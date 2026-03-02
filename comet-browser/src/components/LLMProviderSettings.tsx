@@ -28,7 +28,7 @@ interface LLMProviderSettingsProps {
   setShowSettings: (show: boolean) => void; // New prop for setting visibility
 }
 
-const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props) => {
+const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProviderSettingsProps) => {
   const store = useAppStore();
   const [providers, setProviders] = useState<{ id: string; name: string }[]>([]);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
@@ -76,7 +76,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props) => {
 
   const handleConfigChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setSelectedProviderConfig((prev) => ({ ...prev, [name]: value }));
+    setSelectedProviderConfig((prev: LLMProviderOptions) => ({ ...prev, [name]: value }));
   };
 
   const handleSaveConfig = async () => {

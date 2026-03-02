@@ -97,6 +97,8 @@ interface BrowserState {
     groqApiKey: string;
     setEnableAIAssist: (enable: boolean) => void;
     setOpenaiApiKey: (key: string) => void;
+    openaiModel: string;
+    setOpenaiModel: (model: string) => void;
     setGeminiApiKey: (key: string) => void;
     geminiModel: string;
     setGeminiModel: (model: string) => void;
@@ -251,7 +253,7 @@ interface BrowserState {
 
 export const useAppStore = create<BrowserState>()(
     persist(
-        (set, get) => ({
+        (set: any, get: any) => ({
             // URL and navigation
             currentUrl: 'https://www.google.com',
             defaultUrl: 'https://www.google.com',
@@ -269,7 +271,7 @@ export const useAppStore = create<BrowserState>()(
             isAdmin: false,
             localPhotoURL: null,
             authToken: null,
-            setLocalPhotoURL: (url) => set({ localPhotoURL: url }),
+            setLocalPhotoURL: (url: string | null) => set({ localPhotoURL: url }),
             githubToken: null,
             clientId: '',
             redirectUri: '',
@@ -301,6 +303,7 @@ export const useAppStore = create<BrowserState>()(
             // AI settings
             enableAIAssist: true,
             openaiApiKey: '',
+            openaiModel: 'gpt-4o',
             geminiApiKey: '',
             geminiModel: 'gemini-2.0-flash',
             anthropicApiKey: '',
@@ -326,8 +329,8 @@ export const useAppStore = create<BrowserState>()(
             ambientMusicVolume: 0.5,
             setAmbientMusicUrl: (url: string) => set({ ambientMusicUrl: url }),
             setEnableAmbientMusic: (enable: boolean) => set({ enableAmbientMusic: enable }),
-            setAmbientMusicMode: (mode) => set({ ambientMusicMode: mode }),
-            setAmbientMusicVolume: (volume) => set({ ambientMusicVolume: volume }),
+            setAmbientMusicMode: (mode: 'always' | 'idle' | 'google' | 'off') => set({ ambientMusicMode: mode }),
+            setAmbientMusicVolume: (volume: number) => set({ ambientMusicVolume: volume }),
 
             // Online status
             isOnline: true,
@@ -352,20 +355,20 @@ export const useAppStore = create<BrowserState>()(
 
             // New states
             firewallLevel: 'standard',
-            setFirewallLevel: (level) => set({ firewallLevel: level }),
+            setFirewallLevel: (level: 'standard' | 'strict' | 'paranoid') => set({ firewallLevel: level }),
 
             selectedLanguage: 'en',
-            setSelectedLanguage: (lang) => set({ selectedLanguage: lang }),
+            setSelectedLanguage: (lang: string) => set({ selectedLanguage: lang }),
             availableLanguages: [
                 'en', 'hi', 'bn', 'te', 'mr', 'ta', 'gu', 'ur', 'kn', 'or', 'ml', 'pa', 'as', 'mai', 'sat', 'ks', 'ne', 'kok', 'sd', 'doi', 'mni', 'sa', 'brx', // Indian
                 'es', 'fr', 'de', 'ja', 'zh', 'ru', 'pt', 'it', 'ko', 'ar', 'tr', 'vi', 'th', 'nl', 'pl' // World
             ],
 
             ollamaModelsList: [],
-            setOllamaModelsList: (models) => set({ ollamaModelsList: models }),
+            setOllamaModelsList: (models: any[]) => set({ ollamaModelsList: models }),
 
             offlineReadingList: [],
-            addOfflinePage: (page) => set((state) => ({
+            addOfflinePage: (page: { url: string; title: string; html: string }) => set((state: BrowserState) => ({
                 offlineReadingList: [...state.offlineReadingList, { ...page, timestamp: Date.now() }]
             })),
 
@@ -395,7 +398,7 @@ export const useAppStore = create<BrowserState>()(
 
             // Adblocker
             enableAdblocker: false,
-            setEnableAdblocker: (enable) => {
+            setEnableAdblocker: (enable: boolean) => {
                 set({ enableAdblocker: enable });
                 if (window.electronAPI) {
                     window.electronAPI.toggleAdblocker(enable);
@@ -412,22 +415,22 @@ export const useAppStore = create<BrowserState>()(
 
             // MCP Servers
             mcpServers: [],
-            addMcpServer: (server) => set((state) => ({
+            addMcpServer: (server: { name: string; url: string }) => set((state: BrowserState) => ({
                 mcpServers: [...state.mcpServers, { ...server, id: `mcp-${Date.now()}`, status: 'connecting' }]
             })),
-            removeMcpServer: (id) => set((state) => ({
+            removeMcpServer: (id: string) => set((state: BrowserState) => ({
                 mcpServers: state.mcpServers.filter(s => s.id !== id)
             })),
-            updateMcpServerStatus: (id, status) => set((state) => ({
+            updateMcpServerStatus: (id: string, status: 'online' | 'offline' | 'connecting') => set((state: BrowserState) => ({
                 mcpServers: state.mcpServers.map(s => s.id === id ? { ...s, status } : s)
             })),
 
             // URL and navigation
-            setDefaultUrl: (url) => set({ defaultUrl: url }),
-            setCurrentUrl: (url) => set({ currentUrl: url }),
+            setDefaultUrl: (url: string) => set({ defaultUrl: url }),
+            setCurrentUrl: (url: string) => set({ currentUrl: url }),
 
             // Tabs
-            setActiveTabId: (id) => {
+            setActiveTabId: (id: string) => {
                 const state = get();
                 if (id === state.activeTabId) return;
 
@@ -444,56 +447,56 @@ export const useAppStore = create<BrowserState>()(
                     };
                 });
             },
-            setActiveTab: (id) => get().setActiveTabId(id),
-            updateTab: (id, updates) => set((state) => ({
+            setActiveTab: (id: string) => get().setActiveTabId(id),
+            updateTab: (id: string, updates: any) => set((state: BrowserState) => ({
                 tabs: state.tabs.map(tab =>
                     tab.id === id ? { ...tab, ...updates } : tab
                 )
             })),
-            suspendTab: (id) => set((state) => ({
+            suspendTab: (id: string) => set((state: BrowserState) => ({
                 tabs: state.tabs.map(tab =>
                     tab.id === id ? { ...tab, isSuspended: true } : tab
                 )
             })),
-            resumeTab: (id) => set((state) => ({
+            resumeTab: (id: string) => set((state: BrowserState) => ({
                 tabs: state.tabs.map(tab =>
                     tab.id === id ? { ...tab, isSuspended: false } : tab
                 )
             })),
-            setTabs: (tabs) => set({ tabs }),
+            setTabs: (tabs: BrowserState['tabs']) => set({ tabs }),
 
             // Performance Mode
-            setPerformanceMode: (mode) => set({ performanceMode: mode }),
-            updatePerformanceModeSettings: (settings) => set((state) => ({
+            setPerformanceMode: (mode: 'normal' | 'performance') => set({ performanceMode: mode }),
+            updatePerformanceModeSettings: (settings: any) => set((state: BrowserState) => ({
                 performanceModeSettings: { ...state.performanceModeSettings, ...settings }
             })),
 
             // History and clipboard
-            setHistory: (history) => set({ history }),
+            setHistory: (history: any[]) => set({ history }),
             fetchHistory: () => {
                 // This would be where you fetch history from a backend
                 // For now, it does nothing
             },
-            addToHistory: (entry) => set((state) => ({
+            addToHistory: (entry: any) => set((state: BrowserState) => ({
                 history: [...state.history, { ...entry, timestamp: Date.now() }]
             })),
-            savePageOffline: (url, title, html) => {
+            savePageOffline: (url: string, title: string, html: string) => {
                 console.log('Saving page offline:', url, title);
             },
-            addToUnifiedCart: (item) => {
+            addToUnifiedCart: (item: any) => {
                 console.log('Adding to unified cart:', item);
             },
-            addClipboardItem: (item) => set((state) => {
+            addClipboardItem: (item: string) => set((state: BrowserState) => {
                 const newClipboard = [item, ...state.clipboard.filter(i => i !== item)].slice(0, 50);
                 return { clipboard: newClipboard };
             }),
             clearClipboard: () => set({ clipboard: [] }),
 
             // User and auth
-            setUser: (user) => set({ user, isAdmin: user?.email === 'preetjgfilj2@gmail.com' }),
-            setAdmin: (isAdmin) => set({ isAdmin }),
-            setAuthToken: (token) => set({ authToken: token }),
-            setGithubToken: (token) => set({ githubToken: token }),
+            setUser: (user: any) => set({ user, isAdmin: user?.email === 'preetjgfilj2@gmail.com' }),
+            setAdmin: (isAdmin: boolean) => set({ isAdmin }),
+            setAuthToken: (token: string | null) => set({ authToken: token }),
+            setGithubToken: (token: string | null) => set({ githubToken: token }),
             loginWithToken: (token: string) => {
                 set({ authToken: token });
                 const credential = GoogleAuthProvider.credential(token);
@@ -505,60 +508,61 @@ export const useAppStore = create<BrowserState>()(
 
 
             // View and UI
-            setActiveView: (view) => set({ activeView: view }),
+            setActiveView: (view: string) => set({ activeView: view }),
 
             // AI settings
-            setEnableAIAssist: (enable) => set({ enableAIAssist: enable }),
-            setOpenaiApiKey: (key) => {
+            setEnableAIAssist: (enable: boolean) => set({ enableAIAssist: enable }),
+            setOpenaiApiKey: (key: string) => {
                 set({ openaiApiKey: key });
                 if (window.electronAPI) window.electronAPI.savePersistentData('openai_api_key', key);
             },
-            setGeminiApiKey: (key) => {
+            setOpenaiModel: (model: string) => set({ openaiModel: model }),
+            setGeminiApiKey: (key: string) => {
                 set({ geminiApiKey: key });
                 if (window.electronAPI) window.electronAPI.savePersistentData('gemini_api_key', key);
             },
-            setGeminiModel: (model) => set({ geminiModel: model }),
-            setAnthropicApiKey: (key) => {
+            setGeminiModel: (model: string) => set({ geminiModel: model }),
+            setAnthropicApiKey: (key: string) => {
                 set({ anthropicApiKey: key });
                 if (window.electronAPI) window.electronAPI.savePersistentData('anthropic_api_key', key);
             },
-            setAnthropicModel: (model) => set({ anthropicModel: model }),
-            setGroqApiKey: (key) => {
+            setAnthropicModel: (model: string) => set({ anthropicModel: model }),
+            setGroqApiKey: (key: string) => {
                 set({ groqApiKey: key });
                 if (window.electronAPI) window.electronAPI.savePersistentData('groq_api_key', key);
             },
-            setGroqModel: (model) => set({ groqModel: model }),
-            setXaiApiKey: (key) => {
+            setGroqModel: (model: string) => set({ groqModel: model }),
+            setXaiApiKey: (key: string) => {
                 set({ xaiApiKey: key });
                 if (window.electronAPI) window.electronAPI.savePersistentData('xai_api_key', key);
             },
-            setXaiModel: (model) => set({ xaiModel: model }),
-            setAIProvider: (provider) => set({ aiProvider: provider }),
-            setOllamaBaseUrl: (url) => set({ ollamaBaseUrl: url }),
-            setOllamaModel: (model) => set({ ollamaModel: model }),
-            setLocalLLMBaseUrl: (url) => set({ localLLMBaseUrl: url }),
-            setLocalLLMModel: (model) => set({ localLLMModel: model }),
-            setLocalLlmMode: (mode) => set({ localLlmMode: mode }),
+            setXaiModel: (model: string) => set({ xaiModel: model }),
+            setAIProvider: (provider: string) => set({ aiProvider: provider }),
+            setOllamaBaseUrl: (url: string) => set({ ollamaBaseUrl: url }),
+            setOllamaModel: (model: string) => set({ ollamaModel: model }),
+            setLocalLLMBaseUrl: (url: string) => set({ localLLMBaseUrl: url }),
+            setLocalLLMModel: (model: string) => set({ localLLMModel: model }),
+            setLocalLlmMode: (mode: 'light' | 'normal' | 'heavy') => set({ localLlmMode: mode }),
 
             // AI Permission
             askForAiPermission: true,
-            setAskForAiPermission: (val) => set({ askForAiPermission: val }),
+            setAskForAiPermission: (val: boolean) => set({ askForAiPermission: val }),
             showAiMistakeWarning: false,
-            setShowAiMistakeWarning: (val) => set({ showAiMistakeWarning: val }),
+            setShowAiMistakeWarning: (val: boolean) => set({ showAiMistakeWarning: val }),
             hasSeenAiMistakeWarning: false,
-            setHasSeenAiMistakeWarning: (val) => set({ hasSeenAiMistakeWarning: val }),
-            setMcpServerPort: (port) => set({ mcpServerPort: port }),
-            setAdditionalAIInstructions: (instructions) => set({ additionalAIInstructions: instructions }),
+            setHasSeenAiMistakeWarning: (val: boolean) => set({ hasSeenAiMistakeWarning: val }),
+            setMcpServerPort: (port: number) => set({ mcpServerPort: port }),
+            setAdditionalAIInstructions: (instructions: string) => set({ additionalAIInstructions: instructions }),
 
             // AI Safety
             aiSafetyMode: true, // Default to Safe Mode
-            setAiSafetyMode: (enabled) => set({ aiSafetyMode: enabled }),
+            setAiSafetyMode: (enabled: boolean) => set({ aiSafetyMode: enabled }),
 
             // Theme settings
-            setTheme: (theme) => set({ theme }),
+            setTheme: (theme: string) => set({ theme }),
 
             // Online status
-            setIsOnline: (online) => set({ isOnline: online }),
+            setIsOnline: (online: boolean) => set({ isOnline: online }),
 
             // Active time tracking
             startActiveSession: () => set({ activeStartTime: Date.now() }),
@@ -567,7 +571,7 @@ export const useAppStore = create<BrowserState>()(
             },
 
             // Tab navigation
-            nextTab: () => set((state) => {
+            nextTab: () => set((state: BrowserState) => {
                 const currentIndex = state.tabs.findIndex(tab => tab.id === state.activeTabId);
                 const nextIndex = (currentIndex + 1) % state.tabs.length;
                 const nextTab = state.tabs[nextIndex];
@@ -576,7 +580,7 @@ export const useAppStore = create<BrowserState>()(
                     currentUrl: nextTab.url
                 };
             }),
-            prevTab: () => set((state) => {
+            prevTab: () => set((state: BrowserState) => {
                 const currentIndex = state.tabs.findIndex(tab => tab.id === state.activeTabId);
                 const prevIndex = currentIndex === 0 ? state.tabs.length - 1 : currentIndex - 1;
                 const prevTab = state.tabs[prevIndex];
@@ -589,37 +593,37 @@ export const useAppStore = create<BrowserState>()(
             // Sidebar
             toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
             toggleSidebarCollapse: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
-            setSidebarSide: (side) => set({ sidebarSide: side }),
-            setSidebarWidth: (width) => set({ sidebarWidth: width }),
+            setSidebarSide: (side: 'left' | 'right') => set({ sidebarSide: side }),
+            setSidebarWidth: (width: number) => set({ sidebarWidth: width }),
 
             // Student mode
-            setStudentMode: (student) => set({ studentMode: student }),
+            setStudentMode: (student: boolean) => set({ studentMode: student }),
 
             // Coding mode
-            setCodingMode: (coding) => set({ isCodingMode: coding }),
+            setCodingMode: (coding: boolean) => set({ isCodingMode: coding }),
 
             // Search engine
-            setSelectedEngine: (engine) => set({ selectedEngine: engine }),
+            setSelectedEngine: (engine: string) => set({ selectedEngine: engine }),
 
             // Bookmarks
-            addBookmark: (bookmark) => set((state) => ({
+            addBookmark: (bookmark: { url: string; title: string }) => set((state: BrowserState) => ({
                 bookmarks: [...state.bookmarks, { id: `bookmark-${Date.now()}`, ...bookmark }]
             })),
-            removeBookmark: (url) => set((state) => ({
+            removeBookmark: (url: string) => set((state: BrowserState) => ({
                 bookmarks: state.bookmarks.filter(b => b.url !== url)
             })),
 
             // Passwords and autofill
-            addAddress: (address) => set((state) => ({
+            addAddress: (address: any) => set((state: BrowserState) => ({
                 addresses: [...state.addresses, { id: `address-${Date.now()}`, ...address }]
             })),
-            removeAddress: (id) => set((state) => ({
+            removeAddress: (id: string) => set((state: BrowserState) => ({
                 addresses: state.addresses.filter(a => a.id !== id)
             })),
-            addPaymentMethod: (method) => set((state) => ({
+            addPaymentMethod: (method: any) => set((state: BrowserState) => ({
                 paymentMethods: [...state.paymentMethods, { id: `pm-${Date.now()}`, ...method }]
             })),
-            removePaymentMethod: (id) => set((state) => ({
+            removePaymentMethod: (id: string) => set((state: BrowserState) => ({
                 paymentMethods: state.paymentMethods.filter(pm => pm.id !== id)
             })),
 
@@ -637,11 +641,11 @@ export const useAppStore = create<BrowserState>()(
             },
             setHasSeenWelcomePage: (seen) => set({ hasSeenWelcomePage: seen }),
 
-            setBackendStrategy: (strategy) => set({ backendStrategy: strategy }),
-            setCustomFirebaseConfig: (config) => set({ customFirebaseConfig: config }),
-            setCustomMysqlConfig: (config) => set({ customMysqlConfig: config }),
+            setBackendStrategy: (strategy: 'firebase' | 'mysql') => set({ backendStrategy: strategy }),
+            setCustomFirebaseConfig: (config: any | null) => set({ customFirebaseConfig: config }),
+            setCustomMysqlConfig: (config: any | null) => set({ customMysqlConfig: config }),
 
-            setGuestMode: (isGuest) => {
+            setGuestMode: (isGuest: boolean) => {
                 set({ isGuestMode: isGuest });
                 if (isGuest) {
                     set({
@@ -662,32 +666,29 @@ export const useAppStore = create<BrowserState>()(
                 }
             },
 
-            setCloudSyncConsent: (consent) => set({ cloudSyncConsent: consent }),
+            setCloudSyncConsent: (consent: boolean) => set({ cloudSyncConsent: consent }),
 
-            removeFromCart: (itemId) => set((state) => ({
+            removeFromCart: (itemId: string) => set((state: BrowserState) => ({
                 unifiedCart: state.unifiedCart.filter((item: any) => item.id !== itemId)
             })),
 
             addTab: (url?: string) => {
                 const state = get();
                 // Use search engine URL if no URL provided
-                const getSearchEngineUrl = () => {
-                    switch (state.selectedEngine) {
-                        case 'google':
-                            return 'https://www.google.com';
-                        case 'bing':
-                            return 'https://www.bing.com';
-                        case 'duckduckgo':
-                            return 'https://duckduckgo.com';
-                        case 'brave':
-                            return 'https://search.brave.com';
-                        default:
-                            return 'https://www.google.com';
-                    }
+                const getSearchEngineUrl = (): string => {
+                    const engine = state.selectedEngine || 'google';
+                    const urls: Record<string, string> = {
+                        google: 'https://www.google.com',
+                        bing: 'https://www.bing.com',
+                        duckduckgo: 'https://duckduckgo.com',
+                        brave: 'https://search.brave.com',
+                        perplexity: 'https://www.perplexity.ai'
+                    };
+                    return urls[engine] || 'https://www.google.com';
                 };
 
                 // Ensure we never default to 'about:blank' or empty unless explicitly requested
-                let finalUrl = url;
+                let finalUrl: string = url || '';
                 if (!finalUrl || finalUrl === 'about:blank') {
                     if (state.defaultUrl && state.defaultUrl !== 'about:blank') {
                         finalUrl = state.defaultUrl;
@@ -713,8 +714,8 @@ export const useAppStore = create<BrowserState>()(
                     }, 100);
                 }
 
-                set((state) => {
-                    let newTabs = [...state.tabs, {
+                set((state: BrowserState) => {
+                    let newTabs: BrowserState['tabs'] = [...state.tabs, {
                         id,
                         url: finalUrl,
                         title: 'New Tab',
@@ -727,7 +728,7 @@ export const useAppStore = create<BrowserState>()(
                         const tabsToKeep = newTabs.filter(t => t.id === id || t.keepAlive || t.id === state.activeTabId);
                         const others = newTabs.filter(t => !tabsToKeep.find(tk => tk.id === t.id));
                         others.sort((a, b) => {
-                            const priorityOrder = { low: 0, normal: 1, high: 2 };
+                            const priorityOrder: Record<string, number> = { low: 0, normal: 1, high: 2 };
                             const diff = (priorityOrder[a.priority || 'normal'] as number) - (priorityOrder[b.priority || 'normal'] as number);
                             if (diff !== 0) return diff;
                             return (a.lastAccessed || 0) - (b.lastAccessed || 0);
@@ -750,9 +751,9 @@ export const useAppStore = create<BrowserState>()(
             },
             addIncognitoTab: (url?: string) => {
                 const finalUrl = url || get().defaultUrl;
-                set((state) => {
+                set((state: BrowserState) => {
                     const id = `incognito-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-                    let newTabs = [...state.tabs, {
+                    let newTabs: BrowserState['tabs'] = [...state.tabs, {
                         id,
                         url: finalUrl,
                         title: 'New Incognito Tab',
@@ -764,7 +765,7 @@ export const useAppStore = create<BrowserState>()(
                     if (newTabs.length > 50) {
                         const others = newTabs.filter(t => t.id !== id && !t.keepAlive && t.id !== state.activeTabId);
                         others.sort((a, b) => {
-                            const priorityOrder = { low: 0, normal: 1, high: 2 };
+                            const priorityOrder: Record<string, number> = { low: 0, normal: 1, high: 2 };
                             const diff = (priorityOrder[a.priority || 'normal'] as number) - (priorityOrder[b.priority || 'normal'] as number);
                             if (diff !== 0) return diff;
                             return (a.lastAccessed || 0) - (b.lastAccessed || 0);
@@ -782,7 +783,7 @@ export const useAppStore = create<BrowserState>()(
                     };
                 });
             },
-            removeTab: (id) => {
+            removeTab: (id: string) => {
                 if (window.electronAPI) {
                     window.electronAPI.destroyView(id);
                 }
@@ -808,7 +809,7 @@ export const useAppStore = create<BrowserState>()(
                 });
             },
 
-            setSyncPassphrase: (passphrase) => set({ syncPassphrase: passphrase }),
+            setSyncPassphrase: (passphrase: string) => set({ syncPassphrase: passphrase }),
 
             logout: () => {
                 if (window.electronAPI) window.electronAPI.deletePersistentData('user-data');
