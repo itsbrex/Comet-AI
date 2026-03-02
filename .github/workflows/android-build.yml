@@ -1,0 +1,132 @@
+name: Android Build Only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-flutter-android:
+    name: Build Flutter Android
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Cache Flutter Pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.flutter
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Install dependencies
+        working-directory: flutter_browser_app
+        run: flutter pub get
+
+      - name: Create google-services.json
+        shell: bash
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > flutter_browser_app/android/app/google-services.json
+            echo "google-services.json created."
+          else
+            echo "::warning::GOOGLE_SERVICES_JSON secret is empty or not set!"
+          fi
+
+      - name: Verify google-services.json
+        working-directory: flutter_browser_app/android/app
+        run: |
+          if [ -f "google-services.json" ]; then
+             echo "File exists. Size: $(wc -c < google-services.json) bytes"
+             echo "Checking for valid JSON..."
+             if python3 -c "import json, sys; json.load(open('google-services.json')); print('JSON is valid')"; then
+               echo "JSON Check Passed."
+             else
+               echo "::error::JSON is INVALID!"
+               echo "First 50 chars: $(head -c 50 google-services.json)..."
+               echo "Last 50 chars: ...$(tail -c 50 google-services.json)"
+               exit 1
+             fi
+          else
+             echo "::error::google-services.json does NOT exist."
+             exit 1
+          fi
+
+      - name: Decode Keystore
+        continue-on-error: true
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | sed 's/-----BEGIN CERTIFICATE-----//g' | sed 's/-----END CERTIFICATE-----//g' | tr -d '\n\r' | base64 -d > flutter_browser_app/android/app/upload-keystore.jks
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 secret is missing!"
+          fi
+
+      - name: Create key.properties
+        continue-on-error: true
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" > flutter_browser_app/android/key.properties
+            echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> flutter_browser_app/android/key.properties
+            echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> flutter_browser_app/android/key.properties
+            echo "storeFile=upload-keystore.jks" >> flutter_browser_app/android/key.properties
+          fi
+
+      - name: Build APK (Release)
+        working-directory: flutter_browser_app
+        env:
+          JAVA_TOOL_OPTIONS: "-Xmx4096m"
+        run: flutter build apk --release --verbose
+
+      - name: Rename APK
+        run: cp flutter_browser_app/build/app/outputs/flutter-apk/app-release.apk comet-ai-android.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: comet-ai-android-apk
+          path: comet-ai-android.apk
+
+  create-release:
+    name: Create Draft Release
+    needs: build-flutter-android
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: comet-ai-android-apk
+          path: release-artifacts
+
+      - name: Create Draft Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "release-artifacts/*"
+          draft: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: "v3.1.0-android-${{ github.run_number }}"
+          name: "Android Standalone v3.1.0 (#${{ github.run_number }})"
+          body: "Manual Android-only build triggered from workflow_dispatch."
+          allowUpdates: true

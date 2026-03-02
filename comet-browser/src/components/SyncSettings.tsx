@@ -1,0 +1,335 @@
+"use client";
+// src/components/SyncSettings.tsx
+import React, { useState, useEffect } from 'react';
+import { useAppStore } from '@/store/useAppStore';
+import { Cloud, Wifi, WifiOff, HardDrive, Key, UploadCloud, DownloadCloud, AlertTriangle, CheckCircle, RefreshCw, Info } from 'lucide-react';
+
+interface SyncSettingsProps { }
+
+const SyncSettings: React.FC<SyncSettingsProps> = () => {
+    const store = useAppStore();
+    const [wifiSyncInfo, setWifiSyncInfo] = useState<{ deviceName: string, pairingCode: string, ip: string, port: number } | null>(null);
+    const [remoteDeviceId, setRemoteDeviceId] = useState('');
+    const [localDeviceId, setLocalDeviceId] = useState('');
+    const [p2pConnected, setP2PConnected] = useState(false);
+    const [firebaseReady, setFirebaseReady] = useState(false);
+    const [firebaseUserId, setFirebaseUserId] = useState<string | null>(null);
+    const [encryptionKey, setEncryptionKey] = useState(store.syncPassphrase || '');
+    const [encryptionKeyConfirmed, setEncryptionKeyConfirmed] = useState(false);
+    const [statusMessage, setStatusMessage] = useState('');
+    const [clipboardSyncEnabled, setClipboardSyncEnabled] = useState(true);
+    const [historySyncEnabled, setHistorySyncEnabled] = useState(true);
+    const [wifiSyncQr, setWifiSyncQr] = useState<string | null>(null);
+    const [wifiConnected, setWifiConnected] = useState(false);
+
+    useEffect(() => {
+        if (!window.electronAPI) {
+            setStatusMessage('Electron API not available. Sync features may be limited.');
+            return;
+        }
+
+        const cleanupConnected = window.electronAPI.onP2PConnected(() => {
+            setP2PConnected(true);
+            setStatusMessage('P2P Connection established!');
+        });
+        const cleanupDisconnected = window.electronAPI.onP2PDisconnected(() => {
+            setP2PConnected(false);
+            setStatusMessage('P2P Connection lost.');
+        });
+        const cleanupFirebaseReady = window.electronAPI.onP2PFirebaseReady((userId) => {
+            setFirebaseReady(true);
+            setFirebaseUserId(userId);
+            setStatusMessage(`Firebase ready. User ID: ${userId}`);
+        });
+        const cleanupLocalId = window.electronAPI.onP2PLocalDeviceId((deviceId) => {
+            setLocalDeviceId(deviceId);
+        });
+
+        // WiFi Sync Listeners
+        const cleanupWifiStatus = window.electronAPI.onWifiSyncStatus((data) => {
+            setWifiConnected(data.connected);
+        });
+
+        const cleanupRemotePrompt = window.electronAPI.onRemoteAiPrompt((data) => {
+            // Forward to AI chat input
+            window.electronAPI.sendToAIChatInput(data.prompt);
+            setStatusMessage(`Remote prompt received: ${data.prompt}`);
+        });
+
+        // Initial QR fetch
+        window.electronAPI.getWifiSyncQr().then(qr => {
+            setWifiSyncQr(qr);
+        });
+
+        // WiFi Info fetch
+        if (window.electronAPI.getWifiSyncInfo) {
+            window.electronAPI.getWifiSyncInfo().then(info => {
+                setWifiSyncInfo(info);
+            });
+        }
+
+        // Fetch initial device ID
+        window.electronAPI.getP2PLocalDeviceId().then((id: string) => {
+            if (id) setLocalDeviceId(id);
+        });
+
+        // Request current status
+        window.electronAPI.onP2PMessage((message: any) => {
+            // Generic message handler if needed
+        });
+
+        return () => {
+            if (typeof cleanupConnected === 'function') cleanupConnected();
+            if (typeof cleanupDisconnected === 'function') cleanupDisconnected();
+            if (typeof cleanupFirebaseReady === 'function') cleanupFirebaseReady();
+            if (typeof cleanupLocalId === 'function') cleanupLocalId();
+            if (typeof cleanupWifiStatus === 'function') cleanupWifiStatus();
+            if (typeof cleanupRemotePrompt === 'function') cleanupRemotePrompt();
+        };
+    }, []);
+
+    const handleConnectP2P = async () => {
+        if (!window.electronAPI) {
+            setStatusMessage('Electron API not available.');
+            return;
+        }
+        if (!remoteDeviceId) {
+            setStatusMessage('Please enter a remote device ID to connect.');
+            return;
+        }
+        setStatusMessage('Attempting to connect P2P...');
+        const success = await window.electronAPI.connectToRemoteDevice(remoteDeviceId);
+        if (success) {
+            setStatusMessage('Connection process initiated. Check console for details.');
+        } else {
+            setStatusMessage('Failed to initiate P2P connection.');
+        }
+    };
+
+    const handleGenerateKey = () => {
+        const newKey = crypto.randomUUID(); // Basic UUID, could be more complex
+        setEncryptionKey(newKey);
+        store.setSyncPassphrase(newKey);
+        setEncryptionKeyConfirmed(true);
+        setStatusMessage('New encryption key generated and saved!');
+    };
+
+    const handleSaveEncryptionKey = () => {
+        store.setSyncPassphrase(encryptionKey);
+        setEncryptionKeyConfirmed(true);
+        setStatusMessage('Encryption key saved!');
+    };
+
+    // TODO: Implement actual folder selection and sync initiation
+    const handleInitiateSync = () => {
+        setStatusMessage('Sync initiation logic to be implemented.');
+    };
+
+    return (
+        <div className="space-y-8">
+            <div className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/5 space-y-8">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h3 className="text-lg font-bold text-white mb-2">P2P & Cloud Sync Status</h3>
+                        <p className="text-xs text-white/30">Monitor and manage your cross-device synchronization.</p>
+                    </div>
+                    {localDeviceId && (
+                        <div className="text-right">
+                            <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-1">Local Device ID</p>
+                            <p className="text-xs font-mono text-deep-space-accent-neon bg-deep-space-accent-neon/5 px-3 py-1 rounded-lg border border-deep-space-accent-neon/20">{localDeviceId}</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-4">
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${p2pConnected ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+                        {p2pConnected ? <Wifi size={12} /> : <WifiOff size={12} />}
+                        <span className="text-[10px] font-black uppercase tracking-widest">{p2pConnected ? 'P2P Connected' : 'P2P Disconnected'}</span>
+                    </div>
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${firebaseReady ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-orange-500/10 border-orange-500/30 text-orange-400'}`}>
+                        <Cloud size={12} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">{firebaseReady ? `Cloud Ready (${firebaseUserId ? firebaseUserId.substring(0, 6) + '...' : 'Guest'})` : 'Cloud Not Ready'}</span>
+                    </div>
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${wifiConnected ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-white/5 border-white/10 text-white/30'}`}>
+                        <Wifi size={12} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">{wifiConnected ? 'Mobile Connected' : 'WiFi Sync Ready'}</span>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <button
+                        onClick={() => setClipboardSyncEnabled(!clipboardSyncEnabled)}
+                        className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${clipboardSyncEnabled ? 'bg-deep-space-accent-neon/5 border-deep-space-accent-neon/20' : 'bg-white/5 border-white/5 opacity-50'}`}
+                    >
+                        <div className="flex items-center gap-3 text-white">
+                            <Wifi size={16} />
+                            <span className="text-sm font-bold">Clipboard Sync</span>
+                        </div>
+                        <div className={`w-2 h-2 rounded-full ${clipboardSyncEnabled ? 'bg-deep-space-accent-neon shadow-[0_0_8px_cyan]' : 'bg-white/20'}`} />
+                    </button>
+                    <button
+                        onClick={() => setHistorySyncEnabled(!historySyncEnabled)}
+                        className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${historySyncEnabled ? 'bg-deep-space-accent-neon/5 border-deep-space-accent-neon/20' : 'bg-white/5 border-white/5 opacity-50'}`}
+                    >
+                        <div className="flex items-center gap-3 text-white">
+                            <RefreshCw size={16} />
+                            <span className="text-sm font-bold">History Sync</span>
+                        </div>
+                        <div className={`w-2 h-2 rounded-full ${historySyncEnabled ? 'bg-deep-space-accent-neon shadow-[0_0_8px_cyan]' : 'bg-white/20'}`} />
+                    </button>
+                </div>
+
+                {statusMessage && (
+                    <div className="flex items-center gap-2 text-xs p-3 rounded-lg bg-white/5 border border-white/10 text-white/70">
+                        <Info size={16} /> {statusMessage}
+                    </div>
+                )}
+            </div>
+
+            {/* WiFi Sync Section */}
+            <div className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/5 space-y-8">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h3 className="text-lg font-bold text-white mb-2">Mobile WiFi Sync</h3>
+                        <p className="text-xs text-white/30">Connect your mobile device to execute prompts and control the desktop.</p>
+                    </div>
+                </div>
+
+                {!wifiConnected && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center border border-white/5 rounded-[2rem] bg-black/20 p-8">
+                        <div className="flex flex-col items-center gap-4">
+                            {wifiSyncQr ? (
+                                <div className="p-4 bg-white rounded-2xl shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+                                    <img src={wifiSyncQr} alt="WiFi Sync QR Code" className="w-48 h-48" />
+                                </div>
+                            ) : (
+                                <div className="w-48 h-48 flex items-center justify-center bg-white/5 rounded-2xl border border-white/10">
+                                    <RefreshCw className="animate-spin text-deep-space-accent-neon" />
+                                </div>
+                            )}
+                            <p className="text-[10px] font-black text-white/20 uppercase tracking-widest">Option A: Scan QR</p>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div className="p-6 bg-white/5 rounded-2xl border border-white/10 space-y-4">
+                                <div>
+                                    <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">Option B: Manual Scan</p>
+                                    <p className="text-sm font-bold text-white">Scan for devices on mobile</p>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="text-white/40">Device Name</span>
+                                        <span className="text-white font-mono">{wifiSyncInfo?.deviceName || 'Loading...'}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="text-white/40">Pairing Code</span>
+                                        <span className="text-deep-space-accent-neon font-black text-xl tracking-tighter">{wifiSyncInfo?.pairingCode || '------'}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="text-white/40">IP Address</span>
+                                        <span className="text-white/60 font-mono">{wifiSyncInfo?.ip || '0.0.0.0'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <p className="text-[10px] text-white/20 leading-relaxed italic">
+                                * Ensure both devices are on the same Wi-Fi network. Discovery beacon is active.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {wifiConnected && (
+                    <div className="flex items-center gap-4 p-8 bg-cyan-500/5 border border-cyan-500/20 rounded-[2rem]">
+                        <div className="w-16 h-16 flex items-center justify-center bg-cyan-500/10 rounded-full shadow-[0_0_20px_rgba(0,255,255,0.1)]">
+                            <CheckCircle className="text-cyan-400" size={32} />
+                        </div>
+                        <div>
+                            <p className="text-lg font-bold text-white">Mobile Device Linked</p>
+                            <p className="text-sm text-white/40">Remote commands and AI prompts are active.</p>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/5 space-y-8">
+                <div>
+                    <h3 className="text-lg font-bold text-white mb-2">Connect to Remote Device (P2P)</h3>
+                    <p className="text-xs text-white/30">Enter the Device ID of a peer to establish a direct connection for P2P sync.</p>
+                </div>
+                <input
+                    type="text"
+                    placeholder="Remote Device ID (e.g., another Comet Browser instance)"
+                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 px-6 text-sm text-white focus:outline-none focus:ring-1 focus:ring-deep-space-accent-neon/50 transition-all placeholder:text-white/30"
+                    value={remoteDeviceId}
+                    onChange={(e) => setRemoteDeviceId(e.target.value)}
+                />
+                <button
+                    onClick={handleConnectP2P}
+                    className="w-full px-6 py-3 bg-deep-space-accent-neon text-deep-space-bg font-black uppercase tracking-widest rounded-xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_15px_rgba(0,255,255,0.3)]"
+                    disabled={!firebaseReady || p2pConnected}
+                >
+                    Connect P2P
+                </button>
+            </div>
+
+            <div className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/5 space-y-8">
+                <div>
+                    <h3 className="text-lg font-bold text-white mb-2">Encryption Key Management</h3>
+                    <p className="text-xs text-white/30">Your data is encrypted locally with this key. Keep it safe!</p>
+                </div>
+                <input
+                    type="password"
+                    placeholder="Enter or generate your encryption key"
+                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 px-6 text-sm text-white focus:outline-none focus:ring-1 focus:ring-deep-space-accent-neon/50 transition-all placeholder:text-white/30"
+                    value={encryptionKey}
+                    onChange={(e) => {
+                        setEncryptionKey(e.target.value);
+                        setEncryptionKeyConfirmed(false);
+                    }}
+                />
+                <div className="flex gap-4">
+                    <button
+                        onClick={handleGenerateKey}
+                        className="flex-1 px-6 py-3 bg-white/5 hover:bg-white/10 text-white/60 font-black uppercase tracking-widest rounded-xl transition-all"
+                    >
+                        <Key size={18} className="inline-block mr-2" /> Generate New Key
+                    </button>
+                    <button
+                        onClick={handleSaveEncryptionKey}
+                        className={`flex-1 px-6 py-3 rounded-xl font-black uppercase tracking-widest transition-all ${encryptionKey && !encryptionKeyConfirmed ? 'bg-deep-space-accent-neon text-deep-space-bg hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(0,255,255,0.3)]' : 'bg-white/5 text-white/40 cursor-not-allowed'}`}
+                        disabled={!encryptionKey || encryptionKeyConfirmed}
+                    >
+                        {encryptionKeyConfirmed ? <CheckCircle size={18} className="inline-block mr-2" /> : <UploadCloud size={18} className="inline-block mr-2" />}
+                        {encryptionKeyConfirmed ? 'Key Saved!' : 'Save Key'}
+                    </button>
+                </div>
+                <p className="text-[10px] text-orange-400/60 font-medium leading-relaxed">
+                    <AlertTriangle size={12} className="inline-block mr-1" />
+                    If you lose this key, you will not be able to decrypt your synchronized data on new devices.
+                    We recommend backing it up securely.
+                </p>
+            </div>
+
+            <div className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/5 space-y-8">
+                <div>
+                    <h3 className="text-lg font-bold text-white mb-2">Synchronized Folders</h3>
+                    <p className="text-xs text-white/30">Configure which local folders to keep synchronized across your devices.</p>
+                </div>
+                {/* TODO: Implement folder listing and management */}
+                <div className="text-center py-12 text-white/40">
+                    <HardDrive size={48} className="mx-auto mb-4" />
+                    <p>No folders configured for sync yet.</p>
+                    <button
+                        onClick={handleInitiateSync}
+                        className="mt-6 px-6 py-3 bg-deep-space-accent-neon text-deep-space-bg font-black uppercase tracking-widest rounded-xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_15px_rgba(0,255,255,0.3)]"
+                        disabled={!firebaseReady}
+                    >
+                        <UploadCloud size={18} className="inline-block mr-2" /> Add New Sync Folder
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default SyncSettings;
