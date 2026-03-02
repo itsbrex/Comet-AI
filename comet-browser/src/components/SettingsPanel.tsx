@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { useAppStore } from '@/store/useAppStore';
+import { useAppStore, BrowserState } from '@/store/useAppStore';
 import {
     Monitor, Shield, Globe, Info, Download,
     ChevronRight, ShieldCheck, Key, Package, Keyboard,
@@ -27,8 +27,8 @@ import McpSettings from './McpSettings';
 
 const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () => void, defaultSection?: string }) => {
     const store = useAppStore();
-    const setUser = useAppStore((state) => state.setUser);
-    const fetchHistory = useAppStore((state) => state.fetchHistory);
+    const setUser = useAppStore((state: BrowserState) => state.setUser);
+    const fetchHistory = useAppStore((state: BrowserState) => state.fetchHistory);
     const [activeSection, setActiveSection] = React.useState(defaultSection);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [licenseKey, setLicenseKey] = useState("");
@@ -231,12 +231,12 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                                                         <button
                                                             onClick={async () => {
                                                                 if (window.electronAPI) {
-                                                                    const filePath = await (window.electronAPI as any).selectLocalFile({
+                                                                    const filePath = await window.electronAPI.selectLocalFile({
                                                                         filters: [{ name: 'Images', extensions: ['jpg', 'png', 'jpeg', 'webp'] }]
                                                                     });
                                                                     if (filePath) {
                                                                         try {
-                                                                            const buffer = await (window.electronAPI as any).readFileBuffer(filePath);
+                                                                            const buffer = await window.electronAPI.readFileBuffer(filePath);
                                                                             const base64 = btoa(
                                                                                 new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
                                                                             );
@@ -696,8 +696,8 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                         )}
                     </div>
                 </div>
-            </motion.div >
-        </div >
+            </motion.div>
+        </div>
     );
 };
 

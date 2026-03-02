@@ -16,6 +16,7 @@ export interface ChatMessage {
 
 export interface GenerateContentResult {
   text?: string;
+  thought?: string;
   error?: string;
 }
 

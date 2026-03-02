@@ -32,13 +32,9 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
   const store = useAppStore();
   const [providers, setProviders] = useState<{ id: string; name: string }[]>([]);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
-  const [selectedProviderConfig, setSelectedProviderConfig] = useState<LLMProviderOptions>({});
-  // const [showSettings, setShowSettings] = useState<boolean>(false); // Removed internal state
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  // Initialize a local instance for Web fallback
-  const localProvider = useMemo(() => new OpenAICompatibleProvider(), []);
-
+  // Use store.aiProvider as source of truth
   useEffect(() => {
     const fetchProviders = async () => {
       if (window.electronAPI) {
@@ -47,7 +43,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
           if (availableProviders && availableProviders.length > 0) {
             setProviders(availableProviders);
             // Default to store value if present, else first provider
-            const currentp = store.aiProvider === 'local' ? 'local' : availableProviders[0].id;
+            const currentp = store.aiProvider || availableProviders[0].id;
             setActiveProviderId(currentp);
             return;
           }
@@ -56,17 +52,17 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
         }
       }
 
-      // Exclusive focus on Ollama (Local AI)
+      // Fallback
       setProviders([
         { id: 'ollama', name: 'Ollama (Local AI Engine)' }
       ]);
-      setActiveProviderId('ollama');
+      setActiveProviderId(store.aiProvider || 'ollama');
     };
     fetchProviders();
   }, [store.aiProvider]);
 
   const handleProviderChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newProviderId = e.target.value as any;
+    const newProviderId = e.target.value;
     setActiveProviderId(newProviderId);
     store.setAIProvider(newProviderId);
     if (window.electronAPI) {
@@ -74,10 +70,6 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
     }
   };
 
-  const handleConfigChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setSelectedProviderConfig((prev: LLMProviderOptions) => ({ ...prev, [name]: value }));
-  };
 
   const handleSaveConfig = async () => {
     if (!activeProviderId) return;
@@ -137,7 +129,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                   value={activeProviderId || ''}
                   onChange={handleProviderChange}
                 >
-                  {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {providers.map((p: { id: string; name: string }) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
 
                 <div className="space-y-4">
@@ -149,13 +141,13 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                       placeholder="e.g. 3001"
                       className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
                       value={store.mcpServerPort || ''}
-                      onChange={(e) => {
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         const newPort = parseInt(e.target.value, 10);
                         if (!isNaN(newPort)) {
                           store.setMcpServerPort(newPort);
                           // Send update to main process to restart server if needed, or just update port variable
                           if (window.electronAPI) {
-                            window.electronAPI.setMcpServerPort(newPort);
+                            (window.electronAPI as any).setMcpServerPort(newPort);
                           }
                         }
                       }}
@@ -172,7 +164,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                     placeholder="Enter persistent instructions for the AI (e.g., 'Always respond in markdown and act as a pirate')."
                     className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none h-24 resize-none"
                     value={store.additionalAIInstructions}
-                    onChange={(e) => store.setAdditionalAIInstructions(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => store.setAdditionalAIInstructions(e.target.value)}
                   />
                 </div>
 
@@ -193,7 +185,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                             placeholder="e.g. http://localhost:11434"
                             className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
                             value={store.ollamaBaseUrl || ''}
-                            onChange={(e) => store.setOllamaBaseUrl(e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setOllamaBaseUrl(e.target.value)}
                           />
                         </div>
 
@@ -205,7 +197,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                             aria-label="Ollama Model Selection"
                             className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-deep-space-accent-neon/50 transition-all font-bold"
                             value={store.ollamaModel}
-                            onChange={async (e) => {
+                            onChange={async (e: React.ChangeEvent<HTMLSelectElement>) => {
                               const newModel = e.target.value;
                               store.setOllamaModel(newModel);
                               if (window.electronAPI && newModel !== 'custom') {

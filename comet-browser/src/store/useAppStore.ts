@@ -8,7 +8,7 @@ import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signInWithCred
 
 // ... (rest of the interfaces are the same)
 
-interface BrowserState {
+export interface BrowserState {
     // URL and navigation
     currentUrl: string;
     defaultUrl: string;
@@ -305,7 +305,7 @@ export const useAppStore = create<BrowserState>()(
             openaiApiKey: '',
             openaiModel: 'gpt-4o',
             geminiApiKey: '',
-            geminiModel: 'gemini-2.0-flash',
+            geminiModel: 'gemini-3.0-flash',
             anthropicApiKey: '',
             anthropicModel: 'claude-3-5-sonnet-latest',
             groqApiKey: '',
@@ -514,32 +514,87 @@ export const useAppStore = create<BrowserState>()(
             setEnableAIAssist: (enable: boolean) => set({ enableAIAssist: enable }),
             setOpenaiApiKey: (key: string) => {
                 set({ openaiApiKey: key });
-                if (window.electronAPI) window.electronAPI.savePersistentData('openai_api_key', key);
+                if (window.electronAPI) {
+                    window.electronAPI.savePersistentData('openai_api_key', key);
+                    window.electronAPI.configureLLMProvider('openai', { apiKey: key });
+                }
             },
-            setOpenaiModel: (model: string) => set({ openaiModel: model }),
+            setOpenaiModel: (model: string) => {
+                set({ openaiModel: model });
+                if (window.electronAPI) {
+                    window.electronAPI.configureLLMProvider('openai', { model });
+                }
+            },
             setGeminiApiKey: (key: string) => {
                 set({ geminiApiKey: key });
-                if (window.electronAPI) window.electronAPI.savePersistentData('gemini_api_key', key);
+                if (window.electronAPI) {
+                    window.electronAPI.savePersistentData('gemini_api_key', key);
+                    window.electronAPI.configureLLMProvider('google', { apiKey: key });
+                }
             },
-            setGeminiModel: (model: string) => set({ geminiModel: model }),
+            setGeminiModel: (model: string) => {
+                set({ geminiModel: model });
+                if (window.electronAPI) {
+                    window.electronAPI.configureLLMProvider('google', { model });
+                }
+            },
             setAnthropicApiKey: (key: string) => {
                 set({ anthropicApiKey: key });
-                if (window.electronAPI) window.electronAPI.savePersistentData('anthropic_api_key', key);
+                if (window.electronAPI) {
+                    window.electronAPI.savePersistentData('anthropic_api_key', key);
+                    window.electronAPI.configureLLMProvider('anthropic', { apiKey: key });
+                }
             },
-            setAnthropicModel: (model: string) => set({ anthropicModel: model }),
+            setAnthropicModel: (model: string) => {
+                set({ anthropicModel: model });
+                if (window.electronAPI) {
+                    window.electronAPI.configureLLMProvider('anthropic', { model });
+                }
+            },
             setGroqApiKey: (key: string) => {
                 set({ groqApiKey: key });
-                if (window.electronAPI) window.electronAPI.savePersistentData('groq_api_key', key);
+                if (window.electronAPI) {
+                    window.electronAPI.savePersistentData('groq_api_key', key);
+                    window.electronAPI.configureLLMProvider('groq', { apiKey: key });
+                }
             },
-            setGroqModel: (model: string) => set({ groqModel: model }),
+            setGroqModel: (model: string) => {
+                set({ groqModel: model });
+                if (window.electronAPI) {
+                    window.electronAPI.configureLLMProvider('groq', { model });
+                }
+            },
             setXaiApiKey: (key: string) => {
                 set({ xaiApiKey: key });
-                if (window.electronAPI) window.electronAPI.savePersistentData('xai_api_key', key);
+                if (window.electronAPI) {
+                    window.electronAPI.savePersistentData('xai_api_key', key);
+                    window.electronAPI.configureLLMProvider('xai', { apiKey: key });
+                }
             },
-            setXaiModel: (model: string) => set({ xaiModel: model }),
-            setAIProvider: (provider: string) => set({ aiProvider: provider }),
-            setOllamaBaseUrl: (url: string) => set({ ollamaBaseUrl: url }),
-            setOllamaModel: (model: string) => set({ ollamaModel: model }),
+            setXaiModel: (model: string) => {
+                set({ xaiModel: model });
+                if (window.electronAPI) {
+                    window.electronAPI.configureLLMProvider('xai', { model });
+                }
+            },
+            setAIProvider: (provider: string) => {
+                set({ aiProvider: provider });
+                if (window.electronAPI) {
+                    window.electronAPI.setActiveLLMProvider(provider);
+                }
+            },
+            setOllamaBaseUrl: (url: string) => {
+                set({ ollamaBaseUrl: url });
+                if (window.electronAPI) {
+                    window.electronAPI.configureLLMProvider('ollama', { baseUrl: url });
+                }
+            },
+            setOllamaModel: (model: string) => {
+                set({ ollamaModel: model });
+                if (window.electronAPI) {
+                    window.electronAPI.configureLLMProvider('ollama', { model });
+                }
+            },
             setLocalLLMBaseUrl: (url: string) => set({ localLLMBaseUrl: url }),
             setLocalLLMModel: (model: string) => set({ localLLMModel: model }),
             setLocalLlmMode: (mode: 'light' | 'normal' | 'heavy') => set({ localLlmMode: mode }),

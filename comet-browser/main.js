@@ -258,35 +258,35 @@ const llmGenerateHandler = async (messages, options = {}) => {
       const google = createGoogleGenerativeAI({ apiKey });
 
       const defaultModel = providerId === 'google-flash' ? 'gemini-3.0-flash' : 'gemini-3.1-flash';
-      modelInstance = google(options.model || config.model || defaultModel);
+      modelInstance = google(options.model || config.model || store.get('gemini_model') || defaultModel);
     }
     else if (providerId === 'openai') {
       const { createOpenAI } = await import('@ai-sdk/openai');
       const apiKey = config.apiKey || store.get('openai_api_key');
       if (!apiKey) throw new Error('OpenAI API Key is missing.');
       const openai = createOpenAI({ apiKey });
-      modelInstance = openai(options.model || config.model || 'gpt-4o');
+      modelInstance = openai(options.model || config.model || store.get('openai_model') || 'gpt-4o');
     }
     else if (providerId === 'anthropic') {
       const { createAnthropic } = await import('@ai-sdk/anthropic');
       const apiKey = config.apiKey || store.get('anthropic_api_key');
       if (!apiKey) throw new Error('Anthropic API Key is missing.');
       const anthropic = createAnthropic({ apiKey });
-      modelInstance = anthropic(options.model || config.model || 'claude-3-5-sonnet-latest');
+      modelInstance = anthropic(options.model || config.model || store.get('anthropic_model') || 'claude-3-5-sonnet-latest');
     }
     else if (providerId === 'xai') {
       const { createXai } = await import('@ai-sdk/xai');
       const apiKey = config.apiKey || store.get('xai_api_key');
       if (!apiKey) throw new Error('xAI API Key is missing.');
       const xai = createXai({ apiKey });
-      modelInstance = xai(options.model || config.model || 'grok-2-latest');
+      modelInstance = xai(options.model || config.model || store.get('xai_model') || 'grok-2-latest');
     }
     else if (providerId === 'groq') {
       const { createGroq } = await import('@ai-sdk/groq');
       const apiKey = config.apiKey || store.get('groq_api_key');
       if (!apiKey) throw new Error('Groq API Key is missing.');
       const groq = createGroq({ apiKey });
-      modelInstance = groq(options.model || config.model || 'llama-3.3-70b-versatile');
+      modelInstance = groq(options.model || config.model || store.get('groq_model') || 'llama-3.3-70b-versatile');
     }
     else {
       throw new Error(`Unsupported provider: ${providerId}`);
@@ -1559,8 +1559,34 @@ const llmProviders = [
   { id: 'groq', name: 'Groq (LPU Speed)' },
   { id: 'ollama', name: 'Ollama (Local AI)' }
 ];
-let activeLlmProvider = 'google';
-const llmConfigs = {};
+let activeLlmProvider = store.get('active_llm_provider') || 'google';
+const llmConfigs = {
+  ollama: {
+    baseUrl: store.get('ollama_base_url'),
+    model: store.get('ollama_model'),
+    localLlmMode: store.get('local_llm_mode')
+  },
+  google: {
+    apiKey: store.get('gemini_api_key'),
+    model: store.get('gemini_model')
+  },
+  openai: {
+    apiKey: store.get('openai_api_key'),
+    model: store.get('openai_model')
+  },
+  anthropic: {
+    apiKey: store.get('anthropic_api_key'),
+    model: store.get('anthropic_model')
+  },
+  xai: {
+    apiKey: store.get('xai_api_key'),
+    model: store.get('xai_model')
+  },
+  groq: {
+    apiKey: store.get('groq_api_key'),
+    model: store.get('groq_model')
+  }
+};
 
 ipcMain.handle('llm-get-available-providers', () => llmProviders);
 ipcMain.handle('llm-set-active-provider', (event, providerId) => {
@@ -1572,14 +1598,30 @@ ipcMain.handle('llm-configure-provider', (event, providerId, options) => {
   llmConfigs[providerId] = options;
 
   // Persist to store for survivors
-  if (providerId === 'google' && options.apiKey) store.set('gemini_api_key', options.apiKey);
-  if (providerId === 'openai' && options.apiKey) store.set('openai_api_key', options.apiKey);
-  if (providerId === 'anthropic' && options.apiKey) store.set('anthropic_api_key', options.apiKey);
-  if (providerId === 'xai' && options.apiKey) store.set('xai_api_key', options.apiKey);
-  if (providerId === 'groq' && options.apiKey) store.set('groq_api_key', options.apiKey);
+  if (providerId === 'google') {
+    if (options.apiKey) store.set('gemini_api_key', options.apiKey);
+    if (options.model) store.set('gemini_model', options.model);
+  }
+  if (providerId === 'openai') {
+    if (options.apiKey) store.set('openai_api_key', options.apiKey);
+    if (options.model) store.set('openai_model', options.model);
+  }
+  if (providerId === 'anthropic') {
+    if (options.apiKey) store.set('anthropic_api_key', options.apiKey);
+    if (options.model) store.set('anthropic_model', options.model);
+  }
+  if (providerId === 'xai') {
+    if (options.apiKey) store.set('xai_api_key', options.apiKey);
+    if (options.model) store.set('xai_model', options.model);
+  }
+  if (providerId === 'groq') {
+    if (options.apiKey) store.set('groq_api_key', options.apiKey);
+    if (options.model) store.set('groq_model', options.model);
+  }
   if (providerId === 'ollama') {
     if (options.baseUrl) store.set('ollama_base_url', options.baseUrl);
     if (options.model) store.set('ollama_model', options.model);
+    if (options.localLlmMode !== undefined) store.set('local_llm_mode', options.localLlmMode);
   }
 
   return true;

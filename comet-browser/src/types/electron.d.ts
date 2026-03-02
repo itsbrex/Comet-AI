@@ -64,6 +64,7 @@ declare global {
             maximizeWindow: () => void;
             closeWindow: () => void;
             toggleFullscreen: () => void;
+            setAsDefaultBrowser: () => Promise<boolean>;
             showWebview: () => void;
             hideWebview: () => void;
             bringWindowToTop: () => void;

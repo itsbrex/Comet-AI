@@ -156,7 +156,7 @@ function checkThreat(content: string): ThreatCheckResult {
     return {
       blocked: true,
       ban: true,
-      response: '🚫 **Comet-AI is made for Humans Not Hackers [Permanently Banned From Comet]**\n\nYour access has been suspended due to repeated policy violations.',
+      response: '🚫 **Comet-AI is made for Humans Not Hackers [Permanently Banned From Comet-AI]**\n\nYour access has been suspended due to repeated policy violations.',
     };
   }
 
