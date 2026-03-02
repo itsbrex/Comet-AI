@@ -85,20 +85,20 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props) => {
     let config: LLMProviderOptions = {};
     if (activeProviderId === 'ollama') {
       config = { baseUrl: store.ollamaBaseUrl, model: store.ollamaModel, localLlmMode: store.localLlmMode };
-    } else if (activeProviderId === 'openai-compatible') {
-      config = { apiKey: store.openaiApiKey, baseUrl: store.localLLMBaseUrl, model: store.localLLMModel };
-    } else if (activeProviderId.startsWith('gemini')) {
-      config = { apiKey: store.geminiApiKey, model: store.geminiModel || activeProviderId };
-    } else if (activeProviderId === 'claude' || activeProviderId === 'anthropic' || activeProviderId?.startsWith('claude')) {
-      config = { apiKey: store.anthropicApiKey, model: store.localLLMModel };
-    } else if (activeProviderId === 'groq' || activeProviderId === 'mixtral-8x7b-groq' || activeProviderId?.startsWith('groq')) {
-      config = { apiKey: store.groqApiKey, model: store.localLLMModel };
-    } else if (activeProviderId === 'local-tfjs') {
-      config = { type: 'local-tfjs' };
+    } else if (activeProviderId === 'google') {
+      config = { apiKey: store.geminiApiKey, model: store.geminiModel || 'gemini-1.5-flash' };
+    } else if (activeProviderId === 'openai') {
+      config = { apiKey: store.openaiApiKey, model: store.openaiModel || 'gpt-4o' };
+    } else if (activeProviderId === 'anthropic') {
+      config = { apiKey: store.anthropicApiKey, model: store.anthropicModel || 'claude-3-5-sonnet-latest' };
+    } else if (activeProviderId === 'xai') {
+      config = { apiKey: (store as any).xaiApiKey, model: (store as any).xaiModel || 'grok-2-latest' };
+    } else if (activeProviderId === 'groq') {
+      config = { apiKey: store.groqApiKey, model: (store as any).groqModel || 'llama-3.3-70b-versatile' };
     }
 
     if (window.electronAPI) {
-      const success = await window.electronAPI.configureLLMProvider('ollama', config);
+      const success = await window.electronAPI.configureLLMProvider(activeProviderId, config);
       setFeedback(success ? 'Intelligence Configured' : 'Configuration Failed');
     } else {
       setFeedback('Local IQ Active');
@@ -367,7 +367,150 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props) => {
                       </div>
                     )}
 
-                    {/* Removed legacy cloud provider configuration sections */}
+                    {activeProviderId === 'google' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
+                          <Sparkles size={14} />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">Google Gemini</span>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-white/30 uppercase font-bold">API Key</label>
+                          <input
+                            type="password"
+                            placeholder="Enter Gemini API Key..."
+                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+                            value={store.geminiApiKey || ''}
+                            onChange={(e) => store.setGeminiApiKey(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-white/30 uppercase font-bold">Model</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. gemini-1.5-flash"
+                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+                            value={store.geminiModel || ''}
+                            onChange={(e) => store.setGeminiModel(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {activeProviderId === 'openai' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
+                          <Cloud size={14} />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">OpenAI (GPT-4o/o1)</span>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-white/30 uppercase font-bold">API Key</label>
+                          <input
+                            type="password"
+                            placeholder="sk-..."
+                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+                            value={store.openaiApiKey || ''}
+                            onChange={(e) => store.setOpenaiApiKey(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-white/30 uppercase font-bold">Model</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. gpt-4o"
+                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+                            value={store.openaiModel || ''}
+                            onChange={(e) => store.setOpenaiModel(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {activeProviderId === 'anthropic' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
+                          <Shield size={14} />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">Anthropic Claude</span>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-white/30 uppercase font-bold">API Key</label>
+                          <input
+                            type="password"
+                            placeholder="sk-ant-..."
+                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+                            value={store.anthropicApiKey || ''}
+                            onChange={(e) => store.setAnthropicApiKey(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-white/30 uppercase font-bold">Model</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. claude-3-5-sonnet-latest"
+                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+                            value={store.anthropicModel || ''}
+                            onChange={(e) => store.setAnthropicModel(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {activeProviderId === 'xai' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
+                          <Cloud size={14} />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">xAI Grok</span>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-white/30 uppercase font-bold">API Key</label>
+                          <input
+                            type="password"
+                            placeholder="xai-..."
+                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+                            value={(store as any).xaiApiKey || ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => (store as any).setXaiApiKey(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-white/30 uppercase font-bold">Model</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. grok-2-latest"
+                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+                            value={(store as any).xaiModel || ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => (store as any).setXaiModel(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {activeProviderId === 'groq' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
+                          <Cpu size={14} />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">Groq (LPU)</span>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-white/30 uppercase font-bold">API Key</label>
+                          <input
+                            type="password"
+                            placeholder="gsk_..."
+                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+                            value={store.groqApiKey || ''}
+                            onChange={(e) => store.setGroqApiKey(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-white/30 uppercase font-bold">Model</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. llama-3.3-70b-versatile"
+                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+                            value={store.groqModel || ''}
+                            onChange={(e) => store.setGroqModel(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <button

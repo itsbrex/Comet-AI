@@ -229,31 +229,74 @@ const llmGenerateHandler = async (messages, options = {}) => {
   };
 
   try {
-    // Dynamic import of Vercel AI SDK (ESM) in CommonJS main.js
     const { generateText } = await import('ai');
-    const { createOllama } = await import('@ai-sdk/ollama');
 
-    const config = (typeof llmConfigs !== 'undefined' ? llmConfigs['ollama'] : {}) || {};
-    const baseUrl = config.baseUrl || 'http://localhost:11434';
-    let modelName = options.model || config.model || 'llama3.2';
+    // Determine active provider
+    // Fallback order: options.provider -> module variable -> store
+    const providerId = options.provider || activeLlmProvider || store.get('active_llm_provider') || 'google';
+    const config = (typeof llmConfigs !== 'undefined' ? llmConfigs[providerId] : {}) || {};
 
-    // Startup / Safety Guard
-    const ollamaEnabled = store.get('ollama_enabled') !== false;
-    if (!ollamaEnabled) {
-      return { error: 'Ollama is disabled. Enable it in Settings > Local AI.' };
+    let modelInstance;
+
+    if (providerId === 'ollama') {
+      const { createOllama } = await import('@ai-sdk/ollama');
+      const baseUrl = config.baseUrl || store.get('ollama_base_url') || 'http://localhost:11434';
+      const modelName = options.model || config.model || store.get('ollama_model') || 'llama3.2';
+
+      const ollamaEnabled = store.get('ollama_enabled') !== false;
+      if (!ollamaEnabled) {
+        throw new Error('Ollama is disabled in settings.');
+      }
+
+      const ollama = createOllama({ baseURL: `${baseUrl}/api` });
+      modelInstance = ollama(modelName);
+    }
+    else if (providerId === 'google') {
+      const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
+      const apiKey = config.apiKey || store.get('gemini_api_key');
+      if (!apiKey) throw new Error('Google Gemini API Key is missing.');
+      const google = createGoogleGenerativeAI({ apiKey });
+      modelInstance = google(options.model || config.model || 'gemini-2.0-flash');
+    }
+    else if (providerId === 'openai') {
+      const { createOpenAI } = await import('@ai-sdk/openai');
+      const apiKey = config.apiKey || store.get('openai_api_key');
+      if (!apiKey) throw new Error('OpenAI API Key is missing.');
+      const openai = createOpenAI({ apiKey });
+      modelInstance = openai(options.model || config.model || 'gpt-4o');
+    }
+    else if (providerId === 'anthropic') {
+      const { createAnthropic } = await import('@ai-sdk/anthropic');
+      const apiKey = config.apiKey || store.get('anthropic_api_key');
+      if (!apiKey) throw new Error('Anthropic API Key is missing.');
+      const anthropic = createAnthropic({ apiKey });
+      modelInstance = anthropic(options.model || config.model || 'claude-3-5-sonnet-latest');
+    }
+    else if (providerId === 'xai') {
+      const { createXai } = await import('@ai-sdk/xai');
+      const apiKey = config.apiKey || store.get('xai_api_key');
+      if (!apiKey) throw new Error('xAI API Key is missing.');
+      const xai = createXai({ apiKey });
+      modelInstance = xai(options.model || config.model || 'grok-2-latest');
+    }
+    else if (providerId === 'groq') {
+      const { createGroq } = await import('@ai-sdk/groq');
+      const apiKey = config.apiKey || store.get('groq_api_key');
+      if (!apiKey) throw new Error('Groq API Key is missing.');
+      const groq = createGroq({ apiKey });
+      modelInstance = groq(options.model || config.model || 'llama-3.3-70b-versatile');
+    }
+    else {
+      throw new Error(`Unsupported provider: ${providerId}`);
     }
 
-    // Configure Ollama Provider
-    const ollama = createOllama({ baseURL: `${baseUrl}/api` });
-
-    // SYSTEM MESSAGE PIPELINE: Inject capabilities into every system instruction
+    // SYSTEM MESSAGE PIPELINE
     const systemMsgs = messages.filter(m => m.role === 'system');
     const systemPrompt = [
       ...systemMsgs.map(m => m.content),
       `[COMET_CAPABILITIES]\n${JSON.stringify(capabilities, null, 2)}\n(You are an AGENT with full system access. Use reasoning for complex tasks.)`
     ].join('\n\n');
 
-    // Filter out system messages for the conversation history
     const chatMessages = messages.filter(m => m.role !== 'system').map(m => {
       let experimental_attachments = [];
       if (m.attachments && Array.isArray(m.attachments)) {
@@ -269,9 +312,8 @@ const llmGenerateHandler = async (messages, options = {}) => {
       };
     });
 
-    // Execute generation with Vercel AI SDK
     const { text, reasoning } = await generateText({
-      model: ollama(modelName),
+      model: modelInstance,
       system: systemPrompt,
       messages: chatMessages,
       temperature: 0.7,
@@ -280,7 +322,7 @@ const llmGenerateHandler = async (messages, options = {}) => {
 
     const result = {
       text: text,
-      thought: reasoning || null // Logic for "thinking" support
+      thought: reasoning || null
     };
 
     llmCache.set(cacheKey, result);
@@ -288,7 +330,7 @@ const llmGenerateHandler = async (messages, options = {}) => {
     return result;
 
   } catch (error) {
-    console.error("Vercel AI SDK Error (Ollama):", error);
+    console.error("Vercel AI SDK Error:", error);
     return { error: `Intelligence Failure: ${error.message}` };
   }
 };
@@ -1507,40 +1549,36 @@ ipcMain.handle('load-vector-store', async () => {
 });
 
 const llmProviders = [
-  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro (Latest Reasoning)' },
-  { id: 'gemini-3.1-flash', name: 'Gemini 3.1 Flash (High Speed)' },
-  { id: 'gemini-3-flash', name: 'Gemini 3 Flash (Multimodal + Agentic)' },
-  { id: 'gemini-3-deep-think', name: 'Gemini 3 Deep Think (Scientific)' },
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (2M ctx)' },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite (Ultra Cost-Effective)' },
-  { id: 'gemini-2.0-pro', name: 'Gemini 2.0 Pro (Experimental)' },
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-  { id: 'gpt-5.2', name: 'GPT-5.2 (Latest)' },
-  { id: 'gpt-4o', name: 'GPT-4o' },
-  { id: 'o1', name: 'OpenAI o1' },
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6 (Vision)' },
-  { id: 'claude-3-7-sonnet', name: 'Claude 3.7 Sonnet' },
-  { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet' },
-  { id: 'ollama', name: 'Ollama (Local AI)' },
-  { id: 'groq-llama-3-3-70b', name: 'Groq: Llama 3.3 70B (Versatile)' },
-  { id: 'groq-llama-3-1-8b', name: 'Groq: Llama 3.1 8B (Instant)' },
-  { id: 'groq-deepseek-r1', name: 'Groq: DeepSeek R1 Distill Llama 70B' },
-  { id: 'groq-mixtral', name: 'Groq: Mixtral 8x7b' },
-  { id: 'openai-compatible', name: 'OpenAI Compatible' }
+  { id: 'google', name: 'Google Gemini (2.0/1.5)' },
+  { id: 'openai', name: 'OpenAI (o1/o3/GPT-4o)' },
+  { id: 'anthropic', name: 'Anthropic Claude (3.7/3.5)' },
+  { id: 'xai', name: 'xAI Grok (4/3)' },
+  { id: 'groq', name: 'Groq (LPU Speed)' },
+  { id: 'ollama', name: 'Ollama (Local AI)' }
 ];
-let activeLlmProvider = 'gemini-2.5-flash';
+let activeLlmProvider = 'google';
 const llmConfigs = {};
 
 ipcMain.handle('llm-get-available-providers', () => llmProviders);
 ipcMain.handle('llm-set-active-provider', (event, providerId) => {
   activeLlmProvider = providerId;
+  store.set('active_llm_provider', providerId);
   return true;
 });
 ipcMain.handle('llm-configure-provider', (event, providerId, options) => {
   llmConfigs[providerId] = options;
+
+  // Persist to store for survivors
+  if (providerId === 'google' && options.apiKey) store.set('gemini_api_key', options.apiKey);
+  if (providerId === 'openai' && options.apiKey) store.set('openai_api_key', options.apiKey);
+  if (providerId === 'anthropic' && options.apiKey) store.set('anthropic_api_key', options.apiKey);
+  if (providerId === 'xai' && options.apiKey) store.set('xai_api_key', options.apiKey);
+  if (providerId === 'groq' && options.apiKey) store.set('groq_api_key', options.apiKey);
+  if (providerId === 'ollama') {
+    if (options.baseUrl) store.set('ollama_base_url', options.baseUrl);
+    if (options.model) store.set('ollama_model', options.model);
+  }
+
   return true;
 });
 

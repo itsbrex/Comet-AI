@@ -25,8 +25,11 @@
     "check-dups": "node check_dups.js"
   },
   "dependencies": {
-    "ai": "^4.1.45",
-    "@ai-sdk/ollama": "^1.1.9",
+    "@ai-sdk/google": "^1.1.13",
+    "@ai-sdk/openai": "^1.1.13",
+    "@ai-sdk/anthropic": "^1.1.13",
+    "@ai-sdk/groq": "^1.1.10",
+    "@ai-sdk/xai": "^1.1.10",
     "@tensorflow/tfjs": "^4.22.0",
     "autoprefixer": "^10.4.23",
     "body-parser": "^2.2.2",
