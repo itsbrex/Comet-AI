@@ -21,13 +21,14 @@ import 'package:path/path.dart' as p;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'sync_service.dart';
+import 'webview_tab.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'browser.dart';
 import 'pages/comet_home_page.dart';
 import 'pages/splash_screen.dart';
 import 'pages/connect_desktop_page.dart';
 import 'pages/settings/main.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'pages/ai_chat_page.dart';
 import 'pages/agent_chat_page.dart';
 

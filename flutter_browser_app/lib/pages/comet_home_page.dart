@@ -536,7 +536,7 @@ class _CometHomePageState extends State<CometHomePage>
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, py: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: const Color(0xFF00E5FF).withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
