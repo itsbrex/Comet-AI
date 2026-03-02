@@ -773,6 +773,10 @@ export default function Home() {
         window.electronAPI.wifiSyncBroadcast({ type: 'agent-task', task: url.substring(2).trim() });
         setInputValue('');
         return;
+      } else {
+        // Fallback for when electronAPI is not available
+        console.warn("Electron API not available for agent task");
+        return;
       }
     }
 
