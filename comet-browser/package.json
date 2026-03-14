@@ -1,5 +1,5 @@
 {
-  "name": "Comet-AI",
+  "name": "comet-ai",
   "version": "0.2.1",
   "private": true,
   "description": "Comet AI Browser - A high-performance, intelligence-driven browsing workspace with local LLM support and advanced productivity features.",
@@ -137,7 +137,9 @@
         "zip"
       ],
       "hardenedRuntime": true,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist"
     },
     "linux": {
       "icon": "assets/icon.png",
@@ -150,6 +152,21 @@
       "buildResources": "assets",
       "output": "release"
     },
+    "protocols": [
+      {
+        "name": "Comet AI Browser Auth",
+        "schemes": [
+          "comet-browser"
+        ]
+      },
+      {
+        "name": "HTTP Web Links",
+        "schemes": [
+          "http",
+          "https"
+        ]
+      }
+    ],
     "extraResources": [
       {
         "from": "assets",

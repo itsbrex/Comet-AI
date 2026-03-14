@@ -132,12 +132,34 @@ contextMenu({
 });
 
 ipcMain.handle('set-as-default-browser', async () => {
-  if (process.platform === 'win32' || process.platform === 'darwin') {
-    app.setAsDefaultProtocolClient('http');
-    app.setAsDefaultProtocolClient('https');
-    return true;
+  try {
+    const protocols = ['http', 'https'];
+    let overallSuccess = true;
+
+    for (const proto of protocols) {
+      // On Windows/Mac, this triggers a system dialog or registry change
+      if (!app.setAsDefaultProtocolClient(proto)) {
+        overallSuccess = false;
+      }
+    }
+
+    // Linux specific refinement
+    if (process.platform === 'linux') {
+      try {
+        const { exec } = require('child_process');
+        // comet-ai.desktop is the likely filename based on package.json name
+        exec('xdg-settings set default-web-browser comet-ai.desktop');
+        overallSuccess = true;
+      } catch (e) {
+        console.error('[Main] Linux xdg-settings failed:', e);
+      }
+    }
+
+    return { success: overallSuccess, isDefault: app.isDefaultProtocolClient('https') };
+  } catch (error) {
+    console.error('[Main] Failed to set default browser:', error);
+    return { success: false, error: error.message };
   }
-  return false;
 });
 let mcpServerPort = MCP_SERVER_PORT;
 // Custom protocol for authentication
@@ -150,15 +172,25 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory) => {
-    // Someone tried to run a second instance, we should focus our window.
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
 
-      // Handle deep links from protocol
-      const url = commandLine.pop();
-      if (url && url.startsWith(`${PROTOCOL}://`)) {
-        mainWindow.webContents.send('auth-callback', url);
+      // Find URL in command line (for Windows/Linux deep links)
+      // Usually the URL is the last argument or starts with a known protocol
+      const url = commandLine.find(arg => 
+        arg.startsWith('http://') || 
+        arg.startsWith('https://') || 
+        arg.startsWith(`${PROTOCOL}://`)
+      );
+
+      if (url) {
+        if (url.startsWith(`${PROTOCOL}://`)) {
+          mainWindow.webContents.send('auth-callback', url);
+        } else {
+          // Open external web links in a new tab
+          mainWindow.webContents.send('add-new-tab', url);
+        }
       }
     }
   });
@@ -175,7 +207,11 @@ if (!gotTheLock) {
   app.on('open-url', (event, url) => {
     event.preventDefault();
     if (mainWindow) {
-      mainWindow.webContents.send('auth-callback', url);
+      if (url.startsWith(`${PROTOCOL}://`)) {
+        mainWindow.webContents.send('auth-callback', url);
+      } else if (url.startsWith('http://') || url.startsWith('https://')) {
+        mainWindow.webContents.send('add-new-tab', url);
+      }
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     }
@@ -257,29 +293,38 @@ const prepareLLM = async (messages, options = {}) => {
 
   if (providerId === 'ollama') {
     const { createOllama } = await import('ai-sdk-ollama');
-    const baseUrl = config.baseUrl || store.get('ollama_base_url') || 'http://localhost:11434';
+    const baseUrl = config.baseUrl || store.get('ollama_base_url') || 'http://127.0.0.1:11434';
     const modelName = options.model || config.model || store.get('ollama_model') || 'llama3.2';
+
+    console.log('[Ollama] Base URL:', baseUrl, 'Model:', modelName, 'Is Dev:', isDev);
 
     const ollamaEnabled = store.get('ollama_enabled') !== false;
     if (!ollamaEnabled) {
       throw new Error('Ollama is disabled in settings.');
     }
 
-    const ollama = createOllama({ baseURL: baseUrl });
-    modelInstance = ollama(modelName);
+    try {
+      const ollama = createOllama({ baseURL: baseUrl });
+      modelInstance = ollama(modelName);
+    } catch (ollamaError) {
+      console.error('[Ollama] Failed to create Ollama instance:', ollamaError);
+      throw new Error(`Ollama connection failed: ${ollamaError.message}. Make sure Ollama is running on ${baseUrl}`);
+    }
   }
   else if (providerId === 'google' || providerId === 'google-flash') {
-    const { google } = await import('@ai-sdk/google');
+    const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
     const apiKey = config.apiKey || store.get('gemini_api_key');
     if (!apiKey) throw new Error('Google Gemini API Key is missing.');
     
+    // Create custom instance with API key
+    const google = createGoogleGenerativeAI({ apiKey });
+    
     // Choose model based on type
-    const defaultModel = providerId === 'google-flash' ? 'gemini-3.1-flash-lite-preview' : 'gemini-3.1-pro-preview';
+    const defaultModel = providerId === 'google-flash' ? 'gemini-1.5-flash' : 'gemini-1.5-pro';
     const modelName = options.model || config.model || store.get('gemini_model') || defaultModel;
     
-    // AI SDK 6: Thinking mode is now handled via thinking level or provider options
     modelInstance = google(modelName, {
-      structuredOutputs: true, // Enable by default for AI SDK 6
+      structuredOutputs: true,
     });
   }
   else if (providerId === 'openai') {
@@ -727,11 +772,22 @@ async function createWindow() {
 
 ipcMain.handle('test-gemini-api', async (event, apiKey) => {
   try {
-    const genAI = new GoogleGenAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    const result = await model.generateContent("test");
-    await result.response; // Ensure the call completes
-    return { success: true };
+    const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
+    const { generateText } = await import('ai');
+    
+    // Create custom instance with API key
+    const google = createGoogleGenerativeAI({ apiKey });
+    
+    // Test with a simple prompt
+    const result = await generateText({
+      model: google('gemini-1.5-flash'),
+      prompt: 'Identity check. Respond with "passed".',
+    });
+
+    if (result.text.toLowerCase().includes('passed')) {
+      return { success: true };
+    }
+    return { success: false, error: 'Unexpected response from Gemini' };
   } catch (error) {
     console.error("Gemini API test failed:", error);
     return { success: false, error: error.message };
@@ -1658,32 +1714,36 @@ const llmProviders = [
   { id: 'groq', name: 'Groq (LPU Speed)' },
   { id: 'ollama', name: 'Ollama (Local AI)' }
 ];
-let activeLlmProvider = store.get('active_llm_provider') || 'google';
+let activeLlmProvider = store.get('active_llm_provider') || 'ollama';
 const llmConfigs = {
   ollama: {
-    baseUrl: store.get('ollama_base_url'),
-    model: store.get('ollama_model'),
-    localLlmMode: store.get('local_llm_mode')
+    baseUrl: store.get('ollama_base_url') || 'http://127.0.0.1:11434',
+    model: store.get('ollama_model') || 'llama3.2',
+    localLlmMode: store.get('local_llm_mode') || 'normal'
   },
   google: {
-    apiKey: store.get('gemini_api_key'),
-    model: store.get('gemini_model')
+    apiKey: store.get('gemini_api_key') || '',
+    model: store.get('gemini_model') || 'gemini-1.5-pro'
+  },
+  'google-flash': {
+    apiKey: store.get('gemini_api_key') || '',
+    model: store.get('gemini_model') || 'gemini-1.5-flash'
   },
   openai: {
-    apiKey: store.get('openai_api_key'),
-    model: store.get('openai_model')
+    apiKey: store.get('openai_api_key') || '',
+    model: store.get('openai_model') || 'gpt-4o'
   },
   anthropic: {
-    apiKey: store.get('anthropic_api_key'),
-    model: store.get('anthropic_model')
+    apiKey: store.get('anthropic_api_key') || '',
+    model: store.get('anthropic_model') || 'claude-3-5-sonnet-latest'
   },
   xai: {
-    apiKey: store.get('xai_api_key'),
-    model: store.get('xai_model')
+    apiKey: store.get('xai_api_key') || '',
+    model: store.get('xai_model') || 'grok-2-latest'
   },
   groq: {
-    apiKey: store.get('groq_api_key'),
-    model: store.get('groq_model')
+    apiKey: store.get('groq_api_key') || '',
+    model: store.get('groq_model') || 'llama-3.3-70b-versatile'
   }
 };
 
@@ -1694,10 +1754,10 @@ ipcMain.handle('llm-set-active-provider', (event, providerId) => {
   return true;
 });
 ipcMain.handle('llm-configure-provider', (event, providerId, options) => {
-  llmConfigs[providerId] = options;
+  llmConfigs[providerId] = { ...llmConfigs[providerId], ...options };
 
   // Persist to store for survivors
-  if (providerId === 'google') {
+  if (providerId === 'google' || providerId === 'google-flash') {
     if (options.apiKey) store.set('gemini_api_key', options.apiKey);
     if (options.model) store.set('gemini_model', options.model);
   }
@@ -1724,6 +1784,21 @@ ipcMain.handle('llm-configure-provider', (event, providerId, options) => {
   }
 
   return true;
+});
+
+// IPC handler to get stored API keys for frontend initialization
+ipcMain.handle('get-stored-api-keys', () => {
+  return {
+    openai_api_key: store.get('openai_api_key') || '',
+    gemini_api_key: store.get('gemini_api_key') || '',
+    anthropic_api_key: store.get('anthropic_api_key') || '',
+    groq_api_key: store.get('groq_api_key') || '',
+    xai_api_key: store.get('xai_api_key') || '',
+    ollama_base_url: store.get('ollama_base_url') || 'http://127.0.0.1:11434',
+    ollama_model: store.get('ollama_model') || 'llama3.2',
+    ollama_enabled: store.get('ollama_enabled') !== false,
+    active_llm_provider: store.get('active_llm_provider') || 'ollama',
+  };
 });
 
 // Redundant search-applications handler removed (see line 3387)

@@ -1315,9 +1315,17 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
       // Refined exclusive Ollama integration via Vercel AI SDK
       if (aiProvider === 'ollama') {
         config = { baseUrl: ollamaBaseUrl, model: ollamaModel };
+      } else if (aiProvider === 'google' || aiProvider === 'google-flash') {
+        config = { apiKey: geminiApiKey, model: aiProvider === 'google-flash' ? 'gemini-1.5-flash' : (store.geminiModel || 'gemini-1.5-pro') };
+      } else if (aiProvider === 'openai') {
+        config = { apiKey: openaiApiKey, model: store.openaiModel || 'gpt-4o' };
+      } else if (aiProvider === 'anthropic') {
+        config = { apiKey: anthropicApiKey, model: store.anthropicModel || 'claude-3-5-sonnet-latest' };
+      } else if (aiProvider === 'xai') {
+        config = { apiKey: store.xaiApiKey, model: store.xaiModel || 'grok-2-latest' };
+      } else if (aiProvider === 'groq') {
+        config = { apiKey: groqApiKey, model: store.groqModel || 'llama-3.3-70b-versatile' };
       }
-
-      await window.electronAPI.configureLLMProvider(aiProvider, config);
 
       await window.electronAPI.configureLLMProvider(aiProvider, config);
     };

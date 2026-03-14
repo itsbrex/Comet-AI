@@ -80,7 +80,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
     } else if (activeProviderId === 'google' || activeProviderId === 'google-flash') {
       config = {
         apiKey: store.geminiApiKey,
-        model: activeProviderId === 'google-flash' ? 'gemini-3.0-flash' : (store.geminiModel || 'gemini-3.1-flash')
+        model: activeProviderId === 'google-flash' ? 'gemini-1.5-flash' : (store.geminiModel || 'gemini-1.5-pro')
       };
     } else if (activeProviderId === 'openai') {
       config = { apiKey: store.openaiApiKey, model: store.openaiModel || 'gpt-4o' };

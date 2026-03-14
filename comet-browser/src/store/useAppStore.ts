@@ -323,7 +323,7 @@ export const useAppStore = create<BrowserState>()(
             xaiApiKey: '',
             xaiModel: 'grok-2-latest',
             aiProvider: 'ollama',
-            ollamaBaseUrl: 'http://localhost:11434',
+            ollamaBaseUrl: 'http://127.0.0.1:11434',
             ollamaModel: 'deepseek-r1:1.5b',
             localLLMBaseUrl: '',
             localLLMModel: '',
@@ -904,6 +904,43 @@ if (typeof window !== 'undefined' && window.electronAPI) {
         if (result.success && result.data) {
             useAppStore.getState().setUser(result.data);
             useAppStore.getState().setActiveView('browser');
+        }
+    });
+
+    // Load stored API keys from electron-store on startup
+    window.electronAPI.getStoredApiKeys().then((keys: any) => {
+        if (keys) {
+            if (keys.openai_api_key) {
+                useAppStore.getState().setOpenaiApiKey(keys.openai_api_key);
+                window.electronAPI.configureLLMProvider('openai', { apiKey: keys.openai_api_key });
+            }
+            if (keys.gemini_api_key) {
+                useAppStore.getState().setGeminiApiKey(keys.gemini_api_key);
+                window.electronAPI.configureLLMProvider('google', { apiKey: keys.gemini_api_key });
+            }
+            if (keys.anthropic_api_key) {
+                useAppStore.getState().setAnthropicApiKey(keys.anthropic_api_key);
+                window.electronAPI.configureLLMProvider('anthropic', { apiKey: keys.anthropic_api_key });
+            }
+            if (keys.groq_api_key) {
+                useAppStore.getState().setGroqApiKey(keys.groq_api_key);
+                window.electronAPI.configureLLMProvider('groq', { apiKey: keys.groq_api_key });
+            }
+            if (keys.xai_api_key) {
+                useAppStore.getState().setXaiApiKey(keys.xai_api_key);
+                window.electronAPI.configureLLMProvider('xai', { apiKey: keys.xai_api_key });
+            }
+            if (keys.ollama_base_url) {
+                useAppStore.getState().setOllamaBaseUrl(keys.ollama_base_url);
+                window.electronAPI.configureLLMProvider('ollama', { baseUrl: keys.ollama_base_url });
+            }
+            if (keys.ollama_model) {
+                useAppStore.getState().setOllamaModel(keys.ollama_model);
+                window.electronAPI.configureLLMProvider('ollama', { model: keys.ollama_model });
+            }
+            if (keys.active_llm_provider) {
+                useAppStore.getState().setAIProvider(keys.active_llm_provider);
+            }
         }
     });
 
