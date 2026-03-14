@@ -32,6 +32,7 @@ import Tesseract from 'tesseract.js';
 import { useRouter } from 'next/navigation';
 import { AICommandQueue, AICommand } from './AICommandQueue';
 import { prepareCommandsForExecution } from '@/lib/AICommandParser';
+import AISetupGuide from './AISetupGuide';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -1106,6 +1107,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
   // UI toggles
   const [showLLMProviderSettings, setShowLLMProviderSettings] = useState(false);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showConversationHistory, setShowConversationHistory] = useState(false);
 
@@ -1304,6 +1306,16 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   useEffect(() => {
     setConversations(lsGet<Conversation[]>('conversations_list', []));
   }, []);
+
+  useEffect(() => {
+    // Check if any API keys are configured or if Ollama is selected (and presumably working)
+    const hasConfigured = !!(openaiApiKey || geminiApiKey || anthropicApiKey || groqApiKey || store.xaiApiKey || (aiProvider === 'ollama'));
+    const hasSeenGuide = sessionStorage.getItem('comet_ai_setup_guide_seen');
+
+    if (!hasConfigured && !hasSeenGuide) {
+      setShowSetupGuide(true);
+    }
+  }, [openaiApiKey, geminiApiKey, anthropicApiKey, groqApiKey, store.xaiApiKey, aiProvider]);
 
   useEffect(() => {
     const initAI = async () => {
@@ -2896,10 +2908,26 @@ Built with Electron + Next.js + React. Comet AI is deeply integrated into the br
         onNew={createNewConversation}
       />
 
+      {/* ── Setup Guide Overlay ─────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showSetupGuide && (
+          <AISetupGuide 
+            onClose={() => {
+              setShowSetupGuide(false);
+              sessionStorage.setItem('comet_ai_setup_guide_seen', 'true');
+            }}
+            onComplete={() => {
+              setShowSetupGuide(false);
+              sessionStorage.setItem('comet_ai_setup_guide_seen', 'true');
+              setShowLLMProviderSettings(true);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* ── Action Permission Popup ─────────────────────────────────────────── */}
       <AnimatePresence>
-        {permissionPending && (
-          <motion.div
+        {permissionPending && (          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

@@ -44,6 +44,7 @@ declare global {
             getAvailableLLMProviders: () => Promise<{ id: string; name: string }[]>;
             setActiveLLMProvider: (providerId: string) => Promise<boolean>;
             configureLLMProvider: (providerId: string, options: any) => Promise<boolean>;
+            getStoredApiKeys: () => Promise<any>;
             generateChatContent: (messages: ChatMessage[], options?: any) => Promise<{ text?: string; thought?: string; error?: string }>;
             streamChatContent: (messages: ChatMessage[], options?: any) => void;
             onChatStreamPart: (callback: (part: any) => void) => () => void;
@@ -196,6 +197,7 @@ declare global {
             onNetworkStatusChanged: (callback: (isOnline: boolean) => void) => () => void;
             onClipboardChanged: (callback: (text: string) => void) => () => void;
             onAIChatInputText: (callback: (text: string) => void) => () => void;
+            onAiChatInputText: (callback: (text: string) => void) => () => void;
             translateWebsite: (args: { targetLanguage: string; method?: string }) => Promise<{ success?: boolean; error?: string }>;
             onTriggerTranslationDialog: (callback: () => void) => () => void;
             toggleAdblocker: (enable: boolean) => void;
@@ -207,7 +209,12 @@ declare global {
             openClipboardPopup: () => void;
             openCartPopup: () => void;
             openSearchPopup: (options?: any) => void;
-            popSearchShowAtCursor: (text: string) => Promise<void>;
+            popSearchShow: (text: string, x: number, y: number) => Promise<{ success: boolean; error?: string }>;
+            popSearchShowAtCursor: (text: string) => Promise<{ success: boolean; error?: string }>;
+            popSearchGetConfig: () => Promise<{ success: boolean; config?: any; error?: string }>;
+            popSearchUpdateConfig: (config: any) => Promise<{ success: boolean; error?: string }>;
+            popSearchSaveConfig: (data: any) => Promise<{ success: boolean; canceled?: boolean; error?: string }>;
+            popSearchLoadConfig: () => Promise<string | null>;
             openTranslatePopup: (options?: any) => void;
             openContextMenuPopup: (options?: any) => void;
             openPopupWindow: (type: string, options?: any) => void;
@@ -222,6 +229,7 @@ declare global {
             onGoogleOAuthCode: (callback: (code: string) => void) => () => void;
             onSetSettingsSection: (callback: (section: string) => void) => () => void;
 
+            getWifiSyncUri: () => Promise<string | null>;
             getWifiSyncQr: () => Promise<string | null>;
             getWifiSyncInfo: () => Promise<{ deviceName: string, pairingCode: string, ip: string, port: number }>;
             onWifiSyncStatus: (callback: (data: { connected: boolean }) => void) => () => void;
