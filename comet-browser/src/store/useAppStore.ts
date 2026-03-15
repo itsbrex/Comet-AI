@@ -5,6 +5,7 @@ import { defaultShortcuts, Shortcut } from '@/lib/constants';
 import firebaseService from '@/lib/FirebaseService';
 import { auth } from '@/lib/firebase';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signInWithCredential } from 'firebase/auth';
+import { MODEL_REGISTRY } from '@/lib/modelRegistry';
 
 // ... (rest of the interfaces are the same)
 
@@ -103,6 +104,8 @@ export interface BrowserState {
     setGeminiApiKey: (key: string) => void;
     geminiModel: string;
     setGeminiModel: (model: string) => void;
+    autoGeminiModelUpdates: boolean;
+    setAutoGeminiModelUpdates: (enabled: boolean) => void;
     setAnthropicApiKey: (key: string) => void;
     setAnthropicModel: (model: string) => void;
     anthropicModel: string;
@@ -328,6 +331,8 @@ export const useAppStore = create<BrowserState>()(
             localLLMBaseUrl: '',
             localLLMModel: '',
             localLlmMode: 'normal',
+            autoGeminiModelUpdates: true,
+            geminiModel: MODEL_REGISTRY.google.pro.id,
             mcpServerPort: 3001,
             additionalAIInstructions: '',
  
@@ -548,6 +553,7 @@ export const useAppStore = create<BrowserState>()(
                     window.electronAPI.configureLLMProvider('google', { model });
                 }
             },
+            setAutoGeminiModelUpdates: (enabled: boolean) => set({ autoGeminiModelUpdates: enabled }),
             setAnthropicApiKey: (key: string) => {
                 set({ anthropicApiKey: key });
                 if (window.electronAPI) {
@@ -607,7 +613,12 @@ export const useAppStore = create<BrowserState>()(
             },
             setLocalLLMBaseUrl: (url: string) => set({ localLLMBaseUrl: url }),
             setLocalLLMModel: (model: string) => set({ localLLMModel: model }),
-            setLocalLlmMode: (mode: 'light' | 'normal' | 'heavy') => set({ localLlmMode: mode }),
+            setLocalLlmMode: (mode: 'light' | 'normal' | 'heavy') => {
+                set({ localLlmMode: mode });
+                if (window.electronAPI) {
+                    window.electronAPI.configureLLMProvider('ollama', { localLlmMode: mode });
+                }
+            },
 
             // AI Permission
             askForAiPermission: true,

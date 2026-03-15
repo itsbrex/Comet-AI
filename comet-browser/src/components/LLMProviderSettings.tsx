@@ -1,3 +1,4 @@
+// LLMProviderSettings component
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -9,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { OpenAICompatibleProvider } from '@/lib/llm/providers/openai-compatible';
 import { useAppStore } from '@/store/useAppStore';
 import { Cpu, Cloud, Settings, Save, Shield, Database, ChevronDown, Check, Sparkles, Puzzle, FolderOpen } from 'lucide-react';
+import { getGeminiModelMetadata, getRecommendedGeminiModel } from '@/lib/modelRegistry';
 
 interface LLMProviderSettingsProps {
   selectedEngine: string;
@@ -33,6 +35,13 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
   const [providers, setProviders] = useState<{ id: string; name: string }[]>([]);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const geminiPreferences = useMemo(() => {
+    const providerId = activeProviderId === 'google-flash' ? 'google-flash' : 'google';
+    return {
+      recommended: getRecommendedGeminiModel(providerId),
+      metadata: getGeminiModelMetadata(providerId),
+    };
+  }, [activeProviderId]);
 
   // Use store.aiProvider as source of truth
   useEffect(() => {
@@ -78,9 +87,11 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
     if (activeProviderId === 'ollama') {
       config = { baseUrl: store.ollamaBaseUrl, model: store.ollamaModel, localLlmMode: store.localLlmMode };
     } else if (activeProviderId === 'google' || activeProviderId === 'google-flash') {
+      const providerId = activeProviderId === 'google-flash' ? 'google-flash' : 'google';
+      const recommendedModel = getRecommendedGeminiModel(providerId);
       config = {
         apiKey: store.geminiApiKey,
-        model: activeProviderId === 'google-flash' ? 'gemini-1.5-flash' : (store.geminiModel || 'gemini-1.5-pro')
+        model: providerId === 'google-flash' ? recommendedModel : (store.geminiModel || recommendedModel)
       };
     } else if (activeProviderId === 'openai') {
       config = { apiKey: store.openaiApiKey, model: store.openaiModel || 'gpt-4o' };
@@ -367,7 +378,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                         <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
                           <Sparkles size={14} />
                           <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">
-                            {activeProviderId === 'google-flash' ? 'Google Gemini 3.0 Flash' : 'Google Gemini'}
+                            {geminiPreferences.metadata.friendlyName}
                           </span>
                         </div>
                         <div className="space-y-1">
@@ -385,13 +396,33 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                             <label className="text-[9px] text-white/30 uppercase font-bold">Model Override</label>
                             <input
                               type="text"
-                              placeholder="e.g. gemini-3.1-flash"
+                              placeholder={`e.g. ${geminiPreferences.metadata.id}`}
                               className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
                               value={store.geminiModel || ''}
                               onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setGeminiModel(e.target.value)}
                             />
                           </div>
                         )}
+                        <div className="space-y-2 p-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] text-white/80">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black uppercase tracking-[0.3em] text-white/40">Gemini Update Feed</span>
+                            <button
+                              type="button"
+                              onClick={() => store.setAutoGeminiModelUpdates(!store.autoGeminiModelUpdates)}
+                              className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.4em] transition ${store.autoGeminiModelUpdates ? 'bg-deep-space-accent-neon/80 text-black' : 'bg-white/10 text-white/70'}`}
+                            >
+                              Auto {store.autoGeminiModelUpdates ? 'On' : 'Off'}
+                            </button>
+                          </div>
+                          <p className="text-[9px] text-white/50">
+                            Recommended: <strong className="text-white">{geminiPreferences.metadata.friendlyName}</strong> ({geminiPreferences.metadata.id})
+                          </p>
+                          <p className="text-[9px] text-white/40">Released {geminiPreferences.metadata.releaseDate}</p>
+                          <p className="text-[8px] text-white/40 leading-snug">{geminiPreferences.metadata.notes}</p>
+                          <p className="text-[8px] text-white/30">
+                            Auto-updates pin your Google provider to the freshest Gemini 3.0/3.1 reasoning builds with no manual steps.
+                          </p>
+                        </div>
                       </div>
                     )}
 

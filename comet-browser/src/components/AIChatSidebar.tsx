@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
 import { ChatMessage, LLMProviderOptions } from "@/lib/llm/providers/base";
 import LLMProviderSettings from './LLMProviderSettings';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,6 +33,8 @@ import { useRouter } from 'next/navigation';
 import { AICommandQueue, AICommand } from './AICommandQueue';
 import { prepareCommandsForExecution } from '@/lib/AICommandParser';
 import AISetupGuide from './AISetupGuide';
+import { buildFrontendReasoningOptions, type LlmMode } from '@/lib/aiReasoningOptions';
+import { getRecommendedGeminiModel } from '@/lib/modelRegistry';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -1062,7 +1064,8 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     additionalAIInstructions, selectedLanguage, history, tabs, activeTabId,
     currentUrl, sidebarWidth,
     setShowAiMistakeWarning, setTheme: storeSetTheme, setActiveView,
-    setCurrentUrl, setSidebarWidth,
+    setCurrentUrl, setSidebarWidth, setGeminiModel,
+    localLlmMode, autoGeminiModelUpdates, geminiModel,
   } = store;
 
   // Core state
@@ -1326,9 +1329,14 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
       // Refined exclusive Ollama integration via Vercel AI SDK
       if (aiProvider === 'ollama') {
-        config = { baseUrl: ollamaBaseUrl, model: ollamaModel };
+        config = { baseUrl: ollamaBaseUrl, model: ollamaModel, localLlmMode: store.localLlmMode };
       } else if (aiProvider === 'google' || aiProvider === 'google-flash') {
-        config = { apiKey: geminiApiKey, model: aiProvider === 'google-flash' ? 'gemini-1.5-flash' : (store.geminiModel || 'gemini-1.5-pro') };
+        const providerId = aiProvider === 'google-flash' ? 'google-flash' : 'google';
+        const recommendedModel = getRecommendedGeminiModel(providerId);
+        config = {
+          apiKey: geminiApiKey,
+          model: providerId === 'google-flash' ? recommendedModel : (store.geminiModel || recommendedModel),
+        };
       } else if (aiProvider === 'openai') {
         config = { apiKey: openaiApiKey, model: store.openaiModel || 'gpt-4o' };
       } else if (aiProvider === 'anthropic') {
@@ -1343,7 +1351,19 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     };
 
     initAI();
-  }, [aiProvider, ollamaBaseUrl, ollamaModel, openaiApiKey, localLLMBaseUrl, localLLMModel, geminiApiKey, anthropicApiKey, groqApiKey]);
+  }, [
+    aiProvider, ollamaBaseUrl, ollamaModel, openaiApiKey, localLLMBaseUrl, localLLMModel,
+    geminiApiKey, anthropicApiKey, groqApiKey, store.localLlmMode, store.geminiModel,
+  ]);
+
+  useEffect(() => {
+    if (!autoGeminiModelUpdates) return;
+    if (!aiProvider || !aiProvider.startsWith('google')) return;
+    const providerId = aiProvider === 'google-flash' ? 'google-flash' : 'google';
+    const recommended = getRecommendedGeminiModel(providerId);
+    if (geminiModel === recommended) return;
+    setGeminiModel(recommended);
+  }, [autoGeminiModelUpdates, aiProvider, geminiModel, setGeminiModel]);
 
   // ---------------------------------------------------------------------------
   // Core send handler
@@ -1417,13 +1437,30 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           return;
         }
 
-        const getStreamingResponse = async (history: ChatMessage[]): Promise<any> => {
-          return new Promise((resolve) => {
-            let fullText = '';
-            let fullThought = '';
-            const cleanup = window.electronAPI.onChatStreamPart((part: any) => {
+  const reasoningOptions = useMemo(() => buildFrontendReasoningOptions(
+    (localLlmMode || 'normal') as LlmMode,
+    aiProvider,
+  ), [localLlmMode, aiProvider]);
+
+  const getStreamingResponse = async (history: ChatMessage[]): Promise<any> => {
+    return new Promise((resolve) => {
+      let fullText = '';
+      let fullThought = '';
+      const cleanup = window.electronAPI.onChatStreamPart((part: any) => {
               if (part.type === 'text-delta') {
-                fullText += (part.textDelta || '');
+                const delta = part.textDelta || '';
+                fullText += delta;
+                
+                // Detect <think> tags in real-time for models like DeepSeek-R1
+                const thinkStart = fullText.indexOf('<think>');
+                const thinkEnd = fullText.indexOf('</think>');
+                
+                if (thinkStart !== -1) {
+                  const currentThought = thinkEnd !== -1 
+                    ? fullText.substring(thinkStart + 7, thinkEnd) 
+                    : fullText.substring(thinkStart + 7);
+                  setThinkingText(currentThought.trim());
+                }
               } else if (part.type === 'reasoning-delta') {
                 fullThought += (part.reasoningDelta || '');
                 setThinkingText(fullThought.trim());
@@ -1435,7 +1472,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
                 resolve({ text: fullText, thought: fullThought });
               }
             });
-            window.electronAPI.streamChatContent(history);
+            window.electronAPI.streamChatContent(history, reasoningOptions);
           });
         };
 

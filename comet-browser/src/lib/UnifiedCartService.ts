@@ -3,6 +3,8 @@
  * Smart shopping cart with price tracking, AI recommendations, and cross-site comparison
  */
 
+import { buildFrontendReasoningOptions } from './aiReasoningOptions';
+
 export interface CartItem {
     id: string;
     productName: string;
@@ -77,9 +79,10 @@ Provide recommendations for:
 2. Complementary products
 3. Money-saving tips`;
 
+                const reasoningOptions = buildFrontendReasoningOptions('normal', 'google');
                 const response = await window.electronAPI.generateChatContent([
                     { role: 'user', content: prompt }
-                ], { provider: 'gemini' });
+                ], reasoningOptions);
 
                 if (response.text) {
                     return response.text.split('\n').filter(line => line.trim().length > 0);
@@ -237,9 +240,10 @@ Total: ${items[0]?.currency || '$'} ${total}
 
 Provide actionable suggestions to save money.`;
 
+                const reasoningOptions = buildFrontendReasoningOptions('normal', 'google');
                 const response = await window.electronAPI.generateChatContent([
                     { role: 'user', content: prompt }
-                ], { provider: 'gemini' });
+                ], reasoningOptions);
 
                 if (response.text) {
                     return response.text.split('\n').filter(line => line.trim().length > 0).slice(0, 5);

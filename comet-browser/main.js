@@ -64,6 +64,7 @@ const { RagService } = require('./src/lib/rag-service.js');
 const { VoiceService } = require('./src/lib/voice-service.js');
 const { WorkflowRecorder } = require('./src/lib/workflow-recorder.js');
 const { PopSearchService, popSearchService } = require('./src/lib/pop-search-service.js');
+const { getRecommendedGeminiModel } = require('./src/lib/modelRegistry.js');
 
 const permissionStore = new PermissionStore();
 let cometAiEngine = null;
@@ -294,9 +295,9 @@ const prepareLLM = async (messages, options = {}) => {
   if (providerId === 'ollama') {
     const { createOllama } = await import('ai-sdk-ollama');
     const baseUrl = config.baseUrl || store.get('ollama_base_url') || 'http://127.0.0.1:11434';
-    const modelName = options.model || config.model || store.get('ollama_model') || 'llama3.2';
+    const modelName = options.model || config.model || store.get('ollama_model') || 'deepseek-r1:8b';
 
-    console.log('[Ollama] Base URL:', baseUrl, 'Model:', modelName, 'Is Dev:', isDev);
+    console.log('[Ollama] Base URL:', baseUrl, 'Model:', modelName);
 
     const ollamaEnabled = store.get('ollama_enabled') !== false;
     if (!ollamaEnabled) {
@@ -316,12 +317,10 @@ const prepareLLM = async (messages, options = {}) => {
     const apiKey = config.apiKey || store.get('gemini_api_key');
     if (!apiKey) throw new Error('Google Gemini API Key is missing.');
     
-    // Create custom instance with API key
+    const recommendedModel = getRecommendedGeminiModel(providerId);
+    const modelName = options.model || config.model || store.get('gemini_model') || recommendedModel;
+
     const google = createGoogleGenerativeAI({ apiKey });
-    
-    // Choose model based on type
-    const defaultModel = providerId === 'google-flash' ? 'gemini-1.5-flash' : 'gemini-1.5-pro';
-    const modelName = options.model || config.model || store.get('gemini_model') || defaultModel;
     
     modelInstance = google(modelName, {
       structuredOutputs: true,
@@ -382,43 +381,97 @@ const prepareLLM = async (messages, options = {}) => {
   });
 
   const cacheKey = JSON.stringify({ providerId, messages, options });
-  return { modelInstance, systemPrompt, chatMessages, cacheKey };
+  return { modelInstance, systemPrompt, chatMessages, cacheKey, providerId, config };
+};
+
+const THINKING_LEVEL_BY_MODE = {
+  light: 'low',
+  normal: 'medium',
+  heavy: 'high',
+};
+
+const THINKING_BUDGET_BY_LEVEL = {
+  low: 4000,
+  medium: 9500,
+  high: 16500,
+};
+
+const resolveReasoningPreferences = (options = {}, config = {}) => {
+  const mode = options.localLlmMode || config.localLlmMode || store.get('local_llm_mode') || 'normal';
+  const thinkingLevel = options.thinkingLevel || THINKING_LEVEL_BY_MODE[mode] || 'medium';
+  const budgetTokens = options.thinkingBudget ?? THINKING_BUDGET_BY_LEVEL[thinkingLevel] ?? 9500;
+  return { mode, thinkingLevel, budgetTokens };
+};
+
+const buildProviderOptions = (providerId, options = {}, config = {}) => {
+  const baseOptions = { ...(options.providerOptions || {}) };
+  const { thinkingLevel, budgetTokens } = resolveReasoningPreferences(options, config);
+
+  if (providerId.startsWith('google')) {
+    const existing = baseOptions.google ?? {};
+    baseOptions.google = {
+      ...existing,
+      thinking: {
+        includeThoughts: true,
+        thinkingLevel,
+        ...(existing.thinking || {}),
+      },
+    };
+  }
+
+  if (providerId === 'anthropic') {
+    const existing = baseOptions.anthropic ?? {};
+    baseOptions.anthropic = {
+      ...existing,
+      thinking: {
+        type: 'enabled',
+        budgetTokens,
+        ...(existing.thinking || {}),
+      },
+      effort: existing.effort || thinkingLevel,
+    };
+  }
+
+  if (providerId === 'ollama') {
+    const existing = baseOptions.ollama ?? {};
+    baseOptions.ollama = {
+      ...existing,
+      sendReasoning: existing.sendReasoning ?? true,
+      num_ctx: existing.num_ctx || options.ollamaContext || 32768,
+    };
+  }
+
+  return baseOptions;
 };
 
 const llmGenerateHandler = async (messages, options = {}) => {
   try {
     const { generateText } = await import('ai');
-    const { modelInstance, systemPrompt, chatMessages, cacheKey } = await prepareLLM(messages, options);
+    const { modelInstance, systemPrompt, chatMessages, cacheKey, providerId, config } = await prepareLLM(messages, options);
 
     if (llmCache.has(cacheKey)) {
       console.log('[LLM] Cache hit');
       return llmCache.get(cacheKey);
     }
 
+    console.log(`[LLM-Generate] Starting generation with model: ${modelInstance.modelId}`);
+    
+    const providerOptions = buildProviderOptions(providerId, options, config);
     const { text, reasoning } = await generateText({
       model: modelInstance,
       system: systemPrompt,
       messages: chatMessages,
       temperature: 0.7,
       maxTokens: 8192,
-      // Gemini 3.1 Thinking Mode (SDK 6)
       providerOptions: {
-        google: modelInstance.modelId.includes('3') ? {
-          thinking: {
-            includeThoughts: true,
-            thinkingLevel: options.thinkingLevel || 'medium' // Dynamic thinking level
-          }
-        } : {},
-        ollama: {
-          sendReasoning: true,
-          think: true
-        }
+        ...providerOptions,
       }
     });
 
+    console.log(`[LLM-Generate] Success. Text length: ${text?.length || 0}`);
     const result = {
       text: text,
-      thought: reasoning || null // AI SDK 6 provides 'reasoning' field
+      thought: reasoning || null
     };
 
     llmCache.set(cacheKey, result);
@@ -434,8 +487,9 @@ const llmGenerateHandler = async (messages, options = {}) => {
 const llmStreamHandler = async (event, messages, options = {}) => {
   try {
     const { streamText } = await import('ai');
-    const { modelInstance, systemPrompt, chatMessages } = await prepareLLM(messages, options);
+    const { modelInstance, systemPrompt, chatMessages, providerId, config } = await prepareLLM(messages, options);
 
+    const providerOptions = buildProviderOptions(providerId, options, config);
     const result = await streamText({
       model: modelInstance,
       system: systemPrompt,
@@ -443,16 +497,7 @@ const llmStreamHandler = async (event, messages, options = {}) => {
       temperature: 0.7,
       maxTokens: 8192,
       providerOptions: {
-        google: modelInstance.modelId.includes('3') ? {
-          thinking: {
-            includeThoughts: true,
-            thinkingLevel: options.thinkingLevel || 'medium'
-          }
-        } : {},
-        ollama: {
-          sendReasoning: true,
-          think: true
-        }
+        ...providerOptions,
       }
     });
 
@@ -1718,16 +1763,16 @@ let activeLlmProvider = store.get('active_llm_provider') || 'ollama';
 const llmConfigs = {
   ollama: {
     baseUrl: store.get('ollama_base_url') || 'http://127.0.0.1:11434',
-    model: store.get('ollama_model') || 'llama3.2',
+    model: store.get('ollama_model') || 'deepseek-r1:8b',
     localLlmMode: store.get('local_llm_mode') || 'normal'
   },
   google: {
     apiKey: store.get('gemini_api_key') || '',
-    model: store.get('gemini_model') || 'gemini-1.5-pro'
+    model: store.get('gemini_model') || 'gemini-2.0-pro-exp-02-05'
   },
   'google-flash': {
     apiKey: store.get('gemini_api_key') || '',
-    model: store.get('gemini_model') || 'gemini-1.5-flash'
+    model: store.get('gemini_model') || 'gemini-2.0-flash'
   },
   openai: {
     apiKey: store.get('openai_api_key') || '',
@@ -2259,39 +2304,50 @@ ipcMain.handle('open-external-app', async (event, app_name_or_path) => {
 });
 
 ipcMain.handle('ollama-list-models', async () => {
-  return new Promise((resolve) => {
-    exec('ollama list', (error, stdout, stderr) => {
-      if (error) {
-        console.error(`exec error: ${error}`);
-        resolve({ error: `Failed to list Ollama models. Is Ollama installed and in your system's PATH? Error: ${error.message}` });
-        return;
-      }
-      if (stderr) {
-        console.error(`stderr: ${stderr}`);
-        resolve({ error: `Ollama command error: ${stderr}` });
-        return;
-      }
-
-      const lines = stdout.trim().split('\n');
-      if (lines.length <= 1) { // Only header or no models
-        resolve({ models: [] });
-        return;
-      }
-
-      const models = lines.slice(1).map(line => {
-        const parts = line.trim().split(/\s{2,}/); // Split by 2 or more spaces
-        if (parts.length < 1) return null;
-
-        return {
-          name: parts[0],
-          id: parts[1] || 'N/A',
-          size: parts[2] || 'N/A',
-          updated: parts[parts.length - 1] || 'N/A'
-        };
-      }).filter(Boolean);
-      resolve({ models });
+  try {
+    const baseUrl = store.get('ollama_base_url') || 'http://127.0.0.1:11434';
+    console.log(`[Ollama] Fetching models from ${baseUrl}/api/tags`);
+    
+    const response = await fetch(`${baseUrl}/api/tags`).catch(err => {
+      throw new Error(`Failed to connect to Ollama at ${baseUrl}. Is it running?`);
     });
-  });
+
+    if (!response.ok) {
+      throw new Error(`Ollama server returned error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const models = (data.models || []).map(m => ({
+      name: m.name,
+      id: m.digest || 'N/A',
+      size: m.size ? `${(m.size / (1024 * 1024 * 1024)).toFixed(2)} GB` : 'N/A',
+      modified_at: m.modified_at || 'N/A'
+    }));
+
+    return { models };
+  } catch (error) {
+    console.error(`[Ollama] List error:`, error);
+    
+    // Fallback to CLI
+    return new Promise((resolve) => {
+      exec('ollama list', (err, stdout) => {
+        if (err) {
+          return resolve({ error: error.message });
+        }
+        const lines = stdout.trim().split('\n').slice(1);
+        const models = lines.map(line => {
+          const parts = line.trim().split(/\s{2,}/);
+          return {
+            name: parts[0],
+            id: parts[1] || 'N/A',
+            size: parts[2] || 'N/A',
+            modified_at: parts[parts.length - 1] || 'N/A'
+          };
+        }).filter(m => m.name);
+        resolve({ models });
+      });
+    });
+  }
 });
 
 
@@ -2363,8 +2419,9 @@ app.whenReady().then(() => {
         GROQ_API_KEY: store.get('groq_api_key') || process.env.GROQ_API_KEY || '',
         OPENAI_API_KEY: store.get('openai_api_key') || process.env.OPENAI_API_KEY || '',
         ANTHROPIC_API_KEY: store.get('anthropic_api_key') || process.env.ANTHROPIC_API_KEY || '',
+        OLLAMA_BASE_URL: store.get('ollama_base_url') || 'http://127.0.0.1:11434',
       });
-      console.log('[Main] CometAiEngine initialized.');
+      console.log('[Main] CometAiEngine initialized with Ollama:', store.get('ollama_base_url') || 'http://127.0.0.1:11434');
 
       robotService = new RobotService(permissionStore);
       console.log(`[Main] RobotService initialized (available: ${robotService.isAvailable}).`);
@@ -2519,15 +2576,43 @@ app.whenReady().then(() => {
     wifiSyncService = getWiFiSync(3004);
     wifiSyncService.start();
 
-    wifiSyncService.on('command', ({ commandId, command, args, sendResponse }) => {
+    wifiSyncService.on('command', async ({ commandId, command, args, sendResponse }) => {
       console.log(`[WiFi-Sync] Mobile requested command: ${command}`);
 
       if (command === 'ai-prompt') {
+        const prompt = args.prompt;
+        const modelOverride = args.model;
+        
+        console.log(`[WiFi-Sync] AI Prompt from mobile: "${prompt.substring(0, 50)}..." Target Model: ${modelOverride || 'default'}`);
+
         if (mainWindow) {
-          mainWindow.webContents.send('remote-ai-prompt', { prompt: args.prompt, commandId });
-          sendResponse({ success: true, output: 'Prompt received by desktop' });
-        } else {
-          sendResponse({ success: false, error: 'Desktop window not available' });
+          mainWindow.webContents.send('remote-ai-prompt', { prompt, commandId });
+        }
+
+        try {
+          const targetModel = modelOverride || store.get('ollama_model') || 'deepseek-r1:8b';
+          const provider = (targetModel.includes('gemini') || targetModel.includes('google')) ? 'google-flash' : 'ollama';
+          
+          console.log(`[WiFi-Sync] Dispatching AI task: ${targetModel} (${provider})`);
+
+          const result = await llmGenerateHandler([{ role: 'user', content: prompt }], { 
+            model: targetModel,
+            provider: provider
+          });
+          
+          if (result.error) {
+            console.error(`[WiFi-Sync] AI Error from Handler: ${result.error}`);
+            sendResponse({ success: false, error: result.error });
+          } else if (!result.text) {
+            console.error(`[WiFi-Sync] AI Error: Received empty text from handler`);
+            sendResponse({ success: false, error: "AI generated an empty response" });
+          } else {
+            console.log(`[WiFi-Sync] AI Success! Sending ${result.text.length} chars back.`);
+            sendResponse({ success: true, output: result.text, thought: result.thought });
+          }
+        } catch (err) {
+          console.error(`[WiFi-Sync] CRITICAL AI FAILURE:`, err);
+          sendResponse({ success: false, error: `Internal Engine Error: ${err.message}` });
         }
       } else if (command === 'media-next' || command === 'media-prev' || command === 'media-play-pause') {
         if (robot) {

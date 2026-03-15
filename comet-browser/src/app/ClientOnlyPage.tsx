@@ -46,6 +46,22 @@ import { VirtualizedTabBar } from '@/components/VirtualizedTabBar';
 import { TabSwitcherOverlay } from '@/components/TabSwitcherOverlay';
 import SpotlightSearchOverlay from '@/components/SpotlightSearchOverlay';
 
+type AiOverviewSource = { text: string; metadata: any };
+interface AiOverviewState {
+  query: string;
+  result: string | null;
+  sources: AiOverviewSource[] | null;
+  isLoading: boolean;
+  provider: string;
+  model: string;
+  statusMessage?: string;
+  durationMs?: number;
+  error?: string;
+}
+import { fetchAiOverview } from '@/lib/aiManager';
+import type { AiOverviewResponse } from '@/lib/aiManager';
+import { getRecommendedGeminiModel } from '@/lib/modelRegistry';
+
 const SidebarIcon = ({ icon, label, active, onClick, collapsed }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, collapsed: boolean }) => (
   <button
     onClick={onClick}
@@ -113,7 +129,7 @@ export default function Home() {
   const [isTyping, setIsTyping] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]); // New state for additional suggestions
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, visible: boolean } | null>(null);
-  const [aiOverview, setAiOverview] = useState<{ query: string, result: string | null, sources: { text: string; metadata: any; }[] | null, isLoading: boolean } | null>(null);
+  const [aiOverview, setAiOverview] = useState<AiOverviewState | null>(null);
   const [showTabSwitcher, setShowTabSwitcher] = useState(false);
   const [railVisible, setRailVisible] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -511,34 +527,111 @@ export default function Home() {
     return () => window.removeEventListener('wheel', handleWheel);
   }, [store]);
 
-  const triggerAIAnalysis = async (query: string) => {
-    if (!store.enableAIAssist) return;
-    setAiOverview({ query, result: null, sources: null, isLoading: true });
-    try {
-      if (window.electronAPI) {
-        const localContext = await BrowserAI.retrieveContext(query);
-        const contextString = localContext.map(c => c.text).join('\n\n');
-
-        const result = await window.electronAPI.generateChatContent([
-          {
-            role: 'user',
-            content: `Synthesize a comprehensive, Perplexity-style answer for: \"${query}\". 
-            Include:
-            1. A clear direct answer (2 paragraphs max).
-            2. 3 deep insights.
-            3. Contextual relevance to the user's local data.${contextString}
-            Format with HTML bolding and clear sections.`
-          }
-        ], { provider: store.aiProvider });
-
-        setAiOverview(prev => prev ? { ...prev, result: result.text || result.error || "Neural link stable, but no data returned.", sources: localContext, isLoading: false } : null);
-      } else {
-        setTimeout(() => setAiOverview(prev => prev ? { ...prev, result: "AI Engine not connected in this environment.", sources: null, isLoading: false } : null), 1000);
-      }
-    } catch (e) {
-      setAiOverview(prev => prev ? { ...prev, result: "Analysis failed due to local connectivity issues.", sources: null, isLoading: false } : null);
+  const resolveProviderModel = useCallback((providerId: string) => {
+    switch (providerId) {
+      case 'google-flash':
+        return getRecommendedGeminiModel('google-flash');
+      case 'google':
+        return store.geminiModel || getRecommendedGeminiModel('google');
+      case 'openai':
+        return store.openaiModel || 'gpt-4o';
+      case 'anthropic':
+        return store.anthropicModel || 'claude-3-5-sonnet-latest';
+      case 'xai':
+        return store.xaiModel || 'grok-2-latest';
+      case 'groq':
+        return store.groqModel || 'llama-3.3-70b-versatile';
+      case 'ollama':
+        return store.ollamaModel;
+      default:
+        return providerId;
     }
-  };
+  }, [
+    store.anthropicModel,
+    store.geminiModel,
+    store.groqModel,
+    store.openaiModel,
+    store.xaiModel,
+    store.ollamaModel,
+  ]);
+
+  const runAiOverview = useCallback(async (rawQuery: string) => {
+    const query = rawQuery.trim();
+    if (!query || !store.enableAIAssist) return null;
+    const providerId = store.aiProvider || 'ollama';
+    const modelName = resolveProviderModel(providerId);
+
+    setAiOverview({
+      query,
+      result: null,
+      sources: null,
+      isLoading: true,
+      provider: providerId,
+      model: modelName,
+      statusMessage: 'Gathering context…',
+    });
+
+    const contextItems = await BrowserAI.retrieveContext(query);
+    setAiOverview(prev => prev ? { ...prev, statusMessage: `${contextItems.length} context items ready` } : prev);
+
+    const contextString = contextItems.map((c) => c.text).join('\n\n');
+    const prompt = `Synthesize a comprehensive, Perplexity-style answer for: "${query}". 
+    Include:
+    1. A clear direct answer (2 paragraphs max).
+    2. 3 deep insights.
+    3. Contextual relevance to the user's local data.
+    Format with HTML bolding and clear sections.`;
+
+    const startTime = Date.now();
+    let response: AiOverviewResponse;
+    try {
+      response = await fetchAiOverview({
+        query: prompt,
+        context: contextString,
+        provider: providerId,
+        model: modelName,
+        localLlmMode: store.localLlmMode,
+        extraInstructions: 'Use HTML bolding for highlights and number the insights.',
+      });
+    } catch (error: any) {
+      const message = error?.message || 'Overview failed';
+      setAiOverview({
+        query,
+        result: null,
+        sources: contextItems,
+        isLoading: false,
+        provider: providerId,
+        model: modelName,
+        statusMessage: message,
+        durationMs: Date.now() - startTime,
+        error: message,
+      });
+      return { error: message, provider: providerId, model: modelName, durationMs: Date.now() - startTime };
+    }
+
+    const statusMsg = response.error
+      ? `Error: ${response.error}`
+      : `Delivered in ${response.durationMs ?? (Date.now() - startTime)}ms | ${contextItems.length} contexts`;
+
+    setAiOverview({
+      query,
+      result: response.text || response.error || null,
+      sources: contextItems,
+      isLoading: false,
+      provider: providerId,
+      model: modelName,
+      statusMessage: statusMsg,
+      durationMs: response.durationMs,
+      error: response.error,
+    });
+
+    return response;
+  }, [
+    resolveProviderModel,
+    store.enableAIAssist,
+    store.aiProvider,
+    store.localLlmMode,
+  ]);
 
   // Apply Theme
   useEffect(() => {
@@ -562,11 +655,11 @@ export default function Home() {
   useEffect(() => {
     if (window.electronAPI && store.enableAIAssist) {
       const cleanup = window.electronAPI.onAiQueryDetected((query: any) => {
-        triggerAIAnalysis(query);
+        runAiOverview(query);
       });
       return cleanup;
     }
-  }, [store.enableAIAssist]);
+  }, [store.enableAIAssist, runAiOverview]);
 
   // PWA Service Worker Registration
   useEffect(() => {
@@ -819,7 +912,7 @@ export default function Home() {
       url = `https://${url}`;
     } else if (!url.startsWith('http')) {
       url = `${searchEngines[store.selectedEngine as keyof typeof searchEngines].url}${encodeURIComponent(url)}`;
-      if (store.enableAIAssist) triggerAIAnalysis(store.currentUrl.trim());
+      if (store.enableAIAssist) runAiOverview(store.currentUrl.trim());
     }
 
     if (newTab) {
@@ -1681,12 +1774,21 @@ export default function Home() {
 
             {/* Neural Context Overlay */}
             <AnimatePresence>
-              {aiOverview && (
+            {aiOverview && (
                 <AIAssistOverlay
                   query={aiOverview.query}
                   result={aiOverview.result}
                   sources={aiOverview.sources}
                   isLoading={aiOverview.isLoading}
+                  provider={aiOverview.provider}
+                  model={aiOverview.model}
+                  statusMessage={aiOverview.statusMessage}
+                  durationMs={aiOverview.durationMs}
+                  onRefresh={() => runAiOverview(aiOverview.query)}
+                  availableOllamaModels={store.ollamaModelsList}
+                  selectedOllamaModel={store.ollamaModel}
+                  onOllamaModelSelect={(modelName) => store.setOllamaModel(modelName)}
+                  onOllamaModelsUpdate={(models) => store.setOllamaModelsList(models)}
                   onClose={() => setAiOverview(null)}
                 />
               )}
@@ -1745,9 +1847,9 @@ export default function Home() {
                 if (window.electronAPI) {
                   const selectedText = await window.electronAPI.getSelectedText();
                   if (selectedText) {
-                    triggerAIAnalysis(selectedText);
+                    runAiOverview(selectedText);
                   } else {
-                    triggerAIAnalysis(store.currentUrl);
+                    runAiOverview(store.currentUrl);
                   }
                 }
               }} className="w-full px-4 py-2 flex items-center gap-3 hover:bg-accent/10 text-secondary-text hover:text-accent transition-all">

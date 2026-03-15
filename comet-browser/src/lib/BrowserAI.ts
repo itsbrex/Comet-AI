@@ -1,4 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
+import { buildFrontendReasoningOptions } from './aiReasoningOptions';
 
 /**
  * BrowserAI - Advanced intelligence services for Comet Browser
@@ -365,10 +366,11 @@ export class BrowserAI {
                 if (result.success) return result.translated;
 
                 // Fallback to LLM
+                const reasoningOptions = buildFrontendReasoningOptions('normal', 'google');
                 const response = await window.electronAPI.generateChatContent([
                     { role: 'system', content: `You are a high-performance translation engine. Translate the following text into ${targetLanguage}. Return ONLY the translated text, no explanation.` },
                     { role: 'user', content: text }
-                ]);
+                ], reasoningOptions);
                 return response.text || text;
             } catch (e) {
                 console.error("Translation Error:", e);

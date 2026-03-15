@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, X, Search, ExternalLink, RefreshCw, ChevronRight, Zap, Target, Layers, Cpu } from 'lucide-react';
 
@@ -7,10 +7,50 @@ interface AIAssistOverlayProps {
     result: string | null;
     sources: { text: string; metadata: any; }[] | null;
     isLoading: boolean;
+    provider: string;
+    model: string;
+    statusMessage?: string;
+    durationMs?: number;
     onClose: () => void;
+    onRefresh: () => void;
+    availableOllamaModels?: { name: string; modified_at?: string }[];
+    selectedOllamaModel?: string;
+    onOllamaModelSelect?: (model: string) => void;
+    onOllamaModelsUpdate?: (models: { name: string; modified_at?: string }[]) => void;
 }
 
-const AIAssistOverlay = ({ query, result, sources, isLoading, onClose }: AIAssistOverlayProps) => {
+const AIAssistOverlay = ({
+    query, result, sources, isLoading, provider, model,
+    statusMessage, durationMs, onClose, onRefresh,
+    availableOllamaModels = [], selectedOllamaModel,
+    onOllamaModelSelect, onOllamaModelsUpdate,
+}: AIAssistOverlayProps) => {
+    const [ollamaInput, setOllamaInput] = useState(selectedOllamaModel || '');
+
+    useEffect(() => {
+        setOllamaInput(selectedOllamaModel || '');
+    }, [selectedOllamaModel]);
+
+    useEffect(() => {
+        if (provider !== 'ollama' || typeof window === 'undefined') return;
+        let active = true;
+        (async () => {
+            if (!window.electronAPI) return;
+            const { models } = await window.electronAPI.ollamaListModels();
+            if (!active) return;
+            if (models?.length) {
+                onOllamaModelsUpdate?.(models);
+            }
+        })();
+        return () => {
+            active = false;
+        };
+    }, [provider, onOllamaModelsUpdate]);
+
+    const handleApplyOllamaModel = () => {
+        if (!ollamaInput) return;
+        onOllamaModelSelect?.(ollamaInput);
+    };
     return (
         <div className="fixed top-28 right-8 w-[450px] z-[99999] pointer-events-none">
             <motion.div
@@ -48,6 +88,67 @@ const AIAssistOverlay = ({ query, result, sources, isLoading, onClose }: AIAssis
                     </button>
                 </div>
 
+                <div className="px-8 pb-2 space-y-2 relative z-10">
+                    <div className="flex flex-wrap gap-3 text-[10px] text-white/60">
+                        <span className="px-3 py-1 rounded-full bg-white/10 border border-white/5">{provider.toUpperCase()}</span>
+                        <span className="px-3 py-1 rounded-full bg-white/10 border border-white/5">Model: {model}</span>
+                        {durationMs && (
+                            <span className="px-3 py-1 rounded-full bg-white/10 border border-white/5 text-white/40">Latency: {durationMs}ms</span>
+                        )}
+                    </div>
+                    <p className="text-[9px] text-white/40">{statusMessage || 'Smart overview ready.'}</p>
+                    {provider === 'ollama' && (
+                        <div className="space-y-2 p-3 bg-white/5 border border-white/10 rounded-2xl text-[9px] text-white/70">
+                            <div className="flex items-center justify-between">
+                                <span className="font-black uppercase tracking-[0.3em] text-white/40">Ollama Model Picker</span>
+                                <span className="text-[8px] text-white/30">Any model, any time.</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <select
+                                    value={selectedOllamaModel || ''}
+                                    onChange={(e) => onOllamaModelSelect?.(e.target.value)}
+                                    className="flex-1 bg-black/20 border border-white/10 rounded-2xl px-3 py-2 text-[10px] text-white outline-none"
+                                >
+                                    <option value="">Select from installed models</option>
+                                    {availableOllamaModels?.map((modelEntry) => (
+                                        <option key={modelEntry.name} value={modelEntry.name}>
+                                            {modelEntry.name}{modelEntry.modified_at ? ` · ${modelEntry.modified_at}` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        if (!window.electronAPI) return;
+                                        const { models } = await window.electronAPI.ollamaListModels();
+                                        if (models?.length) {
+                                            onOllamaModelsUpdate?.(models);
+                                        }
+                                    }}
+                                    className="px-4 py-2 rounded-full bg-white/10 text-[9px] font-black uppercase tracking-[0.5em] text-white border border-white/20 hover:bg-white/20"
+                                >
+                                    Refresh
+                                </button>
+                            </div>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    className="flex-1 bg-black/20 border border-white/10 rounded-2xl px-3 py-2 text-[10px] text-white outline-none"
+                                    placeholder="Type any Ollama model (e.g. custom-model:1.0)"
+                                    value={ollamaInput}
+                                    onChange={(e) => setOllamaInput(e.target.value)}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleApplyOllamaModel}
+                                    className="px-4 py-2 rounded-full bg-deep-space-accent-neon/60 text-[9px] font-black uppercase tracking-[0.5em] text-black border border-deep-space-accent-neon/30"
+                                >
+                                    Use
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
                 <div className="px-8 py-2 flex-1 overflow-y-auto custom-scrollbar space-y-8 max-h-[60vh] relative z-10">
                     {/* Active State Tabs */}
                     <div className="flex gap-2 p-1 bg-white/[0.03] rounded-2xl border border-white/5">
@@ -147,9 +248,13 @@ const AIAssistOverlay = ({ query, result, sources, isLoading, onClose }: AIAssis
                 {!isLoading && (
                     <div className="p-8 pt-4 relative z-10">
                         <div className="pt-6 border-t border-white/5 flex gap-3">
-                            <button className="flex-1 py-4 bg-white/[0.05] hover:bg-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white/60 transition-all border border-white/5 flex items-center justify-center gap-2 group">
-                                Deep Dive <Search size={14} />
-                            </button>
+                        <button
+                            className="flex-1 py-4 bg-white/[0.05] hover:bg-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white/60 transition-all border border-white/5 flex items-center justify-center gap-2 group"
+                            onClick={onRefresh}
+                            disabled={isLoading}
+                        >
+                            Deep Dive <Search size={14} />
+                        </button>
                             <button className="flex-1 py-4 bg-deep-space-accent-neon/10 hover:bg-deep-space-accent-neon/20 rounded-2xl text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon transition-all border border-deep-space-accent-neon/20 flex items-center justify-center gap-2 group shadow-[0_0_20px_rgba(0,255,255,0.1)]">
                                 Full RAG <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
                             </button>

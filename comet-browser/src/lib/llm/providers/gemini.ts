@@ -1,5 +1,6 @@
 // src/lib/llm/providers/gemini.ts
 import { LLMProvider, LLMProviderOptions, ChatMessage, GenerateContentResult } from './base';
+import { getRecommendedGeminiModel } from '@/lib/modelRegistry';
 
 export class GeminiProvider implements LLMProvider {
     id: string = 'gemini';
@@ -9,7 +10,7 @@ export class GeminiProvider implements LLMProvider {
 
     init(options: LLMProviderOptions): void {
         this.apiKey = options.apiKey;
-        this.model = options.model || 'gemini-2.5-flash-preview';
+        this.model = options.model || getRecommendedGeminiModel('google');
     }
 
     async generateContent(prompt: string, options?: any): Promise<GenerateContentResult> {
