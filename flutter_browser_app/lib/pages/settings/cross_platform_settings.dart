@@ -12,6 +12,8 @@ import '../../models/window_model.dart';
 import '../../webview_tab.dart';
 import '../../sync_service.dart';
 import 'package:flutter_font_icons/flutter_font_icons.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class CrossPlatformSettings extends StatefulWidget {
   const CrossPlatformSettings({super.key});
@@ -978,45 +980,120 @@ class _CrossPlatformSettingsState extends State<CrossPlatformSettings> {
   ) {
     final urlController = TextEditingController(text: settings.ollamaBaseUrl);
     final modelController = TextEditingController(text: settings.ollamaModel);
+    List<String> availableModels = [settings.ollamaModel];
+    bool isLoadingModels = false;
+
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text("Ollama Configuration"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: urlController,
-                decoration: const InputDecoration(
-                  labelText: "Base URL",
-                  hintText: "http://localhost:11434",
+        return StatefulBuilder(builder: (context, setDialogState) {
+          Future<void> fetchModels() async {
+            setDialogState(() {
+              isLoadingModels = true;
+            });
+            try {
+              final response = await http
+                  .get(Uri.parse('${urlController.text}/api/tags'))
+                  .timeout(const Duration(seconds: 5));
+              if (response.statusCode == 200) {
+                final data = jsonDecode(response.body);
+                final models = (data['models'] as List)
+                    .map((m) => m['name'] as String)
+                    .toList();
+                setDialogState(() {
+                  availableModels = models;
+                  if (!availableModels.contains(modelController.text)) {
+                    if (availableModels.isNotEmpty) {
+                      modelController.text = availableModels.first;
+                    }
+                  }
+                });
+              }
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Failed to fetch models: $e")));
+            } finally {
+              setDialogState(() {
+                isLoadingModels = false;
+              });
+            }
+          }
+
+          return AlertDialog(
+            title: const Text("Ollama Configuration"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(
+                    labelText: "Base URL",
+                    hintText: "http://localhost:11434",
+                  ),
                 ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: isLoadingModels
+                          ? const Center(
+                              child: SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : DropdownButtonFormField<String>(
+                              value: availableModels.contains(modelController.text)
+                                  ? modelController.text
+                                  : (availableModels.isNotEmpty
+                                      ? availableModels.first
+                                      : null),
+                              decoration:
+                                  const InputDecoration(labelText: "Select Model"),
+                              items: availableModels
+                                  .map((m) => DropdownMenuItem(
+                                      value: m, child: Text(m)))
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  modelController.text = val;
+                                }
+                              },
+                            ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: fetchModels,
+                      tooltip: "Fetch models from Ollama",
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: modelController,
+                  decoration: const InputDecoration(
+                    labelText: "Or Manual Model Name",
+                    hintText: "llama3.3",
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: modelController,
-                decoration: const InputDecoration(
-                  labelText: "Model Name",
-                  hintText: "llama3.3",
-                ),
+              ElevatedButton(
+                onPressed: () {
+                  onSave(urlController.text, modelController.text);
+                  Navigator.pop(context);
+                },
+                child: const Text("Save"),
               ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                onSave(urlController.text, modelController.text);
-                Navigator.pop(context);
-              },
-              child: const Text("Save"),
-            ),
-          ],
-        );
+          );
+        });
       },
     );
   }

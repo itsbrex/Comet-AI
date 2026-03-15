@@ -367,7 +367,7 @@ class SyncService {
             (msg) => msg['commandId'] == commandId,
             orElse: () => {'error': 'Timeout'},
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 60));
 
       return response;
     } catch (e) {

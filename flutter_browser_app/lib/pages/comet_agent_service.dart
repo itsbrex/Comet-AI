@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
+import '../sync_service.dart';
 
 // ─────────────────────────────────────────────
 // DATA MODELS
@@ -175,11 +176,40 @@ STUCK: "Exact reason why the agent cannot proceed"
 
   Future<String> performOneShotAction(String prompt,
       {String? screenshotBase64}) async {
-    if (model.toLowerCase().contains('gemini')) {
+    final lowerModel = model.toLowerCase();
+    if (lowerModel.contains('gemini')) {
       return await _callGeminiAPI(prompt, screenshotBase64);
-    } else {
+    } else if (lowerModel.contains('claude')) {
       return await _callClaudeAPI(prompt, screenshotBase64);
+    } else {
+      // Local / Ollama / Other via Desktop Bridge
+      return await _callLocalDesktopAI(prompt, screenshotBase64);
     }
+  }
+
+  Future<String> _callLocalDesktopAI(String prompt, String? screenshotBase64) async {
+    final syncService = await importSyncService();
+    if (syncService == null || !syncService.isConnectedToDesktop) {
+      throw Exception('Desktop connection required for Local AI');
+    }
+
+    // Capture simple context if image is provided but local engine might not support vision yet
+    // We'll send the prompt and let the desktop handler deal with it
+    final result = await syncService.sendPromptToDesktop(prompt, model: model);
+    if (result != null && result['success'] == true) {
+      return result['output'] ?? '';
+    } else {
+      throw Exception(result?['error'] ?? 'Local Desktop AI failed to respond');
+    }
+  }
+
+  // Helper to get sync service without circular imports if possible
+  dynamic importSyncService() {
+    try {
+       // In a real app we'd use a more structured dependency injection
+       // For now we assume SyncService is a singleton accessible
+       return (SyncService());
+    } catch(e) { return null; }
   }
 
   Future<AgentSession> runTask(String task) async {
@@ -218,10 +248,14 @@ STUCK: "Exact reason why the agent cannot proceed"
       AgentStep step;
       try {
         String response;
-        if (model.contains('gemini')) {
+        final lowerModel = model.toLowerCase();
+        if (lowerModel.contains('gemini')) {
           response = await _callGeminiAPI(userMessage, screenshot);
-        } else {
+        } else if (lowerModel.contains('claude')) {
           response = await _callClaudeAPI(userMessage, screenshot);
+        } else {
+          // Local / Ollama
+          response = await _callLocalDesktopAI(userMessage, screenshot);
         }
         step = _parseResponse(response, stepNumber, screenshot);
       } catch (e) {
@@ -598,7 +632,6 @@ class AgentActionExecutor {
   }
 
   Future<String> _getCurrentUrl() async {
-    if (controller == null) return 'unknown';
     try {
       final uri = await controller.getUrl();
       if (uri == null) {
@@ -613,7 +646,7 @@ class AgentActionExecutor {
   }
 
   Future<void> _waitForPageLoad([int timeoutMs = 10000]) async {
-    if (controller == null) return;
+    // controller is now checked by caller or guaranteed by executor
     int elapsed = 0;
     while (elapsed < timeoutMs) {
       final isLoading = await controller.isLoading();
