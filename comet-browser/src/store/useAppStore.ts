@@ -318,7 +318,6 @@ export const useAppStore = create<BrowserState>()(
             openaiApiKey: '',
             openaiModel: 'gpt-4o',
             geminiApiKey: '',
-            geminiModel: 'gemini-3.1-pro-preview',
             anthropicApiKey: '',
             anthropicModel: 'claude-3-5-sonnet-latest',
             groqApiKey: '',

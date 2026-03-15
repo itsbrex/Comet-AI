@@ -598,6 +598,15 @@ async function createWindow() {
   app.commandLine.appendSwitch('--enable-native-gpu-memory-buffers');
   app.commandLine.appendSwitch('--enable-gpu-memory-buffer-compositor-resources');
 
+  if (isDev) {
+    // Clear cache and service workers in development to avoid 404s on stale chunks
+    session.defaultSession.clearStorageData({
+      storages: ['serviceworkers', 'cachestorage']
+    }).then(() => {
+      console.log('[Main] Dev storage (Service Workers & Cache) cleared');
+    });
+  }
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,

@@ -246,7 +246,9 @@ export default function Home() {
       });
 
       const cleanExtInstalled = window.electronAPI.on('extension-installed', ({ name, id }: { name: string, id: string }) => {
-        setAiOverview({ query: `Extension Installed: ${name}`, result: `Successfully installed extension ${name}. You can manage it in settings.`, sources: null, isLoading: false });
+        const providerId = store.aiProvider || 'ollama';
+        const modelName = resolveProviderModel(providerId);
+        setAiOverview({ query: `Extension Installed: ${name}`, result: `Successfully installed extension ${name}. You can manage it in settings.`, sources: null, isLoading: false, provider: providerId, model: modelName });
       });
 
       const cleanTheme = window.electronAPI.on('apply-theme', (theme: any) => {
@@ -258,7 +260,9 @@ export default function Home() {
           if (colors.toolbar) root.style.setProperty('--navbar-bg', `rgb(${colors.toolbar.join(',')})`);
           if (colors.tab_text) root.style.setProperty('--primary-text', `rgb(${colors.tab_text.join(',')})`);
           // Add more mappings as needed
-          setAiOverview({ query: `Theme Applied`, result: `Successfully applied Chrome theme.`, sources: null, isLoading: false });
+          const providerId = store.aiProvider || 'ollama';
+          const modelName = resolveProviderModel(providerId);
+          setAiOverview({ query: `Theme Applied`, result: `Successfully applied Chrome theme.`, sources: null, isLoading: false, provider: providerId, model: modelName });
         }
       });
 
@@ -449,10 +453,13 @@ export default function Home() {
       const textToTranslate = selectedText || store.currentUrl;
       const targetLang = store.selectedLanguage || 'English';
 
-      setAiOverview({ query: `Translating: ${textToTranslate.substring(0, 30)}...`, result: null, sources: null, isLoading: true });
+      const providerId = store.aiProvider || 'ollama';
+      const modelName = resolveProviderModel(providerId);
+
+      setAiOverview({ query: `Translating: ${textToTranslate.substring(0, 30)}...`, result: null, sources: null, isLoading: true, provider: providerId, model: modelName });
 
       const translated = await BrowserAI.translateText(textToTranslate, targetLang);
-      setAiOverview({ query: `Neural Translation (to ${targetLang})`, result: translated, sources: null, isLoading: false });
+      setAiOverview({ query: `Neural Translation (to ${targetLang})`, result: translated, sources: null, isLoading: false, provider: providerId, model: modelName });
     }
   };
 
@@ -663,6 +670,9 @@ export default function Home() {
 
   // PWA Service Worker Registration
   useEffect(() => {
+    // Disable SW in development to prevent stale caches with Turbopack chunks
+    if (process.env.NODE_ENV === 'development') return;
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then((reg) => {

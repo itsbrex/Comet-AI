@@ -62,10 +62,10 @@ export async function fetchAiOverview(options: AiOverviewRequest): Promise<AiOve
 
   const start = Date.now();
   try {
-    const { text, reasoning, error } = await window.electronAPI.generateChatContent(messages, payload);
+    const { text, thought, error } = await window.electronAPI.generateChatContent(messages, payload);
     return {
       text,
-      thought: reasoning,
+      thought,
       error,
       durationMs: Date.now() - start,
       provider: options.provider,

@@ -198,7 +198,7 @@ declare global {
             onClipboardChanged: (callback: (text: string) => void) => () => void;
             onAIChatInputText: (callback: (text: string) => void) => () => void;
             onAiChatInputText: (callback: (text: string) => void) => () => void;
-            translateWebsite: (args: { targetLanguage: string; method?: string }) => Promise<{ success?: boolean; error?: string }>;
+            translateWebsite: (args: { targetLanguage: string; method?: 'google' | 'chrome-ai' }) => Promise<{ success?: boolean; error?: string }>;
             onTriggerTranslationDialog: (callback: () => void) => () => void;
             toggleAdblocker: (enable: boolean) => void;
             translateText: (args: { text: string; to: string; from?: string }) => Promise<{ success: boolean; translated?: string; error?: string }>;
