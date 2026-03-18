@@ -11,6 +11,20 @@ class MainFlutterWindow: NSWindow {
         
         RegisterGeneratedPlugins(registry: flutterViewController)
         
+        let intentChannel = FlutterMethodChannel(
+            name: "com.comet_ai_com.comet_ai.intent_data",
+            binaryMessenger: flutterViewController.engine.binaryMessenger
+        )
+        
+        intentChannel.setMethodCallHandler { (call: FlutterMethodCall, result: @escaping FlutterResult) in
+            if call.method == "getIntentData" {
+                // On macOS, we can return nil or an empty string if no specific intent/launch arg is found
+                result("") 
+            } else {
+                result(FlutterMethodNotImplemented)
+            }
+        }
+        
         WindowManagerPlusPlugin.RegisterGeneratedPlugins = RegisterGeneratedPlugins
         
         super.awakeFromNib()

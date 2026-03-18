@@ -50,19 +50,22 @@ class RagService {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: { parts: [{ text }] } }),
+          body: JSON.stringify({ content: { parts: [{ text: text.slice(0, 5000) }] } }),
         }
       );
 
       if (!res.ok) {
-        console.warn('[RAG] Gemini embed failed, using local:', res.status);
+        console.warn(`[RAG] Embedding API failed (${res.status}), using fallback.`);
         return this._localEmbed(text);
       }
 
       const data = await res.json();
-      return data.embedding?.values || this._localEmbed(text);
+      if (data.embedding?.values) {
+        return data.embedding.values;
+      }
+      return this._localEmbed(text);
     } catch (e) {
-      console.warn('[RAG] Embed API error, using local:', e.message);
+      console.warn('[RAG] Embedding error:', e.message);
       return this._localEmbed(text);
     }
   }
@@ -145,12 +148,16 @@ class RagService {
     }));
   }
 
-  async retrieveContext(query, k = 4, apiKey) {
+  async retrieveContext(query, k = 5, apiKey) {
     const results = await this.retrieve(query, k, apiKey);
     if (results.length === 0) return '';
+    
     return results
-      .map((r, i) => `[Source: ${r.source} | Relevance: ${(r.score * 100).toFixed(1)}%]\n${r.text}`)
-      .join('\n\n---\n\n');
+      .map((r, i) => {
+        const truncatedText = r.text.length > 800 ? r.text.slice(0, 800) + '...' : r.text;
+        return `[SOURCE ${i + 1}: ${r.source} | MATCH: ${(r.score * 100).toFixed(1)}%]\n"""\n${truncatedText}\n"""`;
+      })
+      .join('\n\n');
   }
 
   getStats() {

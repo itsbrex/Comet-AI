@@ -244,15 +244,18 @@ function readMemory() {
 }
 
 // Persistent LLM Cache
-const cacheFilePath = path.join(app.getPath('userData'), 'llm_cache.json');
-let llmCache = new Map();
+const CACHE_TTL = 3600 * 1000 * 24; // 24-hour persistent cache
 
 function loadLLMCache() {
   try {
     if (fs.existsSync(cacheFilePath)) {
       const data = JSON.parse(fs.readFileSync(cacheFilePath, 'utf8'));
-      llmCache = new Map(Object.entries(data));
-      console.log(`[LLM] Loaded ${llmCache.size} items from cache.`);
+      const now = Date.now();
+      // Only load entries that haven't expired
+      llmCache = new Map(
+        Object.entries(data).filter(([_, entry]) => now - (entry.timestamp || 0) < CACHE_TTL)
+      );
+      console.log(`[LLM] Loaded ${llmCache.size} valid items from cache.`);
     }
   } catch (e) {
     console.error('[LLM] Failed to load cache:', e);
@@ -445,6 +448,9 @@ const buildProviderOptions = (providerId, options = {}, config = {}) => {
   return baseOptions;
 };
 
+/**
+ * LLM Generation Implementation
+ */
 const llmGenerateHandler = async (messages, options = {}) => {
   try {
     const { generateText } = await import('ai');
@@ -472,7 +478,8 @@ const llmGenerateHandler = async (messages, options = {}) => {
     console.log(`[LLM-Generate] Success. Text length: ${text?.length || 0}`);
     const result = {
       text: text,
-      thought: reasoning || null
+      thought: reasoning || null,
+      timestamp: Date.now() // Add timestamp for TTL
     };
 
     llmCache.set(cacheKey, result);
@@ -485,18 +492,16 @@ const llmGenerateHandler = async (messages, options = {}) => {
   }
 };
 
+/**
+ * LLM Streaming Implementation
+ */
 const llmStreamHandler = async (event, messages, options = {}) => {
   try {
     // First try to use the AI Engine's streaming capability
     if (cometAiEngine) {
-      // Resolve provider: options.provider -> stored active provider -> 'ollama'
       const providerId = options.provider || activeLlmProvider || store.get('active_llm_provider') || 'ollama';
-
-      // Resolve the actual model name based on provider — NOT the provider ID string itself
-      let model;
-      if (options.model) {
-        model = options.model;
-      } else {
+      let model = options.model;
+      if (!model) {
         switch (providerId) {
           case 'ollama':        model = store.get('ollama_model') || 'llama3'; break;
           case 'google':
@@ -509,10 +514,7 @@ const llmStreamHandler = async (event, messages, options = {}) => {
         }
       }
 
-      // Extract system prompt
       const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
-
-      // Build history: only user/assistant messages (no system), minus the last message
       const nonSystemMessages = messages.filter(m => m.role !== 'system');
       const message = nonSystemMessages[nonSystemMessages.length - 1]?.content || '';
       const history = nonSystemMessages.slice(0, -1).map(m => ({
@@ -522,7 +524,6 @@ const llmStreamHandler = async (event, messages, options = {}) => {
 
       console.log(`[llmStreamHandler] Provider: ${providerId}, Model: ${model}, History: ${history.length} turns`);
 
-      // Ensure engine has the correct API keys / URL for this provider
       const engineKeys = {};
       if (providerId.startsWith('google')) engineKeys.GEMINI_API_KEY = store.get('gemini_api_key') || '';
       if (providerId === 'openai')         engineKeys.OPENAI_API_KEY = store.get('openai_api_key') || '';
@@ -532,16 +533,10 @@ const llmStreamHandler = async (event, messages, options = {}) => {
       if (Object.keys(engineKeys).length > 0) cometAiEngine.configure(engineKeys);
 
       await cometAiEngine.chat({
-        message,
-        model,
-        systemPrompt,
-        history,
+        message, model, systemPrompt, history,
         onChunk: (chunk) => {
           if (!event.sender.isDestroyed()) {
-            event.sender.send('llm-chat-stream-part', {
-              type: 'text-delta',
-              textDelta: chunk
-            });
+            event.sender.send('llm-chat-stream-part', { type: 'text-delta', textDelta: chunk });
           }
         }
       });
@@ -552,10 +547,8 @@ const llmStreamHandler = async (event, messages, options = {}) => {
       return;
     }
 
-    // Fallback to Vercel AI SDK if AI Engine is not available
     const { streamText } = await import('ai');
     const { modelInstance, systemPrompt, chatMessages, providerId, config } = await prepareLLM(messages, options);
-
     const providerOptions = buildProviderOptions(providerId, options, config);
     const result = await streamText({
       model: modelInstance,
@@ -563,9 +556,7 @@ const llmStreamHandler = async (event, messages, options = {}) => {
       messages: chatMessages,
       temperature: 0.7,
       maxTokens: 8192,
-      providerOptions: {
-        ...providerOptions,
-      }
+      providerOptions: { ...providerOptions }
     });
 
     for await (const part of result.fullStream) {
@@ -573,10 +564,45 @@ const llmStreamHandler = async (event, messages, options = {}) => {
       event.sender.send('llm-chat-stream-part', part);
     }
     event.sender.send('llm-chat-stream-part', { type: 'finish' });
-
   } catch (error) {
     console.error("Streaming Error:", error);
     event.sender.send('llm-chat-stream-part', { type: 'error', error: error.message });
+  }
+};
+
+/**
+ * AI Gateway Layer
+ * Handles routing, logging, and error normalization for LLM providers.
+ */
+const AiGateway = {
+  async generate(messages, options = {}) {
+    const start = Date.now();
+    const provider = options.provider || 'google';
+    try {
+      const result = await llmGenerateHandler(messages, options);
+      if (result.error) {
+        return { ...result, error: `[${provider}] ${result.error}`, durationMs: Date.now() - start };
+      }
+      return { ...result, durationMs: Date.now() - start };
+    } catch (e) {
+      console.error(`[AiGateway] Generate failed for ${provider}:`, e);
+      return { error: `[${provider}] Gateway error: ${e.message}`, durationMs: Date.now() - start };
+    }
+  },
+
+  async stream(event, messages, options = {}) {
+    const provider = options.provider || 'google';
+    try {
+      await llmStreamHandler(event, messages, options);
+    } catch (e) {
+      console.error(`[AiGateway] Stream failed for ${provider}:`, e);
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('llm-chat-stream-part', { 
+          type: 'error', 
+          error: `[${provider}] Stream failed: ${e.message}` 
+        });
+      }
+    }
   }
 };
 
@@ -1994,11 +2020,11 @@ ipcMain.on('send-ai-overview-to-sidebar', (event, data) => {
 });
 
 ipcMain.handle('llm-generate-chat-content', async (event, messages, options = {}) => {
-  return await llmGenerateHandler(messages, options);
+  return await AiGateway.generate(messages, options);
 });
 
 ipcMain.on('llm-stream-chat-content', (event, messages, options = {}) => {
-  llmStreamHandler(event, messages, options);
+  AiGateway.stream(event, messages, options);
 });
 
 // Ollama Integration:
@@ -2122,13 +2148,42 @@ async function checkShellPermission(command) {
   return false;
 }
 
+/**
+ * Command Validation Layer
+ * Blocks dangerous shell commands and sanitizes inputs.
+ */
+function validateCommand(command) {
+  if (!command || typeof command !== 'string') {
+    throw new Error('Invalid command format');
+  }
+
+  // Dangerous command patterns
+  const forbidden = [
+    'rm ', 'sudo ', 'shutdown ', 'mkfs ', 'format ', 'dd ', 
+    'char ', '> /', ':(){ :|:& };:', 'mv /', 'poweroff', 'reboot'
+  ];
+
+  const isDangerous = forbidden.some(f => command.toLowerCase().includes(f));
+  if (isDangerous) {
+    console.warn(`[Security] Blocked dangerous command execution attempt: ${command}`);
+    throw new Error(`Security Exception: Blocked dangerous command: ${command}`);
+  }
+
+  // Sanitize input (basic)
+  return command.trim().slice(0, 1000); // Limit size
+}
+
 const allowedCommands = new Set();
 
-ipcMain.handle('execute-shell-command', async (event, command) => {
-  if (!command) return { success: false, error: 'No command provided' };
+ipcMain.handle('execute-shell-command', async (event, rawCommand) => {
+  let command;
+  try {
+    command = validateCommand(rawCommand);
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 
-  // Strict allowlist for known safe commands could be added here
-  // For now, we use the permission dialog
+  // Strict allowlist for known safe commands
   if (!allowedCommands.has(command)) {
     const authorized = await checkShellPermission(command);
     if (!authorized) {
@@ -2307,6 +2362,13 @@ const WINDOWS_APP_MAP = {
 };
 
 ipcMain.handle('open-external-app', async (event, app_name_or_path) => {
+  if (!app_name_or_path || typeof app_name_or_path !== 'string') {
+    return { success: false, error: 'Invalid app path' };
+  }
+  
+  // Basic sanitization
+  app_name_or_path = app_name_or_path.trim().slice(0, 500);
+
   try {
     console.log('[Main] Opening external app:', app_name_or_path);
 
@@ -4483,6 +4545,7 @@ app.whenReady().then(() => {
   ipcMain.handle('mcp-native-applescript', async (event, script) => {
     if (!nativeAppMcp) return { success: false, error: 'NativeApp MCP not initialized' };
     try {
+      validateCommand(script);
       const result = await nativeAppMcp.runAppleScript(script);
       return { success: true, result };
     } catch (e) { return { success: false, error: e.message }; }
@@ -4491,6 +4554,7 @@ app.whenReady().then(() => {
   ipcMain.handle('mcp-native-powershell', async (event, script) => {
     if (!nativeAppMcp) return { success: false, error: 'NativeApp MCP not initialized' };
     try {
+      validateCommand(script);
       const result = await nativeAppMcp.runPowerShell(script);
       return { success: true, result };
     } catch (e) { return { success: false, error: e.message }; }

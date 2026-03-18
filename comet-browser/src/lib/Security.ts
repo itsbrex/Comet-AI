@@ -40,7 +40,7 @@ export const Security = {
             return `E2EE:${btoa(String.fromCharCode(...combined))}`;
         } catch (e) {
             console.error("Encryption failed:", e);
-            return text;
+            throw new Error("Encryption failed"); // Mandatory throw on failure
         }
     },
 
@@ -76,19 +76,24 @@ export const Security = {
      * AI Fortress System
      * Detects and protects sensitive patterns (API Keys, Secrets)
      */
-    fortress: (content: string): { content: string, wasProtected: boolean } => {
-        const patterns = [
-            { name: "[Gemini_API_Key]", regex: /AIzaSy[A-Za-z0-9_-]{33}/g },
-            { name: "[OpenAI_API_Key]", regex: /sk-[A-Za-z0-9]{48}/g },
-            { name: "[Anthropic_API_Key]", regex: /sk-ant-api03-[A-Za-z0-9-_]{93}/g },
-            { name: "[Generic_Secret]", regex: /(password|secret|key|token)[=: ]+['"][A-Za-z0-9!@#$%^&*]{8,}['"]/gi }
-        ];
+    patterns: [
+        { name: "[Gemini_API_Key]", regex: /AIzaSy[A-Za-z0-9_-]{33}/g },
+        { name: "[OpenAI_API_Key]", regex: /sk-[A-Za-z0-9]{48}/g },
+        { name: "[Anthropic_API_Key]", regex: /sk-ant-api03-[A-Za-z0-9-_]{93}/g },
+        { name: "[Generic_Secret]", regex: /(password|secret|key|token)[=: ]+['"][A-Za-z0-9!@#$%^&*]{8,}['"]/gi }
+    ],
 
+    addPattern: (name: string, regex: RegExp) => {
+        Security.patterns.push({ name, regex });
+    },
+
+    fortress: (content: string): { content: string, wasProtected: boolean } => {
         let protectedContent = content;
         let wasProtected = false;
 
-        patterns.forEach(p => {
+        Security.patterns.forEach(p => {
             if (p.regex.test(protectedContent)) {
+                console.log(`[AI Fortress] Protecting sensitive data: ${p.name}`); // Added logging
                 protectedContent = protectedContent.replace(p.regex, p.name);
                 wasProtected = true;
             }

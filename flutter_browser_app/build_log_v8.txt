@@ -1,0 +1,423 @@
+[  +25 ms] executing: sysctl hw.optional.arm64
+[   +2 ms] Exit code 0 from: sysctl hw.optional.arm64
+[        ] hw.optional.arm64: 1
+[   +2 ms] Artifact Instance of 'MaterialFonts' is not required, skipping update.
+[        ] Artifact Instance of 'GradleWrapper' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[        ] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterSdk' is not required, skipping update.
+[        ] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FontSubsetArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'PubDependencies' is not required, skipping update.
+[        ] executing: [/Users/sandipkumarpatel/Dev/flutter/] git -c log.showSignature=false log HEAD -n 1 --pretty=format:%ad --date=iso
+[  +11 ms] Exit code 0 from: git -c log.showSignature=false log HEAD -n 1 --pretty=format:%ad --date=iso
+[        ] 2026-03-03 16:03:22 -0800
+[   +5 ms] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterEngineStamp' is not required, skipping update.
+[        ] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[        ] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[  +13 ms] Artifact Instance of 'MaterialFonts' is not required, skipping update.
+[        ] Artifact Instance of 'GradleWrapper' is not required, skipping update.
+[   +1 ms] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterEngineStamp' is not required, skipping update.
+[        ] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterSdk' is not required, skipping update.
+[        ] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FontSubsetArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'PubDependencies' is not required, skipping update.
+[  +53 ms] executing: [/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/] /Users/sandipkumarpatel/Dev/flutter/bin/cache/dart-sdk/bin/dart pub --suppress-analytics --directory . get --example
+Resolving dependencies...
+Downloading packages...
+  _flutterfire_internals 1.3.59 (1.3.67 available)
+  android_intent_plus 5.3.1 (6.0.0 available)
+  app_settings 6.1.1 (7.0.0 available)
+  archive 4.0.7 (4.0.9 available)
+  args 2.5.0 (2.7.0 available)
+  async 2.11.0 (2.13.0 available)
+  boolean_selector 2.1.1 (2.1.2 available)
+  cross_file 0.3.4+2 (0.3.5+2 available)
+  crypto 3.0.5 (3.0.7 available)
+  dart_webrtc 1.7.0 (1.8.0 available)
+  dynamic_color 1.7.0 (1.8.1 available)
+  ffi 2.1.3 (2.2.0 available)
+  firebase_core 3.15.2 (4.5.0 available)
+  firebase_core_web 2.24.1 (3.5.0 available)
+  firebase_database 11.3.10 (12.1.4 available)
+  firebase_database_platform_interface 0.2.6+10 (0.3.0+3 available)
+  firebase_database_web 0.2.6+16 (0.2.7+4 available)
+  fixnum 1.1.0 (1.1.1 available)
+  flutter_downloader 1.11.8 (1.12.0 available)
+  flutter_inappwebview_internal_annotations 1.1.1 (1.3.0 available)
+  flutter_launcher_icons 0.13.1 (0.14.4 available)
+  flutter_lints 4.0.0 (6.0.0 available)
+  flutter_svg 2.0.10+1 (2.2.4 available)
+  flutter_webrtc 0.12.12+hotfix.1 (1.4.0 available)
+  google_fonts 6.3.3 (8.0.2 available)
+  home_widget 0.6.0 (0.9.0 available)
+  http 1.2.2 (1.6.0 available)
+  http_parser 4.0.2 (4.1.2 available)
+  image 4.7.2 (4.8.0 available)
+  intl 0.19.0 (0.20.2 available)
+  js 0.6.7 (0.7.2 available)
+  json_annotation 4.9.0 (4.11.0 available)
+  lints 4.0.0 (6.1.0 available)
+  meta 1.17.0 (1.18.2 available)
+  mime 1.0.6 (2.0.0 available)
+  package_info_plus 8.0.2 (9.0.0 available)
+  package_info_plus_platform_interface 3.0.1 (3.2.1 available)
+  path_parsing 1.0.1 (1.1.0 available)
+  path_provider 2.1.4 (2.1.5 available)
+  path_provider_android 2.2.12 (2.2.22 available)
+  path_provider_foundation 2.4.0 (2.6.0 available)
+  permission_handler 11.3.1 (12.0.1 available)
+  permission_handler_android 12.0.12 (13.0.1 available)
+  permission_handler_apple 9.4.5 (9.4.7 available)
+  permission_handler_html 0.1.3+2 (0.1.3+5 available)
+  permission_handler_platform_interface 4.2.3 (4.3.0 available)
+  petitparser 6.0.2 (7.0.2 available)
+  platform 3.1.5 (3.1.6 available)
+  posix 6.0.3 (6.5.0 available)
+  provider 6.1.2 (6.1.5+1 available)
+  share_plus 10.0.2 (12.0.1 available)
+  share_plus_platform_interface 5.0.0 (6.1.0 available)
+  source_span 1.10.0 (1.10.2 available)
+  sqflite 2.4.0 (2.4.2 available)
+  sqflite_android 2.4.0 (2.4.2+3 available)
+  sqflite_common 2.5.4+5 (2.5.6 available)
+  sqflite_common_ffi 2.3.3+1 (2.4.0+2 available)
+  sqflite_darwin 2.4.1-1 (2.4.2 available)
+  sqlite3 2.4.6 (3.2.0 available)
+  sqlite3_flutter_libs 0.5.24 (0.6.0+eol available)
+  string_scanner 1.2.0 (1.4.1 available)
+  synchronized 3.3.0+3 (3.4.0 available)
+  term_glyph 1.2.1 (1.2.2 available)
+  typed_data 1.3.2 (1.4.0 available)
+  url_launcher 6.3.1 (6.3.2 available)
+  url_launcher_android 6.3.12 (6.3.28 available)
+  url_launcher_ios 6.3.1 (6.4.1 available)
+  url_launcher_linux 3.2.0 (3.2.2 available)
+  url_launcher_macos 3.2.1 (3.2.5 available)
+  url_launcher_web 2.3.3 (2.4.2 available)
+  url_launcher_windows 3.1.2 (3.1.5 available)
+  uuid 4.5.1 (4.5.3 available)
+  vector_graphics 1.1.11+1 (1.1.20 available)
+  vector_graphics_codec 1.1.11+1 (1.1.13 available)
+  vector_graphics_compiler 1.1.11+1 (1.2.0 available)
+  vm_service 14.2.5 (15.0.2 available)
+  web 1.1.0 (1.1.1 available)
+  webrtc_interface 1.4.0 (1.5.1 available)
+  win32 5.5.5 (6.0.0 available)
+  xml 6.5.0 (6.6.1 available)
+Got dependencies!
+80 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+[ +386 ms] Found plugin window_manager_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/window_manager_plus-1.0.5/
+[   +2 ms] Found plugin screen_retriever at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever-0.2.0/
+[        ] Found plugin screen_retriever_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever_windows-0.2.0/
+[   +1 ms] Found plugin screen_retriever_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever_macos-0.2.0/
+[        ] Found plugin screen_retriever_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever_linux-0.2.0/
+[   +2 ms] Found plugin url_launcher at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher-6.3.1/
+[        ] Found plugin url_launcher_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_windows-3.1.2/
+[        ] Found plugin url_launcher_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_web-2.3.3/
+[   +1 ms] Found plugin url_launcher_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_macos-3.2.1/
+[        ] Found plugin url_launcher_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_linux-3.2.0/
+[        ] Found plugin url_launcher_ios at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_ios-6.3.1/
+[   +1 ms] Found plugin url_launcher_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_android-6.3.12/
+[   +2 ms] Found plugin sqlite3_flutter_libs at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqlite3_flutter_libs-0.5.24/
+[   +2 ms] Found plugin sqflite at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqflite-2.4.0/
+[   +1 ms] Found plugin sqflite_darwin at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqflite_darwin-2.4.1-1/
+[        ] Found plugin sqflite_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqflite_android-2.4.0/
+[        ] Found plugin share_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/share_plus-10.0.2/
+[   +5 ms] Found plugin path_provider at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider-2.1.4/
+[        ] Found plugin path_provider_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_windows-2.3.0/
+[   +1 ms] Found plugin path_provider_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_linux-2.2.1/
+[   +1 ms] Found plugin path_provider_foundation at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_foundation-2.4.0/
+[        ] Found plugin path_provider_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_android-2.2.12/
+[   +2 ms] Found plugin receive_sharing_intent at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/receive_sharing_intent-1.8.1/
+[   +1 ms] Found plugin qr_code_scanner at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/qr_code_scanner-1.0.1/
+[   +1 ms] Found plugin permission_handler at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler-11.3.1/
+[        ] Found plugin permission_handler_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_windows-0.2.1/
+[        ] Found plugin permission_handler_html at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_html-0.1.3+2/
+[        ] Found plugin permission_handler_apple at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_apple-9.4.5/
+[        ] Found plugin permission_handler_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_android-12.0.12/
+[        ] Found plugin package_info_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/package_info_plus-8.0.2/
+[        ] Found plugin multi_window at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/multi_window-0.2.0/
+[        ] Found plugin multi_window_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/multi_window_macos-0.2.0/
+[        ] Found plugin multi_window_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/multi_window_linux-0.2.0/
+[   +1 ms] Found plugin home_widget at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/home_widget-0.6.0/
+[        ] Found plugin flutter_webrtc at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_webrtc-0.12.12+hotfix.1/
+[   +3 ms] Found plugin flutter_inappwebview at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview-6.1.5/
+[        ] Found plugin flutter_inappwebview_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_windows-0.6.0/
+[   +1 ms] Found plugin flutter_inappwebview_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_web-1.1.2/
+[        ] Found plugin flutter_inappwebview_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_macos-1.1.2/
+[        ] Found plugin flutter_inappwebview_ios at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_ios-1.1.2/
+[        ] Found plugin flutter_inappwebview_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_android-1.1.3/
+[        ] Found plugin flutter_downloader at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_downloader-1.11.8/
+[        ] Found plugin firebase_database at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_database-11.3.10/
+[        ] Found plugin firebase_database_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_database_web-0.2.6+16/
+[        ] Found plugin firebase_core at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_core-3.15.2/
+[        ] Found plugin firebase_core_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_core_web-2.24.1/
+[        ] Found plugin dynamic_color at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/dynamic_color-1.7.0/
+[   +2 ms] Found plugin app_settings at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/app_settings-6.1.1/
+[        ] Found plugin android_intent_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/android_intent_plus-5.3.1/
+[  +16 ms] executing: sysctl hw.optional.arm64
+[   +2 ms] Exit code 0 from: sysctl hw.optional.arm64
+[        ] hw.optional.arm64: 1
+[        ] executing: /usr/bin/arch -arm64e xcrun xcodebuild -version
+[  +57 ms] Exit code 0 from: /usr/bin/arch -arm64e xcrun xcodebuild -version
+[        ] Xcode 26.3
+           Build version 17C529
+[  +20 ms] Found plugin window_manager_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/window_manager_plus-1.0.5/
+[        ] Found plugin screen_retriever at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever-0.2.0/
+[        ] Found plugin screen_retriever_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever_windows-0.2.0/
+[        ] Found plugin screen_retriever_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever_macos-0.2.0/
+[        ] Found plugin screen_retriever_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever_linux-0.2.0/
+[        ] Found plugin url_launcher at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher-6.3.1/
+[        ] Found plugin url_launcher_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_windows-3.1.2/
+[        ] Found plugin url_launcher_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_web-2.3.3/
+[        ] Found plugin url_launcher_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_macos-3.2.1/
+[        ] Found plugin url_launcher_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_linux-3.2.0/
+[        ] Found plugin url_launcher_ios at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_ios-6.3.1/
+[        ] Found plugin url_launcher_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_android-6.3.12/
+[        ] Found plugin sqlite3_flutter_libs at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqlite3_flutter_libs-0.5.24/
+[   +1 ms] Found plugin sqflite at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqflite-2.4.0/
+[        ] Found plugin sqflite_darwin at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqflite_darwin-2.4.1-1/
+[        ] Found plugin sqflite_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqflite_android-2.4.0/
+[        ] Found plugin share_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/share_plus-10.0.2/
+[        ] Found plugin path_provider at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider-2.1.4/
+[        ] Found plugin path_provider_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_windows-2.3.0/
+[        ] Found plugin path_provider_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_linux-2.2.1/
+[        ] Found plugin path_provider_foundation at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_foundation-2.4.0/
+[        ] Found plugin path_provider_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_android-2.2.12/
+[        ] Found plugin receive_sharing_intent at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/receive_sharing_intent-1.8.1/
+[        ] Found plugin qr_code_scanner at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/qr_code_scanner-1.0.1/
+[        ] Found plugin permission_handler at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler-11.3.1/
+[        ] Found plugin permission_handler_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_windows-0.2.1/
+[        ] Found plugin permission_handler_html at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_html-0.1.3+2/
+[        ] Found plugin permission_handler_apple at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_apple-9.4.5/
+[        ] Found plugin permission_handler_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_android-12.0.12/
+[        ] Found plugin package_info_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/package_info_plus-8.0.2/
+[        ] Found plugin multi_window at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/multi_window-0.2.0/
+[        ] Found plugin multi_window_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/multi_window_macos-0.2.0/
+[        ] Found plugin multi_window_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/multi_window_linux-0.2.0/
+[        ] Found plugin home_widget at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/home_widget-0.6.0/
+[        ] Found plugin flutter_webrtc at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_webrtc-0.12.12+hotfix.1/
+[   +1 ms] Found plugin flutter_inappwebview at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview-6.1.5/
+[        ] Found plugin flutter_inappwebview_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_windows-0.6.0/
+[        ] Found plugin flutter_inappwebview_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_web-1.1.2/
+[        ] Found plugin flutter_inappwebview_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_macos-1.1.2/
+[        ] Found plugin flutter_inappwebview_ios at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_ios-1.1.2/
+[        ] Found plugin flutter_inappwebview_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_android-1.1.3/
+[        ] Found plugin flutter_downloader at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_downloader-1.11.8/
+[        ] Found plugin firebase_database at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_database-11.3.10/
+[        ] Found plugin firebase_database_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_database_web-0.2.6+16/
+[        ] Found plugin firebase_core at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_core-3.15.2/
+[        ] Found plugin firebase_core_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_core_web-2.24.1/
+[        ] Found plugin dynamic_color at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/dynamic_color-1.7.0/
+[   +1 ms] Found plugin app_settings at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/app_settings-6.1.1/
+[        ] Found plugin android_intent_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/android_intent_plus-5.3.1/
+[   +4 ms] Generating /Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+[   +2 ms] Skipping generating GeneratedPluginRegistrant.java because it is up-to-date.
+[   +1 ms] Skipping generating generated_plugin_registrant.h because it is up-to-date.
+[        ] Skipping generating generated_plugin_registrant.cc because it is up-to-date.
+[        ] Skipping generating generated_plugins.cmake because it is up-to-date.
+[   +1 ms] Skipping generating GeneratedPluginRegistrant.h because it is up-to-date.
+[        ] Skipping generating GeneratedPluginRegistrant.m because it is up-to-date.
+[        ] Skipping generating GeneratedPluginRegistrant.swift because it is up-to-date.
+[ +510 ms] executing: /usr/bin/plutil -convert xml1 -o - /Applications/Android Studio.app/Contents/Info.plist
+[   +6 ms] Exit code 0 from: /usr/bin/plutil -convert xml1 -o - /Applications/Android Studio.app/Contents/Info.plist
+[        ] <?xml version="1.0" encoding="UTF-8"?>
+           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+           <plist version="1.0">
+           <dict>
+           	<key>CFBundleDevelopmentRegion</key>
+           	<string>English</string>
+           	<key>CFBundleDocumentTypes</key>
+           	<array>
+           		<dict>
+           			<key>CFBundleTypeExtensions</key>
+           			<array>
+           				<string>ipr</string>
+           			</array>
+           			<key>CFBundleTypeIconFile</key>
+           			<string>studio.icns</string>
+           			<key>CFBundleTypeName</key>
+           			<string>Android Studio Project File</string>
+           			<key>CFBundleTypeRole</key>
+           			<string>Editor</string>
+           		</dict>
+           		<dict>
+           			<key>CFBundleTypeExtensions</key>
+           			<array>
+           				<string>*</string>
+           			</array>
+           			<key>CFBundleTypeName</key>
+           			<string>All documents</string>
+           			<key>CFBundleTypeOSTypes</key>
+           			<array>
+           				<string>****</string>
+           			</array>
+           			<key>CFBundleTypeRole</key>
+           			<string>Editor</string>
+           			<key>LSTypeIsPackage</key>
+           			<false/>
+           		</dict>
+           	</array>
+           	<key>CFBundleExecutable</key>
+           	<string>studio</string>
+           	<key>CFBundleGetInfoString</key>
+           	<string>Android Studio 2025.3, build AI-253.30387.90.2532.14935130. Copyright JetBrains s.r.o., (c) 2000-2026</string>
+           	<key>CFBundleIconFile</key>
+           	<string>studio.icns</string>
+           	<key>CFBundleIdentifier</key>
+           	<string>com.google.android.studio</string>
+           	<key>CFBundleInfoDictionaryVersion</key>
+           	<string>6.0</string>
+           	<key>CFBundleName</key>
+           	<string>Android Studio</string>
+           	<key>CFBundlePackageType</key>
+           	<string>APPL</string>
+           	<key>CFBundleShortVersionString</key>
+           	<string>2025.3</string>
+           	<key>CFBundleURLTypes</key>
+           	<array>
+           		<dict>
+           			<key>CFBundleTypeRole</key>
+           			<string>Editor</string>
+           			<key>CFBundleURLName</key>
+           			<string>Stacktrace</string>
+           			<key>CFBundleURLSchemes</key>
+           			<array>
+           				<string>idea</string>
+           			</array>
+           		</dict>
+           	</array>
+           	<key>CFBundleVersion</key>
+           	<string>AI-253.30387.90.2532.14935130</string>
+           	<key>LSApplicationCategoryType</key>
+           	<string>public.app-category.developer-tools</string>
+           	<key>LSArchitecturePriority</key>
+           	<array>
+           		<string>arm64</string>
+           	</array>
+           	<key>LSMinimumSystemVersion</key>
+           	<string>10.13</string>
+           	<key>LSRequiresNativeExecution</key>
+           	<string>YES</string>
+           	<key>NSAppleEventsUsageDescription</key>
+           	<string>An application in Android Studio requests the ability to send Apple events.</string>
+           	<key>NSBluetoothAlwaysUsageDescription</key>
+           	<string>An application in Android Studio requests access to Bluetooth.</string>
+           	<key>NSCameraUsageDescription</key>
+           	<string>An application in Android Studio requests access to the device's camera.</string>
+           	<key>NSDesktopFolderUsageDescription</key>
+           	<string>An application in Android Studio requests access to the user's Desktop folder.</string>
+           	<key>NSDocumentsFolderUsageDescription</key>
+           	<string>An application in Android Studio requests access to the user's Documents folder.</string>
+           	<key>NSDownloadsFolderUsageDescription</key>
+           	<string>An application in Android Studio requests access to the user's Downloads folder.</string>
+           	<key>NSHighResolutionCapable</key>
+           	<true/>
+           	<key>NSLocalNetworkUsageDescription</key>
+           	<string>Android Studio's features, such as SSH and database connectivity, require permissions for accessing the local network and sending broadcast requests.</string>
+           	<key>NSLocationUsageDescription</key>
+           	<string>An application in Android Studio requests access to the user's location information.</string>
+           	<key>NSMicrophoneUsageDescription</key>
+           	<string>An application in Android Studio requests access to the device's microphone.</string>
+           	<key>NSNetworkVolumesUsageDescription</key>
+           	<string>An application in Android Studio requests access to files on a network volume.</string>
+           	<key>NSRemovableVolumesUsageDescription</key>
+           	<string>An application in Android Studio requests access to files on a removable volume.</string>
+           	<key>NSSupportsAutomaticGraphicsSwitching</key>
+           	<true/>
+           </dict>
+           </plist>
+[   +4 ms] executing: /Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/java -version
+[  +41 ms] Exit code 0 from: /Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/java -version
+[        ] openjdk version "21.0.9" 2025-10-21
+           OpenJDK Runtime Environment (build 21.0.9+-14787801-b1163.94)
+           OpenJDK 64-Bit Server VM (build 21.0.9+-14787801-b1163.94, mixed mode)
+[   +8 ms] "flutter apk" took 1,218ms.
+[   +2 ms] executing: sw_vers -productName
+[   +8 ms] Exit code 0 from: sw_vers -productName
+[        ] macOS
+[        ] executing: sw_vers -productVersion
+[   +7 ms] Exit code 0 from: sw_vers -productVersion
+[        ] 15.7.4
+[        ] executing: sw_vers -buildVersion
+[   +9 ms] Exit code 0 from: sw_vers -buildVersion
+[        ] 24G517
+[        ] executing: uname -m
+[   +2 ms] Exit code 0 from: uname -m
+[        ] arm64
+[   +7 ms] [!] Your app is using an unsupported Gradle project. To fix this problem, create a new project by running `flutter create -t app <app-directory>` and then move the dart code, assets and pubspec.yaml to the new project.
+[        ] 
+           #0      throwToolExit (package:flutter_tools/src/base/common.dart:34:3)
+           #1      _exitWithUnsupportedProjectMessage (package:flutter_tools/src/android/gradle.dart:1070:3)
+           #2      AndroidGradleBuilder.buildGradleApp (package:flutter_tools/src/android/gradle.dart:449:7)
+           #3      AndroidGradleBuilder.buildApk (package:flutter_tools/src/android/gradle.dart:234:11)
+           #4      BuildApkCommand.runCommand (package:flutter_tools/src/commands/build_apk.dart:131:27)
+           <asynchronous suspension>
+           #5      FlutterCommand.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command.dart:1590:27)
+           <asynchronous suspension>
+           #6      AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #7      CommandRunner.runCommand (package:args/command_runner.dart:212:13)
+           <asynchronous suspension>
+           #8      FlutterCommandRunner.runCommand.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:496:9)
+           <asynchronous suspension>
+           #9      AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #10     FlutterCommandRunner.runCommand (package:flutter_tools/src/runner/flutter_command_runner.dart:431:5)
+           <asynchronous suspension>
+           #11     FlutterCommandRunner.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:307:33)
+           <asynchronous suspension>
+           #12     run.<anonymous closure>.<anonymous closure> (package:flutter_tools/runner.dart:104:11)
+           <asynchronous suspension>
+           #13     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #14     main (package:flutter_tools/executable.dart:103:3)
+           <asynchronous suspension>
+
+
+[        ] Running 1 shutdown hook
+[        ] Shutdown hooks complete
+[ +158 ms] exiting with code 1

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus } from 'lucide-react';
 
 export interface ChatMessage {
+  id?: string;
   role: 'user' | 'model' | 'system' | 'assistant';
   content: string;
 }

@@ -1,0 +1,1305 @@
+[  +26 ms] executing: sysctl hw.optional.arm64
+[   +3 ms] Exit code 0 from: sysctl hw.optional.arm64
+[        ] hw.optional.arm64: 1
+[   +3 ms] Artifact Instance of 'MaterialFonts' is not required, skipping update.
+[        ] Artifact Instance of 'GradleWrapper' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[        ] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterSdk' is not required, skipping update.
+[        ] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FontSubsetArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'PubDependencies' is not required, skipping update.
+[        ] executing: [/Users/sandipkumarpatel/Dev/flutter/] git -c log.showSignature=false log HEAD -n 1 --pretty=format:%ad --date=iso
+[  +12 ms] Exit code 0 from: git -c log.showSignature=false log HEAD -n 1 --pretty=format:%ad --date=iso
+[        ] 2026-03-03 16:03:22 -0800
+[   +5 ms] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterEngineStamp' is not required, skipping update.
+[        ] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[        ] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[  +13 ms] Artifact Instance of 'MaterialFonts' is not required, skipping update.
+[        ] Artifact Instance of 'GradleWrapper' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterEngineStamp' is not required, skipping update.
+[        ] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterSdk' is not required, skipping update.
+[        ] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FontSubsetArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'PubDependencies' is not required, skipping update.
+[  +54 ms] executing: [/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/] /Users/sandipkumarpatel/Dev/flutter/bin/cache/dart-sdk/bin/dart pub --suppress-analytics --directory . get --example
+Resolving dependencies...
+Downloading packages...
+  _flutterfire_internals 1.3.59 (1.3.67 available)
+  android_intent_plus 5.3.1 (6.0.0 available)
+  app_settings 6.1.1 (7.0.0 available)
+  archive 4.0.7 (4.0.9 available)
+  args 2.5.0 (2.7.0 available)
+  async 2.11.0 (2.13.0 available)
+  boolean_selector 2.1.1 (2.1.2 available)
+  cross_file 0.3.4+2 (0.3.5+2 available)
+  crypto 3.0.5 (3.0.7 available)
+  dart_webrtc 1.7.0 (1.8.0 available)
+  dynamic_color 1.7.0 (1.8.1 available)
+  ffi 2.1.3 (2.2.0 available)
+  firebase_core 3.15.2 (4.5.0 available)
+  firebase_core_web 2.24.1 (3.5.0 available)
+  firebase_database 11.3.10 (12.1.4 available)
+  firebase_database_platform_interface 0.2.6+10 (0.3.0+3 available)
+  firebase_database_web 0.2.6+16 (0.2.7+4 available)
+  fixnum 1.1.0 (1.1.1 available)
+  flutter_downloader 1.11.8 (1.12.0 available)
+  flutter_inappwebview_internal_annotations 1.1.1 (1.3.0 available)
+  flutter_launcher_icons 0.13.1 (0.14.4 available)
+  flutter_lints 4.0.0 (6.0.0 available)
+  flutter_svg 2.0.10+1 (2.2.4 available)
+  flutter_webrtc 0.12.12+hotfix.1 (1.4.0 available)
+  google_fonts 6.3.3 (8.0.2 available)
+  home_widget 0.6.0 (0.9.0 available)
+  http 1.2.2 (1.6.0 available)
+  http_parser 4.0.2 (4.1.2 available)
+  image 4.7.2 (4.8.0 available)
+  intl 0.19.0 (0.20.2 available)
+  js 0.6.7 (0.7.2 available)
+  json_annotation 4.9.0 (4.11.0 available)
+  lints 4.0.0 (6.1.0 available)
+  meta 1.17.0 (1.18.2 available)
+  mime 1.0.6 (2.0.0 available)
+  package_info_plus 8.0.2 (9.0.0 available)
+  package_info_plus_platform_interface 3.0.1 (3.2.1 available)
+  path_parsing 1.0.1 (1.1.0 available)
+  path_provider 2.1.4 (2.1.5 available)
+  path_provider_android 2.2.12 (2.2.22 available)
+  path_provider_foundation 2.4.0 (2.6.0 available)
+  permission_handler 11.3.1 (12.0.1 available)
+  permission_handler_android 12.0.12 (13.0.1 available)
+  permission_handler_apple 9.4.5 (9.4.7 available)
+  permission_handler_html 0.1.3+2 (0.1.3+5 available)
+  permission_handler_platform_interface 4.2.3 (4.3.0 available)
+  petitparser 6.0.2 (7.0.2 available)
+  platform 3.1.5 (3.1.6 available)
+  posix 6.0.3 (6.5.0 available)
+  provider 6.1.2 (6.1.5+1 available)
+  share_plus 10.0.2 (12.0.1 available)
+  share_plus_platform_interface 5.0.0 (6.1.0 available)
+  source_span 1.10.0 (1.10.2 available)
+  sqflite 2.4.0 (2.4.2 available)
+  sqflite_android 2.4.0 (2.4.2+3 available)
+  sqflite_common 2.5.4+5 (2.5.6 available)
+  sqflite_common_ffi 2.3.3+1 (2.4.0+2 available)
+  sqflite_darwin 2.4.1-1 (2.4.2 available)
+  sqlite3 2.4.6 (3.2.0 available)
+  sqlite3_flutter_libs 0.5.24 (0.6.0+eol available)
+  string_scanner 1.2.0 (1.4.1 available)
+  synchronized 3.3.0+3 (3.4.0 available)
+  term_glyph 1.2.1 (1.2.2 available)
+  typed_data 1.3.2 (1.4.0 available)
+  url_launcher 6.3.1 (6.3.2 available)
+  url_launcher_android 6.3.12 (6.3.28 available)
+  url_launcher_ios 6.3.1 (6.4.1 available)
+  url_launcher_linux 3.2.0 (3.2.2 available)
+  url_launcher_macos 3.2.1 (3.2.5 available)
+  url_launcher_web 2.3.3 (2.4.2 available)
+  url_launcher_windows 3.1.2 (3.1.5 available)
+  uuid 4.5.1 (4.5.3 available)
+  vector_graphics 1.1.11+1 (1.1.20 available)
+  vector_graphics_codec 1.1.11+1 (1.1.13 available)
+  vector_graphics_compiler 1.1.11+1 (1.2.0 available)
+  vm_service 14.2.5 (15.0.2 available)
+  web 1.1.0 (1.1.1 available)
+  webrtc_interface 1.4.0 (1.5.1 available)
+  win32 5.5.5 (6.0.0 available)
+  xml 6.5.0 (6.6.1 available)
+Got dependencies!
+80 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+[ +378 ms] Found plugin window_manager_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/window_manager_plus-1.0.5/
+[   +2 ms] Found plugin screen_retriever at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever-0.2.0/
+[        ] Found plugin screen_retriever_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever_windows-0.2.0/
+[   +1 ms] Found plugin screen_retriever_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever_macos-0.2.0/
+[        ] Found plugin screen_retriever_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever_linux-0.2.0/
+[   +1 ms] Found plugin url_launcher at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher-6.3.1/
+[        ] Found plugin url_launcher_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_windows-3.1.2/
+[   +1 ms] Found plugin url_launcher_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_web-2.3.3/
+[   +1 ms] Found plugin url_launcher_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_macos-3.2.1/
+[        ] Found plugin url_launcher_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_linux-3.2.0/
+[        ] Found plugin url_launcher_ios at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_ios-6.3.1/
+[        ] Found plugin url_launcher_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_android-6.3.12/
+[   +2 ms] Found plugin sqlite3_flutter_libs at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqlite3_flutter_libs-0.5.24/
+[   +3 ms] Found plugin sqflite at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqflite-2.4.0/
+[   +1 ms] Found plugin sqflite_darwin at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqflite_darwin-2.4.1-1/
+[        ] Found plugin sqflite_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqflite_android-2.4.0/
+[        ] Found plugin share_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/share_plus-10.0.2/
+[   +5 ms] Found plugin path_provider at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider-2.1.4/
+[   +1 ms] Found plugin path_provider_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_windows-2.3.0/
+[   +1 ms] Found plugin path_provider_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_linux-2.2.1/
+[   +1 ms] Found plugin path_provider_foundation at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_foundation-2.4.0/
+[        ] Found plugin path_provider_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_android-2.2.12/
+[   +2 ms] Found plugin receive_sharing_intent at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/receive_sharing_intent-1.8.1/
+[   +1 ms] Found plugin qr_code_scanner at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/qr_code_scanner-1.0.1/
+[   +1 ms] Found plugin permission_handler at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler-11.3.1/
+[        ] Found plugin permission_handler_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_windows-0.2.1/
+[        ] Found plugin permission_handler_html at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_html-0.1.3+2/
+[        ] Found plugin permission_handler_apple at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_apple-9.4.5/
+[        ] Found plugin permission_handler_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_android-12.0.12/
+[        ] Found plugin package_info_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/package_info_plus-8.0.2/
+[        ] Found plugin multi_window at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/multi_window-0.2.0/
+[        ] Found plugin multi_window_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/multi_window_macos-0.2.0/
+[   +1 ms] Found plugin multi_window_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/multi_window_linux-0.2.0/
+[        ] Found plugin home_widget at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/home_widget-0.6.0/
+[   +1 ms] Found plugin flutter_webrtc at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_webrtc-0.12.12+hotfix.1/
+[   +3 ms] Found plugin flutter_inappwebview at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview-6.1.5/
+[        ] Found plugin flutter_inappwebview_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_windows-0.6.0/
+[   +1 ms] Found plugin flutter_inappwebview_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_web-1.1.2/
+[        ] Found plugin flutter_inappwebview_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_macos-1.1.2/
+[        ] Found plugin flutter_inappwebview_ios at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_ios-1.1.2/
+[        ] Found plugin flutter_inappwebview_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_android-1.1.3/
+[        ] Found plugin flutter_downloader at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_downloader-1.11.8/
+[        ] Found plugin firebase_database at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_database-11.3.10/
+[        ] Found plugin firebase_database_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_database_web-0.2.6+16/
+[        ] Found plugin firebase_core at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_core-3.15.2/
+[        ] Found plugin firebase_core_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_core_web-2.24.1/
+[   +1 ms] Found plugin dynamic_color at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/dynamic_color-1.7.0/
+[   +2 ms] Found plugin app_settings at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/app_settings-6.1.1/
+[        ] Found plugin android_intent_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/android_intent_plus-5.3.1/
+[  +18 ms] executing: sysctl hw.optional.arm64
+[   +3 ms] Exit code 0 from: sysctl hw.optional.arm64
+[        ] hw.optional.arm64: 1
+[        ] executing: /usr/bin/arch -arm64e xcrun xcodebuild -version
+[  +58 ms] Exit code 0 from: /usr/bin/arch -arm64e xcrun xcodebuild -version
+[        ] Xcode 26.3
+           Build version 17C529
+[  +23 ms] Found plugin window_manager_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/window_manager_plus-1.0.5/
+[        ] Found plugin screen_retriever at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever-0.2.0/
+[        ] Found plugin screen_retriever_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever_windows-0.2.0/
+[        ] Found plugin screen_retriever_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever_macos-0.2.0/
+[        ] Found plugin screen_retriever_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/screen_retriever_linux-0.2.0/
+[        ] Found plugin url_launcher at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher-6.3.1/
+[        ] Found plugin url_launcher_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_windows-3.1.2/
+[        ] Found plugin url_launcher_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_web-2.3.3/
+[        ] Found plugin url_launcher_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_macos-3.2.1/
+[        ] Found plugin url_launcher_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_linux-3.2.0/
+[        ] Found plugin url_launcher_ios at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_ios-6.3.1/
+[        ] Found plugin url_launcher_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/url_launcher_android-6.3.12/
+[   +1 ms] Found plugin sqlite3_flutter_libs at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqlite3_flutter_libs-0.5.24/
+[   +1 ms] Found plugin sqflite at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqflite-2.4.0/
+[        ] Found plugin sqflite_darwin at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqflite_darwin-2.4.1-1/
+[        ] Found plugin sqflite_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/sqflite_android-2.4.0/
+[        ] Found plugin share_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/share_plus-10.0.2/
+[        ] Found plugin path_provider at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider-2.1.4/
+[        ] Found plugin path_provider_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_windows-2.3.0/
+[        ] Found plugin path_provider_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_linux-2.2.1/
+[        ] Found plugin path_provider_foundation at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_foundation-2.4.0/
+[        ] Found plugin path_provider_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/path_provider_android-2.2.12/
+[        ] Found plugin receive_sharing_intent at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/receive_sharing_intent-1.8.1/
+[        ] Found plugin qr_code_scanner at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/qr_code_scanner-1.0.1/
+[   +1 ms] Found plugin permission_handler at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler-11.3.1/
+[        ] Found plugin permission_handler_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_windows-0.2.1/
+[        ] Found plugin permission_handler_html at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_html-0.1.3+2/
+[        ] Found plugin permission_handler_apple at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_apple-9.4.5/
+[        ] Found plugin permission_handler_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/permission_handler_android-12.0.12/
+[        ] Found plugin package_info_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/package_info_plus-8.0.2/
+[        ] Found plugin multi_window at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/multi_window-0.2.0/
+[        ] Found plugin multi_window_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/multi_window_macos-0.2.0/
+[        ] Found plugin multi_window_linux at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/multi_window_linux-0.2.0/
+[        ] Found plugin home_widget at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/home_widget-0.6.0/
+[        ] Found plugin flutter_webrtc at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_webrtc-0.12.12+hotfix.1/
+[   +2 ms] Found plugin flutter_inappwebview at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview-6.1.5/
+[        ] Found plugin flutter_inappwebview_windows at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_windows-0.6.0/
+[        ] Found plugin flutter_inappwebview_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_web-1.1.2/
+[        ] Found plugin flutter_inappwebview_macos at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_macos-1.1.2/
+[        ] Found plugin flutter_inappwebview_ios at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_ios-1.1.2/
+[        ] Found plugin flutter_inappwebview_android at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_inappwebview_android-1.1.3/
+[        ] Found plugin flutter_downloader at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/flutter_downloader-1.11.8/
+[        ] Found plugin firebase_database at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_database-11.3.10/
+[        ] Found plugin firebase_database_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_database_web-0.2.6+16/
+[        ] Found plugin firebase_core at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_core-3.15.2/
+[        ] Found plugin firebase_core_web at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/firebase_core_web-2.24.1/
+[        ] Found plugin dynamic_color at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/dynamic_color-1.7.0/
+[   +1 ms] Found plugin app_settings at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/app_settings-6.1.1/
+[        ] Found plugin android_intent_plus at /Users/sandipkumarpatel/.pub-cache/hosted/pub.dev/android_intent_plus-5.3.1/
+[   +5 ms] Generating /Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+[   +2 ms] Skipping generating GeneratedPluginRegistrant.java because it is up-to-date.
+[   +1 ms] Skipping generating generated_plugin_registrant.h because it is up-to-date.
+[        ] Skipping generating generated_plugin_registrant.cc because it is up-to-date.
+[        ] Skipping generating generated_plugins.cmake because it is up-to-date.
+[   +1 ms] Skipping generating GeneratedPluginRegistrant.h because it is up-to-date.
+[        ] Skipping generating GeneratedPluginRegistrant.m because it is up-to-date.
+[        ] Skipping generating GeneratedPluginRegistrant.swift because it is up-to-date.
+[ +538 ms] executing: /usr/bin/plutil -convert xml1 -o - /Applications/Android Studio.app/Contents/Info.plist
+[   +6 ms] Exit code 0 from: /usr/bin/plutil -convert xml1 -o - /Applications/Android Studio.app/Contents/Info.plist
+[        ] <?xml version="1.0" encoding="UTF-8"?>
+           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+           <plist version="1.0">
+           <dict>
+           	<key>CFBundleDevelopmentRegion</key>
+           	<string>English</string>
+           	<key>CFBundleDocumentTypes</key>
+           	<array>
+           		<dict>
+           			<key>CFBundleTypeExtensions</key>
+           			<array>
+           				<string>ipr</string>
+           			</array>
+           			<key>CFBundleTypeIconFile</key>
+           			<string>studio.icns</string>
+           			<key>CFBundleTypeName</key>
+           			<string>Android Studio Project File</string>
+           			<key>CFBundleTypeRole</key>
+           			<string>Editor</string>
+           		</dict>
+           		<dict>
+           			<key>CFBundleTypeExtensions</key>
+           			<array>
+           				<string>*</string>
+           			</array>
+           			<key>CFBundleTypeName</key>
+           			<string>All documents</string>
+           			<key>CFBundleTypeOSTypes</key>
+           			<array>
+           				<string>****</string>
+           			</array>
+           			<key>CFBundleTypeRole</key>
+           			<string>Editor</string>
+           			<key>LSTypeIsPackage</key>
+           			<false/>
+           		</dict>
+           	</array>
+           	<key>CFBundleExecutable</key>
+           	<string>studio</string>
+           	<key>CFBundleGetInfoString</key>
+           	<string>Android Studio 2025.3, build AI-253.30387.90.2532.14935130. Copyright JetBrains s.r.o., (c) 2000-2026</string>
+           	<key>CFBundleIconFile</key>
+           	<string>studio.icns</string>
+           	<key>CFBundleIdentifier</key>
+           	<string>com.google.android.studio</string>
+           	<key>CFBundleInfoDictionaryVersion</key>
+           	<string>6.0</string>
+           	<key>CFBundleName</key>
+           	<string>Android Studio</string>
+           	<key>CFBundlePackageType</key>
+           	<string>APPL</string>
+           	<key>CFBundleShortVersionString</key>
+           	<string>2025.3</string>
+           	<key>CFBundleURLTypes</key>
+           	<array>
+           		<dict>
+           			<key>CFBundleTypeRole</key>
+           			<string>Editor</string>
+           			<key>CFBundleURLName</key>
+           			<string>Stacktrace</string>
+           			<key>CFBundleURLSchemes</key>
+           			<array>
+           				<string>idea</string>
+           			</array>
+           		</dict>
+           	</array>
+           	<key>CFBundleVersion</key>
+           	<string>AI-253.30387.90.2532.14935130</string>
+           	<key>LSApplicationCategoryType</key>
+           	<string>public.app-category.developer-tools</string>
+           	<key>LSArchitecturePriority</key>
+           	<array>
+           		<string>arm64</string>
+           	</array>
+           	<key>LSMinimumSystemVersion</key>
+           	<string>10.13</string>
+           	<key>LSRequiresNativeExecution</key>
+           	<string>YES</string>
+           	<key>NSAppleEventsUsageDescription</key>
+           	<string>An application in Android Studio requests the ability to send Apple events.</string>
+           	<key>NSBluetoothAlwaysUsageDescription</key>
+           	<string>An application in Android Studio requests access to Bluetooth.</string>
+           	<key>NSCameraUsageDescription</key>
+           	<string>An application in Android Studio requests access to the device's camera.</string>
+           	<key>NSDesktopFolderUsageDescription</key>
+           	<string>An application in Android Studio requests access to the user's Desktop folder.</string>
+           	<key>NSDocumentsFolderUsageDescription</key>
+           	<string>An application in Android Studio requests access to the user's Documents folder.</string>
+           	<key>NSDownloadsFolderUsageDescription</key>
+           	<string>An application in Android Studio requests access to the user's Downloads folder.</string>
+           	<key>NSHighResolutionCapable</key>
+           	<true/>
+           	<key>NSLocalNetworkUsageDescription</key>
+           	<string>Android Studio's features, such as SSH and database connectivity, require permissions for accessing the local network and sending broadcast requests.</string>
+           	<key>NSLocationUsageDescription</key>
+           	<string>An application in Android Studio requests access to the user's location information.</string>
+           	<key>NSMicrophoneUsageDescription</key>
+           	<string>An application in Android Studio requests access to the device's microphone.</string>
+           	<key>NSNetworkVolumesUsageDescription</key>
+           	<string>An application in Android Studio requests access to files on a network volume.</string>
+           	<key>NSRemovableVolumesUsageDescription</key>
+           	<string>An application in Android Studio requests access to files on a removable volume.</string>
+           	<key>NSSupportsAutomaticGraphicsSwitching</key>
+           	<true/>
+           </dict>
+           </plist>
+[   +4 ms] executing: /Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/java -version
+[  +44 ms] Exit code 0 from: /Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/java -version
+[        ] openjdk version "21.0.9" 2025-10-21
+           OpenJDK Runtime Environment (build 21.0.9+-14787801-b1163.94)
+           OpenJDK 64-Bit Server VM (build 21.0.9+-14787801-b1163.94, mixed mode)
+[   +5 ms] executing: /Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/java --version
+[  +43 ms] Exit code 0 from: /Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/java --version
+[        ] openjdk 21.0.9 2025-10-21
+           OpenJDK Runtime Environment (build 21.0.9+-14787801-b1163.94)
+           OpenJDK 64-Bit Server VM (build 21.0.9+-14787801-b1163.94, mixed mode)
+[        ] Version of Java is different than impacted version, no migration attempted.
+[   +9 ms] CMake project not found, skipping support Android 15 16k page size migration.
+[        ] Using gradle from /Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/gradlew.
+[   +9 ms] LocalFile: '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/build.gradle' doesn't provide an AGP version. Checking settings.
+[        ] LocalFile: '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/settings.gradle' provides AGP version: 8.2.2
+[   +2 ms] Running Gradle task 'assembleRelease'...
+[        ] executing: [/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/] /Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/gradlew --full-stacktrace --info -Pverbose=true -Ptarget-platform=android-arm,android-arm64,android-x64 -Ptarget=lib/main.dart -Pbase-application-name=android.app.Application -Pdart-defines=RkxVVFRFUl9WRVJTSU9OPTMuNDEuNA==,RkxVVFRFUl9DSEFOTkVMPXN0YWJsZQ==,RkxVVFRFUl9HSVRfVVJMPWh0dHBzOi8vZ2l0aHViLmNvbS9mbHV0dGVyL2ZsdXR0ZXIuZ2l0,RkxVVFRFUl9GUkFNRVdPUktfUkVWSVNJT049ZmYzN2JlZjYwMw==,RkxVVFRFUl9FTkdJTkVfUkVWSVNJT049ZTRiOGRjYTNmMQ==,RkxVVFRFUl9EQVJUX1ZFUlNJT049My4xMS4x -Pdart-obfuscation=false -Ptrack-widget-creation=true -Ptree-shake-icons=true assembleRelease
+[ +110 ms] Downloading https://services.gradle.org/distributions/gradle-8.5-all.zip
+[+50606 ms] ...................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+[        ] Unzipping /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5-all.zip to /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z
+[+2672 ms] Set executable permissions for: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/bin/gradle
+[ +144 ms] Initialized native services in: /Users/sandipkumarpatel/.gradle/native
+[        ] Initialized jansi services in: /Users/sandipkumarpatel/.gradle/native
+[ +109 ms] Welcome to Gradle 8.5!
+[        ] Here are the highlights of this release:
+[        ]  - Support for running on Java 21
+[        ]  - Faster first use with Kotlin DSL
+[        ]  - Improved error and warning messages
+[        ] For more details see https://docs.gradle.org/8.5/release-notes.html
+[        ] Received JVM installation metadata from '/Applications/Android Studio.app/Contents/jbr/Contents/Home': {JAVA_HOME=/Applications/Android Studio.app/Contents/jbr/Contents/Home, JAVA_VERSION=21.0.9, JAVA_VENDOR=JetBrains s.r.o., RUNTIME_NAME=OpenJDK Runtime Environment, RUNTIME_VERSION=21.0.9+-14787801-b1163.94, VM_NAME=OpenJDK 64-Bit Server VM, VM_VERSION=21.0.9+-14787801-b1163.94, VM_VENDOR=JetBrains s.r.o., OS_ARCH=aarch64}
+[        ] Removing 0 daemon stop events from registry
+[        ] Starting a Gradle Daemon (subsequent builds will be faster)
+[        ] Starting process 'Gradle build daemon'. Working directory: /Users/sandipkumarpatel/.gradle/daemon/8.5 Command: /Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/java --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED -Xmx4096M -Dfile.encoding=UTF-8 -Duser.country=US -Duser.language=en -Duser.variant -cp /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-launcher-8.5.jar -javaagent:/Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/agents/gradle-instrumentation-agent-8.5.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 8.5
+[  +99 ms] Successfully started process 'Gradle build daemon'
+[ +397 ms] An attempt to start the daemon took 0.493 secs.
+[ +102 ms] The client will now receive all logging from the daemon (pid: 76228). The daemon log file: /Users/sandipkumarpatel/.gradle/daemon/8.5/daemon-76228.out.log
+[        ] Starting build in new daemon [memory: 4 GiB]
+[  +99 ms] Using 12 worker leases.
+[ +100 ms] Received JVM installation metadata from '/Applications/Android Studio.app/Contents/jbr/Contents/Home': {JAVA_HOME=/Applications/Android Studio.app/Contents/jbr/Contents/Home, JAVA_VERSION=21.0.9, JAVA_VENDOR=JetBrains s.r.o., RUNTIME_NAME=OpenJDK Runtime Environment, RUNTIME_VERSION=21.0.9+-14787801-b1163.94, VM_NAME=OpenJDK 64-Bit Server VM, VM_VERSION=21.0.9+-14787801-b1163.94, VM_VENDOR=JetBrains s.r.o., OS_ARCH=aarch64}
+[  +97 ms] Watching the file system is configured to be enabled if available
+[        ] Now considering [/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android] as hierarchies to watch
+[        ] File system watching is active
+[ +302 ms] Starting Build
+[        ] Compiling settings file '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/settings.gradle' using SubsetScriptTransformer.
+[ +396 ms] Now considering [/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle, /Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android] as hierarchies to watch
+[        ] Generating /Users/sandipkumarpatel/.gradle/caches/8.5/generated-gradle-jars/gradle-api-8.5.jar
+[+3803 ms] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/8.5/generated-gradle-jars/gradle-api-8.5.jar: class org/gradle/configurationcache/extensions/AutoCloseableExtensionsKt: inline fun useToRun(): compile avoidance is not supported with public inline functions
+[ +799 ms] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-kotlin-dsl-extensions-8.5.jar: class org/gradle/kotlin/dsl/GradleApiKotlinDslExtensions_1cbh1oqkvm762j10e96dawuh5Kt: inline fun domainObjectContainer(): compile avoidance is not supported with public inline functions
+[        ] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-kotlin-dsl-8.5.jar: class org/gradle/kotlin/dsl/ArtifactHandlerScope: inline fun invoke(): compile avoidance is not supported with public inline functions
+[        ] Kotlin DSL script compilation (Settings/TopLevel/stage1) is not up-to-date because:
+[        ]   No history is available.
+[+3898 ms] > Configure project :gradle
+[        ] Evaluating project ':gradle' using build file '/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build.gradle.kts'.
+[        ] Caching disabled for Kotlin DSL plugin specs accessors for classpath '88f21b562c7d422f7231428dbdb6eb94' because:
+[        ]   Build cache is disabled
+[        ] Kotlin DSL plugin specs accessors for classpath '88f21b562c7d422f7231428dbdb6eb94' is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for Kotlin DSL script compilation (Project/TopLevel/stage1) because:
+[        ]   Build cache is disabled
+[        ] Kotlin DSL script compilation (Project/TopLevel/stage1) is not up-to-date because:
+[        ]   No history is available.
+[        ] Downloading https://plugins.gradle.org/m2/org/gradle/kotlin/kotlin-dsl/org.gradle.kotlin.kotlin-dsl.gradle.plugin/4.2.1/org.gradle.kotlin.kotlin-dsl.gradle.plugin-4.2.1.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1145651673518217627bin
+[ +400 ms] Resource missing. [HTTP HEAD: https://plugins.gradle.org/m2/org/gradle/kotlin/kotlin-dsl/org.gradle.kotlin.kotlin-dsl.gradle.plugin/4.2.1/org.gradle.kotlin.kotlin-dsl.gradle.plugin-4.2.1.jar]
+[ +997 ms] Downloading https://plugins.gradle.org/m2/org/gradle/kotlin/gradle-kotlin-dsl-plugins/4.2.1/gradle-kotlin-dsl-plugins-4.2.1.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3603657430760458009bin
+[ +302 ms] Downloading https://plugins.gradle.org/m2/org/gradle/kotlin/gradle-kotlin-dsl-plugins/4.2.1/gradle-kotlin-dsl-plugins-4.2.1.module to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download737309040981865912bin
+[ +195 ms] Found locally available resource with matching checksum: [https://plugins.gradle.org/m2/org/jetbrains/kotlin/kotlin-stdlib/1.9.20/kotlin-stdlib-1.9.20.pom, /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/1.9.20/3f738a2bb6623e58335de00d020e5055dc8dbc89/kotlin-stdlib-1.9.20.pom]
+[        ] Found locally available resource with matching checksum: [https://plugins.gradle.org/m2/org/jetbrains/kotlin/kotlin-stdlib/1.9.20/kotlin-stdlib-1.9.20.module, /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/1.9.20/3eccbf1caf5170544beef2ea9b3085625320f6f2/kotlin-stdlib-1.9.20.module]
+[ +104 ms] Downloading https://plugins.gradle.org/m2/org/gradle/kotlin/gradle-kotlin-dsl-plugins/4.2.1/gradle-kotlin-dsl-plugins-4.2.1.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download11706366928731691666bin
+[  +99 ms] Found locally available resource with matching checksum: [https://plugins.gradle.org/m2/org/jetbrains/kotlin/kotlin-stdlib/1.9.20/kotlin-stdlib-1.9.20.jar, /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/1.9.20/e58b4816ac517e9cc5df1db051120c63d4cde669/kotlin-stdlib-1.9.20.jar]
+[+2800 ms] Using Kotlin Gradle Plugin gradle81 variant
+[ +196 ms] kotlin scripting plugin: created the scripting discovery configuration: kotlinScriptDef
+[        ] kotlin scripting plugin: created the scripting discovery configuration: testKotlinScriptDef
+[        ] file or directory '/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/java', not found
+[ +599 ms] Caching disabled for Kotlin DSL accessors for project ':gradle' because:
+[        ]   Build cache is disabled
+[        ] Kotlin DSL accessors for project ':gradle' is not up-to-date because:
+[        ]   No history is available.
+[ +303 ms] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin/1.9.20/d67c5ea81ba3098bf02a3feff06c378740af2bc3/kotlin-gradle-plugin-1.9.20-gradle81.jar: class org/jetbrains/kotlin/gradle/internal/KaptWithAndroid: inline fun androidVariantData(): compile avoidance is not supported with public inline functions
+[  +97 ms] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin-idea-proto/1.9.20/c35d575cec4f2e5759fd63df8a3207653bae9ade/kotlin-gradle-plugin-idea-proto-1.9.20.jar: class org/jetbrains/kotlin/gradle/idea/proto/generated/IdeaExtrasProtoKt$Dsl: inline fun setValues(): compile avoidance is not supported with public inline functions
+[ +102 ms] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin-idea/1.9.20/83cf5d4acdbf6c1e7b32ca96cb79b96e4cce032e/kotlin-gradle-plugin-idea-1.9.20.jar: class org/jetbrains/kotlin/gradle/idea/serialize/IdeaKotlinExtrasSerializer$Companion: inline fun javaIoSerializable(): compile avoidance is not supported with public inline functions
+[ +597 ms] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/1.9.20/b44d2f7d8c1c67c0ed66d40e57e52623ca753db7/kotlin-compiler-embeddable-1.9.20.jar: class org/jetbrains/kotlin/konan/file/FileKt: inline fun use(): compile avoidance is not supported with public inline functions
+[ +702 ms] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-tooling-core/1.9.20/bdc01105250e7ecc8bbcf49a21805685cd557dda/kotlin-tooling-core-1.9.20.jar: class org/jetbrains/kotlin/tooling/core/ClosureKt: inline fun closure(): compile avoidance is not supported with public inline functions
+[        ] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-util-io/1.9.20/13fa0df6f8e5aea3ee927e6299063d4a159766ca/kotlin-util-io-1.9.20.jar: class org/jetbrains/kotlin/konan/file/FileKt: inline fun use(): compile avoidance is not supported with public inline functions
+[        ] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.5.0/d8cebccdcddd029022aa8646a5a953ff88b13ac8/kotlinx-coroutines-core-jvm-1.5.0.jar: class kotlinx/coroutines/CoroutineScopeKt: inline fun currentCoroutineContext(): compile avoidance is not supported with public inline functions
+[  +96 ms] Caching disabled for Kotlin DSL script compilation (Project/TopLevel/stage2) because:
+[        ]   Build cache is disabled
+[        ] Kotlin DSL script compilation (Project/TopLevel/stage2) is not up-to-date because:
+[        ]   No history is available.
+[ +601 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/application/com.android.application.gradle.plugin/8.2.2/com.android.application.gradle.plugin-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4608010434486607928bin
+[ +499 ms] Resource missing. [HTTP HEAD: https://dl.google.com/dl/android/maven2/com/android/application/com.android.application.gradle.plugin/8.2.2/com.android.application.gradle.plugin-8.2.2.jar]
+[  +98 ms] Resolve mutations for :gradle:checkKotlinGradlePluginConfigurationErrors (Thread[#85,Execution worker,5,main]) started.
+[        ] :gradle:checkKotlinGradlePluginConfigurationErrors (Thread[#85,Execution worker,5,main]) started.
+[        ] > Task :gradle:checkKotlinGradlePluginConfigurationErrors
+[        ] Caching disabled for task ':gradle:checkKotlinGradlePluginConfigurationErrors' because:
+[        ]   Build cache is disabled
+[        ] Task ':gradle:checkKotlinGradlePluginConfigurationErrors' is not up-to-date because:
+[        ]   Task has not declared any outputs despite executing actions.
+[        ] Resolve mutations for :gradle:compileKotlin (Thread[#85,Execution worker,5,main]) started.
+[        ] :gradle:compileKotlin (Thread[#85,Execution worker,5,main]) started.
+[+1999 ms] > Task :gradle:compileKotlin
+[        ] Deleting stale output file: /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/classes/kotlin/main
+[        ] Deleting stale output file: /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/kotlin/compileKotlin/classpath-snapshot
+[        ] Deleting stale output file: /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/kotlin/compileKotlin/cacheable
+[        ] Transforming gradle-api-8.5.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-ant-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-astbuilder-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-console-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-datetime-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-dateutil-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-groovydoc-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-json-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-nio-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-sql-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-templates-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-test-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming groovy-xml-3.0.17.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming javaparser-core-3.17.0.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-stdlib-1.9.20.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-reflect-1.9.20.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming gradle-installation-beacon-8.5.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming gradle-kotlin-dsl-extensions-8.5.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming gradle-kotlin-dsl-8.5.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming gradle-kotlin-dsl-shared-runtime-8.5.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming gradle-kotlin-dsl-tooling-models-8.5.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming annotation-jvm-1.9.1.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming gradle-8.11.1.jar with ClasspathEntrySnapshotTransform
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-groovydoc-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-nio-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-sql-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-datetime-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-ant-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-console-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-dateutil-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-astbuilder-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/8.5/generated-gradle-jars/gradle-api-8.5.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-groovydoc-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-nio-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-astbuilder-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-sql-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-datetime-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-dateutil-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-ant-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-console-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/8.5/generated-gradle-jars/gradle-api-8.5.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Transforming kotlin-reflect-1.9.20.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlinx-serialization-json-jvm-1.4.0.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlinx-serialization-core-jvm-1.4.0.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-stdlib-jdk8-1.8.0.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-stdlib-jdk7-1.8.0.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-stdlib-1.9.24.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-gradle-plugin-1.8.0-gradle76.jar with ClasspathEntrySnapshotTransform
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-json-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-json-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/kotlin-stdlib-1.9.20.jar because:
+[        ]   Build cache is disabled
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-test-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-templates-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/kotlin-stdlib-1.9.20.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-templates-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-test-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/kotlin-reflect-1.9.20.jar because:
+[        ]   Build cache is disabled
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/javaparser-core-3.17.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/kotlin-reflect-1.9.20.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/javaparser-core-3.17.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-xml-3.0.17.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/groovy-xml-3.0.17.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Transforming builder-8.11.1.jar with ClasspathEntrySnapshotTransform
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-installation-beacon-8.5.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-installation-beacon-8.5.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-kotlin-dsl-extensions-8.5.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-kotlin-dsl-extensions-8.5.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-kotlin-dsl-8.5.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-kotlin-dsl-8.5.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-kotlin-dsl-shared-runtime-8.5.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-kotlin-dsl-shared-runtime-8.5.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-kotlin-dsl-tooling-models-8.5.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/wrapper/dists/gradle-8.5-all/3zlzzgtsutfj0pbojr50n2l7z/gradle-8.5/lib/gradle-kotlin-dsl-tooling-models-8.5.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/androidx.annotation/annotation-jvm/1.9.1/b17951747e38bf3986a24431b9ba0d039958aa5f/annotation-jvm-1.9.1.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/androidx.annotation/annotation-jvm/1.9.1/b17951747e38bf3986a24431b9ba0d039958aa5f/annotation-jvm-1.9.1.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Transforming builder-model-8.11.1.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming gradle-api-8.11.1.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-gradle-plugin-model-1.8.0.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-gradle-plugin-api-1.8.0-gradle76.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-gradle-plugin-api-1.8.0.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-tooling-core-1.8.0.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming annotations-13.0.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming manifest-merger-31.11.1.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming zipflinger-8.11.1.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming apksig-8.11.1.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming apkzlib-8.11.1.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming javawriter-2.5.0.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming asm-9.7.1.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-native-utils-1.8.0.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-project-model-1.8.0.jar with ClasspathEntrySnapshotTransform
+[        ] Transforming kotlin-util-io-1.8.0.jar with ClasspathEntrySnapshotTransform
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-serialization-json-jvm/1.4.0/cfa3e57d044a20e5c9e4561a997df823e2f1c81a/kotlinx-serialization-json-jvm-1.4.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-serialization-json-jvm/1.4.0/cfa3e57d044a20e5c9e4561a997df823e2f1c81a/kotlinx-serialization-json-jvm-1.4.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib-jdk8/1.8.0/ed04f49e186a116753ad70d34f0ac2925d1d8020/kotlin-stdlib-jdk8-1.8.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib-jdk8/1.8.0/ed04f49e186a116753ad70d34f0ac2925d1d8020/kotlin-stdlib-jdk8-1.8.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-serialization-core-jvm/1.4.0/9b00d574374ae0201a505ab54c7744586866dc27/kotlinx-serialization-core-jvm-1.4.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-serialization-core-jvm/1.4.0/9b00d574374ae0201a505ab54c7744586866dc27/kotlinx-serialization-core-jvm-1.4.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib-jdk7/1.8.0/3c91271347f678c239607abb676d4032a7898427/kotlin-stdlib-jdk7-1.8.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib-jdk7/1.8.0/3c91271347f678c239607abb676d4032a7898427/kotlin-stdlib-jdk7-1.8.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/1.9.24/9928532f12c66ad816a625b3f9984f8368ca6d2b/kotlin-stdlib-1.9.24.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/1.9.24/9928532f12c66ad816a625b3f9984f8368ca6d2b/kotlin-stdlib-1.9.24.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/builder-model/8.11.1/6888ed42b8bcc73e3a378048263d2cad36707494/builder-model-8.11.1.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/builder-model/8.11.1/6888ed42b8bcc73e3a378048263d2cad36707494/builder-model-8.11.1.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/gradle-api/8.11.1/e0ce2faa3fe7331e1e6855e5aa699c650f6d56c3/gradle-api-8.11.1.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/gradle-api/8.11.1/e0ce2faa3fe7331e1e6855e5aa699c650f6d56c3/gradle-api-8.11.1.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin-model/1.8.0/9da2fce7af0a94348001ee8dd20a82167f5de284/kotlin-gradle-plugin-model-1.8.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin-model/1.8.0/9da2fce7af0a94348001ee8dd20a82167f5de284/kotlin-gradle-plugin-model-1.8.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin-api/1.8.0/29f79a3bb109e05b07f1d2893074ab176a4276e0/kotlin-gradle-plugin-api-1.8.0-gradle76.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin-api/1.8.0/29f79a3bb109e05b07f1d2893074ab176a4276e0/kotlin-gradle-plugin-api-1.8.0-gradle76.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/gradle/8.11.1/7861a99a64716fd75ce85a3c7e2fcb3a9e928857/gradle-8.11.1.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/gradle/8.11.1/7861a99a64716fd75ce85a3c7e2fcb3a9e928857/gradle-8.11.1.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin-api/1.8.0/29f79a3bb109e05b07f1d2893074ab176a4276e0/kotlin-gradle-plugin-api-1.8.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin-api/1.8.0/29f79a3bb109e05b07f1d2893074ab176a4276e0/kotlin-gradle-plugin-api-1.8.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-tooling-core/1.8.0/da3a4252e4b48833eb566227b2baecbaede8993/kotlin-tooling-core-1.8.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-tooling-core/1.8.0/da3a4252e4b48833eb566227b2baecbaede8993/kotlin-tooling-core-1.8.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin/1.8.0/d79a079634e8d3bd92c594b224f4de2086bb4a10/kotlin-gradle-plugin-1.8.0-gradle76.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin/1.8.0/d79a079634e8d3bd92c594b224f4de2086bb4a10/kotlin-gradle-plugin-1.8.0-gradle76.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/manifest-merger/31.11.1/2eb20f98b2e71c3a1a2ebe675910e6958a7e1b78/manifest-merger-31.11.1.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/manifest-merger/31.11.1/2eb20f98b2e71c3a1a2ebe675910e6958a7e1b78/manifest-merger-31.11.1.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android/zipflinger/8.11.1/3a3b1786c331db72b9610eb1f68f0ec1ec9a1f/zipflinger-8.11.1.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android/zipflinger/8.11.1/3a3b1786c331db72b9610eb1f68f0ec1ec9a1f/zipflinger-8.11.1.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/apkzlib/8.11.1/ea2327cd7a67c0fc9a4d26f035b922dff11c7219/apkzlib-8.11.1.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/apkzlib/8.11.1/ea2327cd7a67c0fc9a4d26f035b922dff11c7219/apkzlib-8.11.1.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.squareup/javawriter/2.5.0/81241ff7078ef14f42ea2a8995fa09c096256e6b/javawriter-2.5.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.squareup/javawriter/2.5.0/81241ff7078ef14f42ea2a8995fa09c096256e6b/javawriter-2.5.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/apksig/8.11.1/f005788487574c7d6ba23dea63bf8cb3a4f164a6/apksig-8.11.1.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/apksig/8.11.1/f005788487574c7d6ba23dea63bf8cb3a4f164a6/apksig-8.11.1.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm/9.7.1/f0ed132a49244b042cd0e15702ab9f2ce3cc8436/asm-9.7.1.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm/9.7.1/f0ed132a49244b042cd0e15702ab9f2ce3cc8436/asm-9.7.1.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-native-utils/1.8.0/73361435f42e1fecbd81f686ccaa8aa1c498b941/kotlin-native-utils-1.8.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-native-utils/1.8.0/73361435f42e1fecbd81f686ccaa8aa1c498b941/kotlin-native-utils-1.8.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-project-model/1.8.0/2b8d20018168339835a79512f46f3251ff09caf5/kotlin-project-model-1.8.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-project-model/1.8.0/2b8d20018168339835a79512f46f3251ff09caf5/kotlin-project-model-1.8.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-util-io/1.8.0/1d7ca3cc3c24111ca8a12e29b10d6df0f778afd8/kotlin-util-io-1.8.0.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-util-io/1.8.0/1d7ca3cc3c24111ca8a12e29b10d6df0f778afd8/kotlin-util-io-1.8.0.jar is not up-to-date because:
+[        ]   No history is available.
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/builder/8.11.1/52ae05e99786bd491ad363825acbc2476c8b905/builder-8.11.1.jar because:
+[        ]   Build cache is disabled
+[        ] ClasspathEntrySnapshotTransform: /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/builder/8.11.1/52ae05e99786bd491ad363825acbc2476c8b905/builder-8.11.1.jar is not up-to-date because:
+[        ]   No history is available.
+[ +193 ms] Caching disabled for task ':gradle:compileKotlin' because:
+[        ]   Build cache is disabled
+[        ] Task ':gradle:compileKotlin' is not up-to-date because:
+[        ]   No history is available.
+[        ] The input changes require a full rebuild for incremental task ':gradle:compileKotlin'.
+[        ] file or directory '/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/java', not found
+[        ] file or directory '/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/java', not found
+[        ] file or directory '/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/java', not found
+[        ] file or directory '/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/java', not found
+[        ] Kotlin source files: /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/VersionUtils.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/FlutterPluginConstants.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/tasks/DeepLinkJsonFromManifestTaskHelper.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/tasks/DeepLinkJsonFromManifestTask.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/tasks/FlutterTaskHelper.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/tasks/BaseFlutterTask.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/tasks/BaseFlutterTaskHelper.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/tasks/FlutterTask.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/IntentFilterCheck.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/plugins/PluginHandler.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/BaseApplicationNameHandler.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/DependencyVersionChecker.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/VersionFetcher.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/AppLinkSettings.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/NativePluginLoaderReflectionBridge.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/FlutterPluginUtils.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/FlutterAppPluginLoaderPlugin.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/FlutterPlugin.kt, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/Deeplink.kt
+[        ] Java source files: 
+[        ] Script source files: 
+[        ] Script file extensions: 
+[        ] Using Kotlin/JVM incremental compilation
+[        ] [KOTLIN] Kotlin compilation 'jdkHome' argument: /Applications/Android Studio.app/Contents/jbr/Contents/Home
+[ +102 ms] Resolve mutations for :gradle:pluginDescriptors (Thread[#88,Execution worker Thread 4,5,main]) started.
+[        ] :gradle:pluginDescriptors (Thread[#88,Execution worker Thread 4,5,main]) started.
+[        ] > Task :gradle:pluginDescriptors
+[        ] Deleting stale output file: /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/pluginDescriptors
+[        ] Caching disabled for task ':gradle:pluginDescriptors' because:
+[        ]   Build cache is disabled
+[        ] Task ':gradle:pluginDescriptors' is not up-to-date because:
+[        ]   No history is available.
+[        ] Resolve mutations for :gradle:processResources (Thread[#88,Execution worker Thread 4,5,main]) started.
+[        ] :gradle:processResources (Thread[#88,Execution worker Thread 4,5,main]) started.
+[        ] > Task :gradle:processResources
+[        ] Deleting stale output file: /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/resources/main
+[        ] Caching disabled for task ':gradle:processResources' because:
+[        ]   Build cache is disabled
+[        ] Task ':gradle:processResources' is not up-to-date because:
+[        ]   No history is available.
+[        ] file or directory '/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/resources', not found
+[+1899 ms] > Task :gradle:compileKotlin
+[        ] i: found daemon on port 17547 (3517932 ms old), trying to connect
+[        ] i: connected to the daemon
+[        ] Options for KOTLIN DAEMON: IncrementalCompilationOptions(super=CompilationOptions(compilerMode=INCREMENTAL_COMPILER, targetPlatform=JVM, reportCategories=[0, 3], reportSeverity=2, requestedCompilationResults=[0], kotlinScriptExtensions=[]), areFileChangesKnown=false, modifiedFiles=null, deletedFiles=null, classpathChanges=NotAvailableForNonIncrementalRun, workingDir=/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/kotlin/compileKotlin/cacheable, multiModuleICSettings=MultiModuleICSettings(buildHistoryFile=/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/kotlin/compileKotlin/local-state/build-history.bin, useModuleDetection=false), usePreciseJavaTracking=true, outputFiles=[/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/classes/kotlin/main, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/kotlin/compileKotlin/cacheable, /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/kotlin/compileKotlin/local-state])
+[        ] w: file:///Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/FlutterPlugin.kt:11:37 'ApkVariant' is deprecated. Deprecated in Java
+[        ] w: file:///Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/FlutterPlugin.kt:614:69 'ApkVariant' is deprecated. Deprecated in Java
+[        ] w: file:///Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/plugins/PluginHandler.kt:186:64 Unchecked cast: NamedDomainObjectContainer<out BuildType> to NamedDomainObjectContainer<BuildType>
+[        ] w: file:///Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/src/main/kotlin/plugins/PluginHandler.kt:187:69 Unchecked cast: NamedDomainObjectContainer<out BuildType> to NamedDomainObjectContainer<BuildType>
+[        ] Resolve mutations for :gradle:compileJava (Thread[#85,Execution worker,5,main]) started.
+[        ] :gradle:compileJava (Thread[#85,Execution worker,5,main]) started.
+[        ] > Task :gradle:compileJava NO-SOURCE
+[        ] Skipping task ':gradle:compileJava' as it has no source files and no previous output files.
+[        ] Resolve mutations for :gradle:compileGroovy (Thread[#85,Execution worker,5,main]) started.
+[        ] :gradle:compileGroovy (Thread[#85,Execution worker,5,main]) started.
+[        ] > Task :gradle:compileGroovy NO-SOURCE
+[        ] Skipping task ':gradle:compileGroovy' as it has no source files and no previous output files.
+[        ] Resolve mutations for :gradle:classes (Thread[#85,Execution worker,5,main]) started.
+[        ] :gradle:classes (Thread[#85,Execution worker,5,main]) started.
+[        ] > Task :gradle:classes
+[        ] Skipping task ':gradle:classes' as it has no actions.
+[        ] Resolve mutations for :gradle:jar (Thread[#85,Execution worker,5,main]) started.
+[        ] :gradle:jar (Thread[#85,Execution worker,5,main]) started.
+[  +98 ms] > Task :gradle:jar
+[        ] Deleting stale output file: /Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/libs/gradle-1.0.0.jar
+[        ] Caching disabled for task ':gradle:jar' because:
+[        ]   Build cache is disabled
+[        ] Task ':gradle:jar' is not up-to-date because:
+[        ]   No history is available.
+[        ] file or directory '/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/classes/java/main', not found
+[        ] file or directory '/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle/build/classes/groovy/main', not found
+[ +197 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/8.2.2/gradle-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download12138561134150452206bin
+[ +198 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/8.2.2/gradle-8.2.2.module to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download9872593795204696569bin
+[ +203 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/repository/31.2.2/repository-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download156820035944922568bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/aaptcompiler/8.2.2/aaptcompiler-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4664717428728008330bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/shared/31.2.2/shared-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download12385052899618265881bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/androidx/databinding/databinding-compiler-common/8.2.2/databinding-compiler-common-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download9796870764139504030bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-settings-api/8.2.2/gradle-settings-api-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download17945093707920119393bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/ddms/ddmlib/31.2.2/ddmlib-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16152014600274860163bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/sdklib/31.2.2/sdklib-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1837723011607864526bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/lint/lint-model/31.2.2/lint-model-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3085171398350587981bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/lint/lint-typedef-remover/31.2.2/lint-typedef-remover-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download8312799589001396558bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/sdk-common/31.2.2/sdk-common-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download12522406315763154108bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/aapt2-proto/8.2.2-10154469/aapt2-proto-8.2.2-10154469.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download8804781070937485138bin
+[ +297 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/crash/31.2.2/crash-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download9828557466884552234bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/databinding/baseLibrary/8.2.2/baseLibrary-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16594741104415306977bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-host-coverage-proto/31.2.2/android-test-plugin-host-coverage-proto-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download2585814653877822635bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-device-provider-ddmlib-proto/31.2.2/android-device-provider-ddmlib-proto-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download15885010800287305697bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/aaptcompiler/8.2.2/aaptcompiler-8.2.2.module to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download10113341427306343941bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-test-api/8.2.2/builder-test-api-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download6440326170949144476bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-settings-api/8.2.2/gradle-settings-api-8.2.2.module to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4715438565484894594bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/layoutlib/layoutlib-api/31.2.2/layoutlib-api-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download13380521765016993454bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/androidx/databinding/databinding-common/8.2.2/databinding-common-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4435929922860699767bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-device-provider-gradle-proto/31.2.2/android-device-provider-gradle-proto-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16500464978279753371bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-host-additional-test-output-proto/31.2.2/android-test-plugin-host-additional-test-output-proto-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3641729616666595336bin
+[  +98 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/aapt2-proto/8.2.2-10154469/aapt2-proto-8.2.2-10154469.module to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1462753866796197162bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-host-emulator-control-proto/31.2.2/android-test-plugin-host-emulator-control-proto-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download6438623148346612252bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-result-listener-gradle-proto/31.2.2/android-test-plugin-result-listener-gradle-proto-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download14569326825544799992bin
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/commons-io/commons-io/2.4/commons-io-2.4.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/ow2/asm/asm/9.2/asm-9.2.pom]
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-host-logcat-proto/31.2.2/android-test-plugin-host-logcat-proto-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download2322538233038551224bin
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/ow2/asm/asm-analysis/9.2/asm-analysis-9.2.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/ow2/asm/asm-commons/9.2/asm-commons-9.2.pom]
+[ +102 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-test-api/8.2.2/builder-test-api-8.2.2.module to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16880408382613614578bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-host-retention-proto/31.2.2/android-test-plugin-host-retention-proto-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download13029545792216061195bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-host-apk-installer-proto/31.2.2/android-test-plugin-host-apk-installer-proto-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download2525533382002220075bin
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/ow2/asm/asm-util/9.2/asm-util-9.2.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk8/1.9.0/kotlin-stdlib-jdk8-1.9.0.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/commons-io/commons-io/2.4/commons-io-2.4.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download15397399258173962677bin
+[        ] Downloading https://repo.maven.apache.org/maven2/org/ow2/asm/asm/9.2/asm-9.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download5078407712913385456bin
+[        ] Downloading https://repo.maven.apache.org/maven2/org/ow2/asm/asm-analysis/9.2/asm-analysis-9.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download18063137550048371810bin
+[  +99 ms] Downloading https://repo.maven.apache.org/maven2/org/ow2/asm/asm-commons/9.2/asm-commons-9.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download14741535404665287870bin
+[        ] Downloading https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk8/1.9.0/kotlin-stdlib-jdk8-1.9.0.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download7141664160618394422bin
+[        ] Downloading https://repo.maven.apache.org/maven2/org/ow2/asm/asm-util/9.2/asm-util-9.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download13478767054799477325bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/bundletool/1.15.2/bundletool-1.15.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download219906555858451325bin
+[  +96 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/grpc/grpc-core/1.45.1/grpc-core-1.45.1.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/grpc/grpc-netty/1.45.1/grpc-netty-1.45.1.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/apache/commons/commons-parent/25/commons-parent-25.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-core/1.45.1/grpc-core-1.45.1.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download5052790284748856435bin
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/code/gson/gson/2.8.6/gson-2.8.6.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/protobuf/protobuf-java/3.19.3/protobuf-java-3.19.3.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-netty/1.45.1/grpc-netty-1.45.1.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3155754994108494171bin
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/ow2/ow2/1.5/ow2-1.5.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/protobuf/protobuf-java-util/3.19.3/protobuf-java-util-3.19.3.pom]
+[  +99 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/grpc/grpc-protobuf/1.45.1/grpc-protobuf-1.45.1.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/25/commons-parent-25.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download11799563611123124992bin
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.8.6/gson-2.8.6.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4067079739709869907bin
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/grpc/grpc-stub/1.45.1/grpc-stub-1.45.1.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/protobuf/protobuf-java/3.19.3/protobuf-java-3.19.3.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1868506713406712142bin
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/protobuf/protobuf-java-util/3.19.3/protobuf-java-util-3.19.3.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download10577133298909963012bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-protobuf/1.45.1/grpc-protobuf-1.45.1.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16697010366034321571bin
+[        ] Downloading https://repo.maven.apache.org/maven2/org/ow2/ow2/1.5/ow2-1.5.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3180427568368568994bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-stub/1.45.1/grpc-stub-1.45.1.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download15938610826592525873bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/builder/8.2.2/builder-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download17848948460719233143bin
+[ +101 ms] Downloading https://dl.google.com/dl/android/maven2/com/google/testing/platform/core-proto/0.0.8-alpha08/core-proto-0.0.8-alpha08.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download14676568454481880081bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-model/8.2.2/builder-model-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16334982966101204213bin
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/code/gson/gson-parent/2.8.6/gson-parent-2.8.6.pom]
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-api/8.2.2/gradle-api-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download6536051378764827003bin
+[ +100 ms] Downloading https://repo.maven.apache.org/maven2/com/google/code/gson/gson-parent/2.8.6/gson-parent-2.8.6.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download2682689550849416676bin
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/protobuf/protobuf-parent/3.19.3/protobuf-parent-3.19.3.pom]
+[  +98 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/apache/apache/9/apache-9.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/protobuf/protobuf-parent/3.19.3/protobuf-parent-3.19.3.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download2346341691882629242bin
+[        ] Downloading https://repo.maven.apache.org/maven2/org/apache/apache/9/apache-9.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download10576140291960499025bin
+[  +97 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/protobuf/protobuf-bom/3.19.3/protobuf-bom-3.19.3.pom]
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-api/8.2.2/gradle-api-8.2.2.module to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3648392021547278346bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/builder/8.2.2/builder-8.2.2.module to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download5617465155081634650bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-model/8.2.2/builder-model-8.2.2.module to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16057374754827158677bin
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/protobuf/protobuf-bom/3.19.3/protobuf-bom-3.19.3.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download8346173994466447460bin
+[ +200 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/code/gson/gson/2.10/gson-2.10.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.10/gson-2.10.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download12779477218999312473bin
+[ +200 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/code/gson/gson-parent/2.10/gson-parent-2.10.pom]
+[ +102 ms] Downloading https://repo.maven.apache.org/maven2/com/google/code/gson/gson-parent/2.10/gson-parent-2.10.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download785141885400390651bin
+[  +99 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/xerces/xercesImpl/2.12.0/xercesImpl-2.12.0.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/guava/guava/31.1-jre/guava-31.1-jre.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/jetbrains/kotlin/kotlin-reflect/1.9.0/kotlin-reflect-1.9.0.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/xerces/xercesImpl/2.12.0/xercesImpl-2.12.0.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4750673199400290251bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/common/31.2.2/common-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download7866783126319363275bin
+[  +99 ms] Downloading https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-reflect/1.9.0/kotlin-reflect-1.9.0.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download759748570436308124bin
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/guava/guava/31.1-jre/guava-31.1-jre.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4964714865179929006bin
+[ +196 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/guava/guava-parent/31.1-jre/guava-parent-31.1-jre.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/guava/guava-parent/31.1-jre/guava-parent-31.1-jre.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download14103605168308456017bin
+[ +203 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/dvlib/31.2.2/dvlib-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download7391504076125464500bin
+[ +500 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/annotations/31.2.2/annotations-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download6902212077873106518bin
+[  +99 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/protos/31.2.2/protos-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1563297525153521031bin
+[  +96 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.9.0/kotlin-stdlib-1.9.0.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.9.0/kotlin-stdlib-1.9.0.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download9056591285880039778bin
+[ +201 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk7/1.9.0/kotlin-stdlib-jdk7-1.9.0.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk7/1.9.0/kotlin-stdlib-jdk7-1.9.0.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download6875985155683527282bin
+[ +100 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/ow2/asm/asm-tree/9.2/asm-tree-9.2.pom]
+[ +100 ms] Downloading https://repo.maven.apache.org/maven2/org/ow2/asm/asm-tree/9.2/asm-tree-9.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download6584241846076830510bin
+[ +199 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/errorprone/error_prone_annotations/2.5.1/error_prone_annotations-2.5.1.pom]
+[  +98 ms] Downloading https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.5.1/error_prone_annotations-2.5.1.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download10260764162017488303bin
+[ +198 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/errorprone/error_prone_parent/2.5.1/error_prone_parent-2.5.1.pom]
+[ +103 ms] Downloading https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_parent/2.5.1/error_prone_parent-2.5.1.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4313879979078042550bin
+[  +99 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/errorprone/error_prone_annotations/2.10.0/error_prone_annotations-2.10.0.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.10.0/error_prone_annotations-2.10.0.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1886850633532021448bin
+[ +296 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/errorprone/error_prone_parent/2.10.0/error_prone_parent-2.10.0.pom]
+[ +100 ms] Downloading https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_parent/2.10.0/error_prone_parent-2.10.0.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download13351105510862567479bin
+[ +100 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/grpc/grpc-api/1.45.1/grpc-api-1.45.1.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/codehaus/mojo/animal-sniffer-annotations/1.19/animal-sniffer-annotations-1.19.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/perfmark/perfmark-api/0.23.0/perfmark-api-0.23.0.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/org/codehaus/mojo/animal-sniffer-annotations/1.19/animal-sniffer-annotations-1.19.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download17610392436849874185bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/perfmark/perfmark-api/0.23.0/perfmark-api-0.23.0.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4167969421913560454bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-api/1.45.1/grpc-api-1.45.1.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1804855997590778337bin
+[  +98 ms] Downloading https://repo.maven.apache.org/maven2/io/perfmark/perfmark-api/0.23.0/perfmark-api-0.23.0.module to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download15665606742033694286bin
+[ +199 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/codehaus/mojo/animal-sniffer-parent/1.19/animal-sniffer-parent-1.19.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/org/codehaus/mojo/animal-sniffer-parent/1.19/animal-sniffer-parent-1.19.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download2167616885479621629bin
+[ +104 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/codehaus/mojo/mojo-parent/50/mojo-parent-50.pom]
+[  +96 ms] Downloading https://repo.maven.apache.org/maven2/org/codehaus/mojo/mojo-parent/50/mojo-parent-50.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4612048538604377100bin
+[ +100 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-codec-http2/4.1.72.Final/netty-codec-http2-4.1.72.Final.pom]
+[ +102 ms] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-codec-http2/4.1.72.Final/netty-codec-http2-4.1.72.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download676175196396348610bin
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-handler-proxy/4.1.72.Final/netty-handler-proxy-4.1.72.Final.pom]
+[  +98 ms] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-handler-proxy/4.1.72.Final/netty-handler-proxy-4.1.72.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3365179125913434817bin
+[  +96 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-parent/4.1.72.Final/netty-parent-4.1.72.Final.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-parent/4.1.72.Final/netty-parent-4.1.72.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download15788141744012467697bin
+[ +203 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/grpc/grpc-protobuf-lite/1.45.1/grpc-protobuf-lite-1.45.1.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/com/google/api/grpc/proto-google-common-protos/2.0.1/proto-google-common-protos-2.0.1.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-protobuf-lite/1.45.1/grpc-protobuf-lite-1.45.1.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3153086736311068380bin
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/api/grpc/proto-google-common-protos/2.0.1/proto-google-common-protos-2.0.1.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download8056491151168069994bin
+[  +97 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/apkzlib/8.2.2/apkzlib-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download15519817675458848682bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/tracker/31.2.2/tracker-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1881967049569435719bin
+[ +101 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/zipflinger/8.2.2/zipflinger-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download9657491334239912528bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/manifest-merger/31.2.2/manifest-merger-31.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4683255920413394922bin
+[ +100 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/8.2.2/apksig-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16032187937508701019bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/signflinger/8.2.2/signflinger-8.2.2.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4919642707742668137bin
+[ +196 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/manifest-merger/31.2.2/manifest-merger-31.2.2.module to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download10103000840494207531bin
+[  +99 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/xml-apis/xml-apis/1.4.01/xml-apis-1.4.01.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/xml-apis/xml-apis/1.4.01/xml-apis-1.4.01.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download18224219701785368276bin
+[ +199 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/org/jetbrains/kotlin/kotlin-stdlib-common/1.9.0/kotlin-stdlib-common-1.9.0.pom]
+[ +100 ms] Downloading https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib-common/1.9.0/kotlin-stdlib-common-1.9.0.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download2191073080309205471bin
+[ +102 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/grpc/grpc-context/1.45.1/grpc-context-1.45.1.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-context/1.45.1/grpc-context-1.45.1.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download2222534706731271259bin
+[  +98 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-common/4.1.72.Final/netty-common-4.1.72.Final.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-handler/4.1.72.Final/netty-handler-4.1.72.Final.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-transport/4.1.72.Final/netty-transport-4.1.72.Final.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-codec/4.1.72.Final/netty-codec-4.1.72.Final.pom]
+[        ] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-buffer/4.1.72.Final/netty-buffer-4.1.72.Final.pom]
+[  +99 ms] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-transport/4.1.72.Final/netty-transport-4.1.72.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download17425514410030781139bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-common/4.1.72.Final/netty-common-4.1.72.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1026363528507893337bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-codec/4.1.72.Final/netty-codec-4.1.72.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16707827729352653241bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-buffer/4.1.72.Final/netty-buffer-4.1.72.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download7605808384056898495bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-handler/4.1.72.Final/netty-handler-4.1.72.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download17980010916549855037bin
+[  +97 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-codec-http/4.1.72.Final/netty-codec-http-4.1.72.Final.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-codec-http/4.1.72.Final/netty-codec-http-4.1.72.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download17875763477758882020bin
+[ +100 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-codec-socks/4.1.72.Final/netty-codec-socks-4.1.72.Final.pom]
+[ +102 ms] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-codec-socks/4.1.72.Final/netty-codec-socks-4.1.72.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download80933586541642811bin
+[ +196 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-resolver/4.1.72.Final/netty-resolver-4.1.72.Final.pom]
+[  +99 ms] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-resolver/4.1.72.Final/netty-resolver-4.1.72.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download12659859944408994380bin
+[  +99 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-tcnative-classes/2.0.46.Final/netty-tcnative-classes-2.0.46.Final.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-tcnative-classes/2.0.46.Final/netty-tcnative-classes-2.0.46.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download10115857028358707047bin
+[ +303 ms] Resource missing. [HTTP GET: https://dl.google.com/dl/android/maven2/io/netty/netty-tcnative-parent/2.0.46.Final/netty-tcnative-parent-2.0.46.Final.pom]
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-tcnative-parent/2.0.46.Final/netty-tcnative-parent-2.0.46.Final.pom to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download697087457188385470bin
+[  +99 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-test-api/8.2.2/builder-test-api-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download9383937774873647467bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-settings-api/8.2.2/gradle-settings-api-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download15766232757424459832bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/sdklib/31.2.2/sdklib-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download7125978224490957007bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/8.2.2/gradle-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4110992290127346204bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/aaptcompiler/8.2.2/aaptcompiler-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download8183672363458285373bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-api/8.2.2/gradle-api-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download5524105531509910042bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/sdk-common/31.2.2/sdk-common-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download17777314326345135953bin
+[  +97 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/manifest-merger/31.2.2/manifest-merger-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download8295791527414932458bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/builder/8.2.2/builder-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16981075417154189814bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/lint/lint-model/31.2.2/lint-model-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1054873329490823036bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/ddms/ddmlib/31.2.2/ddmlib-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download14292717594823312944bin
+[ +201 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/repository/31.2.2/repository-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1667967466231743304bin
+[  +97 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/bundletool/1.15.2/bundletool-1.15.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download10379342612129450881bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/aapt2-proto/8.2.2-10154469/aapt2-proto-8.2.2-10154469.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download10554608559598479006bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/tracker/31.2.2/tracker-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download13402491891672477226bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/crash/31.2.2/crash-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16833301326693290581bin
+[  +98 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/shared/31.2.2/shared-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download13231754723921257685bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/lint/lint-typedef-remover/31.2.2/lint-typedef-remover-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download2781583951785049250bin
+[ +300 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/databinding/baseLibrary/8.2.2/baseLibrary-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download11357376730001697210bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/androidx/databinding/databinding-compiler-common/8.2.2/databinding-compiler-common-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download2421291167370388052bin
+[ +100 ms] Downloading https://dl.google.com/dl/android/maven2/androidx/databinding/databinding-common/8.2.2/databinding-common-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download8996139837802327876bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/layoutlib/layoutlib-api/31.2.2/layoutlib-api-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download10440599557407669499bin
+[  +99 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-device-provider-ddmlib-proto/31.2.2/android-device-provider-ddmlib-proto-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download7908985528052459729bin
+[ +200 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-host-additional-test-output-proto/31.2.2/android-test-plugin-host-additional-test-output-proto-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4580817138673189832bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-host-coverage-proto/31.2.2/android-test-plugin-host-coverage-proto-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download8567660382721277075bin
+[  +98 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-device-provider-gradle-proto/31.2.2/android-device-provider-gradle-proto-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download8791197964903508572bin
+[ +101 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-host-logcat-proto/31.2.2/android-test-plugin-host-logcat-proto-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download5972030406535201392bin
+[  +99 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-host-apk-installer-proto/31.2.2/android-test-plugin-host-apk-installer-proto-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download12858801191657724363bin
+[  +99 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-host-emulator-control-proto/31.2.2/android-test-plugin-host-emulator-control-proto-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download18150094116186652195bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-result-listener-gradle-proto/31.2.2/android-test-plugin-result-listener-gradle-proto-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download2312501785656886266bin
+[ +100 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/common/31.2.2/common-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16962435126506923999bin
+[        ] Downloading https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk8/1.9.0/kotlin-stdlib-jdk8-1.9.0.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download12840085410209507479bin
+[ +102 ms] Downloading https://repo.maven.apache.org/maven2/commons-io/commons-io/2.4/commons-io-2.4.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download11486474192985147265bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/dvlib/31.2.2/dvlib-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download13197908046894872993bin
+[  +97 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-model/8.2.2/builder-model-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16325445832371702930bin
+[        ] Downloading https://repo.maven.apache.org/maven2/org/ow2/asm/asm-commons/9.2/asm-commons-9.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download13847996203287223861bin
+[  +99 ms] Downloading https://repo.maven.apache.org/maven2/org/ow2/asm/asm-util/9.2/asm-util-9.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download5078866168464410041bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/utp/android-test-plugin-host-retention-proto/31.2.2/android-test-plugin-host-retention-proto-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download8387785391963140784bin
+[  +99 ms] Downloading https://repo.maven.apache.org/maven2/org/ow2/asm/asm-analysis/9.2/asm-analysis-9.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download17962775201210600105bin
+[        ] Downloading https://repo.maven.apache.org/maven2/org/ow2/asm/asm/9.2/asm-9.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download4541775852207775387bin
+[        ] Downloading https://repo.maven.apache.org/maven2/org/ow2/asm/asm-tree/9.2/asm-tree-9.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download9435837462131993810bin
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/protobuf/protobuf-java-util/3.19.3/protobuf-java-util-3.19.3.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1522317054728767660bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/apkzlib/8.2.2/apkzlib-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download14687308368695767787bin
+[ +102 ms] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-protobuf/1.45.1/grpc-protobuf-1.45.1.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download16827544867330231295bin
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/api/grpc/proto-google-common-protos/2.0.1/proto-google-common-protos-2.0.1.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download475509863275221546bin
+[  +98 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/protos/31.2.2/protos-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download5743936154740372270bin
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/protobuf/protobuf-java/3.19.3/protobuf-java-3.19.3.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download8663294405860795019bin
+[ +100 ms] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-core/1.45.1/grpc-core-1.45.1.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download11803674941789281820bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-netty/1.45.1/grpc-netty-1.45.1.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download5363213430508252989bin
+[ +199 ms] Downloading https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.10/gson-2.10.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download9184949202836717316bin
+[ +100 ms] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-stub/1.45.1/grpc-stub-1.45.1.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3218357043106922182bin
+[ +200 ms] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-protobuf-lite/1.45.1/grpc-protobuf-lite-1.45.1.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download14168340860682351994bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/google/testing/platform/core-proto/0.0.8-alpha08/core-proto-0.0.8-alpha08.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download14854305367515959027bin
+[ +102 ms] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-api/1.45.1/grpc-api-1.45.1.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download15376015286547152711bin
+[        ] Downloading https://repo.maven.apache.org/maven2/com/google/guava/guava/31.1-jre/guava-31.1-jre.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download6758854741579177623bin
+[ +300 ms] Downloading https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-reflect/1.9.0/kotlin-reflect-1.9.0.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3714182206865902642bin
+[  +99 ms] Downloading https://repo.maven.apache.org/maven2/xerces/xercesImpl/2.12.0/xercesImpl-2.12.0.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download6639360954596493239bin
+[ +497 ms] Downloading https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk7/1.9.0/kotlin-stdlib-jdk7-1.9.0.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download17708076435795449614bin
+[        ] Downloading https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.9.0/kotlin-stdlib-1.9.0.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download12013356692225034051bin
+[ +398 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/signflinger/8.2.2/signflinger-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3776895258753617960bin
+[ +303 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/zipflinger/8.2.2/zipflinger-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download11500886329364661812bin
+[ +396 ms] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/annotations/31.2.2/annotations-31.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download12629686609486940451bin
+[ +100 ms] Downloading https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.11.0/error_prone_annotations-2.11.0.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download7379776658617369725bin
+[ +103 ms] Downloading https://repo.maven.apache.org/maven2/org/codehaus/mojo/animal-sniffer-annotations/1.19/animal-sniffer-annotations-1.19.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download5616101822584023918bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/perfmark/perfmark-api/0.23.0/perfmark-api-0.23.0.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download11677236776108925607bin
+[  +96 ms] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-codec-http2/4.1.72.Final/netty-codec-http2-4.1.72.Final.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3398417367030907559bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-handler-proxy/4.1.72.Final/netty-handler-proxy-4.1.72.Final.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download7200072680607693590bin
+[        ] Downloading https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/8.2.2/apksig-8.2.2.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download12698107978136397839bin
+[  +99 ms] Downloading https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib-common/1.9.0/kotlin-stdlib-common-1.9.0.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1401786947426053707bin
+[ +304 ms] Downloading https://repo.maven.apache.org/maven2/xml-apis/xml-apis/1.4.01/xml-apis-1.4.01.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download14755920082379845149bin
+[ +195 ms] Downloading https://repo.maven.apache.org/maven2/io/grpc/grpc-context/1.45.1/grpc-context-1.45.1.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download18259753893650780660bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-codec-http/4.1.72.Final/netty-codec-http-4.1.72.Final.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download14346935985413474895bin
+[ +102 ms] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-handler/4.1.72.Final/netty-handler-4.1.72.Final.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download3363442086816446166bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-codec-socks/4.1.72.Final/netty-codec-socks-4.1.72.Final.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download7270819899428801115bin
+[ +100 ms] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-codec/4.1.72.Final/netty-codec-4.1.72.Final.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download6757272165536788299bin
+[  +96 ms] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-transport/4.1.72.Final/netty-transport-4.1.72.Final.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download12737348396232879314bin
+[ +399 ms] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-buffer/4.1.72.Final/netty-buffer-4.1.72.Final.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download9916827990067336759bin
+[ +200 ms] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-common/4.1.72.Final/netty-common-4.1.72.Final.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download5736190182638386237bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-resolver/4.1.72.Final/netty-resolver-4.1.72.Final.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download1337927789953721407bin
+[        ] Downloading https://repo.maven.apache.org/maven2/io/netty/netty-tcnative-classes/2.0.46.Final/netty-tcnative-classes-2.0.46.Final.jar to /Users/sandipkumarpatel/.gradle/.tmp/gradle_download14110128886293655881bin
+[+9502 ms] Compiling settings file '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/settings.gradle' using BuildScriptTransformer.
+[        ] Settings evaluated using settings file '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/settings.gradle'.
+[        ] Projects loaded. Root project using build file '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/build.gradle'.
+[        ] Included projects: [root project 'android', project ':app']
+[  +97 ms] > Configure project :
+[        ] Evaluating root project 'android' using build file '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/build.gradle'.
+[        ] Compiling build file '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/build.gradle' using SubsetScriptTransformer.
+[        ] Compiling build file '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/build.gradle' using BuildScriptTransformer.
+[+2004 ms] > Configure project :app
+[        ] Evaluating project ':app' using build file '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/app/build.gradle'.
+[        ] Compiling build file '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/app/build.gradle' using SubsetScriptTransformer.
+[   +4 ms] WARNING: The option setting 'android.defaults.buildfeatures.buildconfig=true' is deprecated.
+[        ] The current default is 'false'.
+[        ] It will be removed in version 9.0 of the Android Gradle plugin.
+[        ] You can resolve this warning in Android Studio via `Refactor` > `Migrate BuildConfig to Gradle Build Files`
+[        ] Using default execution profile
+[        ] Caching disabled for Kotlin DSL plugin specs accessors for classpath 'b083bfaabd587780c4b1b04d186b04cc' because:
+[        ]   Build cache is disabled
+[        ] Kotlin DSL plugin specs accessors for classpath 'b083bfaabd587780c4b1b04d186b04cc' is not up-to-date because:
+[        ]   No history is available.
+[        ] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/gradle/8.2.2/d5251ce31f2502b1ae5109ccab1b244f60b22368/gradle-8.2.2.jar: class com/android/build/gradle/internal/services/BuildServicesKt: inline fun getBuildService(): compile avoidance is not supported with public inline functions
+[        ] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin/1.9.24/b6f5f875b19f9240f2e83e00f6f2b9dff1ebc2c3/kotlin-gradle-plugin-1.9.24-gradle82.jar: class org/jetbrains/kotlin/gradle/internal/KaptWithAndroid: inline fun androidVariantData(): compile avoidance is not supported with public inline functions
+[        ] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools.build/bundletool/1.15.2/35993207f8440e64f2c9db15a5926a85fb17e533/bundletool-1.15.2.jar: class shadow/bundletool/com/android/utils/NodeCollectionHelperKt: inline fun forEach(): compile avoidance is not supported with public inline functions
+[        ] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-serialization-json-jvm/1.4.0/cfa3e57d044a20e5c9e4561a997df823e2f1c81a/kotlinx-serialization-json-jvm-1.4.0.jar: class kotlinx/serialization/json/JsonKt: inline fun decodeFromJsonElement(): compile avoidance is not supported with public inline functions
+[        ] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/com.android.tools/common/31.2.2/c4bd098aab97fa95da10c4098c0238437dc1c4ef/common-31.2.2.jar: class com/android/utils/NodeCollectionHelperKt: inline fun forEach(): compile avoidance is not supported with public inline functions
+[        ] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-serialization-core-jvm/1.4.0/9b00d574374ae0201a505ab54c7744586866dc27/kotlinx-serialization-core-jvm-1.4.0.jar: class kotlinx/serialization/SerializersKt__SerializersKt: inline fun serializer(): compile avoidance is not supported with public inline functions
+[        ] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin-idea-proto/1.9.24/6cbed8e30d8dd9893288df9c90b0e63845484650/kotlin-gradle-plugin-idea-proto-1.9.24.jar: class org/jetbrains/kotlin/gradle/idea/proto/generated/IdeaExtrasProtoKt$Dsl: inline fun setValues(): compile avoidance is not supported with public inline functions
+[ +593 ms] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/1.9.24/78dab849090e6c5e2eadb6e59a11cdc28fb67a08/kotlin-compiler-embeddable-1.9.24.jar: class org/jetbrains/kotlin/konan/file/FileKt: inline fun use(): compile avoidance is not supported with public inline functions
+[ +997 ms] Cannot use Kotlin build script compile avoidance with /Users/sandipkumarpatel/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-util-io/1.9.24/f402c94b93eab99bb1af746126cf979c748064cf/kotlin-util-io-1.9.24.jar: class org/jetbrains/kotlin/konan/file/FileKt: inline fun use(): compile avoidance is not supported with public inline functions
+[        ] Caching disabled for Kotlin DSL script compilation (Project/ScriptPlugin/stage1) because:
+[        ]   Build cache is disabled
+[        ] Kotlin DSL script compilation (Project/ScriptPlugin/stage1) is not up-to-date because:
+[        ]   No history is available.
+[ +602 ms] Warning: Flutter support for your project's Gradle version (8.5.0) will soon be dropped. Please upgrade your Gradle version to a version of at least 8.7.0 soon.
+[        ] Alternatively, use the flag "--android-skip-build-dependency-validation" to bypass this check.
+[        ] Potential fix: Your project's gradle version is typically defined in the gradle wrapper file. By default, this can be found at /Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/gradle/wrapper/gradle-wrapper.properties. 
+[        ] For more information, see https://docs.gradle.org/current/userguide/gradle_wrapper.html.
+[        ] Warning: Flutter support for your project's Android Gradle Plugin version (Android Gradle Plugin version 8.2.2) will soon be dropped. Please upgrade your Android Gradle Plugin version to a version of at least Android Gradle Plugin version 8.6.0 soon.
+[        ] Alternatively, use the flag "--android-skip-build-dependency-validation" to bypass this check.
+[        ] Potential fix: Your project's AGP version is typically defined in the plugins block of the `settings.gradle` file (/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/settings.gradle), by a plugin with the id of com.android.application. 
+[        ] If you don't see a plugins block, your project was likely created with an older template version. In this case it is most likely defined in the top-level build.gradle file (/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/build.gradle) by the following line in the dependencies block of the buildscript: "classpath 'com.android.tools.build:gradle:<version>'".
+[        ] Using Kotlin Gradle Plugin gradle82 variant
+[  +98 ms] Compiling build file '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/app/build.gradle' using BuildScriptTransformer.
+[  +96 ms] Could not execute [report metric STATISTICS_COLLECT_METRICS_OVERHEAD]
+[        ] Could not execute [report metric STATISTICS_COLLECT_METRICS_OVERHEAD]
+[        ] FAILURE: Build failed with an exception.
+[        ] * Where:
+[        ] Build file '/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/app/build.gradle' line: 118
+[        ] * What went wrong:
+[        ] A problem occurred evaluating project ':app'.
+[        ] > Plugin with id 'com.google.gms.google-services' not found.
+[        ] * Try:
+[        ] > Run with --debug option to get more log output.
+[        ] > Run with --scan to get full insights.
+[        ] > Get more help at https://help.gradle.org.
+[        ] * Exception is:
+[        ] org.gradle.api.GradleScriptException: A problem occurred evaluating project ':app'.
+[        ] 	at org.gradle.groovy.scripts.internal.DefaultScriptRunnerFactory$ScriptRunnerImpl.run(DefaultScriptRunnerFactory.java:93)
+[        ] 	at org.gradle.configuration.DefaultScriptPluginFactory$ScriptPluginImpl.lambda$apply$0(DefaultScriptPluginFactory.java:136)
+[        ] 	at org.gradle.configuration.ProjectScriptTarget.addConfiguration(ProjectScriptTarget.java:79)
+[        ] 	at org.gradle.configuration.DefaultScriptPluginFactory$ScriptPluginImpl.apply(DefaultScriptPluginFactory.java:139)
+[        ] 	at org.gradle.configuration.BuildOperationScriptPlugin$1.run(BuildOperationScriptPlugin.java:68)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:29)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:26)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:157)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:47)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationExecutor.run(DefaultBuildOperationExecutor.java:68)
+[        ] 	at org.gradle.configuration.BuildOperationScriptPlugin.lambda$apply$0(BuildOperationScriptPlugin.java:65)
+[        ] 	at org.gradle.internal.code.DefaultUserCodeApplicationContext.apply(DefaultUserCodeApplicationContext.java:43)
+[        ] 	at org.gradle.configuration.BuildOperationScriptPlugin.apply(BuildOperationScriptPlugin.java:65)
+[        ] 	at org.gradle.api.internal.project.DefaultProjectStateRegistry$ProjectStateImpl.lambda$applyToMutableState$1(DefaultProjectStateRegistry.java:406)
+[        ] 	at org.gradle.api.internal.project.DefaultProjectStateRegistry$ProjectStateImpl.fromMutableState(DefaultProjectStateRegistry.java:424)
+[        ] 	at org.gradle.api.internal.project.DefaultProjectStateRegistry$ProjectStateImpl.applyToMutableState(DefaultProjectStateRegistry.java:405)
+[        ] 	at org.gradle.configuration.project.BuildScriptProcessor.execute(BuildScriptProcessor.java:46)
+[        ] 	at org.gradle.configuration.project.BuildScriptProcessor.execute(BuildScriptProcessor.java:27)
+[        ] 	at org.gradle.configuration.project.ConfigureActionsProjectEvaluator.evaluate(ConfigureActionsProjectEvaluator.java:35)
+[        ] 	at org.gradle.configuration.project.LifecycleProjectEvaluator$EvaluateProject.lambda$run$0(LifecycleProjectEvaluator.java:109)
+[        ] 	at org.gradle.api.internal.project.DefaultProjectStateRegistry$ProjectStateImpl.lambda$applyToMutableState$1(DefaultProjectStateRegistry.java:406)
+[        ] 	at org.gradle.api.internal.project.DefaultProjectStateRegistry$ProjectStateImpl.lambda$fromMutableState$2(DefaultProjectStateRegistry.java:429)
+[        ] 	at org.gradle.internal.work.DefaultWorkerLeaseService.withReplacedLocks(DefaultWorkerLeaseService.java:360)
+[        ] 	at org.gradle.api.internal.project.DefaultProjectStateRegistry$ProjectStateImpl.fromMutableState(DefaultProjectStateRegistry.java:429)
+[        ] 	at org.gradle.api.internal.project.DefaultProjectStateRegistry$ProjectStateImpl.applyToMutableState(DefaultProjectStateRegistry.java:405)
+[        ] 	at org.gradle.configuration.project.LifecycleProjectEvaluator$EvaluateProject.run(LifecycleProjectEvaluator.java:100)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:29)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:26)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:157)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:47)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationExecutor.run(DefaultBuildOperationExecutor.java:68)
+[        ] 	at org.gradle.configuration.project.LifecycleProjectEvaluator.evaluate(LifecycleProjectEvaluator.java:72)
+[        ] 	at org.gradle.api.internal.project.DefaultProject.evaluate(DefaultProject.java:790)
+[        ] 	at org.gradle.api.internal.project.DefaultProject.evaluate(DefaultProject.java:156)
+[        ] 	at org.gradle.api.internal.project.ProjectLifecycleController.lambda$ensureSelfConfigured$2(ProjectLifecycleController.java:84)
+[        ] 	at org.gradle.internal.model.StateTransitionController.lambda$doTransition$14(StateTransitionController.java:255)
+[        ] 	at org.gradle.internal.model.StateTransitionController.doTransition(StateTransitionController.java:266)
+[        ] 	at org.gradle.internal.model.StateTransitionController.doTransition(StateTransitionController.java:254)
+[        ] 	at org.gradle.internal.model.StateTransitionController.lambda$maybeTransitionIfNotCurrentlyTransitioning$10(StateTransitionController.java:199)
+[        ] 	at org.gradle.internal.work.DefaultSynchronizer.withLock(DefaultSynchronizer.java:34)
+[        ] 	at org.gradle.internal.model.StateTransitionController.maybeTransitionIfNotCurrentlyTransitioning(StateTransitionController.java:195)
+[        ] 	at org.gradle.api.internal.project.ProjectLifecycleController.ensureSelfConfigured(ProjectLifecycleController.java:84)
+[        ] 	at org.gradle.api.internal.project.DefaultProjectStateRegistry$ProjectStateImpl.ensureConfigured(DefaultProjectStateRegistry.java:380)
+[        ] 	at org.gradle.execution.TaskPathProjectEvaluator.configure(TaskPathProjectEvaluator.java:34)
+[        ] 	at org.gradle.execution.TaskPathProjectEvaluator.configureHierarchy(TaskPathProjectEvaluator.java:50)
+[        ] 	at org.gradle.configuration.DefaultProjectsPreparer.prepareProjects(DefaultProjectsPreparer.java:42)
+[        ] 	at org.gradle.configuration.BuildTreePreparingProjectsPreparer.prepareProjects(BuildTreePreparingProjectsPreparer.java:65)
+[        ] 	at org.gradle.configuration.BuildOperationFiringProjectsPreparer$ConfigureBuild.run(BuildOperationFiringProjectsPreparer.java:52)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:29)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:26)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:157)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:47)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationExecutor.run(DefaultBuildOperationExecutor.java:68)
+[        ] 	at org.gradle.configuration.BuildOperationFiringProjectsPreparer.prepareProjects(BuildOperationFiringProjectsPreparer.java:40)
+[        ] 	at org.gradle.initialization.VintageBuildModelController.lambda$prepareProjects$2(VintageBuildModelController.java:84)
+[        ] 	at org.gradle.internal.model.StateTransitionController.lambda$doTransition$14(StateTransitionController.java:255)
+[        ] 	at org.gradle.internal.model.StateTransitionController.doTransition(StateTransitionController.java:266)
+[        ] 	at org.gradle.internal.model.StateTransitionController.doTransition(StateTransitionController.java:254)
+[        ] 	at org.gradle.internal.model.StateTransitionController.lambda$transitionIfNotPreviously$11(StateTransitionController.java:213)
+[        ] 	at org.gradle.internal.work.DefaultSynchronizer.withLock(DefaultSynchronizer.java:34)
+[        ] 	at org.gradle.internal.model.StateTransitionController.transitionIfNotPreviously(StateTransitionController.java:209)
+[        ] 	at org.gradle.initialization.VintageBuildModelController.prepareProjects(VintageBuildModelController.java:84)
+[        ] 	at org.gradle.initialization.VintageBuildModelController.prepareToScheduleTasks(VintageBuildModelController.java:71)
+[        ] 	at org.gradle.internal.build.DefaultBuildLifecycleController.lambda$prepareToScheduleTasks$6(DefaultBuildLifecycleController.java:175)
+[        ] 	at org.gradle.internal.model.StateTransitionController.lambda$doTransition$14(StateTransitionController.java:255)
+[        ] 	at org.gradle.internal.model.StateTransitionController.doTransition(StateTransitionController.java:266)
+[        ] 	at org.gradle.internal.model.StateTransitionController.doTransition(StateTransitionController.java:254)
+[        ] 	at org.gradle.internal.model.StateTransitionController.lambda$maybeTransition$9(StateTransitionController.java:190)
+[        ] 	at org.gradle.internal.work.DefaultSynchronizer.withLock(DefaultSynchronizer.java:34)
+[        ] 	at org.gradle.internal.model.StateTransitionController.maybeTransition(StateTransitionController.java:186)
+[        ] 	at org.gradle.internal.build.DefaultBuildLifecycleController.prepareToScheduleTasks(DefaultBuildLifecycleController.java:173)
+[        ] 	at org.gradle.internal.buildtree.DefaultBuildTreeWorkPreparer.scheduleRequestedTasks(DefaultBuildTreeWorkPreparer.java:36)
+[        ] 	at org.gradle.configurationcache.VintageBuildTreeWorkController$scheduleAndRunRequestedTasks$1.apply(VintageBuildTreeWorkController.kt:36)
+[        ] 	at org.gradle.configurationcache.VintageBuildTreeWorkController$scheduleAndRunRequestedTasks$1.apply(VintageBuildTreeWorkController.kt:35)
+[        ] 	at org.gradle.composite.internal.DefaultIncludedBuildTaskGraph.withNewWorkGraph(DefaultIncludedBuildTaskGraph.java:112)
+[        ] 	at org.gradle.configurationcache.VintageBuildTreeWorkController.scheduleAndRunRequestedTasks(VintageBuildTreeWorkController.kt:35)
+[        ] 	at org.gradle.internal.buildtree.DefaultBuildTreeLifecycleController.lambda$scheduleAndRunTasks$1(DefaultBuildTreeLifecycleController.java:76)
+[        ] 	at org.gradle.internal.buildtree.DefaultBuildTreeLifecycleController.lambda$runBuild$4(DefaultBuildTreeLifecycleController.java:119)
+[        ] 	at org.gradle.internal.model.StateTransitionController.lambda$transition$6(StateTransitionController.java:169)
+[        ] 	at org.gradle.internal.model.StateTransitionController.doTransition(StateTransitionController.java:266)
+[        ] 	at org.gradle.internal.model.StateTransitionController.lambda$transition$7(StateTransitionController.java:169)
+[        ] 	at org.gradle.internal.work.DefaultSynchronizer.withLock(DefaultSynchronizer.java:44)
+[        ] 	at org.gradle.internal.model.StateTransitionController.transition(StateTransitionController.java:169)
+[        ] 	at org.gradle.internal.buildtree.DefaultBuildTreeLifecycleController.runBuild(DefaultBuildTreeLifecycleController.java:116)
+[        ] 	at org.gradle.internal.buildtree.DefaultBuildTreeLifecycleController.scheduleAndRunTasks(DefaultBuildTreeLifecycleController.java:76)
+[        ] 	at org.gradle.internal.buildtree.DefaultBuildTreeLifecycleController.scheduleAndRunTasks(DefaultBuildTreeLifecycleController.java:71)
+[        ] 	at org.gradle.tooling.internal.provider.ExecuteBuildActionRunner.run(ExecuteBuildActionRunner.java:31)
+[        ] 	at org.gradle.launcher.exec.ChainingBuildActionRunner.run(ChainingBuildActionRunner.java:35)
+[        ] 	at org.gradle.internal.buildtree.ProblemReportingBuildActionRunner.run(ProblemReportingBuildActionRunner.java:49)
+[        ] 	at org.gradle.launcher.exec.BuildOutcomeReportingBuildActionRunner.run(BuildOutcomeReportingBuildActionRunner.java:65)
+[        ] 	at org.gradle.tooling.internal.provider.FileSystemWatchingBuildActionRunner.run(FileSystemWatchingBuildActionRunner.java:140)
+[        ] 	at org.gradle.launcher.exec.BuildCompletionNotifyingBuildActionRunner.run(BuildCompletionNotifyingBuildActionRunner.java:41)
+[        ] 	at org.gradle.launcher.exec.RootBuildLifecycleBuildActionExecutor.lambda$execute$0(RootBuildLifecycleBuildActionExecutor.java:40)
+[        ] 	at org.gradle.composite.internal.DefaultRootBuildState.run(DefaultRootBuildState.java:123)
+[        ] 	at org.gradle.launcher.exec.RootBuildLifecycleBuildActionExecutor.execute(RootBuildLifecycleBuildActionExecutor.java:40)
+[        ] 	at org.gradle.internal.buildtree.InitDeprecationLoggingActionExecutor.execute(InitDeprecationLoggingActionExecutor.java:62)
+[        ] 	at org.gradle.internal.buildtree.InitProblems.execute(InitProblems.java:38)
+[        ] 	at org.gradle.internal.buildtree.DefaultBuildTreeContext.execute(DefaultBuildTreeContext.java:40)
+[        ] 	at org.gradle.launcher.exec.BuildTreeLifecycleBuildActionExecutor.lambda$execute$0(BuildTreeLifecycleBuildActionExecutor.java:58)
+[        ] 	at org.gradle.internal.buildtree.BuildTreeState.run(BuildTreeState.java:58)
+[        ] 	at org.gradle.launcher.exec.BuildTreeLifecycleBuildActionExecutor.execute(BuildTreeLifecycleBuildActionExecutor.java:58)
+[        ] 	at org.gradle.launcher.exec.RunAsBuildOperationBuildActionExecutor$3.call(RunAsBuildOperationBuildActionExecutor.java:61)
+[        ] 	at org.gradle.launcher.exec.RunAsBuildOperationBuildActionExecutor$3.call(RunAsBuildOperationBuildActionExecutor.java:57)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:199)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:157)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+[        ] 	at org.gradle.internal.operations.DefaultBuildOperationExecutor.call(DefaultBuildOperationExecutor.java:73)
+[        ] 	at org.gradle.launcher.exec.RunAsBuildOperationBuildActionExecutor.execute(RunAsBuildOperationBuildActionExecutor.java:57)
+[        ] 	at org.gradle.launcher.exec.RunAsWorkerThreadBuildActionExecutor.lambda$execute$0(RunAsWorkerThreadBuildActionExecutor.java:36)
+[        ] 	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:264)
+[        ] 	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:128)
+[        ] 	at org.gradle.launcher.exec.RunAsWorkerThreadBuildActionExecutor.execute(RunAsWorkerThreadBuildActionExecutor.java:36)
+[        ] 	at org.gradle.tooling.internal.provider.continuous.ContinuousBuildActionExecutor.execute(ContinuousBuildActionExecutor.java:110)
+[        ] 	at org.gradle.tooling.internal.provider.SubscribableBuildActionExecutor.execute(SubscribableBuildActionExecutor.java:64)
+[        ] 	at org.gradle.internal.session.DefaultBuildSessionContext.execute(DefaultBuildSessionContext.java:46)
+[        ] 	at org.gradle.tooling.internal.provider.BuildSessionLifecycleBuildActionExecuter$ActionImpl.apply(BuildSessionLifecycleBuildActionExecuter.java:92)
+[        ] 	at org.gradle.tooling.internal.provider.BuildSessionLifecycleBuildActionExecuter$ActionImpl.apply(BuildSessionLifecycleBuildActionExecuter.java:80)
+[        ] 	at org.gradle.internal.session.BuildSessionState.run(BuildSessionState.java:69)
+[        ] 	at org.gradle.tooling.internal.provider.BuildSessionLifecycleBuildActionExecuter.execute(BuildSessionLifecycleBuildActionExecuter.java:62)
+[        ] 	at org.gradle.tooling.internal.provider.BuildSessionLifecycleBuildActionExecuter.execute(BuildSessionLifecycleBuildActionExecuter.java:41)
+[        ] 	at org.gradle.tooling.internal.provider.StartParamsValidatingActionExecuter.execute(StartParamsValidatingActionExecuter.java:64)
+[        ] 	at org.gradle.tooling.internal.provider.StartParamsValidatingActionExecuter.execute(StartParamsValidatingActionExecuter.java:32)
+[        ] 	at org.gradle.tooling.internal.provider.SessionFailureReportingActionExecuter.execute(SessionFailureReportingActionExecuter.java:51)
+[        ] 	at org.gradle.tooling.internal.provider.SessionFailureReportingActionExecuter.execute(SessionFailureReportingActionExecuter.java:39)
+[        ] 	at org.gradle.tooling.internal.provider.SetupLoggingActionExecuter.execute(SetupLoggingActionExecuter.java:47)
+[        ] 	at org.gradle.tooling.internal.provider.SetupLoggingActionExecuter.execute(SetupLoggingActionExecuter.java:31)
+[        ] 	at org.gradle.launcher.daemon.server.exec.ExecuteBuild.doBuild(ExecuteBuild.java:65)
+[        ] 	at org.gradle.launcher.daemon.server.exec.BuildCommandOnly.execute(BuildCommandOnly.java:37)
+[        ] 	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+[        ] 	at org.gradle.launcher.daemon.server.exec.WatchForDisconnection.execute(WatchForDisconnection.java:39)
+[        ] 	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+[        ] 	at org.gradle.launcher.daemon.server.exec.ResetDeprecationLogger.execute(ResetDeprecationLogger.java:29)
+[        ] 	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+[        ] 	at org.gradle.launcher.daemon.server.exec.RequestStopIfSingleUsedDaemon.execute(RequestStopIfSingleUsedDaemon.java:35)
+[        ] 	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+[        ] 	at org.gradle.launcher.daemon.server.exec.ForwardClientInput$2.create(ForwardClientInput.java:78)
+[        ] 	at org.gradle.launcher.daemon.server.exec.ForwardClientInput$2.create(ForwardClientInput.java:75)
+[        ] 	at org.gradle.util.internal.Swapper.swap(Swapper.java:38)
+[        ] 	at org.gradle.launcher.daemon.server.exec.ForwardClientInput.execute(ForwardClientInput.java:75)
+[        ] 	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+[        ] 	at org.gradle.launcher.daemon.server.exec.LogAndCheckHealth.execute(LogAndCheckHealth.java:64)
+[        ] 	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+[        ] 	at org.gradle.launcher.daemon.server.exec.LogToClient.doBuild(LogToClient.java:63)
+[        ] 	at org.gradle.launcher.daemon.server.exec.BuildCommandOnly.execute(BuildCommandOnly.java:37)
+[        ] 	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+[        ] 	at org.gradle.launcher.daemon.server.exec.EstablishBuildEnvironment.doBuild(EstablishBuildEnvironment.java:84)
+[        ] 	at org.gradle.launcher.daemon.server.exec.BuildCommandOnly.execute(BuildCommandOnly.java:37)
+[        ] 	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+[        ] 	at org.gradle.launcher.daemon.server.exec.StartBuildOrRespondWithBusy$1.run(StartBuildOrRespondWithBusy.java:52)
+[        ] 	at org.gradle.launcher.daemon.server.DaemonStateCoordinator$1.run(DaemonStateCoordinator.java:297)
+[        ] 	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+[        ] 	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+[        ] 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source)
+[        ] 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source)
+[        ] 	at java.base/java.lang.Thread.run(Unknown Source)
+[        ] Caused by: org.gradle.api.plugins.UnknownPluginException: Plugin with id 'com.google.gms.google-services' not found.
+[        ] 	at org.gradle.api.internal.plugins.DefaultPluginManager.apply(DefaultPluginManager.java:146)
+[        ] 	at org.gradle.api.internal.plugins.DefaultObjectConfigurationAction.applyType(DefaultObjectConfigurationAction.java:161)
+[        ] 	at org.gradle.api.internal.plugins.DefaultObjectConfigurationAction.access$200(DefaultObjectConfigurationAction.java:43)
+[        ] 	at org.gradle.api.internal.plugins.DefaultObjectConfigurationAction$3.run(DefaultObjectConfigurationAction.java:98)
+[        ] 	at org.gradle.api.internal.plugins.DefaultObjectConfigurationAction.execute(DefaultObjectConfigurationAction.java:184)
+[        ] 	at org.gradle.api.internal.project.AbstractPluginAware.apply(AbstractPluginAware.java:49)
+[        ] 	at org.gradle.api.internal.project.ProjectScript.apply(ProjectScript.java:37)
+[        ] 	at org.gradle.api.Script$apply$0.callCurrent(Unknown Source)
+[        ] 	at org.codehaus.groovy.runtime.callsite.CallSiteArray.defaultCallCurrent(CallSiteArray.java:51)
+[        ] 	at org.codehaus.groovy.runtime.callsite.AbstractCallSite.callCurrent(AbstractCallSite.java:171)
+[        ] 	at org.codehaus.groovy.runtime.callsite.AbstractCallSite.callCurrent(AbstractCallSite.java:185)
+[        ] 	at build_ahxf773dpc2mlzl9wfx3vigv4.run(/Users/sandipkumarpatel/Developer/Projects/Comet-AI/flutter_browser_app/android/app/build.gradle:118)
+[        ] 	at org.gradle.groovy.scripts.internal.DefaultScriptRunnerFactory$ScriptRunnerImpl.run(DefaultScriptRunnerFactory.java:91)
+[        ] 	... 167 more
+[        ] BUILD FAILED in 1m 46s
+[        ] 5 actionable tasks: 5 executed
+[        ] Watched directory hierarchies: [/Users/sandipkumarpatel/Dev/flutter/packages/flutter_tools/gradle]
+[ +438 ms] Running Gradle task 'assembleRelease'... (completed in 106.7s)
+[  +11 ms] "flutter apk" took 108,020ms.
+[  +11 ms] executing: sw_vers -productName
+[  +10 ms] Exit code 0 from: sw_vers -productName
+[        ] macOS
+[        ] executing: sw_vers -productVersion
+[   +6 ms] Exit code 0 from: sw_vers -productVersion
+[        ] 15.7.4
+[        ] executing: sw_vers -buildVersion
+[   +7 ms] Exit code 0 from: sw_vers -buildVersion
+[        ] 24G517
+[        ] executing: uname -m
+[   +3 ms] Exit code 0 from: uname -m
+[        ] arm64
+[   +7 ms] Gradle task assembleRelease failed with exit code 1
+[        ] 
+           #0      throwToolExit (package:flutter_tools/src/base/common.dart:34:3)
+           #1      AndroidGradleBuilder.buildGradleApp (package:flutter_tools/src/android/gradle.dart:592:7)
+           <asynchronous suspension>
+           #2      AndroidGradleBuilder.buildApk (package:flutter_tools/src/android/gradle.dart:234:5)
+           <asynchronous suspension>
+           #3      BuildApkCommand.runCommand (package:flutter_tools/src/commands/build_apk.dart:131:5)
+           <asynchronous suspension>
+           #4      FlutterCommand.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command.dart:1590:27)
+           <asynchronous suspension>
+           #5      AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #6      CommandRunner.runCommand (package:args/command_runner.dart:212:13)
+           <asynchronous suspension>
+           #7      FlutterCommandRunner.runCommand.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:496:9)
+           <asynchronous suspension>
+           #8      AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #9      FlutterCommandRunner.runCommand (package:flutter_tools/src/runner/flutter_command_runner.dart:431:5)
+           <asynchronous suspension>
+           #10     FlutterCommandRunner.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:307:33)
+           <asynchronous suspension>
+           #11     run.<anonymous closure>.<anonymous closure> (package:flutter_tools/runner.dart:104:11)
+           <asynchronous suspension>
+           #12     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #13     main (package:flutter_tools/executable.dart:103:3)
+           <asynchronous suspension>
+
+
+[        ] Running 1 shutdown hook
+[        ] Shutdown hooks complete
+[ +170 ms] exiting with code 1
