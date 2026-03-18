@@ -512,10 +512,33 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                         {activeSection === 'ambient-music' && (
                             <div className="space-y-8">
                                 <div className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/5 space-y-8">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-white mb-2">Ambient Music Mode</h3>
-                                        <p className="text-xs text-white/30 mb-8">Choose when to play ambient background music.</p>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-white mb-2">Ambient Music</h3>
+                                            <p className="text-xs text-white/30">Enable or disable background ambient music.</p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={store.enableAmbientMusic}
+                                                onChange={() => {
+                                                    const newValue = !store.enableAmbientMusic;
+                                                    store.setEnableAmbientMusic(newValue);
+                                                    if (newValue && store.ambientMusicMode === 'off') {
+                                                        store.setAmbientMusicMode('always');
+                                                    }
+                                                }}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="relative w-11 h-6 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-deep-space-accent-neon" />
+                                        </label>
                                     </div>
+
+                                    <div className="pt-8 border-t border-white/5 space-y-6">
+                                        <div>
+                                            <h3 className="text-sm font-bold text-white mb-2">Ambient Music Mode</h3>
+                                            <p className="text-xs text-white/30 mb-8">Choose when to play ambient background music.</p>
+                                        </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         {['off', 'always', 'idle', 'google'].map((mode) => (
                                             <button
@@ -526,6 +549,7 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                                                 <p className={`font-bold capitalize ${store.ambientMusicMode === mode ? 'text-white' : 'text-white/60'}`}>{mode === 'google' ? 'On Google Search' : mode}</p>
                                             </button>
                                         ))}
+                                    </div>
                                     </div>
 
                                     <div className="pt-8 border-t border-white/5 space-y-6">

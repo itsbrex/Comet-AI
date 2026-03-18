@@ -1,5 +1,43 @@
 const fetch = require('cross-fetch');
 
+// ---------------------------------------------------------------------------
+// Universal stream reader: works for both WHATWG ReadableStream (Node 18+ native
+// fetch) and Node.js Readable (node-fetch / older cross-fetch).
+// ---------------------------------------------------------------------------
+async function* streamToLines(body) {
+  let buffer = '';
+
+  if (body && typeof body[Symbol.asyncIterator] === 'function') {
+    // Node.js Readable OR WHATWG ReadableStream (both support async iteration)
+    for await (const chunk of body) {
+      buffer += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) yield line;
+    }
+  } else if (body && typeof body.getReader === 'function') {
+    // WHATWG ReadableStream without async iteration support (rare)
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) yield line;
+    }
+  } else {
+    throw new Error('[AiEngine] Response body is not a readable stream');
+  }
+
+  // Flush any remaining buffer content
+  if (buffer.trim()) yield buffer;
+}
+
+// ---------------------------------------------------------------------------
+// CometAiEngine — multi-provider AI chat engine
+// ---------------------------------------------------------------------------
 class CometAiEngine {
   constructor() {
     this.keys = {};
@@ -18,84 +56,100 @@ class CometAiEngine {
   _inferProvider(model) {
     if (!model) return 'ollama';
     const m = model.toLowerCase();
+
+    // Explicit provider prefixes
+    // Local model heuristics — treat all common local models as Ollama
+    if (
+      m.includes('llama') || m.includes('mistral') || m.includes('deepseek') ||
+      m.includes('phi') || m.includes('qwen') || m.includes('gemma') ||
+      m.includes(':') || m.includes('local') || m.includes('orca') ||
+      m.includes('codellama') || m.includes('solar') || m.includes('vicuna') ||
+      m.includes('wizard') || m.includes('neural') || m.includes('openchat') ||
+      m.includes('gpt-oss') // Explicitly handle the user's favorite local model
+    ) {
+      return 'ollama';
+    }
+
+    if (m.startsWith('openai/') || m.includes('gpt-')) return 'openai';
+    if (m.startsWith('google/') || m.includes('gemini-')) return 'gemini';
+    if (m.startsWith('anthropic/') || m.includes('claude-')) return 'anthropic';
+    if (m.startsWith('groq/') || m.includes('llama-3.3')) return 'groq';
+
     if (m.includes('gemini') || m.includes('google')) return 'gemini';
     if (m.includes('gpt') || m.includes('openai')) return 'openai';
     if (m.includes('claude') || m.includes('anthropic')) return 'anthropic';
     if (m.includes('groq')) return 'groq';
-    
-    // Check for common local models to route to Ollama
-    if (m.includes('llama') || m.includes('mistral') || m.includes('deepseek') || m.includes('phi') || m.includes('qwen')) return 'ollama';
-    
-    return 'ollama'; // Default to local Ollama for robustness
+
+    // Default: try Ollama (local first policy)
+    return 'ollama';
   }
 
   async chat({ message, model, systemPrompt, history, onChunk }) {
     const provider = this._inferProvider(model);
-    console.log(`[AiEngine] Chat request with model: ${model || 'default'} -> routing to: ${provider}`);
-    
+    console.log(`[AiEngine] Chat → model="${model || 'default'}" → provider="${provider}"`);
+
     switch (provider) {
-      case 'ollama': return this._chatOllama({ message, model, systemPrompt, history, onChunk });
-      case 'gemini': return this._chatGemini({ message, model, systemPrompt, history, onChunk });
-      case 'groq': return this._chatGroq({ message, model, systemPrompt, history, onChunk });
-      case 'openai': return this._chatOpenAI({ message, model, systemPrompt, history, onChunk });
+      case 'ollama':    return this._chatOllama({ message, model, systemPrompt, history, onChunk });
+      case 'gemini':    return this._chatGemini({ message, model, systemPrompt, history, onChunk });
+      case 'groq':      return this._chatGroq({ message, model, systemPrompt, history, onChunk });
+      case 'openai':    return this._chatOpenAI({ message, model, systemPrompt, history, onChunk });
       case 'anthropic': return this._chatAnthropic({ message, model, systemPrompt, history, onChunk });
-      default: return this._chatOllama({ message, model, systemPrompt, history, onChunk });
+      default:          return this._chatOllama({ message, model, systemPrompt, history, onChunk });
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Ollama
+  // -------------------------------------------------------------------------
   async _chatOllama({ message, model, systemPrompt, history, onChunk }) {
-    const targetModel = model || 'deepseek-r1:8b';
-    console.log(`[AiEngine] Ollama request: ${targetModel}`);
-    
+    const targetModel = model || 'llama3';
+    console.log(`[AiEngine] Ollama → model="${targetModel}" streaming=${!!onChunk}`);
+
     const messages = [];
     if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
     for (const h of (history || [])) messages.push(h);
     messages.push({ role: 'user', content: message });
 
-    try {
-      const res = await fetch(`${this.ollamaBaseUrl}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: targetModel,
-          messages,
-          stream: !!onChunk,
-          options: {
-            num_ctx: 32768,
-            temperature: 0.7
+    const res = await fetch(`${this.ollamaBaseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: targetModel,
+        messages,
+        stream: !!onChunk,
+        options: { num_ctx: 32768, temperature: 0.7 }
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Ollama error ${res.status}: ${err}`);
+    }
+
+    if (onChunk) {
+      // Streaming — use universal async-iterable reader
+      for await (const line of streamToLines(res.body)) {
+        if (!line.trim()) continue;
+        try {
+          const json = JSON.parse(line);
+          // Use !== undefined so empty string '' is also emitted
+          if (json.message?.content !== undefined && json.message.content !== '') {
+            onChunk(json.message.content);
           }
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Ollama error ${res.status}: ${err}`);
+        } catch (e) {
+          console.warn('[AiEngine] Ollama chunk parse error:', e.message);
+        }
       }
-
-      if (onChunk) {
-        // Simple streaming implementation for bridge
-        const reader = res.body; // In Node 18+ fetch, body is a ReadableStream
-        let fullText = '';
-        // Note: cross-fetch in Node might return a different stream type. 
-        // We'll use a robust json-per-line parser if possible or just handle non-stream for now.
-        // For Comet, most mobile requests are one-shot generate calls.
-      }
-
+      return '';
+    } else {
       const data = await res.json();
-      const text = data.message?.content || '';
-      if (onChunk) onChunk(text);
-      return text;
-    } catch (e) {
-      console.error('[AiEngine] Ollama failed:', e);
-      // Fallback to Groq if local fails and key exists
-      if (this._getKey('GROQ_API_KEY')) {
-         console.log('[AiEngine] Falling back to Groq...');
-         return this._chatGroq({ message, model: 'llama-3.3-70b-versatile', systemPrompt, history, onChunk });
-      }
-      throw e;
+      return data.message?.content || '';
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Groq (OpenAI-compatible SSE)
+  // -------------------------------------------------------------------------
   async _chatGroq({ message, model, systemPrompt, history, onChunk }) {
     const apiKey = this._getKey('GROQ_API_KEY');
     if (!apiKey) throw new Error('GROQ_API_KEY not configured');
@@ -115,7 +169,7 @@ class CometAiEngine {
         model: model || 'llama-3.3-70b-versatile',
         messages,
         max_tokens: 8192,
-        stream: false,
+        stream: !!onChunk,
       }),
     });
 
@@ -124,12 +178,27 @@ class CometAiEngine {
       throw new Error(`Groq API error ${res.status}: ${err}`);
     }
 
-    const data = await res.json();
-    const text = data.choices?.[0]?.message?.content || '';
-    if (onChunk) onChunk(text);
-    return text;
+    if (onChunk) {
+      for await (const line of streamToLines(res.body)) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.substring(6).trim();
+        if (jsonStr === '[DONE]') break;
+        try {
+          const json = JSON.parse(jsonStr);
+          const content = json.choices?.[0]?.delta?.content;
+          if (content) onChunk(content);
+        } catch (e) {}
+      }
+      return '';
+    } else {
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || '';
+    }
   }
 
+  // -------------------------------------------------------------------------
+  // Gemini
+  // -------------------------------------------------------------------------
   async _chatGemini({ message, model, systemPrompt, history, onChunk }) {
     const apiKey = this._getKey('GEMINI_API_KEY');
     if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
@@ -148,8 +217,9 @@ class CometAiEngine {
     contents.push({ role: 'user', parts: [{ text: message }] });
 
     const targetModel = model || 'gemini-2.0-flash';
+    const endpoint = onChunk ? 'streamGenerateContent' : 'generateContent';
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:${endpoint}?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -162,12 +232,28 @@ class CometAiEngine {
       throw new Error(`Gemini API error ${res.status}: ${err}`);
     }
 
-    const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (onChunk) onChunk(text);
-    return text;
+    if (onChunk) {
+      for await (const line of streamToLines(res.body)) {
+        if (!line.trim()) continue;
+        try {
+          let jsonStr = line.startsWith('data: ') ? line.substring(6) : line;
+          if (jsonStr === '[DONE]') break;
+          const json = JSON.parse(jsonStr);
+          const candidates = json.candidates || (Array.isArray(json) ? json[0]?.candidates : null);
+          const text = candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) onChunk(text);
+        } catch (e) {}
+      }
+      return '';
+    } else {
+      const data = await res.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    }
   }
 
+  // -------------------------------------------------------------------------
+  // OpenAI (SSE)
+  // -------------------------------------------------------------------------
   async _chatOpenAI({ message, model, systemPrompt, history, onChunk }) {
     const apiKey = this._getKey('OPENAI_API_KEY');
     if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
@@ -187,6 +273,7 @@ class CometAiEngine {
         model: model || 'gpt-4o',
         messages,
         max_tokens: 8192,
+        stream: !!onChunk,
       }),
     });
 
@@ -195,12 +282,27 @@ class CometAiEngine {
       throw new Error(`OpenAI API error ${res.status}: ${err}`);
     }
 
-    const data = await res.json();
-    const text = data.choices?.[0]?.message?.content || '';
-    if (onChunk) onChunk(text);
-    return text;
+    if (onChunk) {
+      for await (const line of streamToLines(res.body)) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.substring(6).trim();
+        if (jsonStr === '[DONE]') break;
+        try {
+          const json = JSON.parse(jsonStr);
+          const content = json.choices?.[0]?.delta?.content;
+          if (content) onChunk(content);
+        } catch (e) {}
+      }
+      return '';
+    } else {
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || '';
+    }
   }
 
+  // -------------------------------------------------------------------------
+  // Anthropic (non-streaming only for now)
+  // -------------------------------------------------------------------------
   async _chatAnthropic({ message, model, systemPrompt, history, onChunk }) {
     const apiKey = this._getKey('ANTHROPIC_API_KEY');
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');

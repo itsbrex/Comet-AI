@@ -12,7 +12,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 Object.defineProperty(window, 'parent', { get: () => secretSelf, configurable: true });
                 Object.defineProperty(window, 'opener', { get: () => null, configurable: true });
             } catch (e) {
-                console.warn("Could not redefine top/parent - likely already locked by site.");
+                // Silently ignore if the site has already locked these properties
             }
 
             // Spoof document.referrer if needed

@@ -16,95 +16,107 @@ export interface CommandParseResult {
     hasCommands: boolean;
 }
 
-// All supported command types
-export const SUPPORTED_COMMANDS = [
-    'NAVIGATE',
-    'SEARCH',
-    'SET_THEME',
-    'OPEN_VIEW',
-    'RELOAD',
-    'GO_BACK',
-    'GO_FORWARD',
-    'SCREENSHOT_AND_ANALYZE',
-    'WEB_SEARCH',
-    'READ_PAGE_CONTENT',
-    'LIST_OPEN_TABS',
-    'GENERATE_PDF',
-    'GENERATE_DIAGRAM',
-    'SHELL_COMMAND',
-    'SET_BRIGHTNESS',
-    'SET_VOLUME',
-    'OPEN_APP',
-    'FILL_FORM',
-    'SCROLL_TO',
-    'EXTRACT_DATA',
-    'CREATE_NEW_TAB_GROUP',
-    'OCR_COORDINATES',
-    'OCR_SCREEN',
-    'CLICK_ELEMENT',
-    'FIND_AND_CLICK',
-    'GMAIL_AUTHORIZE',
-    'GMAIL_LIST_MESSAGES',
-    'GMAIL_GET_MESSAGE',
-    'GMAIL_SEND_MESSAGE',
-    'GMAIL_ADD_LABEL',
-    'WAIT',
-    'GUIDE_CLICK',
-    'EXPLAIN_CAPABILITIES',
-] as const;
+// Strict Command Registry with descriptions and examples
+export const COMMAND_REGISTRY = {
+    NAVIGATE: { desc: 'Go to a specific URL', example: '[NAVIGATE: https://google.com]' },
+    SEARCH: { desc: 'Search using default engine', example: '[SEARCH: AI news]' },
+    WEB_SEARCH: { desc: 'Real-time web search with RAG', example: '[WEB_SEARCH: today stock prices]' },
+    READ_PAGE_CONTENT: { desc: 'Read text from active tab', example: '[READ_PAGE_CONTENT]' },
+    LIST_OPEN_TABS: { desc: 'List all open browser tabs', example: '[LIST_OPEN_TABS]' },
+    GENERATE_PDF: { desc: 'Create a branded PDF document', example: '[GENERATE_PDF: Report | Content...]' },
+    SHELL_COMMAND: { desc: 'Execute terminal commands (Safe)', example: '[SHELL_COMMAND: ls -la]' },
+    SET_THEME: { desc: 'Switch between dark/light mode', example: '[SET_THEME: dark]' },
+    SET_VOLUME: { desc: 'Set system audio volume', example: '[SET_VOLUME: 50]' },
+    SET_BRIGHTNESS: { desc: 'Set screen brightness level', example: '[SET_BRIGHTNESS: 80]' },
+    OPEN_APP: { desc: 'Launch a desktop application', example: '[OPEN_APP: Chrome]' },
+    SCREENSHOT_AND_ANALYZE: { desc: 'See the page using Vision/OCR', example: '[SCREENSHOT_AND_ANALYZE]' },
+    CLICK_ELEMENT: { desc: 'Click a web element by selector', example: '[CLICK_ELEMENT: #submit-btn | click submit]' },
+    FIND_AND_CLICK: { desc: 'Find text on screen and click it', example: '[FIND_AND_CLICK: Login | auth task]' },
+    GENERATE_DIAGRAM: { desc: 'Create charts using Mermaid.js', example: '[GENERATE_DIAGRAM: graph TD...]' },
+    OPEN_VIEW: { desc: 'Switch browser workspace views', example: '[OPEN_VIEW: coding]' },
+    RELOAD: { desc: 'Refresh the active browser tab', example: '[RELOAD]' },
+    GO_BACK: { desc: 'Go back in browser history', example: '[GO_BACK]' },
+    GO_FORWARD: { desc: 'Go forward in browser history', example: '[GO_FORWARD]' },
+    WAIT: { desc: 'Pause execution for duration (ms)', example: '[WAIT: 2000]' },
+    EXPLAIN_CAPABILITIES: { desc: 'List all available AI features', example: '[EXPLAIN_CAPABILITIES]' },
+} as const;
 
-export type CommandType = typeof SUPPORTED_COMMANDS[number];
+export const SUPPORTED_COMMANDS = Object.keys(COMMAND_REGISTRY) as Array<keyof typeof COMMAND_REGISTRY>;
+export type CommandType = keyof typeof COMMAND_REGISTRY;
+
+// Non-executable commands (handled by LLM only or displayed in text)
+export const META_COMMANDS = [
+    'EXPLAIN_CAPABILITIES',
+    'THINK',
+    'PLAN',
+    'LIST_OPEN_TABS',
+] as const;
 
 /**
  * Parse AI response and extract commands
- * More robust than regex - handles edge cases and malformed commands
+ * Skips commands inside markdown code blocks or tables
  */
 export function parseAICommands(content: string): CommandParseResult {
     const commands: ParsedCommand[] = [];
     const commandsSet = new Set(SUPPORTED_COMMANDS);
+    const metaCommandsSet = new Set(META_COMMANDS);
 
-    // Build regex dynamically from supported commands
+    // 1. Create a mask of the content to skip parsing inside sensitive blocks
+    // Replace content inside ```...``` and `...` with spaces to preserve indices
+    let mask = content;
+    
+    // Mask code blocks
+    mask = mask.replace(/```[\s\S]*?```/g, (match) => ' '.repeat(match.length));
+    
+    // Mask inline code
+    mask = mask.replace(/`.*?`/g, (match) => ' '.repeat(match.length));
+    
+    // Mask markdown tables (lines with at least 3 '|' characters)
+    const lines = mask.split('\n');
+    mask = lines.map(line => {
+        if ((line.match(/\|/g) || []).length >= 3) {
+            return ' '.repeat(line.length);
+        }
+        return line;
+    }).join('\n');
+
+    // 2. Build regex dynamically from supported commands
     const commandPattern = SUPPORTED_COMMANDS.join('|');
     const commandRegex = new RegExp(`\\[(${commandPattern})(?::\\s*([^\\]]+?))?\\]`, 'gi');
 
     let match;
-    let lastIndex = 0;
-    const textParts: string[] = [];
-
-    // Reset regex state
     commandRegex.lastIndex = 0;
 
-    while ((match = commandRegex.exec(content)) !== null) {
+    while ((match = commandRegex.exec(mask)) !== null) {
         const [fullMatch, commandType, commandValue = ''] = match;
+        const type = commandType.toUpperCase();
 
-        // Validate command type
-        if (!commandsSet.has(commandType.toUpperCase() as CommandType)) {
-            continue;
-        }
+        // Validate command type (only if it's in the master list)
+        if (!commandsSet.has(type as CommandType)) continue;
 
-        // Add text before this command
-        if (match.index > lastIndex) {
-            textParts.push(content.substring(lastIndex, match.index));
-        }
+        // SKIP Meta Commands - they should NOT go into the execution queue
+        if (metaCommandsSet.has(type as any)) continue;
 
         commands.push({
-            type: commandType.toUpperCase(),
-            value: commandValue.trim(),
-            originalMatch: fullMatch,
+            type,
+            value: (match[2] || '').trim(),
+            originalMatch: content.substring(match.index, match.index + fullMatch.length),
             index: match.index,
         });
-
-        lastIndex = commandRegex.lastIndex;
     }
 
-    // Add remaining text after last command
-    if (lastIndex < content.length) {
-        textParts.push(content.substring(lastIndex));
+    // 3. Prepare response text by removing EXECUTED commands (keep meta commands)
+    let textWithoutCommands = content;
+    // Remove from bottom to top to preserve string indices
+    const sortedCmds = [...commands].sort((a, b) => b.index - a.index);
+    for (const cmd of sortedCmds) {
+        textWithoutCommands = textWithoutCommands.substring(0, cmd.index) + 
+                            textWithoutCommands.substring(cmd.index + cmd.originalMatch.length);
     }
 
     return {
         commands,
-        textWithoutCommands: textParts.join('').trim(),
+        textWithoutCommands: textWithoutCommands.trim(),
         hasCommands: commands.length > 0,
     };
 }

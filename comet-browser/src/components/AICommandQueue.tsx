@@ -2,13 +2,13 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Circle, Loader2, AlertCircle, ChevronRight } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, AlertCircle, ChevronRight, Zap, Target, Search, Globe, FileText, Camera, ScanLine, MousePointer2, Volume2, Sun, Terminal, Rocket, Languages, Hourglass, Shield } from 'lucide-react';
 
 export interface AICommand {
     id: string;
     type: string;
     value: string;
-    status: 'pending' | 'executing' | 'completed' | 'failed';
+    status: 'pending' | 'executing' | 'completed' | 'failed' | 'awaiting_permission';
     output?: string;
     error?: string;
     timestamp: number;
@@ -21,43 +21,47 @@ interface AICommandQueueProps {
 }
 
 const getCommandIcon = (type: string) => {
-    const icons: Record<string, string> = {
-        NAVIGATE: '🌐',
-        SEARCH: '🔍',
-        READ_PAGE_CONTENT: '📄',
-        SCREENSHOT_AND_ANALYZE: '📸',
-        OCR_SCREEN: '👁️',
-        FIND_AND_CLICK: '🖱️',
-        SET_VOLUME: '🔊',
-        SET_BRIGHTNESS: '💡',
-        SHELL_COMMAND: '🖥️',
-        OPEN_APP: '🚀',
-        TRANSLATE: '🌍',
-        WEB_SEARCH: '🌐',
-        EXPLAIN_CAPABILITIES: '🧠',
-        WAIT: '⏳',
-    };
-    return icons[type] || '⚡';
+    switch (type) {
+        case 'NAVIGATE': return <Globe size={16} />;
+        case 'SEARCH': return <Search size={16} />;
+        case 'READ_PAGE_CONTENT': return <FileText size={16} />;
+        case 'SCREENSHOT_AND_ANALYZE': return <Camera size={16} />;
+        case 'OCR_SCREEN': return <ScanLine size={16} />;
+        case 'FIND_AND_CLICK': return <MousePointer2 size={16} />;
+        case 'SET_VOLUME': return <Volume2 size={16} />;
+        case 'SET_BRIGHTNESS': return <Sun size={16} />;
+        case 'SHELL_COMMAND': return <Terminal size={16} />;
+        case 'OPEN_APP': return <Rocket size={16} />;
+        case 'TRANSLATE': return <Languages size={16} />;
+        case 'WEB_SEARCH': return <Globe size={16} />;
+        case 'EXPLAIN_CAPABILITIES': return <Zap size={16} />;
+        case 'WAIT': return <Hourglass size={16} />;
+        default: return <Zap size={16} />;
+    }
 };
 
 const getCommandLabel = (type: string, value: string) => {
     const labels: Record<string, (v: string) => string> = {
-        NAVIGATE: (v) => `Navigate to ${v}`,
-        SEARCH: (v) => `Search for "${v}"`,
-        READ_PAGE_CONTENT: () => 'Read page content',
-        SCREENSHOT_AND_ANALYZE: () => 'Capture and analyze screenshot',
-        OCR_SCREEN: (v) => v ? `OCR region ${v}` : 'OCR full screen',
-        FIND_AND_CLICK: (v) => `Find and click "${v}"`,
-        SET_VOLUME: (v) => `Set volume to ${v}%`,
-        SET_BRIGHTNESS: (v) => `Set brightness to ${v}%`,
-        SHELL_COMMAND: (v) => `Execute: ${v.substring(0, 30)}...`,
-        OPEN_APP: (v) => `Open ${v}`,
-        TRANSLATE: (v) => `Translate to ${v}`,
-        WEB_SEARCH: (v) => `Web search: "${v}"`,
-        EXPLAIN_CAPABILITIES: () => 'Explain AI capabilities',
-        WAIT: (v) => `Wait ${parseInt(v) / 1000}s`,
+        NAVIGATE: (v) => `Navigating to ${new URL(v.startsWith('http') ? v : 'https://' + v).hostname}`,
+        SEARCH: (v) => `Searching "${v}"`,
+        READ_PAGE_CONTENT: () => 'Analyzing page content',
+        SCREENSHOT_AND_ANALYZE: () => 'Capturing workspace',
+        OCR_SCREEN: (v) => v ? `OCR: ${v}` : 'Optical Character Recognition',
+        FIND_AND_CLICK: (v) => `Interacting with "${v}"`,
+        SET_VOLUME: (v) => `System Audio: ${v}%`,
+        SET_BRIGHTNESS: (v) => `Display Brightness: ${v}%`,
+        SHELL_COMMAND: (v) => `Running terminal task`,
+        OPEN_APP: (v) => `Launching ${v}`,
+        TRANSLATE: (v) => `Translating context`,
+        WEB_SEARCH: (v) => `Deep Web Search: "${v}"`,
+        EXPLAIN_CAPABILITIES: () => 'Orchestrating capabilities',
+        WAIT: (v) => `Pausing for ${parseInt(v) / 1000}s`,
     };
-    return labels[type] ? labels[type](value) : `${type}: ${value}`;
+    try {
+        return labels[type] ? labels[type](value) : `${type}: ${value}`;
+    } catch {
+        return `${type}: ${value}`;
+    }
 };
 
 export const AICommandQueue: React.FC<AICommandQueueProps> = ({
@@ -69,95 +73,97 @@ export const AICommandQueue: React.FC<AICommandQueueProps> = ({
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-6 right-6 z-[10000] w-96 bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl border border-cyan-500/30 rounded-2xl shadow-2xl shadow-cyan-500/20 overflow-hidden"
+            initial={{ opacity: 0, x: -40, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -40, scale: 0.9 }}
+            className="fixed bottom-6 left-6 z-[10000] w-80 bg-[#0a0a0f]/90 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden"
         >
-            {/* Header */}
-            <div className="px-4 py-3 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-b border-cyan-500/20 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
-                    <h3 className="text-sm font-bold text-white">AI Action Chain</h3>
+            {/* Glossy Header */}
+            <div className="px-5 py-4 bg-gradient-to-r from-sky-500/10 to-transparent border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <div className="w-2.5 h-2.5 bg-sky-400 rounded-full animate-pulse shadow-[0_0_10px_rgba(56,189,248,0.8)]" />
+                        <motion.div 
+                            className="absolute inset-0 bg-sky-400/50 rounded-full"
+                            animate={{ scale: [1, 2], opacity: [0.5, 0] }}
+                            transition={{ duration: 1.5, repeat: Infinity }}
+                        />
+                    </div>
+                    <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white">Action Chain</h3>
                 </div>
-                <div className="text-xs text-cyan-400 font-mono">
-                    {currentCommandIndex + 1} / {commands.length}
+                <div className="px-2 py-0.5 bg-white/5 rounded-full text-[9px] text-white/40 font-mono border border-white/5">
+                    {currentCommandIndex + 1} OF {commands.length}
                 </div>
             </div>
 
             {/* Command List */}
-            <div className="max-h-80 overflow-y-auto custom-scrollbar">
-                <AnimatePresence>
+            <div className="max-h-72 overflow-y-auto modern-scrollbar p-1">
+                <AnimatePresence mode="popLayout">
                     {commands.map((command, index) => {
                         const isActive = index === currentCommandIndex;
                         const isPast = index < currentCommandIndex;
-                        const isFuture = index > currentCommandIndex;
 
                         return (
                             <motion.div
                                 key={command.id}
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 20 }}
-                                transition={{ delay: index * 0.05 }}
-                                className={`px-4 py-3 border-b border-slate-700/50 transition-all ${isActive ? 'bg-cyan-500/10' : isPast ? 'bg-green-500/5' : 'bg-transparent'
-                                    }`}
+                                layout
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                className={`group px-4 py-3.5 rounded-2xl mb-1 transition-all duration-300 border ${
+                                    isActive 
+                                    ? 'bg-sky-500/10 border-sky-500/30' 
+                                    : isPast 
+                                        ? 'bg-transparent border-transparent opacity-40' 
+                                        : 'bg-transparent border-transparent opacity-60'
+                                }`}
                             >
-                                <div className="flex items-start gap-3">
-                                    {/* Status Icon */}
-                                    <div className="mt-0.5">
-                                        {command.status === 'completed' && (
-                                            <CheckCircle2 size={18} className="text-green-400" />
-                                        )}
-                                        {command.status === 'executing' && (
-                                            <Loader2 size={18} className="text-cyan-400 animate-spin" />
-                                        )}
-                                        {command.status === 'failed' && (
-                                            <AlertCircle size={18} className="text-red-400" />
-                                        )}
-                                        {command.status === 'pending' && (
-                                            <Circle size={18} className="text-slate-500" />
-                                        )}
+                                <div className="flex items-center gap-4">
+                                    {/* Icon Column */}
+                                    <div className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-500 ${
+                                        isActive 
+                                        ? 'bg-sky-500 text-white shadow-[0_0_15px_rgba(56,189,248,0.4)]' 
+                                        : isPast 
+                                            ? 'bg-green-500/20 text-green-400' 
+                                            : 'bg-white/5 text-white/40'
+                                    }`}>
+                                        {command.status === 'completed' ? <CheckCircle2 size={16} /> 
+                                         : command.status === 'failed' ? <AlertCircle size={16} className="text-red-400" />
+                                         : command.status === 'awaiting_permission' ? <Shield size={16} className="text-amber-400 animate-pulse" />
+                                         : getCommandIcon(command.type)}
                                     </div>
 
-                                    {/* Command Info */}
+                                    {/* Info Column */}
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-lg">{getCommandIcon(command.type)}</span>
-                                            <span className={`text-sm font-medium ${isActive ? 'text-cyan-300' : isPast ? 'text-green-300' : 'text-slate-400'
-                                                }`}>
-                                                {getCommandLabel(command.type, command.value)}
-                                            </span>
+                                        <div className={`text-[11px] font-bold leading-tight truncate transition-colors ${
+                                            isActive ? 'text-white' : 'text-white/40'
+                                        }`}>
+                                            {getCommandLabel(command.type, command.value)}
                                         </div>
-
-                                        {/* Output/Error */}
-                                        {command.output && (
-                                            <div className="text-xs text-slate-400 mt-1 truncate">
-                                                {command.output}
+                                        
+                                        {isActive && (
+                                            <div className="mt-1.5 flex items-center gap-2">
+                                                <div className="flex-1 h-0.5 bg-white/5 rounded-full overflow-hidden">
+                                                    <motion.div 
+                                                        className="h-full bg-sky-400"
+                                                        initial={{ width: '0%' }}
+                                                        animate={{ width: '100%' }}
+                                                        transition={{ duration: 2, repeat: Infinity }}
+                                                    />
+                                                </div>
                                             </div>
                                         )}
-                                        {command.error && (
-                                            <div className="text-xs text-red-400 mt-1 truncate">
-                                                ❌ {command.error}
-                                            </div>
-                                        )}
-
-                                        {/* Progress indicator for active command */}
-                                        {isActive && command.status === 'executing' && (
-                                            <div className="mt-2 w-full bg-slate-700 rounded-full h-1 overflow-hidden">
-                                                <motion.div
-                                                    className="h-full bg-gradient-to-r from-cyan-400 to-blue-400"
-                                                    initial={{ width: '0%' }}
-                                                    animate={{ width: '100%' }}
-                                                    transition={{ duration: 2, ease: 'linear', repeat: Infinity }}
-                                                />
+                                        
+                                        {command.error && isActive && (
+                                            <div className="text-[9px] text-red-400 font-medium mt-1">
+                                                Interrupted: {command.error}
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* Arrow for future commands */}
-                                    {isFuture && (
-                                        <ChevronRight size={16} className="text-slate-600 mt-0.5" />
+                                    {/* Status Orb for past items */}
+                                    {isPast && (
+                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500/50" />
                                     )}
                                 </div>
                             </motion.div>
@@ -166,34 +172,17 @@ export const AICommandQueue: React.FC<AICommandQueueProps> = ({
                 </AnimatePresence>
             </div>
 
-            {/* Footer */}
+            {/* Glassy Footer */}
             {onCancel && (
-                <div className="px-4 py-3 bg-slate-900/50 border-t border-slate-700/50">
+                <div className="p-4 bg-gradient-to-t from-white/5 to-transparent border-t border-white/5">
                     <button
                         onClick={onCancel}
-                        className="w-full px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg text-sm font-medium transition-all border border-red-500/30"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-red-500/20 active:scale-95"
                     >
-                        Cancel Remaining Actions
+                        Abort Sequence
                     </button>
                 </div>
             )}
-
-            <style dangerouslySetInnerHTML={{
-                __html: `
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(15, 23, 42, 0.5);
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(6, 182, 212, 0.3);
-          border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(6, 182, 212, 0.5);
-        }
-      `}} />
         </motion.div>
     );
 };

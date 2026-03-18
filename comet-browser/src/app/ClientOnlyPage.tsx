@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import AIChatSidebar from '@/components/AIChatSidebar';
 import LandingPage from '@/components/LandingPage';
+import { StartupSetupUI } from '@/components/StartupSetupUI';
 import WebStore from '@/components/WebStore';
 import PDFWorkspace from '@/components/PDFWorkspace';
 import CodingDashboard from '@/components/CodingDashboard';
@@ -597,6 +598,7 @@ export default function Home() {
         context: contextString,
         provider: providerId,
         model: modelName,
+        baseUrl: store.ollamaBaseUrl,
         localLlmMode: store.localLlmMode,
         extraInstructions: 'Use HTML bolding for highlights and number the insights.',
       });
@@ -1005,6 +1007,10 @@ export default function Home() {
   };
 
   const calculateBounds = useCallback(() => {
+    if (!store.hasCompletedStartupSetup) {
+      return { x: 0, y: 0, width: 0, height: 0 };
+    }
+
     const railWidth = railVisible ? 70 : 0;
     const aiSidebarWidth = !store.sidebarOpen ? 0 : (store.isSidebarCollapsed ? 70 : store.sidebarWidth);
 
@@ -1026,7 +1032,7 @@ export default function Home() {
       width: Math.max(0, Math.round(width)),
       height: Math.max(0, Math.round(height))
     };
-  }, [store.sidebarOpen, store.isSidebarCollapsed, store.sidebarWidth, store.sidebarSide, railVisible]);
+  }, [store.sidebarOpen, store.isSidebarCollapsed, store.sidebarWidth, store.sidebarSide, railVisible, store.hasCompletedStartupSetup]);
 
   useEffect(() => {
     if (window.electronAPI) {
@@ -1374,6 +1380,11 @@ export default function Home() {
         onToggleSpotlightSearch={() => setShowSpotlightSearch(prev => !prev)}
         onOpenSettings={() => setShowSettings(true)}
       />
+      
+      {!store.hasCompletedStartupSetup && (
+        <StartupSetupUI onComplete={() => store.setHasCompletedStartupSetup(true)} />
+      )}
+
       <div
         className={`flex flex-1 overflow-hidden relative pt-10 bg-[#020205]`}
         onContextMenu={handleContextMenu}

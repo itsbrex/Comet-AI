@@ -4,16 +4,16 @@ exports.getGeminiModelMetadata = exports.getRecommendedGeminiModel = exports.MOD
 exports.MODEL_REGISTRY = {
     google: {
         pro: {
-            id: 'gemini-3.1-pro',
+            id: 'gemini-3.1-pro-preview',
             friendlyName: 'Gemini 3.1 Pro',
-            releaseDate: '2026-03-10',
-            notes: 'Highest reasoning fidelity with the freshest code/analysis updates.',
+            releaseDate: '2026-02-19',
+            notes: 'Latest flagship Gemini Pro with long-context reasoning and highest fidelity.',
         },
         flash: {
-            id: 'gemini-3.0-flash',
-            friendlyName: 'Gemini 3.0 Flash',
-            releaseDate: '2026-02-18',
-            notes: 'Optimized for speed and low latency while keeping contextual awareness.',
+            id: 'gemini-3-flash-preview',
+            friendlyName: 'Gemini 3 Flash',
+            releaseDate: '2025-12-01',
+            notes: 'Gemini 3 Flash preview — optimized for speed, cost, and strong reasoning.',
         },
     },
 };

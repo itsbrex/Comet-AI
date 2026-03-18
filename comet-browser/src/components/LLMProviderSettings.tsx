@@ -106,8 +106,14 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
     if (window.electronAPI) {
       const success = await window.electronAPI.configureLLMProvider(activeProviderId, config);
       setFeedback(success ? 'Intelligence Configured' : 'Configuration Failed');
+      if (success) {
+        setTimeout(() => {
+          props.setShowSettings(false);
+        }, 2000);
+      }
     } else {
       setFeedback('Local IQ Active');
+      setTimeout(() => props.setShowSettings(false), 2000);
     }
     setTimeout(() => setFeedback(null), 3000);
   };
@@ -244,6 +250,9 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                             )}
                             <option value="custom">Custom (Type below)</option>
                           </select>
+                          <p className="text-[8px] text-amber-400/60 font-medium pt-1 italic">
+                            ⚠️ Choose Ollama Only if You have at Least enough hardware to run LLM
+                          </p>
                         </div>
 
                         {/* Manual Override */}
@@ -289,9 +298,10 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                           <div className="flex gap-2">
                             <input
                               type="text"
-                              placeholder="Model Name (e.g. gemma:2b)"
+                              placeholder="Model Name (e.g. gpt-oss-cloud:120b)"
                               className="flex-1 bg-black/20 border border-white/5 rounded-lg px-3 py-2 text-[10px] text-white outline-none"
                               id="ollama-pull-input"
+                              defaultValue="gpt-oss-cloud:120b"
                             />
                             <button
                               onClick={() => {
@@ -319,9 +329,9 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                                   }
                                 });
                               }}
-                              className="px-3 py-1 bg-deep-space-accent-neon/10 hover:bg-deep-space-accent-neon/20 text-deep-space-accent-neon text-[10px] font-black uppercase rounded-lg transition-all"
+                              className="px-3 py-1 bg-sky-400/20 hover:bg-sky-400/30 text-sky-400 text-[10px] font-black uppercase rounded-lg transition-all border border-sky-400/20"
                             >
-                              PULL
+                              PULL GPT-120B
                             </button>
                           </div>
                           <div id="ollama-terminal" className="h-[60px] bg-black/40 rounded-lg p-2 text-[9px] font-mono text-green-400/80 overflow-y-auto whitespace-pre-wrap border border-white/5 custom-scrollbar">

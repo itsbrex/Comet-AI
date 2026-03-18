@@ -216,6 +216,8 @@ export interface BrowserState {
     updateShortcut: (action: string, accelerator: string) => void;
     hasSeenWelcomePage: boolean;
     setHasSeenWelcomePage: (seen: boolean) => void;
+    hasCompletedStartupSetup: boolean;
+    setHasCompletedStartupSetup: (completed: boolean) => void;
     appName: string;
     backendStrategy: 'firebase' | 'mysql';
     customFirebaseConfig: any | null;
@@ -405,6 +407,7 @@ export const useAppStore = create<BrowserState>()(
             // Settings
             shortcuts: defaultShortcuts,
             hasSeenWelcomePage: false,
+            hasCompletedStartupSetup: false,
             appName: 'Comet',
             backendStrategy: 'firebase',
             customFirebaseConfig: null,
@@ -715,6 +718,7 @@ export const useAppStore = create<BrowserState>()(
                 }
             },
             setHasSeenWelcomePage: (seen) => set({ hasSeenWelcomePage: seen }),
+            setHasCompletedStartupSetup: (completed: boolean) => set({ hasCompletedStartupSetup: completed }),
 
             setBackendStrategy: (strategy: 'firebase' | 'mysql') => set({ backendStrategy: strategy }),
             setCustomFirebaseConfig: (config: any | null) => set({ customFirebaseConfig: config }),

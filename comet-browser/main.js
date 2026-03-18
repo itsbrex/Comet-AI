@@ -294,8 +294,8 @@ const prepareLLM = async (messages, options = {}) => {
 
   if (providerId === 'ollama') {
     const { createOllama } = await import('ai-sdk-ollama');
-    const baseUrl = config.baseUrl || store.get('ollama_base_url') || 'http://127.0.0.1:11434';
-    const modelName = options.model || config.model || store.get('ollama_model') || 'deepseek-r1:8b';
+    const baseUrl = options.baseUrl || config.baseUrl || store.get('ollama_base_url') || 'http://127.0.0.1:11434';
+    const modelName = options.model || config.model || store.get('ollama_model') || 'deepseek-r1:1.5b';
 
     console.log('[Ollama] Base URL:', baseUrl, 'Model:', modelName);
 
@@ -438,6 +438,7 @@ const buildProviderOptions = (providerId, options = {}, config = {}) => {
       ...existing,
       sendReasoning: existing.sendReasoning ?? true,
       num_ctx: existing.num_ctx || options.ollamaContext || 32768,
+      numCtx: existing.numCtx || existing.num_ctx || options.ollamaContext || 32768,
     };
   }
 
@@ -486,6 +487,72 @@ const llmGenerateHandler = async (messages, options = {}) => {
 
 const llmStreamHandler = async (event, messages, options = {}) => {
   try {
+    // First try to use the AI Engine's streaming capability
+    if (cometAiEngine) {
+      // Resolve provider: options.provider -> stored active provider -> 'ollama'
+      const providerId = options.provider || activeLlmProvider || store.get('active_llm_provider') || 'ollama';
+
+      // Resolve the actual model name based on provider — NOT the provider ID string itself
+      let model;
+      if (options.model) {
+        model = options.model;
+      } else {
+        switch (providerId) {
+          case 'ollama':        model = store.get('ollama_model') || 'llama3'; break;
+          case 'google':
+          case 'google-flash':  model = store.get('gemini_model') || 'gemini-2.0-flash'; break;
+          case 'openai':        model = store.get('openai_model') || 'gpt-4o'; break;
+          case 'anthropic':     model = store.get('anthropic_model') || 'claude-3-5-sonnet-latest'; break;
+          case 'groq':          model = store.get('groq_model') || 'llama-3.3-70b-versatile'; break;
+          case 'xai':           model = store.get('xai_model') || 'grok-2-latest'; break;
+          default:              model = 'llama3';
+        }
+      }
+
+      // Extract system prompt
+      const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
+
+      // Build history: only user/assistant messages (no system), minus the last message
+      const nonSystemMessages = messages.filter(m => m.role !== 'system');
+      const message = nonSystemMessages[nonSystemMessages.length - 1]?.content || '';
+      const history = nonSystemMessages.slice(0, -1).map(m => ({
+        role: m.role === 'model' ? 'assistant' : m.role,
+        content: m.content || ''
+      }));
+
+      console.log(`[llmStreamHandler] Provider: ${providerId}, Model: ${model}, History: ${history.length} turns`);
+
+      // Ensure engine has the correct API keys / URL for this provider
+      const engineKeys = {};
+      if (providerId.startsWith('google')) engineKeys.GEMINI_API_KEY = store.get('gemini_api_key') || '';
+      if (providerId === 'openai')         engineKeys.OPENAI_API_KEY = store.get('openai_api_key') || '';
+      if (providerId === 'anthropic')      engineKeys.ANTHROPIC_API_KEY = store.get('anthropic_api_key') || '';
+      if (providerId === 'groq')           engineKeys.GROQ_API_KEY = store.get('groq_api_key') || '';
+      if (providerId === 'ollama')         engineKeys.OLLAMA_BASE_URL = options.baseUrl || store.get('ollama_base_url') || 'http://127.0.0.1:11434';
+      if (Object.keys(engineKeys).length > 0) cometAiEngine.configure(engineKeys);
+
+      await cometAiEngine.chat({
+        message,
+        model,
+        systemPrompt,
+        history,
+        onChunk: (chunk) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('llm-chat-stream-part', {
+              type: 'text-delta',
+              textDelta: chunk
+            });
+          }
+        }
+      });
+
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('llm-chat-stream-part', { type: 'finish' });
+      }
+      return;
+    }
+
+    // Fallback to Vercel AI SDK if AI Engine is not available
     const { streamText } = await import('ai');
     const { modelInstance, systemPrompt, chatMessages, providerId, config } = await prepareLLM(messages, options);
 
@@ -508,7 +575,7 @@ const llmStreamHandler = async (event, messages, options = {}) => {
     event.sender.send('llm-chat-stream-part', { type: 'finish' });
 
   } catch (error) {
-    console.error("Vercel AI SDK Stream Error:", error);
+    console.error("Streaming Error:", error);
     event.sender.send('llm-chat-stream-part', { type: 'error', error: error.message });
   }
 };
@@ -1448,14 +1515,20 @@ ipcMain.on('activate-view', (event, { tabId, bounds }) => {
 
   const newView = tabViews.get(tabId);
   if (newView) {
-    mainWindow.addBrowserView(newView);
-    const roundedBounds = {
-      x: Math.round(bounds.x),
-      y: Math.round(bounds.y),
-      width: Math.round(bounds.width),
-      height: Math.round(bounds.height),
-    };
-    newView.setBounds(roundedBounds);
+    if (bounds.width === 0 || bounds.height === 0) {
+      mainWindow.removeBrowserView(newView);
+    } else {
+      if (!mainWindow.getBrowserViews().includes(newView)) {
+        mainWindow.addBrowserView(newView);
+      }
+      const roundedBounds = {
+        x: Math.round(bounds.x),
+        y: Math.round(bounds.y),
+        width: Math.round(bounds.width),
+        height: Math.round(bounds.height),
+      };
+      newView.setBounds(roundedBounds);
+    }
   }
   activeTabId = tabId;
 });
@@ -1479,13 +1552,20 @@ ipcMain.on('destroy-view', (event, tabId) => {
 ipcMain.on('set-browser-view-bounds', (event, bounds) => {
   const view = tabViews.get(activeTabId);
   if (view && mainWindow) {
-    const roundedBounds = {
-      x: Math.round(bounds.x),
-      y: Math.round(bounds.y),
-      width: Math.round(bounds.width),
-      height: Math.round(bounds.height),
-    };
-    view.setBounds(roundedBounds);
+    if (bounds.width === 0 || bounds.height === 0) {
+      mainWindow.removeBrowserView(view);
+    } else {
+      if (!mainWindow.getBrowserViews().includes(view)) {
+        mainWindow.addBrowserView(view);
+      }
+      const roundedBounds = {
+        x: Math.round(bounds.x),
+        y: Math.round(bounds.y),
+        width: Math.round(bounds.width),
+        height: Math.round(bounds.height),
+      };
+      view.setBounds(roundedBounds);
+    }
   }
 });
 
@@ -1772,7 +1852,7 @@ let activeLlmProvider = store.get('active_llm_provider') || 'ollama';
 const llmConfigs = {
   ollama: {
     baseUrl: store.get('ollama_base_url') || 'http://127.0.0.1:11434',
-    model: store.get('ollama_model') || 'deepseek-r1:8b',
+    model: store.get('ollama_model') || 'deepseek-r1:1.5b',
     localLlmMode: store.get('local_llm_mode') || 'normal'
   },
   google: {
@@ -1849,7 +1929,7 @@ ipcMain.handle('get-stored-api-keys', () => {
     groq_api_key: store.get('groq_api_key') || '',
     xai_api_key: store.get('xai_api_key') || '',
     ollama_base_url: store.get('ollama_base_url') || 'http://127.0.0.1:11434',
-    ollama_model: store.get('ollama_model') || 'llama3.2',
+    ollama_model: store.get('ollama_model') || 'deepseek-r1:1.5b',
     ollama_enabled: store.get('ollama_enabled') !== false,
     active_llm_provider: store.get('active_llm_provider') || 'ollama',
   };
@@ -3103,22 +3183,65 @@ app.whenReady().then(() => {
   ipcMain.handle('web-search-rag', async (event, query) => {
     try {
       console.log(`[RAG] Performing web search for: ${query}`);
-      // Use Google Search with a simple User-Agent to get snippets
-      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-      const response = await fetch(searchUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
-      });
-      const html = await response.text();
-
-      // Simple regex to extract search snippets (approximate)
-      const snippets = [];
-      const divRegex = /<div class="VwiC3b[^>]*>([\s\S]*?)<\/div>/g;
-      let match;
-      while ((match = divRegex.exec(html)) !== null && snippets.length < 5) {
-        const cleanSnippet = match[1].replace(/<[^>]*>/g, '').trim();
-        if (cleanSnippet) snippets.push(cleanSnippet);
+      
+      // 1. Try configured API providers first (Tavily, Brave, SerpAPI)
+      if (webSearchProvider) {
+        const availableProviders = webSearchProvider.getAvailableProviders();
+        if (availableProviders.length > 0) {
+          try {
+            console.log(`[RAG] Using API provider [${availableProviders[0]}] for enhanced results`);
+            const results = await webSearchProvider.search(query, availableProviders[0], 5);
+            return results.map(r => `${r.title}: ${r.snippet}`);
+          } catch (apiErr) {
+            console.warn('[RAG] API search failed, falling back to scrapper:', apiErr.message);
+          }
+        }
       }
 
+      // 2. Fallback to Google Scrapper with multiple selectors
+      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en`;
+      const response = await fetch(searchUrl, {
+        headers: { 
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
+        }
+      });
+
+      if (!response.ok) {
+        console.warn(`[RAG] Google Search responded with status: ${response.status}`);
+        return [];
+      }
+
+      const html = await response.text();
+      const snippets = [];
+      
+      // Improved Regex for modern Google Snippets
+      const selectors = [
+        /<div[^>]+class="VwiC3b[^>]*>([\s\S]*?)<\/div>/g,
+        /<div[^>]+class="BNeawe s3v9rd AP7Wnd"[^>]*>([\s\S]*?)<\/div>/g,
+        /<span[^>]+class="hgKElc"[^>]*>([\s\S]*?)<\/span>/g, // Featured Snippet
+        /<div[^>]+class="yY967"[^>]*>([\s\S]*?)<\/div>/g,
+        /<div[^>]+class="MUFw9c[^>]*>([\s\S]*?)<\/div>/g
+      ];
+
+      for (const regex of selectors) {
+        let match;
+        while ((match = regex.exec(html)) !== null && snippets.length < 5) {
+          let cleanSnippet = match[1]
+            .replace(/<[^>]*>/g, '') // Remove HTML tags
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .trim();
+          
+          if (cleanSnippet && cleanSnippet.length > 20 && !snippets.includes(cleanSnippet)) {
+            snippets.push(cleanSnippet);
+          }
+        }
+      }
+
+      console.log(`[RAG] Search retrieved ${snippets.length} snippets`);
       return snippets;
     } catch (error) {
       console.error('[RAG] Web search failed:', error);

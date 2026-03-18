@@ -5,6 +5,7 @@ export interface AiOverviewRequest {
   query: string;
   provider: string;
   model?: string;
+  baseUrl?: string;
   localLlmMode?: LlmMode;
   context?: string;
   extraInstructions?: string;
@@ -58,6 +59,7 @@ export async function fetchAiOverview(options: AiOverviewRequest): Promise<AiOve
     ...reasoningOptions,
     provider: options.provider,
     model: modelName,
+    baseUrl: options.baseUrl,
   };
 
   const start = Date.now();
