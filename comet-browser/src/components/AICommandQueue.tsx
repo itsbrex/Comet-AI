@@ -73,10 +73,10 @@ export const AICommandQueue: React.FC<AICommandQueueProps> = ({
 
     return (
         <motion.div
-            initial={{ opacity: 0, x: -40, scale: 0.9 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -40, scale: 0.9 }}
-            className="fixed bottom-6 left-6 z-[10000] w-80 bg-[#0a0a0f]/90 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden"
+            initial={{ opacity: 0, y: 40, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 40, scale: 0.9 }}
+            className="absolute bottom-6 left-4 right-4 z-[100] bg-[#0a0a0f]/95 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden"
         >
             {/* Glossy Header */}
             <div className="px-5 py-4 bg-gradient-to-r from-sky-500/10 to-transparent border-b border-white/5 flex items-center justify-between">

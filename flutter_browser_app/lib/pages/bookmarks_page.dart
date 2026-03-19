@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/browser_model.dart';
 import '../models/favorite_model.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../models/window_model.dart';
 import '../webview_tab.dart';
 import '../models/webview_model.dart';
 
 class BookmarksPage extends StatelessWidget {
-  const BookmarksPage({Key? key}) : super(key: key);
+  const BookmarksPage({super.key});
 
   @override
   Widget build(BuildContext context) {

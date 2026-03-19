@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:path_provider/path_provider.dart';
@@ -33,27 +32,27 @@ class SyncService {
   Future<void> initialize(String userId, {String? customDeviceId}) async {
     this.userId = userId;
     if (customDeviceId != null) {
-      this.deviceId = customDeviceId;
+      deviceId = customDeviceId;
     } else {
       try {
         final dir = await getApplicationDocumentsDirectory();
         final file = File('${dir.path}/device_id.txt');
         if (await file.exists()) {
-          this.deviceId = await file.readAsString();
+          deviceId = await file.readAsString();
         } else {
-          this.deviceId = const Uuid().v4();
-          await file.writeAsString(this.deviceId!);
+          deviceId = const Uuid().v4();
+          await file.writeAsString(deviceId!);
         }
       } catch (e) {
         print('[Sync] Error loading/saving device ID: $e');
-        this.deviceId = const Uuid().v4();
+        deviceId = const Uuid().v4();
       }
     }
     print('[Sync] Initialized for user: $userId, device: $deviceId');
   }
 
   Future<void> connect(String targetDeviceId) async {
-    this.remoteDeviceId = targetDeviceId;
+    remoteDeviceId = targetDeviceId;
     _signalRef = FirebaseDatabase.instance.ref('p2p_signals/$userId/$deviceId');
 
     _signalRef!.onValue.listen((event) {
@@ -273,8 +272,9 @@ class SyncService {
                 msg['authenticated'] == true) {
               if (!completer.isCompleted) completer.complete();
             } else if (msg['type'] == 'error' && msg['code'] == 'AUTH_FAILED') {
-              if (!completer.isCompleted)
+              if (!completer.isCompleted) {
                 completer.completeError('AUTH_FAILED');
+              }
             }
           } catch (_) {}
           _handleDesktopMessage(data);

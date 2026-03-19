@@ -6,7 +6,7 @@ import 'dart:async';
 import '../sync_service.dart';
 
 class ConnectDesktopPage extends StatefulWidget {
-  const ConnectDesktopPage({Key? key}) : super(key: key);
+  const ConnectDesktopPage({super.key});
 
   @override
   State<ConnectDesktopPage> createState() => _ConnectDesktopPageState();
@@ -57,21 +57,21 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        backgroundColor: Color(0xFF121212),
+        backgroundColor: const Color(0xFF121212),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Enter Pairing Code',
+        title: const Text('Enter Pairing Code',
             style: TextStyle(color: Colors.white, fontFamily: 'Outfit')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Enter the 6-digit code shown on your desktop screen.',
+            const Text('Enter the 6-digit code shown on your desktop screen.',
                 style: TextStyle(color: Colors.white70, fontSize: 13)),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             TextField(
               autofocus: true,
               keyboardType: TextInputType.number,
               maxLength: 6,
-              style: TextStyle(
+              style: const TextStyle(
                   color: Colors.white,
                   letterSpacing: 10,
                   fontSize: 24,
@@ -92,18 +92,18 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: Colors.white38)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white38)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF00E5FF),
+                backgroundColor: const Color(0xFF00E5FF),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12))),
             onPressed: () async {
               Navigator.pop(context);
               await _connect(ip, port, deviceId, pairingCode);
             },
-            child: Text('Connect', style: TextStyle(color: Colors.black)),
+            child: const Text('Connect', style: TextStyle(color: Colors.black)),
           ),
         ],
       ),
@@ -131,7 +131,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Connected to desktop at $ip'),
-            backgroundColor: Color(0xFF00E676),
+            backgroundColor: const Color(0xFF00E676),
           ),
         );
       }
@@ -177,12 +177,12 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(
+        title: const Text(
           'Connect to Desktop',
           style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold),
         ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -199,17 +199,17 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
     return SingleChildScrollView(
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(20.0),
+          const Padding(
+            padding: EdgeInsets.all(20.0),
             child: Column(
               children: [
-                const Icon(
+                Icon(
                   Icons.qr_code_scanner,
                   size: 60,
                   color: Color(0xFF00E5FF),
                 ),
-                const SizedBox(height: 10),
-                const Text(
+                SizedBox(height: 10),
+                Text(
                   'Scan QR Code',
                   style: TextStyle(
                     fontSize: 24,
@@ -254,8 +254,8 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
             ),
           ),
           if (_discoveredDevices.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 30, 20, 10),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 30, 20, 10),
               child: Row(
                 children: [
                   Icon(Icons.devices, color: Colors.white38, size: 16),
@@ -274,7 +274,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
             ),
             ListView.builder(
               shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
+              physics: const NeverScrollableScrollPhysics(),
               itemCount: _discoveredDevices.length,
               itemBuilder: (context, index) {
                 final device = _discoveredDevices[index];
@@ -289,22 +289,22 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                         onTap: () => _showPairingCodeDialog(
                             device['ip'], device['port'], device['deviceId']),
                         leading: Container(
-                          padding: EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Color(0xFF00E5FF).withOpacity(0.1),
+                            color: const Color(0xFF00E5FF).withOpacity(0.1),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(Icons.desktop_windows,
+                          child: const Icon(Icons.desktop_windows,
                               color: Color(0xFF00E5FF)),
                         ),
                         title: Text(device['deviceName'],
-                            style: TextStyle(
+                            style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold)),
                         subtitle: Text(device['ip'],
-                            style: TextStyle(color: Colors.white38)),
+                            style: const TextStyle(color: Colors.white38)),
                         trailing:
-                            Icon(Icons.chevron_right, color: Colors.white24),
+                            const Icon(Icons.chevron_right, color: Colors.white24),
                       ),
                     ),
                   ),
@@ -312,8 +312,8 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
               },
             ),
           ] else
-            Padding(
-              padding: const EdgeInsets.all(40.0),
+            const Padding(
+              padding: EdgeInsets.all(40.0),
               child: Column(
                 children: [
                   SizedBox(
@@ -332,7 +332,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Container(
-                padding: EdgeInsets.all(15),
+                padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
                   color: Colors.red.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(15),
@@ -340,11 +340,11 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.error_outline, color: Colors.red),
-                    SizedBox(width: 10),
+                    const Icon(Icons.error_outline, color: Colors.red),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(errorMessage!,
-                          style: TextStyle(color: Colors.white70)),
+                          style: const TextStyle(color: Colors.white70)),
                     ),
                   ],
                 ),
@@ -371,21 +371,21 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
               height: 100,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   colors: [Color(0xFF00E676), Color(0xFF00C853)],
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Color(0xFF00E676).withOpacity(0.3),
+                    color: const Color(0xFF00E676).withOpacity(0.3),
                     blurRadius: 20,
                     spreadRadius: 5,
                   ),
                 ],
               ),
-              child: Icon(Icons.check, size: 50, color: Colors.white),
+              child: const Icon(Icons.check, size: 50, color: Colors.white),
             ),
-            SizedBox(height: 30),
-            Text(
+            const SizedBox(height: 30),
+            const Text(
               'Connected!',
               style: TextStyle(
                 fontSize: 28,
@@ -394,28 +394,28 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                 fontFamily: 'Outfit',
               ),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             Text(
               'Desktop: $desktopIp',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 16,
                 color: Colors.white70,
                 fontFamily: 'Inter',
               ),
             ),
-            SizedBox(height: 30),
+            const SizedBox(height: 30),
             ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: Container(
-                  padding: EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: Colors.white.withOpacity(0.1)),
                   ),
-                  child: Column(
+                  child: const Column(
                     children: [
                       Icon(Icons.touch_app, size: 30, color: Color(0xFF00E5FF)),
                       SizedBox(height: 15),
@@ -446,7 +446,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                 ),
               ),
             ),
-            SizedBox(height: 40),
+            const SizedBox(height: 40),
             TextButton(
               onPressed: () {
                 SyncService().disconnectFromDesktop();
@@ -456,7 +456,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                 });
                 _startDiscovery(); // Restart discovery
               },
-              child: Text(
+              child: const Text(
                 'DISCONNECT SESSION',
                 style: TextStyle(
                   color: Colors.redAccent,
@@ -473,13 +473,13 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
 
   Widget _buildInstructionCard() {
     return Container(
-      padding: EdgeInsets.all(15),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.03),
         borderRadius: BorderRadius.circular(15),
         border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
-      child: Row(
+      child: const Row(
         children: [
           Icon(Icons.security, color: Colors.white24, size: 20),
           SizedBox(width: 12),

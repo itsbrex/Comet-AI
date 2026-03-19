@@ -6,8 +6,13 @@ import { useRouter } from 'next/navigation';
 import { 
   Maximize2, Minimize2, FileText, Download, Wifi, WifiOff, X, 
   ChevronLeft, ChevronRight, ChevronDown, Zap, Send, Paperclip, 
-  FolderOpen, ScanLine, MoreVertical, Sparkles, Image as ImageIcon, 
-  Share2, CopyIcon, Search, Trash2, Printer, Cpu, Brain, Rocket, Camera, Terminal, MoreHorizontal
+  FolderOpen, ScanLine,
+  MoreVertical,
+  Sparkles,
+  Image as ImageIcon,
+  Eye, EyeOff, Brain, Search, Loader2, MousePointerClick,
+  CheckCircle2, AlertCircle,
+  Share2, CopyIcon, Trash2, Printer, Cpu, Rocket, Camera, Terminal, MoreHorizontal
 } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 import ReactMarkdown from 'react-markdown';
@@ -56,6 +61,7 @@ type ExtendedChatMessage = ChatMessage & {
   ocrLabel?: string;
   thinkingSteps?: ThinkingStep[];
   thinkText?: string;
+  actionLogs?: { type: string, output: string, success: boolean }[];
 };
 
 interface Attachment {
@@ -336,15 +342,18 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
         setCurrentCommandIndex(0);
         
         // Wait for all commands to complete
-        await new Promise<void>((resolve) => {
-          const timeout = setTimeout(resolve, 300000); // 5 minutes max to allow for manual user permission
+        const finalCommands = await new Promise<AICommand[]>((resolve) => {
+          const timeout = setTimeout(() => resolve([]), 300000); // 5 minutes max to allow for manual user permission
+          let isResolved = false;
           const checkStatus = () => {
+            if (isResolved) return;
             setCommandQueue(q => {
               const allDone = q.length === 0 || q.every(c => c.status === 'completed' || c.status === 'failed');
-              if (allDone) {
+              if (allDone && !isResolved) {
+                isResolved = true;
                 clearTimeout(timeout);
-                resolve();
-              } else {
+                resolve(q);
+              } else if (!isResolved) {
                 setTimeout(checkStatus, 500);
               }
               return q;
@@ -355,17 +364,16 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
         
         resolveThinkingStep(cmdId, 'done');
 
-        // 6. Synthesis (Follow-up) — Use local history to avoid state lag
+        // 6. Synthesis (Follow-up)
         const synthId = addThinkingStep('Synthesizing Results...');
-        const actionResults = aiCommands.map(c => 
+        const actionResults = finalCommands.map(c => 
           `[Action ${c.type}]: ${c.status === 'completed' ? (c.output || 'Success') : ('Error: ' + (c.error || 'Failed'))}`
         ).join('\n');
         
-        // Build the synthesis history locally from the initial history + response + results
         const synthHistory: ChatMessage[] = [
           ...initialHistory,
           { role: 'assistant', content: response.text },
-          { role: 'user', content: `Action outputs:\n${actionResults}\n\nPlease analyze these and give me the FINAL ANSWER now.` }
+          { role: 'user', content: `Action outputs for the steps above:\n${actionResults}\n\nPlease analyze these and provide the COMPREHENSIVE FINAL ANSWER to the original request now. If any step failed, explain why and suggest an alternative if possible.` }
         ];
 
         setMessages(prev => [...prev, { role: 'model', content: '' }] as ExtendedChatMessage[]);
@@ -516,8 +524,38 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
       }
       
       setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'completed', output } : cmd));
+      
+      // Update chat with progress action log
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last && last.role === 'model') {
+          const updated = [...prev];
+          const actionLogs = last.actionLogs || [];
+          updated[prev.length - 1] = { 
+             ...last, 
+             actionLogs: [...actionLogs, { type: command.type, output, success: true }]
+          };
+          return updated;
+        }
+        return prev;
+      });
+
     } catch (err: any) {
       setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'failed', error: err.message } : cmd));
+      
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last && last.role === 'model') {
+          const updated = [...prev];
+          const actionLogs = last.actionLogs || [];
+          updated[prev.length - 1] = { 
+             ...last, 
+             actionLogs: [...actionLogs, { type: command.type, output: err.message, success: false }]
+          };
+          return updated;
+        }
+        return prev;
+      });
     } finally {
       processingQueueRef.current = false;
       setCurrentCommandIndex(prev => prev + 1);
@@ -729,7 +767,18 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
                </div>
             </motion.div>
           )}
-          {messages.map((msg, i) => (
+          {messages.map((msg, i) => {
+            let displayContent = msg.content;
+            let displayThought = msg.thinkText;
+            
+            // Extract <think> tags from content if present
+            const thinkMatch = displayContent.match(/<think>([\s\S]*?)(?:<\/think>|$)/i);
+            if (thinkMatch) {
+              displayThought = thinkMatch[1].trim();
+              displayContent = displayContent.replace(/<think>[\s\S]*?(?:<\/think>|$)/i, '').trim();
+            }
+
+            return (
             <motion.div 
               key={i} 
               layout 
@@ -737,9 +786,9 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
               animate={{ opacity: 1, y: 0, scale: 1 }} 
               className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
             >
-              {msg.role === 'model' && (msg.thinkingSteps || msg.thinkText) && (
+              {msg.role === 'model' && (msg.thinkingSteps || displayThought) && (
                 <div className="w-full max-w-[90%] mb-2">
-                  <ThinkingPanel steps={msg.thinkingSteps} thinkText={msg.thinkText} initialOpen={false} />
+                  <ThinkingPanel steps={msg.thinkingSteps} thinkText={displayThought} initialOpen={false} />
                 </div>
               )}
               
@@ -765,15 +814,31 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
                     ) : <code className="bg-white/10 px-2 py-0.5 rounded-lg text-[12px] font-mono text-sky-300" {...rest}>{children}</code>;
                   }
                 }}>
-                  {msg.content}
+                  {displayContent}
                 </ReactMarkdown>
+
+                {msg.actionLogs && msg.actionLogs.length > 0 && (
+                   <div className="mt-5 flex flex-col gap-2">
+                     {msg.actionLogs.map((log, idx) => (
+                       <div key={idx} className={`px-4 py-3 rounded-2xl flex flex-col gap-1.5 text-[11px] border ${log.success ? 'bg-sky-500/10 border-sky-500/20 text-sky-200' : 'bg-red-500/10 border-red-500/20 text-red-200'}`}>
+                          <div className="flex items-center gap-2 font-black uppercase tracking-widest">
+                             {log.success ? <CheckCircle2 size={14} className="text-sky-400" /> : <AlertCircle size={14} className="text-red-400" />}
+                             <span>{log.type.replace(/_/g, ' ')}</span>
+                          </div>
+                          <div className="opacity-80 leading-relaxed font-mono text-[10px] break-words">
+                             {log.output}
+                          </div>
+                       </div>
+                     ))}
+                   </div>
+                )}
                 
                 {msg.role === 'model' && (
-                  <MessageActions content={msg.content} index={i} copiedIndex={copiedMessageIndex} onCopy={() => {}} onShare={() => {}} />
+                  <MessageActions content={displayContent} index={i} copiedIndex={copiedMessageIndex} onCopy={() => {}} onShare={() => {}} />
                 )}
               </div>
             </motion.div>
-          ))}
+          )})}
           {isLoading && <ThinkingIndicator />}
         </AnimatePresence>
         <div ref={messagesEndRef} />

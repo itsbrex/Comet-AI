@@ -1044,7 +1044,7 @@ class _CrossPlatformSettingsState extends State<CrossPlatformSettings> {
                               ),
                             )
                           : DropdownButtonFormField<String>(
-                              value: availableModels.contains(modelController.text)
+                              initialValue: availableModels.contains(modelController.text)
                                   ? modelController.text
                                   : (availableModels.isNotEmpty
                                       ? availableModels.first

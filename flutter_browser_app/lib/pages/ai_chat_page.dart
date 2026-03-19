@@ -5,8 +5,7 @@ import '../sync_service.dart';
 
 class FullScreenAIChat extends StatefulWidget {
   final String initialMessage;
-  const FullScreenAIChat({Key? key, required this.initialMessage})
-      : super(key: key);
+  const FullScreenAIChat({super.key, required this.initialMessage});
 
   @override
   State<FullScreenAIChat> createState() => _FullScreenAIChatState();
@@ -93,14 +92,14 @@ class _FullScreenAIChatState extends State<FullScreenAIChat> {
         ),
       ),
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
               Colors.black,
-              const Color(0xFF1A0033),
-              const Color(0xFF001A33),
+              Color(0xFF1A0033),
+              Color(0xFF001A33),
             ],
           ),
         ),

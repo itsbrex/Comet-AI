@@ -183,7 +183,7 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
             }
           },
           child: Scaffold(
-              appBar: BrowserAppBar(), 
+              appBar: const BrowserAppBar(), 
               body: Stack(
                 children: [
                   _buildWebViewTabsContent(),

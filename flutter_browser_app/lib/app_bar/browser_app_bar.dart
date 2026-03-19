@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_browser/models/webview_model.dart';
 
 class BrowserAppBar extends StatefulWidget implements PreferredSizeWidget {
-  BrowserAppBar({super.key});
+  const BrowserAppBar({super.key});
 
   @override
   State<BrowserAppBar> createState() => _BrowserAppBarState();

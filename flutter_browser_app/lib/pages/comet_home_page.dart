@@ -8,14 +8,13 @@ import '../webview_tab.dart';
 import 'ai_chat_page.dart';
 import 'agent_chat_page.dart';
 import '../url_predictor.dart';
-import 'settings/main.dart';
 import 'settings/android_settings.dart';
 import 'dart:ui' as ui;
 
 class CometHomePage extends StatefulWidget {
   final Function(String)? onSearch;
 
-  const CometHomePage({Key? key, this.onSearch}) : super(key: key);
+  const CometHomePage({super.key, this.onSearch});
 
   @override
   State<CometHomePage> createState() => _CometHomePageState();
@@ -335,7 +334,7 @@ class _CometHomePageState extends State<CometHomePage>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
+            const Text(
               "BOOKMARKS",
               style: TextStyle(
                 color: Colors.white38,
@@ -722,7 +721,7 @@ class _CometHomePageState extends State<CometHomePage>
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               hintText: "Issue a command...",
-              hintStyle: TextStyle(color: Colors.white24),
+              hintStyle: const TextStyle(color: Colors.white24),
               filled: true,
               fillColor: Colors.white.withOpacity(0.05),
               border: OutlineInputBorder(

@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_browser/models/browser_model.dart';
 import 'package:flutter_browser/models/webview_model.dart';
@@ -14,7 +13,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:window_manager_plus/window_manager_plus.dart';
 import 'package:path/path.dart' as p;
@@ -332,7 +330,6 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
           primary: Color(0xFF00E5FF),
           secondary: Color(0xFFD500F9),
           surface: Color(0xFF121212),
-          background: Colors.black,
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,

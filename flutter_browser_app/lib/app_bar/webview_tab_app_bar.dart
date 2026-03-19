@@ -470,7 +470,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
   }
 
   Widget _buildMoreAction() {
-    return Container(
+    return SizedBox(
       width: 44,
       child: PopupMenuButton<String>(
         padding: EdgeInsets.zero,

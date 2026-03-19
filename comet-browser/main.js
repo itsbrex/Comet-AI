@@ -3260,53 +3260,76 @@ app.whenReady().then(() => {
         }
       }
 
-      // 2. Fallback to Google Scrapper with multiple selectors
-      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en`;
-      const response = await fetch(searchUrl, {
-        headers: { 
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
+      // 2. Fallback to Robust Scrapper
+      const searchEngines = [
+        {
+          name: 'Google',
+          url: `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en`,
+          selectors: [
+            /<div[^>]+class="VwiC3b[^>]*>([\s\S]*?)<\/div>/g,
+            /<div[^>]+class="BNeawe s3v9rd AP7Wnd"[^>]*>([\s\S]*?)<\/div>/g,
+            /<span[^>]+class="hgKElc"[^>]*>([\s\S]*?)<\/span>/g,
+            /<div[^>]+class="yY967"[^>]*>([\s\S]*?)<\/div>/g,
+            /<div[^>]+class="MUFw9c[^>]*>([\s\S]*?)<\/div>/g
+          ]
+        },
+        {
+          name: 'DuckDuckGo',
+          url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+          selectors: [
+            /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g,
+            /<div[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/div>/g
+          ]
         }
-      });
-
-      if (!response.ok) {
-        console.warn(`[RAG] Google Search responded with status: ${response.status}`);
-        return [];
-      }
-
-      const html = await response.text();
-      const snippets = [];
-      
-      // Improved Regex for modern Google Snippets
-      const selectors = [
-        /<div[^>]+class="VwiC3b[^>]*>([\s\S]*?)<\/div>/g,
-        /<div[^>]+class="BNeawe s3v9rd AP7Wnd"[^>]*>([\s\S]*?)<\/div>/g,
-        /<span[^>]+class="hgKElc"[^>]*>([\s\S]*?)<\/span>/g, // Featured Snippet
-        /<div[^>]+class="yY967"[^>]*>([\s\S]*?)<\/div>/g,
-        /<div[^>]+class="MUFw9c[^>]*>([\s\S]*?)<\/div>/g
       ];
 
-      for (const regex of selectors) {
-        let match;
-        while ((match = regex.exec(html)) !== null && snippets.length < 5) {
-          let cleanSnippet = match[1]
-            .replace(/<[^>]*>/g, '') // Remove HTML tags
-            .replace(/&amp;/g, '&')
-            .replace(/&quot;/g, '"')
-            .replace(/&#39;/g, "'")
-            .trim();
-          
-          if (cleanSnippet && cleanSnippet.length > 20 && !snippets.includes(cleanSnippet)) {
-            snippets.push(cleanSnippet);
+      for (const engine of searchEngines) {
+        try {
+          console.log(`[RAG] Attempting search with ${engine.name}...`);
+          const response = await fetch(engine.url, {
+            headers: { 
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+              'Accept-Language': 'en-US,en;q=0.9',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
+            }
+          });
+
+          if (!response.ok) continue;
+
+          const html = await response.text();
+          const snippets = [];
+
+          for (const regex of engine.selectors) {
+            let match;
+            regex.lastIndex = 0;
+            while ((match = regex.exec(html)) !== null && snippets.length < 5) {
+              let cleanSnippet = match[1]
+                .replace(/<[^>]*>/g, '') // Remove HTML tags
+                .replace(/&amp;/g, '&')
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'")
+                .replace(/\s+/g, ' ')
+                .trim();
+              
+              if (cleanSnippet && cleanSnippet.length > 20 && !snippets.includes(cleanSnippet)) {
+                snippets.push(cleanSnippet);
+              }
+            }
+            if (snippets.length >= 3) break;
           }
+
+          if (snippets.length > 0) {
+            console.log(`[RAG] ${engine.name} search retrieved ${snippets.length} snippets`);
+            return snippets;
+          }
+        } catch (e) {
+          console.warn(`[RAG] ${engine.name} search failed:`, e.message);
         }
       }
 
-      console.log(`[RAG] Search retrieved ${snippets.length} snippets`);
-      return snippets;
+      return [];
     } catch (error) {
-      console.error('[RAG] Web search failed:', error);
+      console.error('[RAG] Web search failed completely:', error);
       return [];
     }
   });

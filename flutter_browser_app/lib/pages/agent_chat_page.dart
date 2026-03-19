@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:provider/provider.dart';
 import 'package:collection/collection.dart';
@@ -17,10 +16,10 @@ class AgentChatPage extends StatefulWidget {
   final InAppWebViewController? webViewController;
 
   const AgentChatPage({
-    Key? key,
+    super.key,
     required this.initialTask,
     this.webViewController,
-  }) : super(key: key);
+  });
 
   @override
   State<AgentChatPage> createState() => _AgentChatPageState();
