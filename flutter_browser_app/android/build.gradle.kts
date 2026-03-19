@@ -1,5 +1,4 @@
 import com.android.build.gradle.LibraryExtension
-import org.gradle.kotlin.dsl.configure
 
 allprojects {
     repositories {
@@ -18,13 +17,15 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+
 subprojects {
     project.evaluationDependsOn(":app")
 }
+
 subprojects {
     if (project.name == "qr_code_scanner") {
         plugins.withId("com.android.library") {
-            project.extensions.configure<LibraryExtension> {
+            project.extensions.getByType<LibraryExtension>().apply {
                 if (namespace.isNullOrBlank()) {
                     namespace = "net.touchcapture.qr.flutterqr"
                 }
