@@ -805,31 +805,39 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
                     <span className="text-[9px] font-black uppercase tracking-widest text-sky-400/60">Comet Response</span>
                   </div>
                 )}
-                
-                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={{
-                  code({ node, className, children, ...rest }) {
-                    const match = /language-(\w+)/.exec(className || '');
-                    return match ? (
-                      <div className="my-5 rounded-3xl overflow-hidden border border-white/5 shadow-2xl"><SyntaxHighlighter style={dracula as any} language={match[1]} PreTag="div" customStyle={{ margin: 0, padding: '1.5rem', fontSize: '11px' }}>{String(children)}</SyntaxHighlighter></div>
-                    ) : <code className="bg-white/10 px-2 py-0.5 rounded-lg text-[12px] font-mono text-sky-300" {...rest}>{children}</code>;
-                  }
-                }}>
-                  {displayContent}
-                </ReactMarkdown>
-
+                {msg.isOcr ? (
+                  <CollapsibleOCRMessage label={msg.ocrLabel || 'EXTRACTED_DATA'} content={displayContent} />
+                ) : (
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={{
+                    code({ node, className, children, ...rest }) {
+                      const match = /language-(\w+)/.exec(className || '');
+                      return match ? (
+                        <div className="my-5 rounded-3xl overflow-hidden border border-white/5 shadow-2xl"><SyntaxHighlighter style={dracula as any} language={match[1]} PreTag="div" customStyle={{ margin: 0, padding: '1.5rem', fontSize: '11px' }}>{String(children)}</SyntaxHighlighter></div>
+                      ) : <code className="bg-white/10 px-2 py-0.5 rounded-lg text-[12px] font-mono text-sky-300" {...rest}>{children}</code>;
+                    }
+                  }}>
+                    {displayContent}
+                  </ReactMarkdown>
+                )}
                 {msg.actionLogs && msg.actionLogs.length > 0 && (
-                   <div className="mt-5 flex flex-col gap-2">
-                     {msg.actionLogs.map((log, idx) => (
-                       <div key={idx} className={`px-4 py-3 rounded-2xl flex flex-col gap-1.5 text-[11px] border ${log.success ? 'bg-sky-500/10 border-sky-500/20 text-sky-200' : 'bg-red-500/10 border-red-500/20 text-red-200'}`}>
-                          <div className="flex items-center gap-2 font-black uppercase tracking-widest">
-                             {log.success ? <CheckCircle2 size={14} className="text-sky-400" /> : <AlertCircle size={14} className="text-red-400" />}
-                             <span>{log.type.replace(/_/g, ' ')}</span>
-                          </div>
-                          <div className="opacity-80 leading-relaxed font-mono text-[10px] break-words">
-                             {log.output}
-                          </div>
-                       </div>
-                     ))}
+                   <div className="mt-5 flex flex-wrap gap-2">
+                     {msg.actionLogs.map((log, idx) => {
+                       const isSearch = log.type.includes('SEARCH');
+                       const isRead = log.type.includes('READ');
+                       
+                       return (
+                         <div key={idx} className={`px-3 py-1.5 rounded-full flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest border transition-all duration-300 hover:scale-105 shadow-sm active:scale-95 cursor-default ${
+                           log.success 
+                           ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' 
+                           : 'bg-red-500/10 border-red-500/30 text-red-400'
+                         }`} title={log.output}>
+                            {isSearch && <Search size={12} />}
+                            {isRead && <FileText size={12} />}
+                            {!isSearch && !isRead && (log.success ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />)}
+                            <span>{log.type.replace(/_/g, ' ')}</span>
+                         </div>
+                       );
+                     })}
                    </div>
                 )}
                 

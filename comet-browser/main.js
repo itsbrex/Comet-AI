@@ -1974,7 +1974,23 @@ ipcMain.handle('extract-page-content', async () => {
   const view = tabViews.get(activeTabId);
   if (!view) return { error: 'No active view' };
   try {
-    const content = await view.webContents.executeJavaScript(`document.body.innerText`);
+    const content = await view.webContents.executeJavaScript(`
+      (() => {
+        // Clone body to avoid mutating the live page
+        const bodyContent = document.body.innerText || "";
+        
+        // Alternative: more aggressive cleaning
+        const scripts = document.querySelectorAll('script, style, nav, footer, header');
+        scripts.forEach(s => s.remove());
+        
+        const cleanText = document.body.innerText
+          .replace(/\\s+/g, ' ')
+          .replace(/[\\r\\n]+/g, '\\n')
+          .trim();
+          
+        return cleanText || bodyContent;
+      })()
+    `);
     return { content };
   } catch (e) {
     return { error: e.message };
