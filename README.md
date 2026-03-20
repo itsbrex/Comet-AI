@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.1-green)]()
+[![Version](https://img.shields.io/badge/Version-0.2.1.1-green)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
 [![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
@@ -86,7 +86,9 @@ Before any content reaches the LLM, dangerous patterns are filtered:
 - Prompt injection attempts (jailbreak patterns, role-override attempts)
 
 ### 3. Human-in-the-Loop (HITL)
-Every native OS action — clicking outside the browser, running shell commands, opening apps — requires **explicit user approval** via a permission modal. High-risk actions show a QR code for mobile verification.
+Every native OS action — clicking outside the browser, running shell commands, opening apps — requires **explicit user approval** via a permission modal. 
+- **Low/Medium Risk:** Can be approved instantly with `Shift+Tab`.
+- **High Risk:** Shows a QR code for secure **Cross-Device Authorization**. Scan it with Comet Mobile app to view and match a 6-digit PIN before the action is unblocked.
 
 The AI generates **intent**, not execution. Even if socially engineered, it cannot act without your approval.
 

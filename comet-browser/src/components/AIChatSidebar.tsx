@@ -820,6 +820,30 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [permissionPending]);
 
+  // Listen for mobile high-risk approval
+  useEffect(() => {
+    if (window.electronAPI && window.electronAPI.onMobileApproveHighRisk) {
+      const unsub = window.electronAPI.onMobileApproveHighRisk((data: { pin: string, id: string }) => {
+        setPermissionPending((currentPending: any) => {
+          if (currentPending && currentPending.context.risk === 'high') {
+            try {
+              const qrData = JSON.parse(currentPending.context.highRiskQr || '{}');
+              // Validate both PIN and action Token to prevent cross-action hijacking
+              if (qrData.pin === data.pin && qrData.token === data.id) {
+                currentPending.resolve(true);
+                return null;
+              }
+            } catch (e) {
+              console.error("Failed to parse high risk QR data for PIN validation", e);
+            }
+          }
+          return currentPending;
+        });
+      });
+      return () => unsub();
+    }
+  }, []);
+
   // Fetch Ollama models
   useEffect(() => {
     if (aiProvider === 'ollama') {

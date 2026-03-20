@@ -501,6 +501,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getWifiSyncQr: () => ipcRenderer.invoke('get-wifi-sync-qr'),
   getWifiSyncInfo: () => ipcRenderer.invoke('get-wifi-sync-info'),
   generateHighRiskQr: (actionId) => ipcRenderer.invoke('generate-high-risk-qr', actionId),
+  onMobileApproveHighRisk: (callback) => {
+    const subscription = (event, data) => callback(data);
+    ipcRenderer.on('mobile-approve-high-risk', subscription);
+    return () => ipcRenderer.removeListener('mobile-approve-high-risk', subscription);
+  },
 
   // Window utilities
   bringWindowToTop: () => ipcRenderer.invoke('bring-window-to-top'),

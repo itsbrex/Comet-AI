@@ -49,6 +49,36 @@ class SyncService {
       }
     }
     print('[Sync] Initialized for user: $userId, device: $deviceId');
+    _attemptAutoReconnect();
+  }
+
+  Future<void> _saveLastConnectedDevice(String ip, int port, String targetDeviceId, String? pairingCode) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/last_connected_device.json');
+      await file.writeAsString(jsonEncode({
+        'ip': ip,
+        'port': port,
+        'deviceId': targetDeviceId,
+        'pairingCode': pairingCode,
+      }));
+    } catch (e) {
+      print('[Sync] Failed to save last connected device: $e');
+    }
+  }
+
+  Future<void> _attemptAutoReconnect() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/last_connected_device.json');
+      if (await file.exists()) {
+        final data = jsonDecode(await file.readAsString());
+        print('[Sync] Attempting auto-reconnect to: ${data['ip']}');
+        await connectToDesktop(data['ip'], data['port'], data['deviceId'], pairingCode: data['pairingCode']);
+      }
+    } catch (e) {
+      print('[Sync] Auto-reconnect failed or no previous device: $e');
+    }
   }
 
   Future<void> connect(String targetDeviceId) async {
@@ -177,6 +207,11 @@ class SyncService {
         ),
       );
     }
+    if (isConnectedToDesktop && _desktopSocket != null) {
+      _desktopSocket!.add(
+        jsonEncode({'type': 'clipboard-sync', 'text': text}),
+      );
+    }
   }
 
   void sendHistory(Map data) {
@@ -303,6 +338,7 @@ class SyncService {
       await completer.future.timeout(const Duration(seconds: 10));
 
       isConnectedToDesktop = true;
+      _saveLastConnectedDevice(ip, port, deviceId, pairingCode);
       print('[Sync] Connected and Authenticated to desktop at $ip:$port');
     } catch (e) {
       _desktopSocket?.close();

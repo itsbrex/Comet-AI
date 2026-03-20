@@ -337,6 +337,7 @@ declare global {
             workflowDelete: (name: string) => Promise<{ success: boolean; deleted?: boolean; error?: string }>;
             workflowStatus: () => Promise<{ success: boolean; isRecording?: boolean; stepCount?: number }>;
             generateHighRiskQr: (actionId: string) => Promise<string | null>;
+            onMobileApproveHighRisk: (callback: (data: { pin: string; id: string }) => void) => () => void;
             getAppIcon: () => Promise<string | null>;
         };
     }

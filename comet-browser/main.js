@@ -245,6 +245,8 @@ function readMemory() {
 
 // Persistent LLM Cache
 const CACHE_TTL = 3600 * 1000 * 24; // 24-hour persistent cache
+const cacheFilePath = path.join(app.getPath('userData'), 'llm_cache.json');
+let llmCache = new Map();
 
 function loadLLMCache() {
   try {
@@ -912,6 +914,10 @@ async function createWindow() {
       // Send to P2P peers if connected
       if (p2pSyncService && p2pSyncService.getStatus().connected) {
         p2pSyncService.sendMessage({ type: 'clipboard-sync', text: currentText });
+      }
+      // Send to Mobile devices connected via WiFi WebSocket
+      if (wifiSyncService) {
+        wifiSyncService.broadcast({ type: 'clipboard-sync', text: currentText });
       }
     }
   }, 3000);
@@ -2754,7 +2760,15 @@ app.whenReady().then(() => {
     wifiSyncService.on('command', async ({ commandId, command, args, sendResponse }) => {
       console.log(`[WiFi-Sync] Mobile requested command: ${command}`);
 
-      if (command === 'ai-prompt') {
+      if (command === 'approve-high-risk') {
+        const pin = args.pin;
+        const configId = args.id;
+        console.log(`[WiFi-Sync] Mobile approved high risk action with PIN: ${pin}`);
+        if (mainWindow) {
+          mainWindow.webContents.send('mobile-approve-high-risk', { pin, id: configId });
+        }
+        sendResponse({ success: true, message: 'Approval forwarded to desktop' });
+      } else if (command === 'ai-prompt') {
         const prompt = args.prompt;
         const modelOverride = args.model;
         
@@ -2922,13 +2936,16 @@ app.whenReady().then(() => {
 
   ipcMain.handle('generate-high-risk-qr', async (event, actionId) => {
     // Generate a secure deep link that opens flutter_browser_app
-    // Format: comet-ai://approve?id=TOKEN&deviceId=DEVICE_ID&action=high_risk
+    // Format: comet-ai://approve?id=TOKEN&deviceId=DEVICE_ID&pin=123456
     const deviceId = os.hostname();
     const token = actionId || Math.random().toString(36).substring(2, 10);
-    // Use a redirect URL that modern mobile browsers can handle and redirect to the app
-    const deepLinkUrl = `https://browser.ponsrischool.in/approve?id=${token}&deviceId=${encodeURIComponent(deviceId)}&app=flutter_browser_app`;
+    // Generate a random 6-digit PIN
+    const pin = Math.floor(100000 + Math.random() * 900000).toString();
+    const deepLinkUrl = `comet-ai://approve?id=${token}&deviceId=${encodeURIComponent(deviceId)}&pin=${pin}`;
     try {
-      return await QRCode.toDataURL(deepLinkUrl);
+      const qrImage = await QRCode.toDataURL(deepLinkUrl);
+      // We must return both the image and the pin so the web UI can display the pin
+      return JSON.stringify({ qrImage, pin, token });
     } catch (err) {
       console.error('[Main] Failed to generate High-Risk QR:', err);
       return null;

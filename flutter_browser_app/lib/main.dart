@@ -29,6 +29,7 @@ import 'pages/connect_desktop_page.dart';
 import 'pages/settings/main.dart';
 import 'pages/ai_chat_page.dart';
 import 'pages/agent_chat_page.dart';
+import 'pages/approve_action_page.dart';
 
 // ignore: non_constant_identifier_names
 late final String WEB_ARCHIVE_DIR;
@@ -270,6 +271,11 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
         '/home',
         arguments: {'focus': true, 'voice': true},
       );
+    } else if (data.startsWith("comet-ai://approve")) {
+      navigatorKey.currentState?.pushNamed(
+        '/approve',
+        arguments: {'data': data},
+      );
     } else if (data.startsWith('http://') || data.startsWith('https://')) {
       final windowModel = Provider.of<WindowModel>(
         navigatorKey.currentContext!,
@@ -358,6 +364,12 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
                   as Map<String, dynamic>?;
           final task = args?['task'] ?? "";
           return AgentChatPage(initialTask: task);
+        },
+        '/approve': (context) {
+          final args =
+              ModalRoute.of(context)!.settings.arguments
+                  as Map<String, dynamic>?;
+          return ApproveActionPage(arguments: args ?? {});
         },
       },
     );

@@ -10,7 +10,7 @@ interface ClickPermissionModalProps {
     risk: 'low' | 'medium' | 'high';
     actionType?: string;
     what?: string;
-    highRiskQr?: string | null;
+    highRiskQr?: string | null;  // Now expects a JSON string with {qrImage, pin, token}
   };
   onAllow: () => void;
   onDeny: () => void;
@@ -24,6 +24,15 @@ const RISK_CONFIG = {
 
 const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAllow, onDeny }: ClickPermissionModalProps) {
   const risk = RISK_CONFIG[context.risk || 'medium'];
+
+  let qrData = null;
+  if (context.highRiskQr) {
+    try {
+      qrData = JSON.parse(context.highRiskQr);
+    } catch (_) {
+      qrData = { qrImage: context.highRiskQr, pin: '' };
+    }
+  }
 
   return (
     <motion.div
@@ -75,14 +84,20 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
           </div>
         )}
 
-        {context.risk === 'high' && context.highRiskQr && (
+        {context.risk === 'high' && qrData?.qrImage && (
           <div className="pt-2 border-t border-red-500/10 flex flex-col items-center">
             <div className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-3 animate-pulse">
               🚨 High Risk: Scan to Authorize on Mobile
             </div>
             <div className="p-3 bg-white rounded-xl shadow-2xl">
-               <img src={context.highRiskQr} alt="Authorize" className="w-32 h-32" />
+               <img src={qrData.qrImage} alt="Authorize" className="w-32 h-32" />
             </div>
+            {qrData.pin && (
+              <div className="mt-4 flex flex-col items-center">
+                <span className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Match this PIN on mobile</span>
+                <span className="text-xl font-mono font-black tracking-[0.4em] text-white mt-1 bg-white/5 py-1 px-4 rounded-lg border border-white/10">{qrData.pin}</span>
+              </div>
+            )}
             <p className="text-[10px] text-white/30 text-center mt-3 leading-relaxed">
               Scanning opens **Comet Mobile** <br/> to safely verify this action.
             </p>
