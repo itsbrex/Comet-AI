@@ -316,7 +316,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
       // 4. LLM Request — Build history locally to avoid state lag
       const aiId = addThinkingStep('LLM Processing...');
       const initialHistory: ChatMessage[] = [
-        { role: 'system', content: SYSTEM_INSTRUCTIONS },
+        { role: 'system', content: `${SYSTEM_INSTRUCTIONS}\n\n[CONTEXT: CURRENT_TIME]\n${new Date().toLocaleString()}\n[LOCATION]\nIndia/Search Results Mode` },
         ...messages.map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: `${userMessage.content}\n\n[CONTEXT]\n${contextItems.map(c => c.text).join('\n')}` }
       ];

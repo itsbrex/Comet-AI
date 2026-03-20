@@ -123,25 +123,25 @@ const WelcomeScreen = () => {
                     <FeatureCard 
                         icon={<Sparkles size={24}/>} 
                         title="AI Orchestration" 
-                        desc="Switch between Gemini, OpenAI, Claude, and local Ollama nodes instantly." 
+                        desc="Switch between Gemini, OpenAI, Claude, and local Ollama nodes instantly. Try the GPT-OSS 120B model for elite reasoning." 
                         delay={0.2}
                     />
                     <FeatureCard 
                         icon={<Layers size={24}/>} 
                         title="Neural Memory" 
-                        desc="RAG-powered session recovery. Your browser remembers so you don't have to." 
+                        desc="RAG-powered session recovery. Your browser remembers context, including the current date and your browsing history." 
                         delay={0.3}
                     />
                     <FeatureCard 
                         icon={<Shield size={24}/>} 
                         title="Isolated Nodes" 
-                        desc="Hardware-level sandboxing for every tab. Crash-proof and secure-by-default." 
+                        desc="Hardware-level sandboxing. For local AI, use OLLAMA_HOST=0.0.0.0 to bridge external networks securely." 
                         delay={0.4}
                     />
                     <FeatureCard 
-                        icon={<Terminal size={24}/>} 
-                        title="Native Command" 
-                        desc="Direct shell access and system automation via autonomous AI agents." 
+                        icon={<Rocket size={24}/>} 
+                        title="Quick AI Overview" 
+                        desc="Type / in any page or chat directly with Comet AI to automate navigation, search, and system tasks." 
                         delay={0.5}
                     />
                 </div>

@@ -59,6 +59,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('audio-status-changed', subscription);
     return () => ipcRenderer.removeListener('audio-status-changed', subscription);
   },
+  onTabLoadingStatus: (callback) => {
+    const subscription = (event, { tabId, isLoading }) => callback({ tabId, isLoading });
+    ipcRenderer.on('tab-loading-status', subscription);
+    return () => ipcRenderer.removeListener('tab-loading-status', subscription);
+  },
 
   // Download Started Listener
   onDownloadStarted: (callback) => {

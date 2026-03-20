@@ -21,6 +21,7 @@ export interface BrowserState {
         title: string;
         isIncognito?: boolean;
         isAudible?: boolean;
+        isLoading?: boolean;
         lastAccessed?: number;
         isSuspended?: boolean;
         priority?: 'low' | 'normal' | 'high';
@@ -30,7 +31,7 @@ export interface BrowserState {
     addTab: (url?: string) => void;
     addIncognitoTab: (url?: string) => void;
     removeTab: (id: string) => void;
-    updateTab: (id: string, updates: Partial<{ url: string; title: string; isAudible?: boolean; isSuspended?: boolean; priority?: 'low' | 'normal' | 'high'; keepAlive?: boolean }>) => void;
+    updateTab: (id: string, updates: Partial<{ url: string; title: string; isAudible?: boolean; isLoading?: boolean; isSuspended?: boolean; priority?: 'low' | 'normal' | 'high'; keepAlive?: boolean }>) => void;
     suspendTab: (id: string) => void;
     resumeTab: (id: string) => void;
     setTabs: (tabs: BrowserState['tabs']) => void;
@@ -265,7 +266,7 @@ export const useAppStore = create<BrowserState>()(
             defaultUrl: 'https://www.google.com',
 
             // Tabs
-            tabs: [{ id: 'default', url: 'https://www.google.com', title: 'New Tab' }],
+            tabs: [{ id: 'default', url: 'https://www.google.com', title: 'New Tab', isLoading: false }],
             activeTabId: 'default',
 
             // History and clipboard
@@ -788,6 +789,7 @@ export const useAppStore = create<BrowserState>()(
                         id,
                         url: finalUrl,
                         title: 'New Tab',
+                        isLoading: true, // Default to true for new tabs
                         lastAccessed: Date.now(),
                         priority: 'high' as const
                     }];

@@ -1435,6 +1435,14 @@ ipcMain.on('create-view', (event, { tabId, url }) => {
     return { action: 'deny' };
   });
 
+  newView.webContents.on('did-start-loading', () => {
+    mainWindow.webContents.send('tab-loading-status', { tabId, isLoading: true });
+  });
+
+  newView.webContents.on('did-stop-loading', () => {
+    mainWindow.webContents.send('tab-loading-status', { tabId, isLoading: false });
+  });
+
   newView.webContents.on('did-finish-load', () => {
     mainWindow.webContents.send('on-tab-loaded', { tabId, url: newView.webContents.getURL() });
   });

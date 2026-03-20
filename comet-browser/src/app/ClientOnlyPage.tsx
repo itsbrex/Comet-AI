@@ -1116,9 +1116,16 @@ export default function Home() {
         }
       });
 
+      const cleanLoading = window.electronAPI.onTabLoadingStatus(({ tabId, isLoading }) => {
+        if (store.tabs.find(t => t.id === tabId)) {
+          store.updateTab(tabId, { isLoading });
+        }
+      });
+
       return () => {
         cleanUrl();
         cleanTitle();
+        cleanLoading();
       };
     }
   }, [store.activeTabId, store.tabs]);
@@ -1535,9 +1542,16 @@ export default function Home() {
                       <span className="opacity-100">{urlPrediction.substring(inputValue.length)}</span>
                     </div>
                   )}
-                  <div className="absolute top-0 left-0 right-0 h-[2px] overflow-hidden pointer-events-none rounded-t-2xl">
-                    <motion.div animate={{ x: ['-100%', '100%'] }} transition={{ duration: 3, repeat: Infinity, ease: 'linear' }} className="w-1/2 h-full gradient-progressbar" />
-                  </div>
+                  {store.tabs.find(t => t.id === store.activeTabId)?.isLoading && (
+                    <div className="absolute top-0 left-0 right-0 h-[2px] overflow-hidden pointer-events-none rounded-t-2xl">
+                      <motion.div 
+                        initial={{ x: '-100%' }}
+                        animate={{ x: '100%' }} 
+                        transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }} 
+                        className="w-1/2 h-full gradient-progressbar" 
+                      />
+                    </div>
+                  )}
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 no-drag-region z-20 flex items-center gap-1.5">
                     <button
                       onClick={() => setShowDownloads(!showDownloads)}

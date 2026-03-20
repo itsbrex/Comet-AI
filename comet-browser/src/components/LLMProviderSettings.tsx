@@ -253,10 +253,35 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                           <p className="text-[8px] text-amber-400/60 font-medium pt-1 italic">
                             ⚠️ Choose Ollama Only if You have at Least enough hardware to run LLM
                           </p>
+                          <button 
+                            onClick={async () => {
+                              try {
+                                setFeedback("Verifying...");
+                                const res = await fetch(`${store.ollamaBaseUrl}/api/tags`);
+                                if (res.ok) {
+                                  setFeedback("Connection Active");
+                                  const data = await res.json();
+                                  if (data.models) props.setOllamaModels(data.models);
+                                } else {
+                                  setFeedback("Node Offline");
+                                }
+                              } catch (e) {
+                                setFeedback("Bridge Failed");
+                              }
+                              setTimeout(() => setFeedback(null), 2000);
+                            }}
+                            className="mt-2 w-full py-2 bg-sky-500/10 border border-sky-500/20 rounded-lg text-sky-400 text-[9px] font-black uppercase tracking-widest hover:bg-sky-500/20 transition-all"
+                          >
+                             Verify Connection
+                          </button>
                         </div>
 
                         {/* Manual Override */}
                         <div className="flex flex-col gap-1">
+                          <div className="flex items-center justify-between mb-1">
+                             <label className="text-[9px] text-white/30 uppercase font-bold">Manual Model Override</label>
+                             <span className="text-[8px] text-purple-400 font-bold uppercase cursor-pointer hover:underline" onClick={() => store.setOllamaModel('gpt-oss-cloud:120b')}>Try GPT-OSS 120B</span>
+                          </div>
                           <input
                             type="text"
                             placeholder="Or type model name..."

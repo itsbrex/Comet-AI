@@ -128,6 +128,7 @@ declare global {
 
             // Tab Management
             onTabLoaded: (callback: (data: { tabId: string; url: string }) => void) => () => void;
+            onTabLoadingStatus: (callback: (data: { tabId: string; isLoading: boolean }) => void) => () => void;
             onTabSuspended: (callback: (tabId: string) => void) => () => void;
             onTabResumed: (callback: (tabId: string) => void) => () => void;
             onResumeTabAndActivate: (callback: (tabId: string) => void) => () => void;

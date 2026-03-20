@@ -180,20 +180,20 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
             }
           },
           child: Scaffold(
-              body: Stack(
-                children: [
-                  _buildWebViewTabsContent(),
-                  if (_showCopiedBanner && _copiedText != null)
-                    Positioned(
-                      bottom: 120, // Adjusted to avoid bottom bar
-                      left: 20,
-                      right: 20,
-                      child: _buildClipboardBanner(),
-                    ),
-                ],
-              ),
-              bottomNavigationBar: const BrowserAppBar(),
+            body: Stack(
+              children: [
+                _buildWebViewTabsContent(),
+                if (_showCopiedBanner && _copiedText != null)
+                  Positioned(
+                    bottom: 120, // Adjusted to avoid bottom bar
+                    left: 20,
+                    right: 20,
+                    child: _buildClipboardBanner(),
+                  ),
+              ],
             ),
+            bottomNavigationBar: const BrowserAppBar(),
+          ),
         ));
   }
 
@@ -236,8 +236,8 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
                     ),
                   ),
                   Text(
-                    _copiedText!.length > 50 
-                        ? '${_copiedText!.substring(0, 50)}...' 
+                    _copiedText!.length > 50
+                        ? '${_copiedText!.substring(0, 50)}...'
                         : _copiedText!,
                     style: const TextStyle(
                       color: Colors.white70,
@@ -254,7 +254,8 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: const Color(0xFF00E5FF),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -288,7 +289,8 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
               (url.isValidUri && url.toString().split(".").length > 1)) {
             url = url.scheme.isEmpty ? WebUri("https://$url") : url;
           } else {
-            url = WebUri(settings.searchEngine.searchUrl + Uri.encodeComponent(value));
+            url = WebUri(
+                settings.searchEngine.searchUrl + Uri.encodeComponent(value));
           }
 
           windowModel.addTab(
@@ -347,7 +349,11 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF00E5FF), Color(0xFFD500F9), Color(0xFF00E5FF)],
+                        colors: [
+                          Color(0xFF00E5FF),
+                          Color(0xFFD500F9),
+                          Color(0xFF00E5FF)
+                        ],
                         stops: [0.0, 0.5, 1.0],
                       ),
                       boxShadow: [
@@ -366,7 +372,8 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
                           gradient: LinearGradient(
                             colors: [
                               const Color(0xFF00E5FF),
-                              Color.lerp(const Color(0xFF00E5FF), const Color(0xFFD500F9), progress)!,
+                              Color.lerp(const Color(0xFF00E5FF),
+                                  const Color(0xFFD500F9), progress)!,
                             ],
                           ),
                         ),
@@ -408,8 +415,8 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
                         ? Uri.parse("${url.origin}/favicon.ico")
                         : null);
 
-                var isCurrentTab = windowModel.getCurrentTabIndex() ==
-                    webViewModel.tabIndex;
+                var isCurrentTab =
+                    windowModel.getCurrentTabIndex() == webViewModel.tabIndex;
 
                 return Column(
                   mainAxisSize: MainAxisSize.min,
@@ -434,26 +441,24 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
                                 "",
                             maxLines: 2,
                             style: TextStyle(
-                              color: webViewModel.isIncognitoMode ||
-                                      isCurrentTab
-                                  ? Colors.white
-                                  : Theme.of(context).colorScheme.onSurface,
+                              color:
+                                  webViewModel.isIncognitoMode || isCurrentTab
+                                      ? Colors.white
+                                      : Theme.of(context).colorScheme.onSurface,
                             ),
                             overflow: TextOverflow.ellipsis),
-                        subtitle:
-                            Text(webViewModel.url?.toString() ?? "",
-                                style: TextStyle(
-                                  color:
-                                      webViewModel.isIncognitoMode ||
-                                              isCurrentTab
-                                          ? Colors.white60
-                                          : Theme.of(context)
-                                              .colorScheme
-                                              .onSurface
-                                              .withOpacity(0.6),
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis),
+                        subtitle: Text(webViewModel.url?.toString() ?? "",
+                            style: TextStyle(
+                              color:
+                                  webViewModel.isIncognitoMode || isCurrentTab
+                                      ? Colors.white60
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withOpacity(0.6),
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
                         isThreeLine: true,
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -463,17 +468,15 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
                                 Icons.close,
                                 size: 20.0,
                                 color:
-                                    webViewModel.isIncognitoMode ||
-                                            isCurrentTab
+                                    webViewModel.isIncognitoMode || isCurrentTab
                                         ? Colors.white60
                                         : Colors.black54,
                               ),
                               onPressed: () {
                                 setState(() {
-                                  if (webViewModel.tabIndex !=
-                                      null) {
-                                    windowModel.closeTab(
-                                        webViewModel.tabIndex!);
+                                  if (webViewModel.tabIndex != null) {
+                                    windowModel
+                                        .closeTab(webViewModel.tabIndex!);
                                     if (windowModel.webViewTabs.isEmpty) {
                                       browserModel.showTabScroller = false;
                                     }

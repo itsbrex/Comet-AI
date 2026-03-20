@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAppStore } from '@/store/useAppStore';
-import { Cpu, Globe, Key, Settings2, ShieldCheck, ArrowRight, Check, Play, DownloadCloud } from 'lucide-react';
+import { Cpu, Globe, Key, Settings2, ShieldCheck, ArrowRight, Check, Play, DownloadCloud, Sparkles } from 'lucide-react';
 
 export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
   const store = useAppStore();
@@ -92,9 +92,23 @@ export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
                       <p className="text-[10px] text-white/40 uppercase tracking-widest font-black leading-relaxed">
                         Local models (No advanced reasoning)
                       </p>
-                      <p className="text-[10px] text-amber-500 mt-1 uppercase tracking-widest font-black leading-relaxed">
+                       <p className="text-[10px] text-amber-500 mt-1 uppercase tracking-widest font-black leading-relaxed">
                         ⚠️ Choose Ollama Only if You have at Least enough hardware to run LLM
                       </p>
+                      <button 
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(`${store.ollamaBaseUrl}/api/tags`);
+                            if (res.ok) alert("Connection Successful! AI Node active.");
+                            else alert("Ollama node unreachable. Ensure export OLLAMA_HOST=0.0.0.0 is set.");
+                          } catch (e) {
+                            alert("Connection Failed. Check if Ollama is running and OLLAMA_HOST=0.0.0.0 is set.");
+                          }
+                        }}
+                        className="mt-1 text-[9px] text-sky-400/60 hover:text-sky-400 font-bold uppercase tracking-widest transition-all"
+                      >
+                         [ Verify Local Bridge ]
+                      </button>
                     </div>
                   </div>
                   <a href="https://ollama.com/download" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 font-bold uppercase tracking-widest mt-1">
@@ -112,6 +126,12 @@ export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
                   <button onClick={() => { store.setAIProvider('ollama'); finishSetup(); }} className="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-black font-black uppercase tracking-widest text-xs rounded-xl flex items-center gap-2">
                     Use Ollama <ArrowRight size={14} />
                   </button>
+                </div>
+                <div className="p-3 bg-purple-500/5 border border-purple-500/10 rounded-xl">
+                   <p className="text-[9px] text-purple-400/80 font-bold uppercase tracking-widest flex items-center gap-2">
+                      <Sparkles size={10} /> Pro Tip: Try GPT-OSS 120B
+                   </p>
+                   <p className="text-[8px] text-white/30 mt-1">Run <code className="text-purple-300/60">ollama run gpt-oss-cloud:120b</code> for enterprise-grade reasoning.</p>
                 </div>
               </div>
 

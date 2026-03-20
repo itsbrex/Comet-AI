@@ -169,34 +169,35 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
               <div className="space-y-4">
                 <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3 group hover:border-sky-400/20 transition-all">
                   <div className="text-[10px] font-black text-white/40 uppercase tracking-widest flex items-center justify-between">
-                    <span>1. Expose to Network</span>
-                    <span className="text-[8px] bg-white/10 px-2 py-0.5 rounded-full">Terminal</span>
+                    <span>1. Allow External Network</span>
+                    <span className="text-[8px] bg-sky-500/20 px-2 py-0.5 rounded-full text-sky-400">Critical</span>
                   </div>
                   <p className="text-[10px] text-white/40 leading-relaxed font-medium">
-                    To allow Comet to communicate with Ollama, set the host to 0.0.0.0:
+                    To connect Comet's AI engine to your external Ollama node, expose the host:
                   </p>
                   <div className="bg-black/60 p-3 rounded-xl font-mono text-[10px] text-sky-300 border border-white/10 shadow-inner select-all">
                     export OLLAMA_HOST=0.0.0.0
                   </div>
+                  <p className="text-[8px] text-sky-400/50 italic">Allows Comet to bridge through your router/network firewall.</p>
                 </div>
 
                 <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3 group hover:border-sky-400/20 transition-all">
                   <div className="text-[10px] font-black text-white/40 uppercase tracking-widest flex items-center justify-between">
-                    <span>2. Bypass Origins</span>
-                    <span className="text-[8px] bg-white/10 px-2 py-0.5 rounded-full">Security</span>
+                    <span>2. Extreme Intelligence</span>
+                    <span className="text-[8px] bg-purple-500/20 px-2 py-0.5 rounded-full text-purple-400">GPT-OSS 120B</span>
                   </div>
                   <p className="text-[10px] text-white/40 leading-relaxed font-medium">
-                    Permit browser access by relaxing the origin constraints:
+                    Unlock elite reasoning with the 120B parameter "Free Cloud" model:
                   </p>
-                  <div className="bg-black/60 p-3 rounded-xl font-mono text-[10px] text-sky-300 border border-white/10 shadow-inner select-all">
-                    export OLLAMA_ORIGINS="*"
+                  <div className="bg-black/60 p-3 rounded-xl font-mono text-[10px] text-purple-400 border border-white/10 shadow-inner select-all">
+                    ollama run gpt-oss-cloud:120b
                   </div>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex items-start gap-4">
                   <Info size={18} className="text-blue-400/60 flex-shrink-0 mt-0.5" />
                   <p className="text-[10px] text-blue-400/60 leading-relaxed font-bold uppercase tracking-tight">
-                    Restart Ollama service after updating these environment variables to finalize the link.
+                    Restart your machine or Ollama process to apply bridge settings.
                   </p>
                 </div>
               </div>
