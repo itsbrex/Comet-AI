@@ -172,7 +172,7 @@ Special thanks to **Otherwise_Wave9374** for contributions to tool permission ga
 
 ## 🧑‍💻 About
 
-Comet AI Browser is built by a **16-year-old student** from India, preparing for JEE, on a intel i5 pc with integrated intel UHD graphics.
+Comet AI Browser is built by a **16-year-old student** from India, preparing for JEE, on a intel i5 pc with integrated intel UHD graphics 8GB ram.
 
 > Efficient architecture beats expensive hardware.
 
