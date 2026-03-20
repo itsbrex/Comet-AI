@@ -1,236 +1,140 @@
-# 🌟 Comet AI Browser (v0.2.0)!      [Made with Love in India](https://madewithlove.org.in/badge.svg)
+# 🌟 Comet AI Browser
 
-
-<div align="center"><a id="top"></a>
+<div align="center">
 
 ![Comet AI Browser](https://raw.githubusercontent.com/Preet3627/Comet-AI/main/icon.ico)
 
-**“Comet-AI is one of the open-source AI browsers that enables permission-gated OS automation.”**
+**An open-source, AI-native browser with permission-gated OS automation.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.0--stable-green)]()
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
+[![Version](https://img.shields.io/badge/Version-0.2.1-green)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
-![Maintained](https://img.shields.io/badge/Maintained-Yes-green)
-![Hardware](https://img.shields.io/badge/Tested_On-i5--8250U_|_8GB-orange)
-![Security](https://img.shields.io/badge/Prompt_Injection-Protected-blueviolet)
-![MCP](https://img.shields.io/badge/Protocol-MCP_Enabled-cyan)
-<div align="center">
-
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
-[![Low Spec Optimized](https://img.shields.io/badge/Optimized-i5--U_|_8GB_RAM-success?style=for-the-badge&logo=cpu-z)](https://github.com/Preet3627/Comet-AI)
-[![Security Model](https://img.shields.io/badge/Security-Triple--Lock_HITL-blueviolet?style=for-the-badge&logo=shield)](https://github.com/Preet3627/Comet-AI)
-[![Low-Spec](https://img.shields.io/badge/Low-Spec_i5-U_8GB--green?style=flat&logo=electron)](https://github.com/Preet3627/Comet-AI)
+[![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
+
+[Features](#-features) • [Download](#-download) • [Quick Start](#-quick-start) • [Security](#-security) • [Contributing](#-contributing)
 
 </div>
 
-[Features](#-features) • [Download](#-download) • [Quick Start](#-quick-start) • [Development Status](#-development-status) • [Contributing](#-contributing)
+---
 
-</div>
+## Why Comet?
 
-***
+Most browsers are built for monetization. Comet is built for **control**.
 
-Unlike traditional AI browsers that rely only on model guardrails, Comet enforces **architectural isolation**:
-
-- 🔍 OCR-only visual perception  
-- 🔥 Syntactic command firewall  
-- 🔐 Human-authorized native execution  
-
-Built and optimized on **Intel i5-U | 8GB RAM | No GPU**
+- 🧠 Autonomous AI agent that can browse, search, and act on your behalf
+- 🔒 Privacy-first — local LLM support via Ollama, no cloud required
+- 💻 OS-level automation with explicit human approval for every action
+- ⚡ Optimized for low-spec hardware — tested on Intel i5-U, 8GB RAM, no GPU
 
 ---
 
-## 🌌 Why Comet Exists
+## ✨ Features
 
-Modern browsers are built for monetization and cloud dependency.
+### 🤖 AI Agent
+- Multi-step autonomous task execution via chained commands
+- Real-time action queue with live progress tracking UI
+- RAG (Retrieval-Augmented Generation) using local vector memory
+- Hybrid context: browser history + live web search results
+- Thinking transparency — reasoning shown in collapsible "ThinkingPanel"
+- `<think>` tag parsing for DeepSeek-style chain-of-thought models
 
-Comet is built for:
+### 🌐 Browser Capabilities
+- Full Chromium-based browsing via Electron BrowserView
+- Tab management with groups
+- Page content extraction with PII scrubbing
+- OCR-based screen reading (Tesseract.js)
+- Screenshot capture and visual analysis
+- Built-in ad blocker (~99% accuracy)
 
-- 🧠 Autonomous browsing agency  
-- 🔒 Privacy-first AI usage  
-- 💻 OS-level automation with safety  
-- ⚡ Low-spec hardware efficiency  
+### 📄 Document & Productivity
+- Single-prompt PDF generation with branded styling
+- PDF viewer with OCR, annotations, zoom, and rotation
+- Unified cart manager across shopping sites
+- Autofill for saved addresses and payment methods
+- Unified search (apps, settings, web — one shortcut)
 
-Comet is for developers, researchers, and power users who want programmable browsing — without sacrificing control.
+### 🛡️ Security Model
+- **Triple-Lock Architecture** (see [Security](#-security) section)
+- Prompt injection detection with strike-based banning
+- PII scrubbing before content reaches the LLM
+- All shell commands and native clicks require explicit user approval
 
----
-
-## 🤖 Autonomous AI Agent
-
-Comet includes a multimodal browser-level agent.
-
-### Perception System
-- Screen capture
-- Tesseract.js OCR
-- DOM-aware snapshotting
-- Vision models (Claude / Gemini)
-
-The AI sees **pixels, not executable HTML.**
-
-### Action Engine
-
-[NAVIGATE: url] [CLICK: text/selector] [TYPE: text | selector] [SCROLL: direction] [EXTRACT_DATA: query] [GENERATE_PDF: title | content] [SCREENSHOT_AND_ANALYZE] [EXEC_DESKTOP: intent]
-
-### Agent Capabilities
-- Self-correcting navigation loop
-- AI reasoning transparency ("Thinking Blocks")
-- Workflow recording & replay
-- Voice control (Whisper transcription)
-
----
-
-## 🧠 AI Model Support
-
-Supports latest models via API or local inference:
-
-- OpenAI (GPT series)
-- Anthropic (Claude series)
-- Google (Gemini series)
-- Groq (ultra-fast inference)
-- Ollama (local LLM execution)
-
-Hybrid routing:
-- ⚡ Groq → speed
-- 🧠 Ollama → privacy
+### 🤖 AI Provider Support
+| Provider | Type | Notes |
+|----------|------|-------|
+| Google Gemini | Cloud | Default recommended |
+| OpenAI GPT | Cloud | GPT-4 and above |
+| Anthropic Claude | Cloud | Strong for long context |
+| Groq | Cloud | Fastest inference |
+| Ollama | Local | Full privacy, no API key |
 
 ---
 
-## 🛡️ Triple-Lock Security Architecture
+## 🛡️ Security
 
-Comet does **not** claim LLM immunity.  
-It enforces **system-level isolation.**
+Comet does **not** rely on LLM guardrails alone. It enforces **architectural isolation** at three levels.
 
-### 1️⃣ Visual Sandbox (OCR-Only)
-The agent perceives pages via screenshots + OCR.  
-It does not execute or parse raw HTML/JS.
+### 1. Visual Sandbox
+The agent perceives pages via **screenshots + OCR only**. It never parses or executes raw HTML or JavaScript. This prevents hidden prompt injection via DOM manipulation.
 
-Prevents:
-- Hidden prompt injection
-- Script payload attacks
-- DOM manipulation exploits
+### 2. Syntactic Firewall
+Before any content reaches the LLM, dangerous patterns are filtered:
+- Shell execution primitives (`rm -rf`, `powershell`, `sudo`)
+- Encoded payloads and obfuscated commands
+- Prompt injection attempts (jailbreak patterns, role-override attempts)
 
----
+### 3. Human-in-the-Loop (HITL)
+Every native OS action — clicking outside the browser, running shell commands, opening apps — requires **explicit user approval** via a permission modal. High-risk actions show a QR code for mobile verification.
 
-### 2️⃣ Syntactic Firewall
-Before text reaches the LLM:
-
-- OS-level commands are filtered
-- Encoded shell payloads are rejected
-- Dangerous execution primitives are stripped
-
-Examples blocked:
-
-rm -rf powershell.exe sudo cmd.exe
+The AI generates **intent**, not execution. Even if socially engineered, it cannot act without your approval.
 
 ---
 
-### 3️⃣ Human-in-the-Loop Authorization (HITL)
+## ⚡ Performance
 
-All native desktop actions require:
-
-- 📱 QR-secured mobile handshake  
-- 🔐 PIN verification  
-- ✍️ Explicit human approval  
-
-The AI generates **Action Intent**, not execution.
-
-Even if socially engineered, it cannot act without approval.
-
----
-
-### ✅ Security Summary
-
-Comet enforces:
-
-- Non-executable perception  
-- Filtered planning  
-- Human-authorized execution  
-
-This is **architectural isolation**, not prompt engineering.
-
----
-
-## ⚡ Performance & Hardware Optimization
-
-Engineered for low-resource environments.
-
-Tested on:
-
-- CPU: Intel i5-U (Ultra-Low Power)
-- RAM: 8GB
-- Storage: SATA SSD
-- GPU: None
-
-### Performance Snapshot
+Engineered to run well on modest hardware.
 
 | Metric | Value |
-|--------|--------|
+|--------|-------|
 | Speedometer 3 | ~12–14 ms |
 | Cold Start | < 2 seconds |
-| Electron RAM | ~462–500 MB |
-| Agent Response | ~3–5s (Claude API) |
+| Electron RAM Usage | ~462–500 MB |
+| Agent Response (Claude API) | ~3–5s |
 
-Optimization Techniques:
-
-- Controlled renderer isolation  
-- Efficient IPC routing  
-- Lazy model loading  
-- Sandboxed tab processes  
-
-Efficient engineering > expensive hardware.
+**Test machine:** Intel i5-U · 8GB RAM · SATA SSD · No GPU
 
 ---
 
-## 🔄 Multi-Device Ecosystem
+## 📦 Installation
 
-### 📱 Mobile ↔ Desktop Sync
+### Prerequisites
+- Node.js 18+
+- npm or yarn
+- (Optional) [Ollama](https://ollama.com) for local AI
 
-- WiFi QR pairing
-- WebSocket bridge
-- P2P clipboard sharing
-- Session recovery
-- Remote task broadcasting
+### Desktop (Windows / macOS / Linux)
 
-Mobile agent trigger:
+```bash
+git clone https://github.com/Preet3627/Comet-AI.git
+cd Comet-AI/comet-browser
+npm install
+npm run dev          # Next.js frontend
+npm run electron-start  # Electron shell
+```
 
-> > 
+### Mobile (Android)
 
+```bash
+cd flutter_browser_app
+flutter pub get
+flutter run
+```
 
+Production APK builds are available on the [Releases](https://github.com/Preet3627/Comet-AI/releases) page.
 
----
-
-## 🍱 Productivity Workspace
-
-- 📄 Autonomous PDF generation  
-- 🎞 Presenton Studio (AI slide creation)  
-- 🔎 PopSearch (Ctrl+Shift+S)  
-- 🧩 Modular extension system  
-- 📋 Unified clipboard & history  
-
----
-
-## 🖥️ Desktop Features
-
-Framework: Electron + Next.js
-
-- RobotJS permission-gated automation
-- Tesseract OCR screen targeting
-- Raycast integration (macOS)
-- MCP Desktop servers (FileSystem / NativeApp)
-- Keyboard shortcuts:
-  - Shift+Enter → new line
-  - Ctrl+Enter → search in new tab
-  - Alt+Enter → background tab
-
----
-
-## 📱 Mobile (Flutter)
-
-- Autonomous Comet Agent
-- Vision + OCR support
-- QR Authorization system
-- Production-ready Android build
-- iOS in simulator testing phase
+📖 Full documentation: **https://browser.ponsrischool.in**
 
 ---
 
@@ -238,91 +142,40 @@ Framework: Electron + Next.js
 
 | Platform | Status |
 |----------|--------|
-| Windows | ✅  Production Ready  |
-| macOS | ✅  Production Ready |
-| Linux | ✅   Production Ready |
+| Windows | ✅ Production Ready |
+| macOS | ✅ Production Ready |
+| Linux | ✅ Production Ready |
 | Android | ✅ Production Ready |
 | iOS | 🧪 Testing Phase |
 
 ---
 
-## 📦 Installation
+## 🗺️ Roadmap
 
-### Clone Repository
-
-```bash
-git clone https://github.com/Preet3627/Comet-AI.git
-cd Comet-AI
-npm install
-
-Run Desktop
-
-cd comet-browser
-npm run dev
-npm run electron-start
-
-Run Mobile
-
-cd flutter_browser_app
-flutter pub get
-flutter run
-```
-
-Official documentation & builds:
-
-👉 https://browser.ponsrischool.in
-Local Ollama and Other Cloud LLM are suppoeted Natively and A 99% Accurate Ad Blocker
+- [ ] Native Chromium core (replace Electron BrowserView)
+- [ ] Fully offline LLM (1.5B–3B parameter models)
+- [ ] Extension marketplace
+- [ ] Multi-agent collaborative workspace
+- [ ] Granular OS tool permission profiles
 
 ---
 
-🗺️ Roadmap to v1.0
+## 👥 Contributing
 
-Native Chromium-based core
+PRs are welcome. Please open an issue first to discuss significant changes.
 
-Fully offline LLM (1.5B–3B params)
-
-Extension marketplace
-
-Multi-agent collaborative workspace
-
-Advanced OS tool permission gating
-
-
+Special thanks to **Otherwise_Wave9374** for contributions to tool permission gating and agent loop refinement.
 
 ---
 
-👥 Contributors
+## 🧑‍💻 About
 
-Special thanks to:
+Comet AI Browser is built by a **16-year-old student** from India, preparing for JEE, on a intel i5 pc with integrated intel UHD graphics.
 
-Otherwise_Wave9374 – Tool permission gating & agent loop refinement
-
-
-PRs welcome.
-
+> Efficient architecture beats expensive hardware.
 
 ---
 
-🧑‍💻 About the Creator
+## 📝 License
 
-Comet AI Browser is built by a 16-year-old student preparing for JEE.
-
-Primary development machine:
-
-Intel i5-U | 8GB RAM | SATA SSD
-
-Proof that strong architecture beats large budgets.
-
----
-
-
-📝 License
-
-MIT License
-
-
----
-
-[⬆ Back to Top](#top)
-
----
+[MIT](LICENSE) © 2026 Comet-AI

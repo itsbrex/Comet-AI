@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/browser_model.dart';
 import '../models/favorite_model.dart';
 import '../models/window_model.dart';
-import '../webview_tab.dart';
+
 import '../models/webview_model.dart';
 
 class BookmarksPage extends StatelessWidget {
@@ -102,10 +102,7 @@ class BookmarksPage extends StatelessWidget {
         onTap: () {
           final windowModel = Provider.of<WindowModel>(context, listen: false);
           windowModel.addTab(
-            WebViewTab(
-              key: GlobalKey(),
-              webViewModel: WebViewModel(url: favorite.url),
-            ),
+            WebViewModel(url: favorite.url),
           );
           Navigator.pushNamed(context, '/browser');
         },

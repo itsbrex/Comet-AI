@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/webview_model.dart';
 import '../models/window_model.dart';
-import '../webview_tab.dart';
+
 import 'package:provider/provider.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -55,9 +55,14 @@ class _SplashScreenState extends State<SplashScreen>
 
     Timer(const Duration(milliseconds: 3000), () async {
       if (mounted) {
-        final intentData = await const MethodChannel(
-          'com.comet_ai_com.comet_ai.intent_data',
-        ).invokeMethod<String>('getIntentData');
+        String? intentData;
+        try {
+          intentData = await const MethodChannel(
+            'com.comet_ai_com.comet_ai.intent_data',
+          ).invokeMethod<String>('getIntentData');
+        } catch (e) {
+          debugPrint('Error getting intent data: $e');
+        }
 
         if (intentData != null && intentData.isNotEmpty) {
           _handleIntentData(intentData);
@@ -82,10 +87,7 @@ class _SplashScreenState extends State<SplashScreen>
     } else if (data.startsWith('http://') || data.startsWith('https://')) {
       final windowModel = Provider.of<WindowModel>(context, listen: false);
       windowModel.addTab(
-        WebViewTab(
-          key: GlobalKey(),
-          webViewModel: WebViewModel(url: WebUri(data)),
-        ),
+        WebViewModel(url: WebUri(data)),
       );
       Navigator.of(context).pushReplacementNamed('/browser');
     } else {

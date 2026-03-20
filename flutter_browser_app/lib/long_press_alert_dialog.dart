@@ -6,7 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_browser/custom_image.dart';
-import 'package:flutter_browser/webview_tab.dart';
+
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path_provider/path_provider.dart';
@@ -184,11 +184,9 @@ class _LongPressAlertDialogState extends State<LongPressAlertDialog> {
     return ListTile(
       title: const Text("Open in a new tab"),
       onTap: () {
-        windowModel.addTab(WebViewTab(
-          key: GlobalKey(),
-          webViewModel:
-              WebViewModel(url: widget.requestFocusNodeHrefResult?.url),
-        ));
+        windowModel.addTab(
+          WebViewModel(url: widget.requestFocusNodeHrefResult?.url),
+        );
         Navigator.pop(context);
       },
     );
@@ -200,12 +198,9 @@ class _LongPressAlertDialogState extends State<LongPressAlertDialog> {
     return ListTile(
       title: const Text("Open in a new incognito tab"),
       onTap: () {
-        windowModel.addTab(WebViewTab(
-          key: GlobalKey(),
-          webViewModel: WebViewModel(
-              url: widget.requestFocusNodeHrefResult?.url,
-              isIncognitoMode: true),
-        ));
+        windowModel.addTab(WebViewModel(
+            url: widget.requestFocusNodeHrefResult?.url,
+            isIncognitoMode: true));
         Navigator.pop(context);
       },
     );
@@ -326,11 +321,8 @@ class _LongPressAlertDialogState extends State<LongPressAlertDialog> {
     return ListTile(
       title: const Text("Image in a new tab"),
       onTap: () {
-        windowModel.addTab(WebViewTab(
-          key: GlobalKey(),
-          webViewModel: WebViewModel(
-              url: WebUri(widget.hitTestResult.extra ?? "about:blank")),
-        ));
+        windowModel.addTab(WebViewModel(
+            url: WebUri(widget.hitTestResult.extra ?? "about:blank")));
         Navigator.pop(context);
       },
     );
@@ -345,10 +337,7 @@ class _LongPressAlertDialogState extends State<LongPressAlertDialog> {
         if (widget.hitTestResult.extra != null) {
           var url =
               "http://images.google.com/searchbyimage?image_url=${widget.hitTestResult.extra!}";
-          windowModel.addTab(WebViewTab(
-            key: GlobalKey(),
-            webViewModel: WebViewModel(url: WebUri(url)),
-          ));
+          windowModel.addTab(WebViewModel(url: WebUri(url)));
         }
         Navigator.pop(context);
       },

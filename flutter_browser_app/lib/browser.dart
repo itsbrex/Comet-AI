@@ -87,10 +87,7 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
       if (url != null) {
         if (mounted) {
           final windowModel = Provider.of<WindowModel>(context, listen: false);
-          windowModel.addTab(WebViewTab(
-            key: GlobalKey(),
-            webViewModel: WebViewModel(url: WebUri(url)),
-          ));
+          windowModel.addTab(WebViewModel(url: WebUri(url)));
         }
       }
     }
@@ -150,7 +147,7 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
     return WillPopScope(
         onWillPop: () async {
           final windowModel = Provider.of<WindowModel>(context, listen: false);
-          final webViewModel = windowModel.getCurrentTab()?.webViewModel;
+          final webViewModel = windowModel.getCurrentTab();
           final webViewController = webViewModel?.webViewController;
 
           if (webViewController != null) {
@@ -183,19 +180,19 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
             }
           },
           child: Scaffold(
-              appBar: const BrowserAppBar(), 
               body: Stack(
                 children: [
                   _buildWebViewTabsContent(),
                   if (_showCopiedBanner && _copiedText != null)
                     Positioned(
-                      bottom: 100,
+                      bottom: 120, // Adjusted to avoid bottom bar
                       left: 20,
                       right: 20,
                       child: _buildClipboardBanner(),
                     ),
                 ],
               ),
+              bottomNavigationBar: const BrowserAppBar(),
             ),
         ));
   }
@@ -291,41 +288,47 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
               (url.isValidUri && url.toString().split(".").length > 1)) {
             url = url.scheme.isEmpty ? WebUri("https://$url") : url;
           } else {
-            url = WebUri(settings.searchEngine.searchUrl + value);
+            url = WebUri(settings.searchEngine.searchUrl + Uri.encodeComponent(value));
           }
 
-          windowModel.addTab(WebViewTab(
-            key: GlobalKey(),
-            webViewModel: WebViewModel(url: url),
-          ));
+          windowModel.addTab(
+            WebViewModel(url: url),
+          );
         },
       );
     }
 
-    for (final webViewTab in windowModel.webViewTabs) {
+    for (final webViewModel in windowModel.webViewTabs) {
       var isCurrentTab =
-          webViewTab.webViewModel.tabIndex == windowModel.getCurrentTabIndex();
+          webViewModel.tabIndex == windowModel.getCurrentTabIndex();
 
       if (isCurrentTab) {
         Future.delayed(const Duration(milliseconds: 100), () {
-          webViewTabStateKey.currentState?.onShowTab();
+          (webViewModel.tabKey.currentState as dynamic)?.onShowTab?.call();
         });
       } else {
-        webViewTabStateKey.currentState?.onHideTab();
+        (webViewModel.tabKey.currentState as dynamic)?.onHideTab?.call();
       }
     }
-
-    var stackChildren = <Widget>[
-      windowModel.getCurrentTab() ?? Container(),
-      _createProgressIndicator()
-    ];
 
     return Column(
       children: [
         Expanded(
-            child: Stack(
-          children: stackChildren,
-        ))
+          child: Stack(
+            children: [
+              IndexedStack(
+                index: windowModel.getCurrentTabIndex(),
+                children: windowModel.webViewTabs.map((webViewModel) {
+                  return WebViewTab(
+                    key: webViewModel.tabKey,
+                    webViewModel: webViewModel,
+                  );
+                }).toList(),
+              ),
+              _createProgressIndicator()
+            ],
+          ),
+        )
       ],
     );
   }
@@ -386,9 +389,9 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
             appBar: const TabViewerAppBar(),
             body: TabViewer(
               currentIndex: windowModel.getCurrentTabIndex(),
-              children: windowModel.webViewTabs.map((webViewTab) {
-                webViewTabStateKey.currentState?.pause();
-                var screenshotData = webViewTab.webViewModel.screenshot;
+              children: windowModel.webViewTabs.map((webViewModel) {
+                (webViewModel.tabKey.currentState as dynamic)?.pause?.call();
+                var screenshotData = webViewModel.screenshot;
                 Widget screenshotImage = Container(
                   decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.surface),
@@ -398,15 +401,15 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
                       : null,
                 );
 
-                var url = webViewTab.webViewModel.url;
-                var faviconUrl = webViewTab.webViewModel.favicon != null
-                    ? webViewTab.webViewModel.favicon!.url
+                var url = webViewModel.url;
+                var faviconUrl = webViewModel.favicon != null
+                    ? webViewModel.favicon!.url
                     : (url != null && ["http", "https"].contains(url.scheme)
                         ? Uri.parse("${url.origin}/favicon.ico")
                         : null);
 
                 var isCurrentTab = windowModel.getCurrentTabIndex() ==
-                    webViewTab.webViewModel.tabIndex;
+                    webViewModel.tabIndex;
 
                 return Column(
                   mainAxisSize: MainAxisSize.min,
@@ -414,42 +417,34 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
                     Material(
                       color: isCurrentTab
                           ? Colors.blue
-                          : (webViewTab.webViewModel.isIncognitoMode
+                          : (webViewModel.isIncognitoMode
                               ? Colors.black
                               : Theme.of(context).colorScheme.surface),
                       child: ListTile(
                         leading: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
-                            // CachedNetworkImage(
-                            //   placeholder: (context, url) =>
-                            //   url == "about:blank"
-                            //       ? Container()
-                            //       : CircularProgressIndicator(),
-                            //   imageUrl: faviconUrl,
-                            //   height: 30,
-                            // )
                             CustomImage(
                                 url: faviconUrl, maxWidth: 30.0, height: 30.0)
                           ],
                         ),
                         title: Text(
-                            webViewTab.webViewModel.title ??
-                                webViewTab.webViewModel.url?.toString() ??
+                            webViewModel.title ??
+                                webViewModel.url?.toString() ??
                                 "",
                             maxLines: 2,
                             style: TextStyle(
-                              color: webViewTab.webViewModel.isIncognitoMode ||
+                              color: webViewModel.isIncognitoMode ||
                                       isCurrentTab
                                   ? Colors.white
                                   : Theme.of(context).colorScheme.onSurface,
                             ),
                             overflow: TextOverflow.ellipsis),
                         subtitle:
-                            Text(webViewTab.webViewModel.url?.toString() ?? "",
+                            Text(webViewModel.url?.toString() ?? "",
                                 style: TextStyle(
                                   color:
-                                      webViewTab.webViewModel.isIncognitoMode ||
+                                      webViewModel.isIncognitoMode ||
                                               isCurrentTab
                                           ? Colors.white60
                                           : Theme.of(context)
@@ -468,17 +463,17 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
                                 Icons.close,
                                 size: 20.0,
                                 color:
-                                    webViewTab.webViewModel.isIncognitoMode ||
+                                    webViewModel.isIncognitoMode ||
                                             isCurrentTab
                                         ? Colors.white60
                                         : Colors.black54,
                               ),
                               onPressed: () {
                                 setState(() {
-                                  if (webViewTab.webViewModel.tabIndex !=
+                                  if (webViewModel.tabIndex !=
                                       null) {
                                     windowModel.closeTab(
-                                        webViewTab.webViewModel.tabIndex!);
+                                        webViewModel.tabIndex!);
                                     if (windowModel.webViewTabs.isEmpty) {
                                       browserModel.showTabScroller = false;
                                     }

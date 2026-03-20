@@ -128,7 +128,7 @@ class _JavaScriptConsoleState extends State<JavaScriptConsole> {
                 icon: const Icon(Icons.cancel),
                 onPressed: () {
                   final windowModel = Provider.of<WindowModel>(context, listen: false);
-                  var webViewModel = windowModel.getCurrentTab()?.webViewModel;
+                  var webViewModel = windowModel.getCurrentTab();
                   if (webViewModel != null) {
                     webViewModel.setJavaScriptConsoleResults([]);
 
@@ -147,7 +147,7 @@ class _JavaScriptConsoleState extends State<JavaScriptConsole> {
 
   void evaluateJavaScript(String source) async {
     final windowModel = Provider.of<WindowModel>(context, listen: false);
-    final webViewModel = windowModel.getCurrentTab()?.webViewModel;
+    final webViewModel = windowModel.getCurrentTab();
 
     if (webViewModel != null) {
       var currentWebViewModel =

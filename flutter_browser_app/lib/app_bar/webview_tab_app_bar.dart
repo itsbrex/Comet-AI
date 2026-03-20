@@ -85,7 +85,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
           _searchController != null &&
           _searchController!.text.isEmpty) {
         final windowModel = Provider.of<WindowModel>(context, listen: false);
-        final webViewModel = windowModel.getCurrentTab()?.webViewModel;
+        final webViewModel = windowModel.getCurrentTab();
         var webViewController = webViewModel?.webViewController;
         _searchController!.text =
             (await webViewController?.getUrl())?.toString() ?? "";
@@ -369,7 +369,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
                 ? WebUri(settings.customUrlHomePage)
                 : WebUri(settings.searchEngine.url);
 
-            final webViewModel = windowModel.getCurrentTab()?.webViewModel;
+            final webViewModel = windowModel.getCurrentTab();
             if (webViewModel?.webViewController != null) {
               webViewModel!.webViewController!
                   .loadUrl(urlRequest: URLRequest(url: url));
@@ -439,7 +439,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
     return GestureDetector(
       onTap: () async {
         if (windowModel.webViewTabs.isNotEmpty) {
-          var webViewModel = windowModel.getCurrentTab()?.webViewModel;
+          var webViewModel = windowModel.getCurrentTab();
           if (webViewModel != null) {
             webViewModel.screenshot = await webViewModel.webViewController
                 ?.takeScreenshot(
@@ -604,7 +604,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
               },
               onTap: () async {
                 if (windowModel.webViewTabs.isNotEmpty) {
-                  var webViewModel = windowModel.getCurrentTab()?.webViewModel;
+                  var webViewModel = windowModel.getCurrentTab();
                   var webViewController = webViewModel?.webViewController;
 
                   if (View.of(context).viewInsets.bottom > 0.0) {
@@ -1435,10 +1435,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
         : WebUri(settings.searchEngine.url);
 
     windowModel.addTab(
-      WebViewTab(
-        key: GlobalKey(),
-        webViewModel: WebViewModel(url: url),
-      ),
+      WebViewModel(url: url),
     );
   }
 
@@ -1452,10 +1449,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
         : WebUri(settings.searchEngine.url);
 
     windowModel.addTab(
-      WebViewTab(
-        key: GlobalKey(),
-        webViewModel: WebViewModel(url: url, isIncognitoMode: true),
-      ),
+      WebViewModel(url: url, isIncognitoMode: true),
     );
   }
 
@@ -1730,7 +1724,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
 
   void share() {
     final windowModel = Provider.of<WindowModel>(context, listen: false);
-    final webViewModel = windowModel.getCurrentTab()?.webViewModel;
+    final webViewModel = windowModel.getCurrentTab();
     final url = webViewModel?.url;
     if (url != null) {
       Share.share(url.toString(), subject: webViewModel?.title);
@@ -1749,7 +1743,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
 
   void toggleDesktopMode() async {
     final windowModel = Provider.of<WindowModel>(context, listen: false);
-    final webViewModel = windowModel.getCurrentTab()?.webViewModel;
+    final webViewModel = windowModel.getCurrentTab();
     final webViewController = webViewModel?.webViewController;
 
     final currentWebViewModel = Provider.of<WebViewModel>(
@@ -1856,7 +1850,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
     final browserModel = Provider.of<BrowserModel>(context, listen: false);
     final settings = browserModel.getSettings();
     final windowModel = Provider.of<WindowModel>(context, listen: false);
-    final webViewModel = windowModel.getCurrentTab()?.webViewModel;
+    final webViewModel = windowModel.getCurrentTab();
     final webViewController = webViewModel?.webViewController;
 
     if (webViewController == null) return;
@@ -2166,7 +2160,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
   void _performTranslation(String langCode, String langName) async {
     final browserModel = Provider.of<BrowserModel>(context, listen: false);
     final windowModel = Provider.of<WindowModel>(context, listen: false);
-    final webViewModel = windowModel.getCurrentTab()?.webViewModel;
+    final webViewModel = windowModel.getCurrentTab();
     final webViewController = webViewModel?.webViewController;
 
     if (webViewController == null) return;
@@ -2259,7 +2253,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
 
   void _showSuggestionsOverlay() async {
     final windowModel = Provider.of<WindowModel>(context, listen: false);
-    final webViewModel = windowModel.getCurrentTab()?.webViewModel;
+    final webViewModel = windowModel.getCurrentTab();
     var webViewController = webViewModel?.webViewController;
     var currentUrl = (await webViewController?.getUrl())?.toString() ?? "";
 

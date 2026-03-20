@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/browser_model.dart';
 import '../models/window_model.dart';
 import '../models/webview_model.dart';
-import '../webview_tab.dart';
+
 import 'ai_chat_page.dart';
 import 'agent_chat_page.dart';
 import '../url_predictor.dart';
@@ -50,6 +50,11 @@ class _CometHomePageState extends State<CometHomePage>
   void _handleSearch([String? forcedQuery]) {
     final query = forcedQuery ?? _searchController.text;
     if (query.isNotEmpty) {
+      if (widget.onSearch != null) {
+        widget.onSearch!(query);
+        return;
+      }
+
       final windowModel = Provider.of<WindowModel>(context, listen: false);
 
       if (query.startsWith('>>')) {
@@ -89,13 +94,10 @@ class _CometHomePageState extends State<CometHomePage>
       }
 
       windowModel.addTab(
-        WebViewTab(
-          key: GlobalKey(),
-          webViewModel: WebViewModel(url: WebUri(url)),
-        ),
+        WebViewModel(url: WebUri(url)),
       );
-
-      Navigator.pushNamed(context, '/browser');
+      
+      // No need to navigate if we are already on the browser screen that renders IndexedStack
     }
   }
 
@@ -172,7 +174,9 @@ class _CometHomePageState extends State<CometHomePage>
                             _buildTopSitesWidget(settings),
                             const SizedBox(height: 32),
                             _buildBookmarksSection(settings, browserModel),
-                            const SizedBox(height: 48),
+                            const SizedBox(height: 32),
+                            _buildSystemWidgets(),
+                            const SizedBox(height: 32),
                             _buildQuickFeatures(context),
                             const SizedBox(height: 40),
                           ],
@@ -320,6 +324,174 @@ class _CometHomePageState extends State<CometHomePage>
               ),
             )
             .toList(),
+      ),
+    );
+  }
+
+  Widget _buildSystemWidgets() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "SYSTEM INTELLIGENCE",
+          style: TextStyle(
+            color: Colors.white38,
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildGlassWidget(
+              "CPU",
+              "24%",
+              Icons.memory,
+              const Color(0xFF00E5FF),
+              "Optimized",
+            ),
+            _buildGlassWidget(
+              "RAM",
+              "4.2 GB",
+              Icons.speed,
+              const Color(0xFFD500F9),
+              "Clean",
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _buildNeuralAgentCard(),
+      ],
+    );
+  }
+
+  Widget _buildGlassWidget(
+    String label,
+    String value,
+    IconData icon,
+    Color accentColor,
+    String status,
+  ) {
+    return Container(
+      width: (MediaQuery.of(context).size.width - 64) / 2,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withOpacity(0.05),
+            blurRadius: 10,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icon, color: accentColor, size: 20),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  status,
+                  style: TextStyle(
+                    color: accentColor,
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white38, fontSize: 10),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNeuralAgentCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        image: const DecorationImage(
+          image: AssetImage('assets/icon/icon_grain.png'),
+          opacity: 0.03,
+          fit: BoxFit.cover,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF00E5FF), Color(0xFFD500F9)],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00E5FF).withOpacity(0.3),
+                  blurRadius: 12,
+                ),
+              ],
+            ),
+            child: const Icon(Icons.rocket, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Comet Neural Agent",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Issue deep system commands with '>>'",
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.4),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.keyboard_arrow_right, color: Colors.white24),
+            onPressed: () => _handleSearch(">> "),
+          ),
+        ],
       ),
     );
   }

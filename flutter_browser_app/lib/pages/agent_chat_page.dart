@@ -176,7 +176,7 @@ class _AgentChatPageState extends State<AgentChatPage>
       final windowModel = Provider.of<WindowModel>(context, listen: false);
       final currentTab = windowModel.getCurrentTab();
       if (currentTab != null) {
-        controller = currentTab.webViewModel.webViewController;
+        controller = currentTab.webViewController;
       }
     }
 
@@ -253,7 +253,7 @@ class _AgentChatPageState extends State<AgentChatPage>
         _agentService = CometAgentService(
           apiKey: _apiKey!,
           model: settings.geminiModel,
-          webViewController: currentTab.webViewModel.webViewController,
+          webViewController: currentTab.webViewController,
         );
         // Re-hook listeners
         _hookAgentListeners();

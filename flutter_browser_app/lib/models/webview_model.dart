@@ -25,6 +25,7 @@ class WebViewModel extends ChangeNotifier {
   FindInteractionController? findInteractionController;
   Uint8List? screenshot;
   bool needsToCompleteInitialLoad;
+  final GlobalKey tabKey = GlobalKey();
   final DateTime _createdTime;
   DateTime _lastOpenedTime;
 

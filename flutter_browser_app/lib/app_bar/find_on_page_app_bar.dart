@@ -31,7 +31,7 @@ class _FindOnPageAppBarState extends State<FindOnPageAppBar> {
   @override
   Widget build(BuildContext context) {
     final windowModel = Provider.of<WindowModel>(context, listen: false);
-    final webViewModel = windowModel.getCurrentTab()?.webViewModel;
+    final webViewModel = windowModel.getCurrentTab();
     final findInteractionController = webViewModel?.findInteractionController;
 
     return AppBar(

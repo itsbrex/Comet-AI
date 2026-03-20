@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_browser/util.dart';
-import 'package:flutter_browser/webview_tab.dart';
+
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:provider/provider.dart';
 
@@ -82,9 +82,6 @@ class _EmptyTabState extends State<EmptyTab> {
       url = WebUri(settings.searchEngine.searchUrl + value);
     }
 
-    windowModel.addTab(WebViewTab(
-      key: GlobalKey(),
-      webViewModel: WebViewModel(url: url),
-    ));
+    windowModel.addTab(WebViewModel(url: url));
   }
 }

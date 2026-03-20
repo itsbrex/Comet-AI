@@ -7,7 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_browser/main.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_browser/models/webview_model.dart';
-import 'package:flutter_browser/webview_tab.dart';
+
 import 'package:uuid/uuid.dart';
 import 'package:collection/collection.dart';
 
@@ -18,7 +18,7 @@ class WindowModel extends ChangeNotifier {
   String _name = '';
   DateTime _updatedTime;
   final DateTime _createdTime;
-  final List<WebViewTab> _webViewTabs = [];
+  final List<WebViewModel> _webViewTabs = [];
   int _currentTabIndex = -1;
   late WebViewModel _currentWebViewModel;
   bool _shouldSave = false;
@@ -65,7 +65,7 @@ class WindowModel extends ChangeNotifier {
 
   String get id => _id;
 
-  UnmodifiableListView<WebViewTab> get webViewTabs =>
+  UnmodifiableListView<WebViewModel> get webViewTabs =>
       UnmodifiableListView(_webViewTabs);
 
   String get name => _name;
@@ -76,47 +76,47 @@ class WindowModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addTab(WebViewTab webViewTab) {
-    _webViewTabs.add(webViewTab);
+  void addTab(WebViewModel webViewModel) {
+    _webViewTabs.add(webViewModel);
     _currentTabIndex = _webViewTabs.length - 1;
-    webViewTab.webViewModel.tabIndex = _currentTabIndex;
-    webViewTab.webViewModel.lastOpenedTime = DateTime.now();
+    webViewModel.tabIndex = _currentTabIndex;
+    webViewModel.lastOpenedTime = DateTime.now();
 
-    _currentWebViewModel.updateWithValue(webViewTab.webViewModel);
+    _currentWebViewModel.updateWithValue(webViewModel);
 
     notifyListeners();
   }
 
-  void addTabs(List<WebViewTab> webViewTabs) {
-    for (var webViewTab in webViewTabs) {
-      _webViewTabs.add(webViewTab);
-      webViewTab.webViewModel.tabIndex = _webViewTabs.length - 1;
+  void addTabs(List<WebViewModel> webViewModels) {
+    for (var webViewModel in webViewModels) {
+      _webViewTabs.add(webViewModel);
+      webViewModel.tabIndex = _webViewTabs.length - 1;
     }
     _currentTabIndex = _webViewTabs.length - 1;
     if (_currentTabIndex >= 0) {
-      webViewTabs.last.webViewModel.lastOpenedTime = DateTime.now();
-      _currentWebViewModel.updateWithValue(webViewTabs.last.webViewModel);
+      _webViewTabs.last.lastOpenedTime = DateTime.now();
+      _currentWebViewModel.updateWithValue(_webViewTabs.last);
     }
 
     notifyListeners();
   }
 
   void closeTab(int index) {
-    final webViewTab = _webViewTabs[index];
+    final webViewModel = _webViewTabs[index];
     _webViewTabs.removeAt(index);
-    InAppWebViewController.disposeKeepAlive(webViewTab.webViewModel.keepAlive);
+    InAppWebViewController.disposeKeepAlive(webViewModel.keepAlive);
 
     if (Util.isMobile() || _currentTabIndex >= _webViewTabs.length) {
       _currentTabIndex = _webViewTabs.length - 1;
     }
 
     for (int i = index; i < _webViewTabs.length; i++) {
-      _webViewTabs[i].webViewModel.tabIndex = i;
+      _webViewTabs[i].tabIndex = i;
     }
 
     if (_currentTabIndex >= 0) {
       _currentWebViewModel
-          .updateWithValue(_webViewTabs[_currentTabIndex].webViewModel);
+          .updateWithValue(_webViewTabs[_currentTabIndex]);
     } else {
       _currentWebViewModel.updateWithValue(WebViewModel());
     }
@@ -127,7 +127,7 @@ class WindowModel extends ChangeNotifier {
   void showTab(int index) {
     if (_currentTabIndex != index) {
       _currentTabIndex = index;
-      final webViewModel = _webViewTabs[_currentTabIndex].webViewModel;
+      final webViewModel = _webViewTabs[_currentTabIndex];
       webViewModel.lastOpenedTime = DateTime.now();
       _currentWebViewModel.updateWithValue(webViewModel);
 
@@ -136,9 +136,9 @@ class WindowModel extends ChangeNotifier {
   }
 
   void closeAllTabs() {
-    for (final webViewTab in _webViewTabs) {
+    for (final webViewModel in _webViewTabs) {
       InAppWebViewController.disposeKeepAlive(
-          webViewTab.webViewModel.keepAlive);
+          webViewModel.keepAlive);
     }
     _webViewTabs.clear();
     _currentTabIndex = -1;
@@ -151,7 +151,7 @@ class WindowModel extends ChangeNotifier {
     return _currentTabIndex;
   }
 
-  WebViewTab? getCurrentTab() {
+  WebViewModel? getCurrentTab() {
     return _currentTabIndex >= 0 ? _webViewTabs[_currentTabIndex] : null;
   }
 
@@ -243,16 +243,13 @@ class WindowModel extends ChangeNotifier {
 
       List<Map<String, dynamic>> webViewTabList =
           browserData["webViewTabs"]?.cast<Map<String, dynamic>>() ?? [];
-      List<WebViewTab> webViewTabs = webViewTabList
-          .map((e) => WebViewTab(
-                key: GlobalKey(),
-                webViewModel: WebViewModel.fromMap(e)!,
-              ))
+      List<WebViewModel> webViewModels = webViewTabList
+          .map((e) => WebViewModel.fromMap(e)!)
           .toList();
-      webViewTabs.sort((a, b) =>
-          a.webViewModel.tabIndex!.compareTo(b.webViewModel.tabIndex!));
+      webViewModels.sort((a, b) =>
+          a.tabIndex!.compareTo(b.tabIndex!));
 
-      addTabs(webViewTabs);
+      addTabs(webViewModels);
 
       int currentTabIndex = browserData["currentTabIndex"] ?? _currentTabIndex;
       currentTabIndex = min(currentTabIndex, _webViewTabs.length - 1);
@@ -283,15 +280,12 @@ class WindowModel extends ChangeNotifier {
             : null);
     List<Map<String, dynamic>> webViewTabList =
         map["webViewTabs"]?.cast<Map<String, dynamic>>() ?? [];
-    List<WebViewTab> webViewTabs = webViewTabList
-        .map((e) => WebViewTab(
-              key: GlobalKey(),
-              webViewModel: WebViewModel.fromMap(e)!,
-            ))
+    List<WebViewModel> webViewModels = webViewTabList
+        .map((e) => WebViewModel.fromMap(e)!)
         .toList();
-    webViewTabs.sort(
-        (a, b) => a.webViewModel.tabIndex!.compareTo(b.webViewModel.tabIndex!));
-    window.addTabs(webViewTabs);
+    webViewModels.sort(
+        (a, b) => a.tabIndex!.compareTo(b.tabIndex!));
+    window.addTabs(webViewModels);
     return window;
   }
 
@@ -299,7 +293,7 @@ class WindowModel extends ChangeNotifier {
     return {
       "id": _id,
       "name": _name,
-      "webViewTabs": _webViewTabs.map((e) => e.webViewModel.toMap()).toList(),
+      "webViewTabs": _webViewTabs.map((e) => e.toMap()).toList(),
       "currentTabIndex": _currentTabIndex,
       "currentWebViewModel": _currentWebViewModel.toMap(),
       "shouldSave": _shouldSave,

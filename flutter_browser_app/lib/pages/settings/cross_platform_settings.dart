@@ -9,7 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/window_model.dart';
-import '../../webview_tab.dart';
+
 import '../../sync_service.dart';
 import 'package:flutter_font_icons/flutter_font_icons.dart';
 import 'dart:convert';
@@ -193,7 +193,7 @@ class _CrossPlatformSettingsState extends State<CrossPlatformSettings> {
             settings.debuggingEnabled = value;
             browserModel.updateSettings(settings);
             if (windowModel.webViewTabs.isNotEmpty) {
-              var webViewModel = windowModel.getCurrentTab()?.webViewModel;
+              var webViewModel = windowModel.getCurrentTab();
               if (Util.isAndroid()) {
                 InAppWebViewController.setWebContentsDebuggingEnabled(
                   settings.debuggingEnabled,
@@ -593,11 +593,8 @@ class _CrossPlatformSettingsState extends State<CrossPlatformSettings> {
         onTap: () {
           final windowModel = Provider.of<WindowModel>(context, listen: false);
           windowModel.addTab(
-            WebViewTab(
-              key: GlobalKey(),
-              webViewModel: WebViewModel(
-                url: WebUri("https://browser.ponsrischool.in"),
-              ),
+            WebViewModel(
+              url: WebUri("https://browser.ponsrischool.in"),
             ),
           );
         },
@@ -619,11 +616,8 @@ class _CrossPlatformSettingsState extends State<CrossPlatformSettings> {
         onTap: () {
           final windowModel = Provider.of<WindowModel>(context, listen: false);
           windowModel.addTab(
-            WebViewTab(
-              key: GlobalKey(),
-              webViewModel: WebViewModel(
-                url: WebUri("https://github.com/Preet3627/Comet-AI"),
-              ),
+            WebViewModel(
+              url: WebUri("https://github.com/Preet3627/Comet-AI"),
             ),
           );
         },

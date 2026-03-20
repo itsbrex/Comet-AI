@@ -19,7 +19,7 @@ import 'package:path/path.dart' as p;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'sync_service.dart';
-import 'webview_tab.dart';
+
 import 'package:google_fonts/google_fonts.dart';
 
 import 'browser.dart';
@@ -276,10 +276,7 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
         listen: false,
       );
       windowModel.addTab(
-        WebViewTab(
-          key: GlobalKey(),
-          webViewModel: WebViewModel(url: WebUri(data)),
-        ),
+        WebViewModel(url: WebUri(data)),
       );
       navigatorKey.currentState?.pushNamed('/browser');
     } else {
