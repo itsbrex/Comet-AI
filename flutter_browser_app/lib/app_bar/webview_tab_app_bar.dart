@@ -35,7 +35,6 @@ import '../custom_popup_menu_item.dart';
 import '../models/window_model.dart';
 import '../popup_menu_actions.dart';
 import '../project_info_popup.dart';
-import '../webview_tab.dart';
 
 class WebViewTabAppBar extends StatefulWidget {
   final void Function()? showFindOnPage;
@@ -1695,10 +1694,7 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
                     listen: false,
                   );
                   windowModel.addTab(
-                    WebViewTab(
-                      key: GlobalKey(),
-                      webViewModel: WebViewModel(url: WebUri("file://$path")),
-                    ),
+                    WebViewModel(url: WebUri("file://$path")),
                   );
                 }
                 Navigator.pop(context);

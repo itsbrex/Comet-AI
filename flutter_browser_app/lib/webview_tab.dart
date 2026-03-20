@@ -484,14 +484,11 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
         windowModel.notifyWebViewTabUpdated();
       },
       onCreateWindow: (controller, createWindowRequest) async {
-        var webViewTab = WebViewTab(
-          key: GlobalKey(),
-          webViewModel: WebViewModel(
-              url: WebUri("about:blank"),
-              windowId: createWindowRequest.windowId),
+        var webViewModel = WebViewModel(
+          url: WebUri("about:blank"),
+          windowId: createWindowRequest.windowId,
         );
-
-        windowModel.addTab(webViewTab);
+        windowModel.addTab(webViewModel);
 
         return true;
       },
