@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Circle, Loader2, AlertCircle, ChevronRight, Zap, Target, Search, Globe, FileText, Camera, ScanLine, MousePointer2, Volume2, Sun, Terminal, Rocket, Languages, Hourglass, Shield } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, AlertCircle, ChevronRight, Zap, Target, Search, Globe, FileText, Camera, ScanLine, MousePointer2, Volume2, Sun, Terminal, Rocket, Languages, Hourglass, Shield, Brain } from 'lucide-react';
 
 export interface AICommand {
     id: string;
@@ -36,6 +36,7 @@ const getCommandIcon = (type: string) => {
         case 'WEB_SEARCH': return <Globe size={16} />;
         case 'EXPLAIN_CAPABILITIES': return <Zap size={16} />;
         case 'WAIT': return <Hourglass size={16} />;
+        case 'THINK': return <Brain size={16} />;
         default: return <Zap size={16} />;
     }
 };
@@ -56,6 +57,7 @@ const getCommandLabel = (type: string, value: string) => {
         WEB_SEARCH: (v) => `Deep Web Search: "${v}"`,
         EXPLAIN_CAPABILITIES: () => 'Orchestrating capabilities',
         WAIT: (v) => `Pausing for ${parseInt(v) / 1000}s`,
+        THINK: (v) => `Cognitive Processing: ${v}`,
     };
     try {
         return labels[type] ? labels[type](value) : `${type}: ${value}`;
@@ -141,7 +143,22 @@ export const AICommandQueue: React.FC<AICommandQueueProps> = ({
                                             {getCommandLabel(command.type, command.value)}
                                         </div>
                                         
-                                        {isActive && (
+                                        {/* Command Output / Results */}
+                                        {command.output && (
+                                            <motion.div 
+                                                initial={{ height: 0, opacity: 0 }}
+                                                animate={{ height: 'auto', opacity: 1 }}
+                                                className={`mt-2 p-2 rounded-lg bg-black/40 border border-white/5 text-[9px] font-mono leading-relaxed overflow-hidden ${
+                                                    isActive ? 'text-sky-300' : 'text-sky-300/40'
+                                                }`}
+                                            >
+                                                {command.output.length > 150 
+                                                    ? `${command.output.substring(0, 150)}...` 
+                                                    : command.output}
+                                            </motion.div>
+                                        )}
+
+                                        {isActive && !command.output && (
                                             <div className="mt-1.5 flex items-center gap-2">
                                                 <div className="flex-1 h-0.5 bg-white/5 rounded-full overflow-hidden">
                                                     <motion.div 
@@ -162,7 +179,7 @@ export const AICommandQueue: React.FC<AICommandQueueProps> = ({
                                     </div>
 
                                     {/* Status Orb for past items */}
-                                    {isPast && (
+                                    {isPast && !command.output && (
                                         <div className="w-1.5 h-1.5 rounded-full bg-green-500/50" />
                                     )}
                                 </div>

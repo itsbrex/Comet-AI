@@ -3616,13 +3616,19 @@ app.whenReady().then(() => {
         </head>
         <body>
           <div class="header-info">
-             <div class="branding" style="font-size: 1.5rem;">🌌 Comet-AI</div>
+             <div class="branding" style="font-size: 1.5rem; display: flex; align-items: center; gap: 12px;">
+                <img src="data:image/png;base64,${fs.readFileSync(path.join(__dirname, 'public/icon.png')).toString('base64')}" style="width: 32px; height: 32px;" />
+                Comet-AI
+             </div>
           </div>
           <h1>${title || 'Comet AI Document'}</h1>
           <div class="meta">Verified Intelligence Report • ${new Date().toLocaleDateString()}</div>
           ${content}
           <div class="footer">
-            <div class="branding">🌠 Comet-AI Browser</div>
+            <div class="branding" style="display: flex; align-items: center; gap: 8px;">
+               <img src="data:image/png;base64,${fs.readFileSync(path.join(__dirname, 'public/icon.png')).toString('base64')}" style="width: 20px; height: 20px;" />
+               Comet-AI Browser
+            </div>
             <div>Autonomous Agent Workspace • Page 1 of 1</div>
           </div>
         </body>

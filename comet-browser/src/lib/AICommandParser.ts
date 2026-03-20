@@ -38,6 +38,8 @@ export const COMMAND_REGISTRY = {
     GO_BACK: { desc: 'Go back in browser history', example: '[GO_BACK]' },
     GO_FORWARD: { desc: 'Go forward in browser history', example: '[GO_FORWARD]' },
     WAIT: { desc: 'Pause execution for duration (ms)', example: '[WAIT: 2000]' },
+    THINK: { desc: 'Show AI reasoning steps', example: '[THINK: "Calculating optimal path..."]' },
+    PLAN: { desc: 'Show AI future plans', example: '[PLAN: "Step 1: Search, Step 2: Read"]' },
     EXPLAIN_CAPABILITIES: { desc: 'List all available AI features', example: '[EXPLAIN_CAPABILITIES]' },
 } as const;
 
@@ -46,10 +48,7 @@ export type CommandType = keyof typeof COMMAND_REGISTRY;
 
 // Non-executable commands (handled by LLM only or displayed in text)
 export const META_COMMANDS = [
-    'EXPLAIN_CAPABILITIES',
-    'THINK',
-    'PLAN',
-    'LIST_OPEN_TABS',
+    'PLACEHOLDER_META',
 ] as const;
 
 /**
@@ -97,9 +96,15 @@ export function parseAICommands(content: string): CommandParseResult {
         // SKIP Meta Commands - they should NOT go into the execution queue
         if (metaCommandsSet.has(type as any)) continue;
 
+        // Clean up command value: trim and strip surrounding quotes
+        let value = (match[2] || '').trim();
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.substring(1, value.length - 1).trim();
+        }
+
         commands.push({
             type,
-            value: (match[2] || '').trim(),
+            value,
             originalMatch: content.substring(match.index, match.index + fullMatch.length),
             index: match.index,
         });

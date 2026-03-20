@@ -264,3 +264,58 @@ export function lsRemove(key: string): void {
   } catch {
   }
 }
+
+/**
+ * Returns the cached Comet icon base64 string, or null if not yet loaded.
+ * Loading is kicked off automatically at module init below.
+ */
+export function tryGetIconBase64(): string | null {
+  try {
+    return (window as any).__cometIconBase64 ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Loads the Comet icon into a base64 PNG and caches it on window.
+ */
+export async function preloadCometIcon(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if ((window as any).__cometIconBase64) return;
+
+  const tryCanvas = (src: string): Promise<string | null> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const size = Math.max(img.naturalWidth || 32, img.naturalHeight || 32, 1);
+          const canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          canvas.getContext('2d')?.drawImage(img, 0, 0, size, size);
+          const data = canvas.toDataURL('image/png');
+          if (data.length < 100) { resolve(null); return; }
+          (window as any).__cometIconBase64 = data;
+          resolve(data);
+        } catch { resolve(null); }
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+
+  if (await tryCanvas('/icon.png')) return;
+  if (await tryCanvas('/icon.ico')) return;
+
+  try {
+    const api = (window as any).electronAPI;
+    if (typeof api?.readFileAsBase64 === 'function') {
+      const base64 = await api.readFileAsBase64('icon.ico');
+      if (base64) {
+        (window as any).__cometIconBase64 = `data:image/x-icon;base64,${base64}`;
+        return;
+      }
+    }
+  } catch { }
+}
