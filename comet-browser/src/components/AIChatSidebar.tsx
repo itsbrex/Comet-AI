@@ -130,6 +130,8 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [currentCommandIndex, setCurrentCommandIndex] = useState(0);
   const processingQueueRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // true after user approves any high-risk action in the current chain
+  const chainApprovedRef = useRef(false);
 
   // Reasoning steps
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
@@ -163,6 +165,12 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [permissionPending, setPermissionPending] = useState<any | null>(null);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
+  // Purple glow effect on chatbox when Shift+Tab is pressed to quick-allow
+  const [shiftTabGlow, setShiftTabGlow] = useState(false);
+  // Terminal log state
+  const [terminalLogs, setTerminalLogs] = useState<Array<{ id: string; command: string; output: string; success: boolean; timestamp: number }>>([]);
+  const [showTerminal, setShowTerminal] = useState(false);
+  const terminalEndRef = useRef<HTMLDivElement>(null);
 
   // ---------------------------------------------------------------------------
   // Helper Logic
@@ -182,6 +190,9 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     actionType: string, action: string, target: string, what: string, reason: string,
     risk: 'low' | 'medium' | 'high' = 'low'
   ): Promise<boolean> => {
+    // Low risk (web search, PDF, navigate, screenshot, etc.) — auto-approve silently
+    if (risk === 'low') return true;
+
     let highRiskQr = null;
     if (risk === 'high' && window.electronAPI?.generateHighRiskQr) {
       highRiskQr = await window.electronAPI.generateHighRiskQr(Math.random().toString(36).substring(7));
@@ -281,6 +292,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     setThinkingSteps([]);
     setThinkingText('');
     setError(null);
+    chainApprovedRef.current = false; // Reset per-chain approval
 
     // 2. Security Checks
     const threatCheck = checkThreat(rawContent);
@@ -476,23 +488,10 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           break;
         }
 
-        case 'WAIT':
-        case 'DELAY': {
-          const ms = parseInt(command.value) || 2000;
-          output = `Waiting for ${ms/1000}s...`;
-          await new Promise(resolve => setTimeout(resolve, ms));
-          break;
-        }
-
-        case 'THINK': {
-          const thinkId = addThinkingStep('Chain Reasoning', command.value);
-          output = `Reasoning: ${command.value}`;
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          resolveThinkingStep(thinkId, 'done');
-          break;
-        }
 
         case 'READ_PAGE_CONTENT': {
+          // 2s delay to allow page to fully load before extracting
+          await new Promise(resolve => setTimeout(resolve, 2000));
           const res = await window.electronAPI.extractPageContent();
           if (res.content) {
             const scrubbed = scrubbedContent(res.content);
@@ -526,16 +525,32 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           break;
 
         case 'SHELL_COMMAND': {
-          setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'awaiting_permission' } : cmd));
-          const confirmed = await requestActionPermission(
-            'SHELL_COMMAND', 'Execute Shell Command', 'Terminal', command.value, 
-            'The AI needs to run this command to complete your task.', 'high'
-          );
+          let confirmed = chainApprovedRef.current; // Skip prompt if chain already approved
+          if (!confirmed) {
+            setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'awaiting_permission' } : cmd));
+            confirmed = await requestActionPermission(
+              'SHELL_COMMAND', 'Execute Shell Command', 'Terminal', command.value,
+              'The AI needs to run this command to complete your task.', 'high'
+            );
+            if (confirmed) chainApprovedRef.current = true;
+          }
           setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
+          const logId = `term-${Date.now()}`;
+          const logEntry = { id: logId, command: command.value, output: '', success: false, timestamp: Date.now() };
           if (confirmed) {
+            // Show terminal and add a pending entry
+            setShowTerminal(true);
+            setTerminalLogs(prev => [...prev, { ...logEntry, output: '⏳ Running...' }]);
             const res = await window.electronAPI.executeShellCommand(command.value);
-            output = res.success ? `Command output: ${res.output}` : `Error: ${res.error}`;
+            const cmdOutput = res.success ? (res.output || '(no output)') : `Error: ${res.error}`;
+            // Update the terminal log with actual output
+            setTerminalLogs(prev => prev.map(l => l.id === logId
+              ? { ...l, output: cmdOutput, success: !!res.success }
+              : l
+            ));
+            output = `$ ${command.value}\n${cmdOutput}`;
           } else {
+            setTerminalLogs(prev => [...prev, { ...logEntry, output: '⛔ Denied by user.', success: false }]);
             output = 'Command execution denied by user.';
           }
           break;
@@ -628,6 +643,60 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           await window.electronAPI.goForward();
           output = 'Navigated forward in history.';
           break;
+
+        case 'SCREENSHOT_AND_ANALYZE': {
+          const stepId = addThinkingStep('Capturing screenshot...', 'Taking screenshot and running OCR');
+          // 2s delay to allow the page to fully render before OCR
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          try {
+            // Use vision describe if available, else fall back to OCR text
+            let ocrText = '';
+            if (window.electronAPI.visionDescribe) {
+              const visionRes = await window.electronAPI.visionDescribe('What is on this screen? Extract all visible text.');
+              ocrText = typeof visionRes === 'string' ? visionRes : ((visionRes as any)?.description || '');
+            } else if (window.electronAPI.ocrScreenText) {
+              const ocrRes = await window.electronAPI.ocrScreenText();
+              ocrText = typeof ocrRes === 'string' ? ocrRes : ((ocrRes as any)?.text || '');
+            }
+            resolveThinkingStep(stepId, 'done', 'Screenshot captured');
+            if (ocrText) {
+              output = `Screenshot analyzed. OCR text (${ocrText.length} chars): ${ocrText.substring(0, 200)}...`;
+              await BrowserAI.addToVectorMemory(ocrText, { type: 'screenshot_ocr', url: currentUrl });
+              setMessages(prev => {
+                const last = prev[prev.length - 1];
+                if (last && last.role === 'model') {
+                  const updated = [...prev];
+                  updated[prev.length - 1] = { ...last, isOcr: true, ocrLabel: 'SCREENSHOT_ANALYSIS', content: ocrText };
+                  return updated;
+                }
+                return [...prev, { role: 'model', content: ocrText, isOcr: true, ocrLabel: 'SCREENSHOT_ANALYSIS' } as ExtendedChatMessage];
+              });
+            } else {
+              output = 'Screenshot captured but no text detected.';
+            }
+          } catch (e: any) {
+            resolveThinkingStep(stepId, 'error', e.message);
+            output = `Screenshot failed: ${e.message}`;
+          }
+          break;
+        }
+
+        case 'EXTRACT_DATA': {
+          const selector = command.value.split('|')[0].trim();
+          try {
+            const res = await window.electronAPI.extractPageContent();
+            if (res && res.content) {
+              const scrubbed = scrubbedContent(res.content);
+              output = `Extracted data from page (${scrubbed.length} chars).`;
+              await BrowserAI.addToVectorMemory(scrubbed, { type: 'extracted_data', selector, url: currentUrl });
+            } else {
+              output = `No data found for selector: ${selector}.`;
+            }
+          } catch (e: any) {
+            output = `Extract failed: ${e.message}`;
+          }
+          break;
+        }
 
         default:
           output = `Operation ${command.type} completed.`;
@@ -738,6 +807,9 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
         const { risk } = permissionPending.context;
         if (risk === 'low' || risk === 'medium') {
           e.preventDefault();
+          // Flash the purple chatbox glow
+          setShiftTabGlow(true);
+          setTimeout(() => setShiftTabGlow(false), 900);
           permissionPending.resolve(true);
           setPermissionPending(null);
         }
@@ -771,6 +843,10 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [terminalLogs]);
 
   // ---------------------------------------------------------------------------
   // Sub-Renderers
@@ -822,6 +898,57 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
         )}
       </AnimatePresence>
 
+      {/* ── Terminal Panel ── */}
+      <AnimatePresence>
+        {showTerminal && terminalLogs.length > 0 && (
+          <motion.div
+            key="terminal"
+            initial={{ opacity: 0, y: 30, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.97 }}
+            className="absolute bottom-[180px] left-4 right-4 z-[9000] rounded-2xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] bg-[#09090f]"
+            style={{ maxHeight: '220px' }}
+          >
+            {/* Terminal Header */}
+            <div className="flex items-center justify-between px-4 py-2 bg-[#111118] border-b border-white/5">
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-red-500/80" />
+                  <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
+                  <div className="w-3 h-3 rounded-full bg-green-500/80" />
+                </div>
+                <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-widest ml-2">Comet Terminal</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setTerminalLogs([])}
+                  className="text-[9px] text-white/20 hover:text-white/50 font-mono uppercase tracking-widest transition-colors"
+                >clear</button>
+                <button
+                  onClick={() => setShowTerminal(false)}
+                  className="text-white/20 hover:text-white/60 transition-colors"
+                ><X size={12} /></button>
+              </div>
+            </div>
+            {/* Terminal Body */}
+            <div className="overflow-y-auto modern-scrollbar p-3 space-y-2 font-mono text-[11px]" style={{ maxHeight: '170px' }}>
+              {terminalLogs.map(log => (
+                <div key={log.id} className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-400/70">❯</span>
+                    <span className="text-sky-300/80">{log.command}</span>
+                  </div>
+                  <pre className={`ml-4 whitespace-pre-wrap break-all leading-relaxed ${
+                    log.success ? 'text-white/60' : 'text-red-400/80'
+                  }`}>{log.output}</pre>
+                </div>
+              ))}
+              <div ref={terminalEndRef} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {permissionPending && (
           <div className="absolute inset-0 z-[10001] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
@@ -850,6 +977,18 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowTerminal(v => !v)}
+              className={`p-2.5 rounded-xl transition-all relative ${showTerminal ? 'bg-green-500/20 text-green-400' : 'hover:bg-white/5 text-white/30 hover:text-white'}`}
+              title="Toggle Terminal"
+            >
+              <Terminal size={18} />
+              {terminalLogs.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-500 text-[8px] font-bold text-black flex items-center justify-center">
+                  {terminalLogs.length > 9 ? '9+' : terminalLogs.length}
+                </span>
+              )}
+            </button>
             <button onClick={() => setShowCapabilities(!showCapabilities)} className={`p-2.5 rounded-xl transition-all ${showCapabilities ? 'bg-sky-500/20 text-sky-400' : 'hover:bg-white/5 text-white/30 hover:text-white'}`} title="View AI Capabilities">
               <Sparkles size={18} />
             </button>
@@ -970,7 +1109,11 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
       {/* ── Input Area ── */}
       <footer className="p-6 pt-0 bg-gradient-to-t from-[#020205] via-[#020205] to-transparent sticky bottom-0">
-        <div className="p-4 rounded-[2.5rem] bg-[#0d0d15] border border-white/10 group focus-within:border-sky-500/30 transition-all shadow-2xl relative">
+        <div className={`p-4 rounded-[2.5rem] bg-[#0d0d15] border transition-all shadow-2xl relative group ${
+          shiftTabGlow
+            ? 'border-purple-500/80 shadow-[0_0_24px_4px_rgba(168,85,247,0.35)] focus-within:border-purple-500/80'
+            : 'border-white/10 focus-within:border-sky-500/30'
+        }`}>
           
           {/* Active Model Indicator inside Chatbox */}
           <div className="absolute -top-10 left-4 flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/5">

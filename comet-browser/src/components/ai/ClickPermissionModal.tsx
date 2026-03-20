@@ -109,6 +109,20 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
           ✓ Allow
         </button>
       </div>
+
+      {/* Shift+Tab shortcut hint for low/medium risk */}
+      {context.risk !== 'high' && (
+        <div className="px-5 pb-4 flex items-center justify-center gap-2">
+          <kbd className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[9px] font-mono text-white/30">
+            Shift
+          </kbd>
+          <span className="text-[9px] text-white/20">+</span>
+          <kbd className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[9px] font-mono text-white/30">
+            Tab
+          </kbd>
+          <span className="text-[9px] text-white/20 uppercase tracking-widest">to quick-allow</span>
+        </div>
+      )}
     </motion.div>
   );
 });
