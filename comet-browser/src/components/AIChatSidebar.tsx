@@ -600,7 +600,33 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
             output = `Search results for "${query}":\n${snippets.join('\n')}`;
           } else {
-            output = `No results found for "${query}". Do NOT invent data — tell the user you could not find current information.`;
+            // Fallback: wait for the search page to load and try DOM / OCR extraction
+            await new Promise(resolve => setTimeout(resolve, 3500));
+            try {
+              const domRes = await window.electronAPI.extractPageContent();
+              if (domRes && domRes.content && domRes.content.length > 100) {
+                const scrubbed = scrubbedContent(domRes.content);
+                output = `Search results for "${query}" (fallback DOM) (${scrubbed.length} chars):\n${scrubbed.substring(0, 4000)}...`;
+                await BrowserAI.addToVectorMemory(scrubbed, { type: 'web_search_fallback', query, url: searchUrl });
+              } else {
+                let ocrText = '';
+                if (window.electronAPI.visionDescribe) {
+                  const visionRes = await window.electronAPI.visionDescribe('Extract all text from this search page.');
+                  ocrText = typeof visionRes === 'string' ? visionRes : ((visionRes as any)?.description || '');
+                } else if (window.electronAPI.ocrScreenText) {
+                  const ocrRes = await window.electronAPI.ocrScreenText();
+                  ocrText = typeof ocrRes === 'string' ? ocrRes : ((ocrRes as any)?.text || '');
+                }
+                if (ocrText && ocrText.length > 50) {
+                  output = `Search results for "${query}" (fallback OCR) (${ocrText.length} chars):\n${ocrText.substring(0, 4000)}...`;
+                  await BrowserAI.addToVectorMemory(ocrText, { type: 'web_search_fallback_ocr', query, url: searchUrl });
+                } else {
+                  output = `No results found for "${query}". Do NOT invent data — tell the user you could not find current information.`;
+                }
+              }
+            } catch (fallbackErr) {
+               output = `No results found for "${query}". Do NOT invent data — tell the user you could not find current information.`;
+            }
           }
           break;
         }
