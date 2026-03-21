@@ -494,6 +494,12 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
         resolveThinkingStep(cmdId, 'done');
 
+        // If the queue was manually emptied (aborted) by the user during execution
+        if (finalCommands.length === 0 && commands.length > 0) {
+           setMessages(prev => [...prev, { role: 'model', content: '(⚠️ Sequence aborted by user)' } as ExtendedChatMessage]);
+           break;
+        }
+
         // Loop Synthesis step: Feed action outputs back into context
         const actionResults = finalCommands.map(c =>
           `[Action ${c.type}]: ${c.status === 'completed' ? (c.output || 'Success') : ('Error: ' + (c.error || 'Failed'))}`
@@ -559,9 +565,8 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
             output = `Navigated to internal page: ${page}`;
           } else {
             setActiveView('browser');
-            const tabToUse = (activeTabId && activeTabId !== 'default') ? activeTabId : 'default';
-            await window.electronAPI.navigateBrowserView({ tabId: tabToUse, url: targetUrl });
-            output = `Navigated to ${targetUrl}`;
+            store.addTab(targetUrl); // ✨ ALWAYS create a new tab for AI navigations
+            output = `Opened new tab and navigated to ${targetUrl}`;
           }
           break;
         }
@@ -574,13 +579,8 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
           setActiveView('browser');
 
-          if (!activeTabId || activeTabId === 'default') {
-            store.addTab(searchUrl);
-            output = `Opening search in new tab: "${query}"`;
-          } else {
-            await window.electronAPI.navigateBrowserView({ tabId: activeTabId, url: searchUrl });
-            output = `Searching for "${query}" in current tab.`;
-          }
+          store.addTab(searchUrl); // ✨ ALWAYS create a new tab for deep web searches
+          output = `Opened new tab for search: "${query}"`;
 
           // Fetch real results and store in vector memory for LLM context
           const results = await window.electronAPI.webSearchRag(query);
