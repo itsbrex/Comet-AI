@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -191,6 +192,17 @@ void main(List<String> args) async {
       if (data?.text != null) {
         SyncService().sendClipboard(data!.text!);
       }
+
+      // Check for image in clipboard
+      try {
+        final Uint8List? imageBytes = await const MethodChannel('com.comet_ai_com.comet_ai.intent_data')
+            .invokeMethod('getClipboardImage');
+        if (imageBytes != null) {
+          SyncService().sendImageClipboard(imageBytes);
+        }
+      } catch (e) {
+        // ignore
+      }
     });
   } catch (e) {
     print('[Sync] Firebase/Sync initialization error: $e');
@@ -260,43 +272,30 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
 
   void _handleIntentData(String data) {
     if (data == "comet-ai://search") {
-      navigatorKey.currentState?.pushNamedAndRemoveUntil(
-        '/home',
-        (route) => false,
-      );
-    } else if (data == "comet-ai://ai") {
-      navigatorKey.currentState?.pushNamed('/ai-chat');
+      navigatorKey.currentState?.pushNamedAndRemoveUntil('/home', (route) => false, arguments: {'focus': true});
     } else if (data == "comet-ai://voice") {
-      navigatorKey.currentState?.pushNamed(
-        '/home',
-        arguments: {'focus': true, 'voice': true},
-      );
+      navigatorKey.currentState?.pushNamedAndRemoveUntil('/home', (route) => false, arguments: {'focus': true, 'voice': true});
+    } else if (data == "comet-ai://terminal") {
+      navigatorKey.currentState?.pushNamed('/settings');
+    } else if (data == "comet-ai://connect") {
+      navigatorKey.currentState?.pushNamed('/connect-desktop');
     } else if (data.startsWith("comet-ai://approve")) {
-      navigatorKey.currentState?.pushNamed(
-        '/approve',
-        arguments: {'data': data},
-      );
+      navigatorKey.currentState?.pushNamed('/approve-action', arguments: {'data': data});
     } else if (data.startsWith('http://') || data.startsWith('https://')) {
-      final windowModel = Provider.of<WindowModel>(
-        navigatorKey.currentContext!,
-        listen: false,
-      );
-      windowModel.addTab(
-        WebViewModel(url: WebUri(data)),
-      );
+      final windowModel = Provider.of<WindowModel>(navigatorKey.currentContext!, listen: false);
+      windowModel.addTab(WebViewModel(url: WebUri(data)));
       navigatorKey.currentState?.pushNamed('/browser');
+    } else if (data.startsWith('>>')) {
+      navigatorKey.currentState?.pushNamed('/agent-chat', arguments: {'initialTask': data.substring(2).trim()});
+    } else if (data.startsWith('>')) {
+      navigatorKey.currentState?.pushNamed('/ai-chat', arguments: {'initialMessage': data.substring(1).trim()});
     } else {
-      if (data.startsWith('>>')) {
-        navigatorKey.currentState?.pushNamed(
-          '/agent-chat',
-          arguments: {'task': data.substring(2).trim()},
-        );
-      } else {
-        navigatorKey.currentState?.pushNamed(
-          '/ai-chat',
-          arguments: {'initialMessage': data},
-        );
-      }
+      final windowModel = Provider.of<WindowModel>(navigatorKey.currentContext!, listen: false);
+      final browserModel = Provider.of<BrowserModel>(navigatorKey.currentContext!, listen: false);
+      final settings = browserModel.getSettings();
+      final url = WebUri(settings.searchEngine.searchUrl + Uri.encodeComponent(data));
+      windowModel.addTab(WebViewModel(url: url));
+      navigatorKey.currentState?.pushNamed('/browser');
     }
   }
 

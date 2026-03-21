@@ -2207,31 +2207,44 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
     final settings = browserModel.getSettings();
     final webViewModel = Provider.of<WebViewModel>(context, listen: false);
 
-    var url = WebUri(value.trim());
-    if (Util.isLocalizedContent(url) ||
-        (url.isValidUri && url.toString().split(".").length > 1)) {
-      url = url.scheme.isEmpty ? WebUri("https://$url") : url;
-    } else {
-      url = WebUri(settings.searchEngine.searchUrl + value);
+    final String trimmedValue = value.trim();
+    WebUri url;
+
+    // Improved URL detection
+    try {
+      final Uri uri = Uri.parse(trimmedValue);
+      if (Util.isLocalizedContent(uri)) {
+        url = WebUri(trimmedValue);
+      } else if (trimmedValue.contains('.') && !trimmedValue.contains(' ')) {
+        url = trimmedValue.contains('://')
+            ? WebUri(trimmedValue)
+            : WebUri("https://$trimmedValue");
+      } else {
+        url = WebUri(settings.searchEngine.searchUrl +
+            Uri.encodeComponent(trimmedValue));
+      }
+    } catch (e) {
+      url = WebUri(
+          settings.searchEngine.searchUrl + Uri.encodeComponent(trimmedValue));
     }
 
     if (webViewModel.webViewController != null) {
-      if (value.startsWith('>>')) {
+      if (trimmedValue.startsWith('>>')) {
         // Double arrow -> Autonomous Browser Agent
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) =>
-                AgentChatPage(initialTask: value.substring(2).trim()),
+                AgentChatPage(initialTask: trimmedValue.substring(2).trim()),
           ),
         );
-      } else if (value.startsWith('>')) {
+      } else if (trimmedValue.startsWith('>')) {
         // Single arrow -> Desktop Control Chat
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                FullScreenAIChat(initialMessage: value.substring(1).trim()),
+            builder: (context) => FullScreenAIChat(
+                initialMessage: trimmedValue.substring(1).trim()),
           ),
         );
       } else {
@@ -2241,7 +2254,6 @@ class _WebViewTabAppBarState extends State<WebViewTabAppBar>
       }
     } else {
       addNewTab(url: url);
-      webViewModel.url = url;
     }
     _hideSuggestionsOverlay();
     _focusNode?.unfocus();

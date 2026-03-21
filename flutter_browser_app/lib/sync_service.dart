@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:io';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/services.dart';
@@ -150,7 +151,12 @@ class SyncService {
         _lastSentClipboard = msg['text'];
         Clipboard.setData(ClipboardData(text: msg['text']));
         _clipboardController.add(msg['text']);
-        print('[Sync] Clipboard synced: ${msg['text']}');
+        print('[Sync] Clipboard text synced');
+      } else if (msg['type'] == 'clipboard-sync-image') {
+        final Uint8List bytes = base64Decode(msg['image']);
+        const MethodChannel('com.comet_ai_com.comet_ai.intent_data')
+            .invokeMethod('setClipboardImage', bytes);
+        print('[Sync] Clipboard image synced');
       } else if (msg['type'] == 'history-sync') {
         _historyController.add(msg['data']);
         print('[Sync] History synced');
@@ -210,6 +216,22 @@ class SyncService {
     if (isConnectedToDesktop && _desktopSocket != null) {
       _desktopSocket!.add(
         jsonEncode({'type': 'clipboard-sync', 'text': text}),
+      );
+    }
+  }
+
+  void sendImageClipboard(Uint8List bytes) {
+    final String base64Image = base64Encode(bytes);
+    if (isConnected && _dataChannel != null) {
+      _dataChannel!.send(
+        RTCDataChannelMessage(
+          jsonEncode({'type': 'clipboard-sync-image', 'image': base64Image}),
+        ),
+      );
+    }
+    if (isConnectedToDesktop && _desktopSocket != null) {
+      _desktopSocket!.add(
+        jsonEncode({'type': 'clipboard-sync-image', 'image': base64Image}),
       );
     }
   }
@@ -360,6 +382,11 @@ class SyncService {
         _lastSentClipboard = msg['text'];
         Clipboard.setData(ClipboardData(text: msg['text']));
         _clipboardController.add(msg['text']);
+      } else if (msg['type'] == 'clipboard-sync-image') {
+        final Uint8List bytes = base64Decode(msg['image']);
+        const MethodChannel('com.comet_ai_com.comet_ai.intent_data')
+            .invokeMethod('setClipboardImage', bytes);
+        print('[Sync] Desktop image clipboard synced');
       } else if (msg['type'] == 'agent-task') {
         final task = msg['task'];
         if (task != null) {

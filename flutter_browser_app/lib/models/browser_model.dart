@@ -13,6 +13,7 @@ import 'favorite_model.dart';
 
 import 'search_engine_model.dart';
 import 'package:collection/collection.dart';
+import 'package:home_widget/home_widget.dart';
 
 class BrowserSettings {
   SearchEngineModel searchEngine;
@@ -41,6 +42,8 @@ class BrowserSettings {
   bool adBlockingEnabled;
   bool performanceModeEnabled;
   bool urlPredictorEnabled;
+  String weatherLocation;
+  String weatherUnit;
 
   BrowserSettings({
     this.searchEngine = GoogleSearchEngine,
@@ -69,6 +72,8 @@ class BrowserSettings {
     this.adBlockingEnabled = true,
     this.performanceModeEnabled = false,
     this.urlPredictorEnabled = false,
+    this.weatherLocation = "San Francisco",
+    this.weatherUnit = "C",
   });
 
   BrowserSettings copy() {
@@ -97,6 +102,8 @@ class BrowserSettings {
       adBlockingEnabled: adBlockingEnabled,
       performanceModeEnabled: performanceModeEnabled,
       urlPredictorEnabled: urlPredictorEnabled,
+      weatherLocation: weatherLocation,
+      weatherUnit: weatherUnit,
     );
   }
 
@@ -133,6 +140,8 @@ class BrowserSettings {
             adBlockingEnabled: map["adBlockingEnabled"] ?? true,
             performanceModeEnabled: map["performanceModeEnabled"] ?? false,
             urlPredictorEnabled: map["urlPredictorEnabled"] ?? false,
+            weatherLocation: map["weatherLocation"] ?? "San Francisco",
+            weatherUnit: map["weatherUnit"] ?? "C",
           )
         : null;
   }
@@ -165,6 +174,8 @@ class BrowserSettings {
       "adBlockingEnabled": adBlockingEnabled,
       "performanceModeEnabled": performanceModeEnabled,
       "urlPredictorEnabled": urlPredictorEnabled,
+      "weatherLocation": weatherLocation,
+      "weatherUnit": weatherUnit,
     };
   }
 
@@ -313,7 +324,19 @@ class BrowserModel extends ChangeNotifier {
 
   void updateSettings(BrowserSettings settings) {
     _settings = settings;
+    _syncToHomeWidget();
     notifyListeners();
+  }
+
+  void _syncToHomeWidget() async {
+    if (Util.isAndroid()) {
+      await HomeWidget.saveWidgetData('weather_location', _settings.weatherLocation);
+      await HomeWidget.saveWidgetData('weather_unit', _settings.weatherUnit);
+      await HomeWidget.updateWidget(
+        name: 'CometAIWeatherWidgetProvider',
+        androidName: 'CometAIWeatherWidgetProvider',
+      );
+    }
   }
 
   Future<List<WindowModel>> getWindows() async {

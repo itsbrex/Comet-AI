@@ -284,13 +284,25 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
               Provider.of<BrowserModel>(context, listen: false);
           final settings = browserModel.getSettings();
 
-          var url = WebUri(value.trim());
-          if (Util.isLocalizedContent(url) ||
-              (url.isValidUri && url.toString().split(".").length > 1)) {
-            url = url.scheme.isEmpty ? WebUri("https://$url") : url;
-          } else {
-            url = WebUri(
-                settings.searchEngine.searchUrl + Uri.encodeComponent(value));
+          final String trimmedValue = value.trim();
+          WebUri url;
+
+          // Improved URL detection
+          try {
+            final Uri uri = Uri.parse(trimmedValue);
+            if (Util.isLocalizedContent(uri)) {
+              url = WebUri(trimmedValue);
+            } else if (trimmedValue.contains('.') && !trimmedValue.contains(' ')) {
+              url = trimmedValue.contains('://')
+                  ? WebUri(trimmedValue)
+                  : WebUri("https://$trimmedValue");
+            } else {
+              url = WebUri(settings.searchEngine.searchUrl +
+                  Uri.encodeComponent(trimmedValue));
+            }
+          } catch (e) {
+            url = WebUri(settings.searchEngine.searchUrl +
+                Uri.encodeComponent(trimmedValue));
           }
 
           windowModel.addTab(

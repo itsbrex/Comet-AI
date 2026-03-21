@@ -9,6 +9,7 @@ import 'ai_chat_page.dart';
 import 'agent_chat_page.dart';
 import '../url_predictor.dart';
 import 'settings/android_settings.dart';
+import '../util.dart';
 import 'dart:ui' as ui;
 
 class CometHomePage extends StatefulWidget {
@@ -48,14 +49,11 @@ class _CometHomePageState extends State<CometHomePage>
   }
 
   void _handleSearch([String? forcedQuery]) {
-    final query = forcedQuery ?? _searchController.text;
+    final query = (forcedQuery ?? _searchController.text).trim();
     if (query.isNotEmpty) {
-      if (widget.onSearch != null) {
-        widget.onSearch!(query);
-        return;
-      }
-
       final windowModel = Provider.of<WindowModel>(context, listen: false);
+      final browserModel = Provider.of<BrowserModel>(context, listen: false);
+      final settings = browserModel.getSettings();
 
       if (query.startsWith('>>')) {
         final task = query.substring(2).trim();
@@ -79,25 +77,32 @@ class _CometHomePageState extends State<CometHomePage>
         return;
       }
 
-      String url = query;
-      if (!query.startsWith('http://') && !query.startsWith('https://')) {
-        if (query.contains('.') && !query.contains(' ')) {
-          url = 'https://$query';
+      WebUri url;
+      // Improved URL detection
+      try {
+        final Uri uri = Uri.parse(query);
+        if (Util.isLocalizedContent(uri)) {
+          url = WebUri(query);
+        } else if (query.contains('.') && !query.contains(' ')) {
+          url = query.contains('://')
+              ? WebUri(query)
+              : WebUri("https://$query");
         } else {
-          final browserModel = Provider.of<BrowserModel>(
-            context,
-            listen: false,
-          );
-          final searchEngine = browserModel.getSettings().searchEngine;
-          url = '${searchEngine.searchUrl}${Uri.encodeComponent(query)}';
+          url = WebUri(settings.searchEngine.searchUrl +
+              Uri.encodeComponent(query));
         }
+      } catch (e) {
+        url = WebUri(settings.searchEngine.searchUrl +
+            Uri.encodeComponent(query));
       }
 
-      windowModel.addTab(
-        WebViewModel(url: WebUri(url)),
-      );
-      
-      // No need to navigate if we are already on the browser screen that renders IndexedStack
+      if (widget.onSearch != null) {
+        widget.onSearch!(url.toString());
+      } else {
+        windowModel.addTab(
+          WebViewModel(url: url),
+        );
+      }
     }
   }
 
@@ -659,67 +664,136 @@ class _CometHomePageState extends State<CometHomePage>
   }
 
   Widget _buildPremiumWeatherWidget() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withOpacity(0.1),
-            Colors.white.withOpacity(0.0),
+    final browserModel = Provider.of<BrowserModel>(context);
+    final settings = browserModel.getSettings();
+    final String location = settings.weatherLocation;
+    final String unit = settings.weatherUnit;
+
+    return GestureDetector(
+      onTap: () => _showWeatherSettingsDialog(browserModel, settings),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withOpacity(0.1),
+              Colors.white.withOpacity(0.0),
+            ],
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.wb_sunny_outlined, color: Colors.amber, size: 40),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "${DateTime.now().day} ${[
+                      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'
+                    ][DateTime.now().month - 1]}",
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  Text(
+                    "24°$unit in $location",
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Text(
+                    "Mostly Sunny",
+                    style: TextStyle(color: Colors.white30, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00E5FF).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                "TAP TO EDIT",
+                style: TextStyle(
+                  color: Color(0xFF00E5FF),
+                  fontSize: 8,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           ],
         ),
       ),
-      child: Row(
-        children: [
-          const Icon(Icons.wb_sunny_outlined, color: Colors.amber, size: 40),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    );
+  }
+
+  void _showWeatherSettingsDialog(BrowserModel browserModel, BrowserSettings settings) {
+    String tempLocation = settings.weatherLocation;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text("Weather Settings", style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              decoration: const InputDecoration(
+                labelText: "Location",
+                labelStyle: TextStyle(color: Colors.white54),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+              ),
+              style: const TextStyle(color: Colors.white),
+              onChanged: (value) => tempLocation = value,
+              controller: TextEditingController(text: settings.weatherLocation),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  "MONDAY, MARCH 2",
-                  style: TextStyle(
-                    color: Colors.white54,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
-                  ),
-                ),
-                Text(
-                  "24°C in San Francisco",
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Text(
-                  "Mostly Sunny",
-                  style: TextStyle(color: Colors.white30, fontSize: 12),
+                const Text("Unit", style: TextStyle(color: Colors.white70)),
+                DropdownButton<String>(
+                  dropdownColor: const Color(0xFF1A1A1A),
+                  value: settings.weatherUnit,
+                  items: ["C", "F"].map((u) => DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(color: Colors.white)))).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      final newSettings = settings.copy();
+                      newSettings.weatherUnit = value;
+                      browserModel.updateSettings(newSettings);
+                      Navigator.pop(context);
+                      _showWeatherSettingsDialog(browserModel, newSettings);
+                    }
+                  },
                 ),
               ],
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00E5FF).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Text(
-              "IDEAL",
-              style: TextStyle(
-                color: Color(0xFF00E5FF),
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
+          TextButton(
+            onPressed: () {
+              final newSettings = settings.copy();
+              newSettings.weatherLocation = tempLocation;
+              browserModel.updateSettings(newSettings);
+              Navigator.pop(context);
+            },
+            child: const Text("SAVE", style: TextStyle(color: Color(0xFF00E5FF))),
           ),
         ],
       ),
