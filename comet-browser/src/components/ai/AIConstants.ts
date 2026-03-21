@@ -61,7 +61,7 @@ export const NOT_FOUND_SIGNALS = [
   "access denied", "403 forbidden",
 ];
 
-export const INTERNAL_TAG_RE = /\[(?:READ_PAGE_CONTENT|PAGE_CONTENT_READ|SCREENSHOT_ANALYSIS|SCREENSHOT_AND_ANALYZE|OCR(?:_COORDINATES|_SCREEN)?|EXTRACTED|EXTRACT_DATA|OPEN_TABS|EMAILS|LIST_OPEN_TABS|NAVIGATE|SEARCH|WEB_SEARCH|FIND_AND_CLICK|CLICK_ELEMENT|CLICK_AT|CLICK_APP_ELEMENT|FILL_FORM|SCROLL_TO|SHELL_COMMAND|OPEN_APP|SET_THEME|SET_VOLUME|SET_BRIGHTNESS|RELOAD|GO_BACK|GO_FORWARD|WAIT|GUIDE_CLICK|GENERATE_PDF|GENERATE_DIAGRAM|OPEN_PRESENTON|EXPLAIN_CAPABILITIES|OPEN_VIEW|GMAIL_\w+|CREATE_NEW_TAB_GROUP)[^\]]*\]/gi;
+export const INTERNAL_TAG_RE = /\[(?:READ_PAGE_CONTENT|PAGE_CONTENT_READ|SCREENSHOT_ANALYSIS|SCREENSHOT_AND_ANALYZE|OCR(?:_COORDINATES|_SCREEN)?|EXTRACTED|EXTRACT_DATA|OPEN_TABS|EMAILS|LIST_OPEN_TABS|NAVIGATE|SEARCH|WEB_SEARCH|FIND_AND_CLICK|CLICK_ELEMENT|CLICK_AT|CLICK_APP_ELEMENT|FILL_FORM|SCROLL_TO|SHELL_COMMAND|OPEN_APP|SET_THEME|SET_VOLUME|SET_BRIGHTNESS|RELOAD|GO_BACK|GO_FORWARD|WAIT|GUIDE_CLICK|GENERATE_PDF|GENERATE_DIAGRAM|OPEN_PRESENTON|EXPLAIN_CAPABILITIES|OPEN_VIEW|GMAIL_\w+|CREATE_NEW_TAB_GROUP|SHOW_IMAGE|SHOW_VIDEO)[^\]]*\]/gi;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Queries that ALWAYS require a web search before answering
@@ -156,7 +156,14 @@ FOR WEBSITE DATA:
 - [READ_PAGE_CONTENT]               ← use AFTER every NAVIGATE
 - [SCREENSHOT_AND_ANALYZE]
 - [LIST_OPEN_TABS]
-- [GENERATE_PDF: title | content]   ← content MUST come from prior WEB_SEARCH results
+- [GENERATE_PDF: title | content]   ← Basic form. Content MUST come from prior search results. Close with ']'.
+- [GENERATE_PDF: title | author:Name | subtitle:Brief subtitle | screenshot:yes | content] ← Extended form with metadata.
+  - screenshot:yes  → captures the active browser tab page and embeds it in the PDF
+  - author:Name     → sets a custom author name shown under the title
+  - subtitle:Text   → sets a subtitle line under the main title
+  - You can combine options in any order between pipes. Content goes last.
+- [SHOW_IMAGE: url | optional_caption]  ← Displays a specific image inline in the chat
+- [SHOW_VIDEO: url | title | optional_description] ← Displays a rich video card in the chat (YouTube supported)
 - [GENERATE_DIAGRAM: mermaid_code]
 - [SHELL_COMMAND: command]
 - [SET_BRIGHTNESS: percentage]

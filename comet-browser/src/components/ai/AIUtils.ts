@@ -104,6 +104,10 @@ export function extractSiteFromContext(content: string, url: string): string | u
 
 export function applyInlineMarkdown(text: string): string {
   return text
+    // Images: ![alt](url) → <img> (must come before link processing)
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;margin:8px 0;display:block;"/>')
+    // Links: [text](url)
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#0ea5e9;text-decoration:underline;">$1</a>')
     .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
@@ -194,52 +198,122 @@ export function buildCleanPDFContent(
       .replace(/<(h[1-6]|p|li|ul|ol|table|tr|thead|tbody|div|br\s*\/?|img)\b/gi, '\n<$1')
       .replace(/<\/(h[1-6]|p|li|ul|ol|table|tr|thead|tbody|div)>/gi, '</$1>\n');
   } else {
+    // ── Pre-clean: fix unclosed/malformed markdown before parsing ─────────────
+    // Remove unclosed bold+bracket like **[Note on screenshots...
+    text = text.replace(/\*\*\[[^\n\]]*$/gm, '');
+    // Remove lines that are just raw command tags that leaked through
+    text = text.replace(INTERNAL_TAG_RE, '');
+    // Fix dangling ** at end of line
+    text = text.replace(/\*\*\s*$/gm, '');
+
     const lines = text.split('\n');
     const htmlLines: string[] = [];
     let inList = false;
     let listType = 'ul';
+    let inCodeFence = false;
+    let codeLang = '';
+    let codeBuffer: string[] = [];
+    let tableBuffer: string[] = [];
+    let inTable = false;
+
+    const flushList = () => { if (inList) { htmlLines.push(`</${listType}>`); inList = false; } };
+    const flushTable = () => {
+      if (!inTable || tableBuffer.length === 0) { inTable = false; tableBuffer = []; return; }
+      inTable = false;
+      // Separate header row, separator row, and data rows
+      const allRows = tableBuffer;
+      const dataRows = allRows.filter(r => !/^\s*\|?[-:|\s]+\|?\s*$/.test(r));
+      if (dataRows.length === 0) { tableBuffer = []; return; }
+      let tableHtml = '<table>';
+      dataRows.forEach((row, i) => {
+        const parts = row.replace(/^\||\|$/g, '').split('|').map(c => applyInlineMarkdown(c.trim()));
+        if (i === 0) {
+          tableHtml += `<thead><tr>${parts.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+        } else {
+          tableHtml += `<tr>${parts.map(c => `<td>${c}</td>`).join('')}</tr>`;
+        }
+      });
+      tableHtml += '</tbody></table>';
+      htmlLines.push(tableHtml);
+      tableBuffer = [];
+    };
 
     for (const rawLine of lines) {
+      // ── Code fence ──────────────────────────────────────────────────────────
+      if (/^```/.test(rawLine.trim())) {
+        if (!inCodeFence) {
+          flushList(); flushTable();
+          inCodeFence = true;
+          codeLang = rawLine.trim().replace(/^```/, '').trim();
+          codeBuffer = [];
+        } else {
+          inCodeFence = false;
+          const escaped = codeBuffer.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          htmlLines.push(`<pre><code${codeLang ? ` class="language-${codeLang}"` : ''}>${escaped}</code></pre>`);
+          codeBuffer = [];
+        }
+        continue;
+      }
+      if (inCodeFence) { codeBuffer.push(rawLine); continue; }
+
+      // ── Pipe table row ──────────────────────────────────────────────────────
+      if (/^\s*\|/.test(rawLine)) {
+        flushList();
+        inTable = true;
+        tableBuffer.push(rawLine.trim());
+        continue;
+      } else if (inTable) {
+        flushTable();
+      }
+
       let line = rawLine
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
-      if (/^#{1}\s/.test(line)) { if (inList) { htmlLines.push(`</${listType}>`); inList = false; } htmlLines.push(`<h1>${line.replace(/^#+\s/, '')}</h1>`); continue; }
-      if (/^#{2}\s/.test(line)) { if (inList) { htmlLines.push(`</${listType}>`); inList = false; } htmlLines.push(`<h2>${line.replace(/^#+\s/, '')}</h2>`); continue; }
-      if (/^#{3,}\s/.test(line)) { if (inList) { htmlLines.push(`</${listType}>`); inList = false; } htmlLines.push(`<h3>${line.replace(/^#+\s/, '')}</h3>`); continue; }
+      // ── Headings ────────────────────────────────────────────────────────────
+      if (/^#{1}\s/.test(line))  { flushList(); htmlLines.push(`<h1>${applyInlineMarkdown(line.replace(/^#+\s/, ''))}</h1>`); continue; }
+      if (/^#{2}\s/.test(line))  { flushList(); htmlLines.push(`<h2>${applyInlineMarkdown(line.replace(/^#+\s/, ''))}</h2>`); continue; }
+      if (/^#{3,}\s/.test(line)) { flushList(); htmlLines.push(`<h3>${applyInlineMarkdown(line.replace(/^#+\s/, ''))}</h3>`); continue; }
 
-      if (/^[-*]{3,}$/.test(line.trim())) { if (inList) { htmlLines.push(`</${listType}>`); inList = false; } htmlLines.push('<hr/>'); continue; }
+      // ── Horizontal rule ─────────────────────────────────────────────────────
+      if (/^[-*]{3,}$/.test(line.trim())) { flushList(); htmlLines.push('<hr/>'); continue; }
 
+      // ── Blockquote ──────────────────────────────────────────────────────────
+      if (/^&gt;\s/.test(line.trim())) {
+        flushList();
+        htmlLines.push(`<blockquote>${applyInlineMarkdown(line.trim().replace(/^&gt;\s/, ''))}</blockquote>`);
+        continue;
+      }
+
+      // ── Unordered list ──────────────────────────────────────────────────────
       if (/^[-*•]\s/.test(line.trim())) {
-        if (!inList || listType !== 'ul') {
-          if (inList) htmlLines.push(`</${listType}>`);
-          htmlLines.push('<ul>');
-          inList = true;
-          listType = 'ul';
-        }
-        htmlLines.push(`<li>${applyInlineMarkdown(line.replace(/^[-*•]\s/, ''))}</li>`);
+        if (!inList || listType !== 'ul') { if (inList) htmlLines.push(`</${listType}>`); htmlLines.push('<ul>'); inList = true; listType = 'ul'; }
+        htmlLines.push(`<li>${applyInlineMarkdown(line.trim().replace(/^[-*•]\s/, ''))}</li>`);
         continue;
       }
 
+      // ── Ordered list ────────────────────────────────────────────────────────
       if (/^\d+\.\s/.test(line.trim())) {
-        if (!inList || listType !== 'ol') {
-          if (inList) htmlLines.push(`</${listType}>`);
-          htmlLines.push('<ol>');
-          inList = true;
-          listType = 'ol';
-        }
-        htmlLines.push(`<li>${applyInlineMarkdown(line.replace(/^\d+\.\s/, ''))}</li>`);
+        if (!inList || listType !== 'ol') { if (inList) htmlLines.push(`</${listType}>`); htmlLines.push('<ol>'); inList = true; listType = 'ol'; }
+        htmlLines.push(`<li>${applyInlineMarkdown(line.trim().replace(/^\d+\.\s/, ''))}</li>`);
         continue;
       }
 
-      if (inList && line.trim() === '') { htmlLines.push(`</${listType}>`); inList = false; }
-      if (line.trim() === '') { htmlLines.push('<br/>'); continue; }
+      // ── Empty line ──────────────────────────────────────────────────────────
+      if (line.trim() === '') { flushList(); htmlLines.push('<br/>'); continue; }
 
+      // ── Paragraph ───────────────────────────────────────────────────────────
+      flushList();
       htmlLines.push(`<p>${applyInlineMarkdown(line)}</p>`);
     }
 
-    if (inList) htmlLines.push(`</${listType}>`);
+    flushList();
+    flushTable();
+    if (inCodeFence && codeBuffer.length > 0) {
+      const escaped = codeBuffer.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      htmlLines.push(`<pre><code>${escaped}</code></pre>`);
+    }
     bodyHTML = htmlLines.join('\n');
   }
 
@@ -333,7 +407,6 @@ export function buildCleanPDFContent(
   <div class="doc-title">
     <h1>${escapeHtml(title)}</h1>
     <div class="doc-meta">Generated by Comet AI • ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-    <span class="verified-badge">✓ Real-time verified data</span>
   </div>
   ${bodyHTML}
   ${imagesHTML}

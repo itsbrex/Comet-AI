@@ -292,7 +292,9 @@ const prepareLLM = async (messages, options = {}) => {
 
   // Determine active provider
   // Fallback order: options.provider -> module variable -> store
-  const providerId = options.provider || activeLlmProvider || store.get('active_llm_provider') || 'google';
+  // Normalize provider aliases so 'gemini' maps correctly to 'google'
+  const rawProviderId = options.provider || activeLlmProvider || store.get('active_llm_provider') || 'google';
+  const providerId = rawProviderId === 'gemini' ? 'google' : rawProviderId;
   const config = (typeof llmConfigs !== 'undefined' ? llmConfigs[providerId] : {}) || {};
 
   let modelInstance;
@@ -501,18 +503,21 @@ const llmStreamHandler = async (event, messages, options = {}) => {
   try {
     // First try to use the AI Engine's streaming capability
     if (cometAiEngine) {
-      const providerId = options.provider || activeLlmProvider || store.get('active_llm_provider') || 'ollama';
+    // Normalize provider aliases: 'gemini' -> 'google' so switch-cases match
+    const rawProviderId = options.provider || activeLlmProvider || store.get('active_llm_provider') || 'google';
+    const providerId = rawProviderId === 'gemini' ? 'google' : rawProviderId;
       let model = options.model;
       if (!model) {
         switch (providerId) {
           case 'ollama':        model = store.get('ollama_model') || 'llama3'; break;
+          case 'gemini':
           case 'google':
           case 'google-flash':  model = store.get('gemini_model') || 'gemini-2.0-flash'; break;
           case 'openai':        model = store.get('openai_model') || 'gpt-4o'; break;
           case 'anthropic':     model = store.get('anthropic_model') || 'claude-3-5-sonnet-latest'; break;
           case 'groq':          model = store.get('groq_model') || 'llama-3.3-70b-versatile'; break;
           case 'xai':           model = store.get('xai_model') || 'grok-2-latest'; break;
-          default:              model = 'llama3';
+          default:              model = store.get('gemini_model') || 'gemini-2.0-flash'; // safe default
         }
       }
 
@@ -524,10 +529,19 @@ const llmStreamHandler = async (event, messages, options = {}) => {
         content: m.content || ''
       }));
 
-      console.log(`[llmStreamHandler] Provider: ${providerId}, Model: ${model}, History: ${history.length} turns`);
+      console.log(`[llmStreamHandler] Provider: ${providerId} (raw: ${rawProviderId}), Model: ${model}, History: ${history.length} turns`);
 
       const engineKeys = {};
-      if (providerId.startsWith('google')) engineKeys.GEMINI_API_KEY = store.get('gemini_api_key') || '';
+      // 'google', 'google-flash', and 'gemini' all use the same Gemini API key
+      if (providerId.startsWith('google') || providerId === 'gemini') {
+        const apiKey = store.get('gemini_api_key') || '';
+        if (!apiKey) {
+          console.error('[llmStreamHandler] Gemini API key is missing! Cannot stream.');
+          event.sender.send('llm-chat-stream-part', { type: 'error', error: 'Gemini API key is not configured. Please open AI settings and add your key.' });
+          return;
+        }
+        engineKeys.GEMINI_API_KEY = apiKey;
+      }
       if (providerId === 'openai')         engineKeys.OPENAI_API_KEY = store.get('openai_api_key') || '';
       if (providerId === 'anthropic')      engineKeys.ANTHROPIC_API_KEY = store.get('anthropic_api_key') || '';
       if (providerId === 'groq')           engineKeys.GROQ_API_KEY = store.get('groq_api_key') || '';
@@ -1990,19 +2004,18 @@ ipcMain.handle('extract-page-content', async () => {
   try {
     const content = await view.webContents.executeJavaScript(`
       (() => {
-        // Clone body to avoid mutating the live page
-        const bodyContent = document.body.innerText || "";
-        
-        // Alternative: more aggressive cleaning
-        const scripts = document.querySelectorAll('script, style, nav, footer, header');
-        scripts.forEach(s => s.remove());
-        
-        const cleanText = document.body.innerText
-          .replace(/\\s+/g, ' ')
-          .replace(/[\\r\\n]+/g, '\\n')
-          .trim();
+        try {
+          const clone = document.body.cloneNode(true);
+          const elementsToRemove = clone.querySelectorAll('script, style, nav, footer, header, noscript, svg');
+          elementsToRemove.forEach(e => e.remove());
           
-        return cleanText || bodyContent;
+          return clone.innerText
+            .replace(/\\s+/g, ' ')
+            .replace(/[\\r\\n]+/g, '\\n')
+            .trim() || document.body.innerText;
+        } catch(e) {
+          return document.body ? document.body.innerText : "";
+        }
       })()
     `);
     return { content };

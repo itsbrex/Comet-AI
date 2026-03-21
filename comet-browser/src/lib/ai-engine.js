@@ -197,55 +197,86 @@ class CometAiEngine {
   }
 
   // -------------------------------------------------------------------------
-  // Gemini
+  // Gemini — fixed per official docs: ai.google.dev/api/generate-content
+  // Streaming: use ?alt=sse so response is SSE (data: {...} lines)
+  // System prompt: use top-level "systemInstruction" field (not user/model hack)
   // -------------------------------------------------------------------------
   async _chatGemini({ message, model, systemPrompt, history, onChunk }) {
     const apiKey = this._getKey('GEMINI_API_KEY');
     if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
 
+    // Build contents array — only user/model turns (NO system role)
     const contents = [];
-    if (systemPrompt) {
-      contents.push({ role: 'user', parts: [{ text: systemPrompt }] });
-      contents.push({ role: 'model', parts: [{ text: 'Understood.' }] });
-    }
     for (const h of (history || [])) {
+      // Normalize role names: 'assistant' -> 'model', system messages skipped
+      if (h.role === 'system') continue;
       contents.push({
         role: h.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: h.content }],
+        parts: [{ text: h.content || '' }],
       });
     }
     contents.push({ role: 'user', parts: [{ text: message }] });
 
     const targetModel = model || 'gemini-2.0-flash';
-    const endpoint = onChunk ? 'streamGenerateContent' : 'generateContent';
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:${endpoint}?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents }),
-      }
-    );
 
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Gemini API error ${res.status}: ${err}`);
+    // Build request body per official spec
+    const requestBody = { contents };
+
+    // Use the official "systemInstruction" field for system prompts
+    // NOT a fake user/model pair at the start of contents
+    if (systemPrompt && systemPrompt.trim()) {
+      requestBody.systemInstruction = {
+        parts: [{ text: systemPrompt }]
+      };
     }
 
     if (onChunk) {
+      // Official docs: append ?alt=sse to get Server-Sent Events format
+      // Each line will be: "data: {json}" — NOT a raw JSON array
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Gemini API error ${res.status}: ${err}`);
+      }
+
+      // Per official docs each SSE chunk is: "data: {GenerateContentResponse JSON}"
       for await (const line of streamToLines(res.body)) {
-        if (!line.trim()) continue;
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.substring(6).trim();
+        if (!jsonStr || jsonStr === '[DONE]') continue;
         try {
-          let jsonStr = line.startsWith('data: ') ? line.substring(6) : line;
-          if (jsonStr === '[DONE]') break;
           const json = JSON.parse(jsonStr);
-          const candidates = json.candidates || (Array.isArray(json) ? json[0]?.candidates : null);
-          const text = candidates?.[0]?.content?.parts?.[0]?.text;
+          const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
           if (text) onChunk(text);
-        } catch (e) {}
+        } catch (e) {
+          // Silently skip malformed chunks
+        }
       }
       return '';
     } else {
+      // Non-streaming: standard generateContent
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Gemini API error ${res.status}: ${err}`);
+      }
+
       const data = await res.json();
       return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     }

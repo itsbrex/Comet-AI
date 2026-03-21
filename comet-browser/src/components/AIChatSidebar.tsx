@@ -12,7 +12,7 @@ import {
   Image as ImageIcon,
   Eye, EyeOff, Brain, Search, Loader2, MousePointerClick,
   CheckCircle2, AlertCircle,
-  Share2, CopyIcon, Trash2, Printer, Cpu, Rocket, Camera, Terminal, MoreHorizontal
+  Share2, CopyIcon, Trash2, Printer, Cpu, Rocket, Camera, Terminal, MoreHorizontal, Play
 } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 import ReactMarkdown from 'react-markdown';
@@ -58,6 +58,20 @@ import firebaseService from '@/lib/FirebaseService';
 // Types
 // ---------------------------------------------------------------------------
 
+type MediaItem = {
+  type: 'image';
+  url: string;
+  caption?: string;
+} | {
+  type: 'video';
+  videoUrl: string;
+  title: string;
+  description?: string;
+  thumbnailUrl?: string;
+  source: 'youtube' | 'other';
+  videoId?: string;
+};
+
 type ExtendedChatMessage = ChatMessage & {
   attachments?: string[];
   isOcr?: boolean;
@@ -66,6 +80,7 @@ type ExtendedChatMessage = ChatMessage & {
   thinkingSteps?: ThinkingStep[];
   thinkText?: string;
   actionLogs?: { type: string, output: string, success: boolean }[];
+  mediaItems?: MediaItem[];
 };
 
 interface Attachment {
@@ -141,6 +156,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [thinkingText, setThinkingText] = useState<string>('');
   const [isThinking, setIsThinking] = useState(false);
   const thinkingIdCounter = useRef(0);
+  const hasShownSetupGuide = useRef(false);
 
   // Refs & Workers
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -270,16 +286,19 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   // AI Logic Bridge
   // ---------------------------------------------------------------------------
 
+  // Normalize 'gemini' -> 'google' so the main process provider switch always matches
+  const normalizedProvider = aiProvider === 'gemini' ? 'google' : aiProvider;
+
   const reasoningOptions = useMemo(() => buildFrontendReasoningOptions(
     (localLlmMode || 'normal') as LlmMode,
-    aiProvider,
+    normalizedProvider,
     {
-      model: aiProvider === 'ollama' ? (ollamaModel || 'llama3')
-        : aiProvider === 'gemini' || aiProvider === 'google' ? (geminiModel || 'gemini-2.0-flash')
+      model: normalizedProvider === 'ollama' ? (ollamaModel || 'llama3')
+        : normalizedProvider === 'google' ? (geminiModel || 'gemini-2.0-flash')
           : undefined,
-      baseUrl: aiProvider === 'ollama' ? ollamaBaseUrl : undefined,
+      baseUrl: normalizedProvider === 'ollama' ? ollamaBaseUrl : undefined,
     }
-  ), [localLlmMode, aiProvider, ollamaModel, ollamaBaseUrl, geminiModel]);
+  ), [localLlmMode, normalizedProvider, ollamaModel, ollamaBaseUrl, geminiModel]);
 
   const getStreamingResponse = useCallback(async (history: ChatMessage[]): Promise<any> => {
     return new Promise((resolve) => {
@@ -321,9 +340,14 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     const rawContent = (customContent ?? inputMessage).trim();
     if (!rawContent && attachments.length === 0) return;
 
+    // Show setup guide if AI is not configured. After first show, don't block—
+    // let the user try anyway (they may have set a key via store directly).
     if (!isAiSetup()) {
-      setShowSetupGuide(true);
-      return;
+      if (!hasShownSetupGuide.current) {
+        hasShownSetupGuide.current = true;
+        setShowSetupGuide(true);
+      }
+      // Still fall through and attempt to send — the error from main.js will explain
     }
 
     if (!customContent) { setInputMessage(''); setAttachments([]); }
@@ -516,7 +540,9 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
 
     } catch (err: any) {
-      setError(err.message);
+      console.error('Core AI execution failure:', err);
+      setError(`Neural Engine Failure: ${err.message}`);
+      setMessages(prev => [...prev, { role: 'model', content: `❌ **CRITICAL ERROR**\n${err.message}` } as ExtendedChatMessage]);
     } finally {
       setIsLoading(false);
       setIsThinking(false);
@@ -575,12 +601,19 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
         // so the LLM's next synthesis turn gets real data, not hallucination
         case 'SEARCH':
         case 'WEB_SEARCH': {
-          const query = command.value.trim().replace(/^["'](.*)["']$/, '$1') || 'Comet AI Browser';
-          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+          let query = command.value.trim().replace(/^["'](.*)["']$/, '$1') || 'Comet AI Browser';
+          let searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+          
+          // If the AI mistakenly uses WEB_SEARCH but provides a direct URL, handle it as a direct navigation
+          if (query.match(/^https?:\/\/[^\s]+/i) || query.match(/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}(\/.*)?$/)) {
+             searchUrl = query.startsWith('http') ? query : `https://${query}`;
+             query = `Opening URL: ${searchUrl}`; // Just for logging
+          }
+
           setActiveView('browser');
 
           store.addTab(searchUrl); // ✨ ALWAYS create a new tab for deep web searches
-          output = `Opened new tab for search: "${query}"`;
+          output = `Opened new tab for: "${query}"`;
 
           // Fetch real results and store in vector memory for LLM context
           const results = await window.electronAPI.webSearchRag(query);
@@ -608,6 +641,14 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
                 const scrubbed = scrubbedContent(domRes.content);
                 output = `Search results for "${query}" (fallback DOM) (${scrubbed.length} chars):\n${scrubbed.substring(0, 4000)}...`;
                 await BrowserAI.addToVectorMemory(scrubbed, { type: 'web_search_fallback', query, url: searchUrl });
+                setMessages(prev => {
+                  const last = prev[prev.length - 1];
+                  const newOcrLabel = `WEB_SEARCH_FALLBACK_DOM`;
+                  if (last && last.role === 'model') {
+                    return [...prev.slice(0, -1), { ...last, isOcr: true, ocrLabel: newOcrLabel, ocrText: scrubbed }];
+                  }
+                  return [...prev, { role: 'model', content: '', isOcr: true, ocrLabel: newOcrLabel, ocrText: scrubbed } as ExtendedChatMessage];
+                });
               } else {
                 let ocrText = '';
                 if (window.electronAPI.visionDescribe) {
@@ -620,6 +661,14 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
                 if (ocrText && ocrText.length > 50) {
                   output = `Search results for "${query}" (fallback OCR) (${ocrText.length} chars):\n${ocrText.substring(0, 4000)}...`;
                   await BrowserAI.addToVectorMemory(ocrText, { type: 'web_search_fallback_ocr', query, url: searchUrl });
+                  setMessages(prev => {
+                    const last = prev[prev.length - 1];
+                    const newOcrLabel = `WEB_SEARCH_FALLBACK_OCR`;
+                    if (last && last.role === 'model') {
+                      return [...prev.slice(0, -1), { ...last, isOcr: true, ocrLabel: newOcrLabel, ocrText: ocrText }];
+                    }
+                    return [...prev, { role: 'model', content: '', isOcr: true, ocrLabel: newOcrLabel, ocrText: ocrText } as ExtendedChatMessage];
+                  });
                 } else {
                   output = `No results found for "${query}". Do NOT invent data — tell the user you could not find current information.`;
                 }
@@ -638,6 +687,15 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
             const scrubbed = scrubbedContent(res.content);
             output = `Page content read successfully (${scrubbed.length} chars):\n${scrubbed.substring(0, 4000)}...`;
             await BrowserAI.addToVectorMemory(scrubbed, { type: 'page_content', url: currentUrl });
+            setMessages(prev => {
+              const last = prev[prev.length - 1];
+              if (last && last.role === 'model') {
+                const updated = [...prev];
+                updated[prev.length - 1] = { ...last, isOcr: true, ocrLabel: 'PAGE_CONTENT', ocrText: scrubbed };
+                return updated;
+              }
+              return [...prev, { role: 'model', content: '', isOcr: true, ocrLabel: 'PAGE_CONTENT', ocrText: scrubbed } as ExtendedChatMessage];
+            });
           } else {
             output = `Error reading page: ${res.error}`;
           }
@@ -710,12 +768,32 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           break;
         }
 
-        // ✅ FIXED: GENERATE_PDF now fetches real data before building the PDF
-        // Prevents the AI from generating PDFs with invented headlines/URLs
+        // ✅ FIXED: GENERATE_PDF now supports screenshots, custom title/author/subtitle
+        // Format: [GENERATE_PDF: title | screenshot:yes | author:Name | subtitle:Subtitle | content...]
         case 'GENERATE_PDF': {
-          const [title, ...contentParts] = command.value.split('|');
-          const pdfTitle = title?.trim() || 'Document';
-          let pdfContent = contentParts.join('|').trim();
+          const rawValue = command.value;
+
+          // ── Parse extended options from pipe-separated fields ───────────────
+          // Anything that is key:value is an option; the rest is content
+          const allParts = rawValue.split('|').map((p: string) => p.trim());
+          const options: Record<string, string> = {};
+          const contentParts: string[] = [];
+
+          for (const part of allParts) {
+            const kvMatch = part.match(/^(title|author|subtitle|screenshot|filename)\s*:\s*(.+)$/i);
+            if (kvMatch) {
+              options[kvMatch[1].toLowerCase()] = kvMatch[2].trim();
+            } else {
+              contentParts.push(part);
+            }
+          }
+
+          // First non-option part is always the title if no explicit title: key
+          const pdfTitle = options.title || contentParts[0]?.trim() || 'Document';
+          const pdfSubtitle = options.subtitle || '';
+          const pdfAuthor = options.author || 'Comet AI';
+          const shouldScreenshot = options.screenshot?.toLowerCase() === 'yes' || options.screenshot?.toLowerCase() === 'true';
+          let pdfContent = (options.title ? contentParts : contentParts.slice(1)).join('|').trim();
 
           // Detect if this PDF needs live/current data
           const isDataPDF = /news|update|report|today|latest|tech|market|sports|daily/i.test(pdfTitle);
@@ -739,7 +817,6 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
                 resolveThinkingStep(searchId, 'done', `Real data injected (${realData.length} chars)`);
               } else {
                 resolveThinkingStep(searchId, 'error', 'Search returned no data — PDF will note data unavailability');
-                // Add honest disclaimer instead of fake data
                 pdfContent = pdfContent || `This report could not retrieve live data at the time of generation (${new Date().toLocaleString()}). Please search manually for current information.`;
               }
             } catch (e: any) {
@@ -747,11 +824,115 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
             }
           }
 
+          // ── Capture browser page screenshot (active tab only) ──────────────
+          // Uses Electron's webContents.capturePage() via captureBrowserViewScreenshot
+          const pdfImages: import('./ai/AIUtils').PDFImage[] = [];
+          if (shouldScreenshot) {
+            const ssId = addThinkingStep('📸 Capturing browser page for PDF...');
+            try {
+              // captureBrowserViewScreenshot returns a dataURL string directly
+              const dataUrl: string | null = await window.electronAPI.captureBrowserViewScreenshot();
+              if (dataUrl) {
+                pdfImages.push({
+                  src: dataUrl,
+                  alt: 'Browser Page Screenshot',
+                  caption: `Page screenshot at ${new Date().toLocaleTimeString()} — ${currentUrl || 'active tab'}`,
+                  width: '100%'
+                });
+                resolveThinkingStep(ssId, 'done', 'Browser page screenshot captured');
+              } else {
+                resolveThinkingStep(ssId, 'error', 'No browser view active to screenshot');
+              }
+            } catch (e: any) {
+              resolveThinkingStep(ssId, 'error', `Screenshot failed: ${e.message}`);
+            }
+          }
+
+          // ── Prepend subtitle/author to content if provided ─────────────────
+          if (pdfSubtitle || pdfAuthor !== 'Comet AI') {
+            const meta: string[] = [];
+            if (pdfSubtitle) meta.push(`*${pdfSubtitle}*`);
+            if (pdfAuthor && pdfAuthor !== 'Comet AI') meta.push(`**Author:** ${pdfAuthor}`);
+            pdfContent = meta.join('\n') + '\n\n---\n\n' + pdfContent;
+          }
+
           await preloadCometIconLocal();
           const iconSource = (window as any).__cometIconBase64 || null;
-          const cleanHTML = buildCleanPDFContent(pdfContent, pdfTitle, iconSource);
+          const cleanHTML = buildCleanPDFContent(pdfContent, pdfTitle, iconSource, pdfImages.length > 0 ? pdfImages : undefined);
           const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML);
           output = res.success ? `PDF "${pdfTitle}" generated and saved.` : `Error: ${res.error}`;
+          break;
+        }
+
+        // ── SHOW_IMAGE: display an image from URL in the chat ─────────────────
+        // Format: [SHOW_IMAGE: imageUrl | optional caption]
+        case 'SHOW_IMAGE': {
+          const parts = command.value.split('|').map((s: string) => s.trim());
+          const imageUrl = parts[0];
+          const caption = parts[1] || '';
+
+          if (!imageUrl) { output = 'No image URL provided.'; break; }
+
+          setMessages(prev => {
+            if (prev.length === 0) return prev;
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            const existing = last.mediaItems || [];
+            updated[updated.length - 1] = {
+              ...last,
+              mediaItems: [...existing, { type: 'image', url: imageUrl, caption }]
+            };
+            return updated;
+          });
+          output = `Image displayed: ${imageUrl}`;
+          break;
+        }
+
+        // ── SHOW_VIDEO: display a YouTube/video card in chat ──────────────────
+        // Format: [SHOW_VIDEO: videoUrl | title | description]
+        case 'SHOW_VIDEO': {
+          const parts = command.value.split('|').map((s: string) => s.trim());
+          const videoUrl = parts[0];
+          const videoTitle = parts[1] || 'Video';
+          const videoDesc = parts[2] || '';
+
+          if (!videoUrl) { output = 'No video URL provided.'; break; }
+
+          // Extract YouTube video ID to build thumbnail URL (no API key needed)
+          let videoId: string | undefined;
+          let thumbnailUrl: string | undefined;
+          let source: 'youtube' | 'other' = 'other';
+
+          const ytMatch = videoUrl.match(
+            /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+          );
+          if (ytMatch) {
+            videoId = ytMatch[1];
+            source = 'youtube';
+            // Use maxresdefault thumbnail, fallback to hqdefault
+            thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+          }
+
+          setMessages(prev => {
+            if (prev.length === 0) return prev;
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            const existing = last.mediaItems || [];
+            updated[updated.length - 1] = {
+              ...last,
+              mediaItems: [...existing, {
+                type: 'video',
+                videoUrl,
+                title: videoTitle,
+                description: videoDesc,
+                thumbnailUrl,
+                source,
+                videoId
+              }]
+            };
+            return updated;
+          });
+          output = `Video card added: ${videoTitle}`;
           break;
         }
 
@@ -919,6 +1100,8 @@ I've successfully executed the following real tasks:
           output = 'Navigated forward in history.';
           break;
 
+        case 'OCR_COORDINATES':
+        case 'OCR_SCREEN':
         case 'SCREENSHOT_AND_ANALYZE': {
           const stepId = addThinkingStep('Capturing screenshot...', 'Taking screenshot and running OCR');
           await new Promise(resolve => setTimeout(resolve, 2000));
@@ -1051,6 +1234,17 @@ I've successfully executed the following real tasks:
               }
               
               await BrowserAI.addToVectorMemory(contextForAI, { type: 'secure_dom_read', url: currentUrl });
+
+              setMessages(prev => {
+                const last = prev[prev.length - 1];
+                if (last && last.role === 'model') {
+                  const updated = [...prev];
+                  updated[prev.length - 1] = { ...last, isOcr: true, ocrLabel: 'DOM_EXTRACTED', ocrText: contextForAI };
+                  return updated;
+                }
+                return [...prev, { role: 'model', content: '', isOcr: true, ocrLabel: 'DOM_EXTRACTED', ocrText: contextForAI } as ExtendedChatMessage];
+              });
+
               resolveThinkingStep(readStepId, 'done', `${(res.content || '').length} chars processed`);
             }
           } catch (e: any) {
@@ -1103,6 +1297,29 @@ I've successfully executed the following real tasks:
     }
   }, [commandQueue, currentCommandIndex, activeTabId, router, storeSetTheme, setActiveView, currentUrl, requestActionPermission, preloadCometIconLocal, addThinkingStep, resolveThinkingStep, fetchRealSearchContext]);
 
+  const formatMessageForExport = (m: ExtendedChatMessage) => {
+    let result = `${m.role.toUpperCase()}:\n`;
+    if (m.thinkText) result += `\n[THINKING]\n${m.thinkText}\n[/THINKING]\n`;
+    if (m.actionLogs && m.actionLogs.length > 0) {
+      result += `\n[ACTION CHAIN]\n`;
+      m.actionLogs.forEach(log => result += `- ${log.type}: ${log.output}\n`);
+      result += `[/ACTION CHAIN]\n`;
+    }
+    if (m.isOcr && m.ocrText) {
+      result += `\n[${m.ocrLabel || 'EXTRACTED_DATA'}]\n${m.ocrText}\n[/${m.ocrLabel || 'EXTRACTED_DATA'}]\n`;
+    }
+    if (m.mediaItems && m.mediaItems.length > 0) {
+      result += `\n[MEDIA ATTACHMENTS]\n`;
+      m.mediaItems.forEach(item => {
+        if (item.type === 'image') result += `- IMAGE: ${item.url} (${item.caption || 'no caption'})\n`;
+        if (item.type === 'video') result += `- VIDEO: ${item.videoUrl} (${item.title})\n`;
+      });
+      result += `[/MEDIA ATTACHMENTS]\n`;
+    }
+    result += `\n${m.content.trim()}`;
+    return result.trim();
+  };
+
   const clearChat = useCallback(() => {
     setMessages([]);
     setThinkingSteps([]);
@@ -1113,17 +1330,23 @@ I've successfully executed the following real tasks:
   const exportChat = useCallback(async (format: 'text' | 'pdf') => {
     if (messages.length === 0) return;
     setShowActionsMenu(false);
+    
+    const formattedMessages = messages.map(m => ({
+      ...m,
+      content: formatMessageForExport(m)
+    }));
+
     if (window.electronAPI) {
       if (format === 'text') {
-        await window.electronAPI.exportChatAsTxt(messages);
+        await window.electronAPI.exportChatAsTxt(formattedMessages);
       } else {
-        await window.electronAPI.exportChatAsPdf(messages);
+        await window.electronAPI.exportChatAsPdf(formattedMessages);
       }
     }
   }, [messages]);
 
   const copyChatToClipboard = useCallback(() => {
-    const chatData = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+    const chatData = messages.map(m => formatMessageForExport(m)).join('\n\n' + '='.repeat(50) + '\n\n');
     navigator.clipboard.writeText(chatData);
     setShowActionsMenu(false);
   }, [messages]);
@@ -1392,7 +1615,7 @@ I've successfully executed the following real tasks:
               displayContent = displayContent.replace(/<think>[\s\S]*?(?:<\/think>|$)/i, '').trim();
             }
 
-            displayContent = displayContent.replace(/\[(NAVIGATE|SEARCH|WEB_SEARCH|READ_PAGE_CONTENT|LIST_OPEN_TABS|GENERATE_PDF|SHELL_COMMAND|SET_THEME|SET_VOLUME|SET_BRIGHTNESS|OPEN_APP|SCREENSHOT_AND_ANALYZE|CLICK_ELEMENT|FIND_AND_CLICK|GENERATE_DIAGRAM|OPEN_VIEW|RELOAD|GO_BACK|GO_FORWARD|WAIT|THINK|PLAN|EXPLAIN_CAPABILITIES|DOM_SEARCH|DOM_READ_FILTERED)(?::\s*[^\]]+?)?\]/gi, '').trim();
+            displayContent = displayContent.replace(INTERNAL_TAG_RE, '').trim();
 
             return (
               <motion.div
@@ -1435,6 +1658,93 @@ I've successfully executed the following real tasks:
                   {msg.isOcr && msg.ocrText && (
                     <CollapsibleOCRMessage label={msg.ocrLabel || 'SCREENSHOT_ANALYSIS'} content={msg.ocrText} />
                   )}
+
+                  {/* ── Inline Media: Images & Video Cards ─────────────────── */}
+                  {msg.mediaItems && msg.mediaItems.length > 0 && (
+                    <div className="mt-4 space-y-3">
+                      {msg.mediaItems.map((item, midx) => {
+                        if (item.type === 'image') {
+                          return (
+                            <motion.div
+                              key={midx}
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              className="rounded-2xl overflow-hidden border border-white/10 shadow-xl"
+                            >
+                              <img
+                                src={item.url}
+                                alt={item.caption || 'Image'}
+                                className="w-full max-h-80 object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200"><rect fill="%230f0f1a" width="400" height="200"/><text fill="%23ffffff40" x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="14">Image unavailable</text></svg>';
+                                }}
+                              />
+                              {item.caption && (
+                                <div className="px-3 py-2 bg-black/30 text-[10px] text-white/50 font-medium">
+                                  {item.caption}
+                                </div>
+                              )}
+                            </motion.div>
+                          );
+                        }
+                        if (item.type === 'video') {
+                          const isYt = item.source === 'youtube';
+                          return (
+                            <motion.a
+                              key={midx}
+                              href={item.videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => { e.preventDefault(); window.electronAPI?.createView?.({ tabId: `yt-${Date.now()}`, url: item.videoUrl }); store.addTab(item.videoUrl); }}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="block rounded-2xl overflow-hidden border border-white/10 shadow-xl bg-black/40 hover:border-sky-500/40 transition-all group cursor-pointer"
+                            >
+                              {/* Thumbnail */}
+                              <div className="relative">
+                                {item.thumbnailUrl ? (
+                                  <img
+                                    src={item.thumbnailUrl}
+                                    alt={item.title}
+                                    className="w-full max-h-52 object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                                    onError={(e) => {
+                                      // Fallback to hqdefault if maxresdefault 404s
+                                      if (isYt && item.videoId) {
+                                        (e.target as HTMLImageElement).src = `https://img.youtube.com/vi/${item.videoId}/hqdefault.jpg`;
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-full h-40 bg-gradient-to-br from-sky-900/40 to-purple-900/40 flex items-center justify-center">
+                                    <Play size={40} className="text-white/30" />
+                                  </div>
+                                )}
+                                {/* Play button overlay */}
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-transform group-hover:scale-110 ${isYt ? 'bg-red-600' : 'bg-sky-500'}`}>
+                                    <Play size={22} className="text-white ml-1" fill="white" />
+                                  </div>
+                                </div>
+                                {/* Source badge */}
+                                <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${isYt ? 'bg-red-600 text-white' : 'bg-sky-500 text-black'}`}>
+                                  {isYt ? 'YouTube' : 'Video'}
+                                </div>
+                              </div>
+                              {/* Info */}
+                              <div className="p-3">
+                                <p className="text-sm font-bold text-white/90 leading-tight line-clamp-2">{item.title}</p>
+                                {item.description && (
+                                  <p className="text-[11px] text-white/50 mt-1.5 leading-relaxed line-clamp-3">{item.description}</p>
+                                )}
+                                <p className="text-[9px] text-sky-400/60 mt-2 font-mono truncate">{item.videoUrl}</p>
+                              </div>
+                            </motion.a>
+                          );
+                        }
+                        return null;
+                      })}
+                    </div>
+                  )}
                   {msg.actionLogs && msg.actionLogs.length > 0 && (
                     <div className="mt-5 flex flex-wrap gap-2">
                       {msg.actionLogs.map((log, idx) => {
@@ -1464,7 +1774,7 @@ I've successfully executed the following real tasks:
                   )}
                   
                   {/* DOM Search Results Display */}
-                  {(domSearchResults.length > 0 || domSearchLoading || domMeta) && (
+                  {i === messages.length - 1 && (domSearchResults.length > 0 || domSearchLoading || domMeta) && (
                     <DOMSearchDisplay
                       results={domSearchResults}
                       query={domSearchQuery}
@@ -1476,7 +1786,7 @@ I've successfully executed the following real tasks:
                   )}
                   
                   {/* OCR Search Results Display */}
-                  {(ocrSearchResults.length > 0 || ocrSearchLoading) && (
+                  {i === messages.length - 1 && (ocrSearchResults.length > 0 || ocrSearchLoading) && (
                     <DOMSearchDisplay
                       results={ocrSearchResults}
                       query={ocrSearchQuery}
