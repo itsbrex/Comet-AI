@@ -63,7 +63,7 @@ const WelcomeScreen = () => {
                             </div>
                             <div>
                                 <h1 className="text-4xl font-black text-white tracking-[0.2em] uppercase">Comet</h1>
-                                <p className="text-xs font-black text-deep-space-accent-neon tracking-[0.5em] uppercase opacity-60">Neural Workspace v0.2.2</p>
+                                <p className="text-xs font-black text-deep-space-accent-neon tracking-[0.5em] uppercase opacity-60">Neural Workspace v0.2.1.2 Patched</p>
                             </div>
                         </div>
 

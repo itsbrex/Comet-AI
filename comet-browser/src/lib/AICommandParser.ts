@@ -41,6 +41,8 @@ export const COMMAND_REGISTRY = {
     THINK: { desc: 'Show AI reasoning steps', example: '[THINK: "Calculating optimal path..."]' },
     PLAN: { desc: 'Show AI future plans', example: '[PLAN: "Step 1: Search, Step 2: Read"]' },
     EXPLAIN_CAPABILITIES: { desc: 'List all available AI features', example: '[EXPLAIN_CAPABILITIES]' },
+    DOM_SEARCH: { desc: 'Search within current page DOM', example: '[DOM_SEARCH: search term]' },
+    DOM_READ_FILTERED: { desc: 'Read DOM with filtering & injection check', example: '[DOM_READ_FILTERED: optional search term]' },
 } as const;
 
 export const SUPPORTED_COMMANDS = Object.keys(COMMAND_REGISTRY) as Array<keyof typeof COMMAND_REGISTRY>;
@@ -258,6 +260,8 @@ export function getCommandDescription(command: ParsedCommand): string {
         WAIT: (v) => `Wait ${parseInt(v) / 1000} seconds`,
         GUIDE_CLICK: (v) => `Guide click: ${v.split('|')[0]}`,
         EXPLAIN_CAPABILITIES: () => 'Explain AI capabilities',
+        DOM_SEARCH: (v) => `Search DOM for: ${v}`,
+        DOM_READ_FILTERED: (v) => v ? `Read filtered DOM matching: ${v}` : 'Read filtered DOM (full)',
     };
 
     const descFn = descriptions[type];

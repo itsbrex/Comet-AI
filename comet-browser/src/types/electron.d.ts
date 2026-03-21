@@ -21,6 +21,35 @@ declare global {
             reload: () => void;
             getCurrentUrl: () => Promise<string>;
             extractPageContent: () => Promise<{ content?: string; error?: string }>;
+            extractSecureDOM: () => Promise<{
+                content: string;
+                elements: Array<{ tag: string; text: string; xpath: string; children: any[] }>;
+                metadata: {
+                    url: string;
+                    title: string;
+                    timestamp: number;
+                    injectionDetected: boolean;
+                    filterStats: {
+                        piiRemoved: number;
+                        scriptsRemoved: number;
+                        stylesRemoved: number;
+                        navRemoved: number;
+                        adsRemoved: number;
+                    };
+                };
+                error?: string;
+            }>;
+            searchDOM: (query: string) => Promise<{
+                results: Array<{
+                    text: string;
+                    context: string;
+                    xpath: string;
+                    score: number;
+                    tag: string;
+                }>;
+                query: string;
+                error?: string;
+            }>;
             setBrowserViewBounds: (bounds: { x: number; y: number; width: number; height: number }) => void;
             capturePageHtml: () => Promise<string>;
             saveOfflinePage: (data: { url: string; title: string, html: string }) => Promise<boolean>;

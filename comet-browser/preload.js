@@ -36,6 +36,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCurrentUrl: () => ipcRenderer.invoke('get-browser-view-url'),
   getOpenTabs: () => ipcRenderer.invoke('get-open-tabs'),
   extractPageContent: () => ipcRenderer.invoke('extract-page-content'),
+  extractSecureDOM: () => ipcRenderer.invoke('extract-secure-dom'),
+  searchDOM: (query) => ipcRenderer.invoke('search-dom', query),
   getSelectedText: () => ipcRenderer.invoke('get-selected-text'),
   findAndClickText: (targetText) => ipcRenderer.invoke('find-and-click-text', targetText),
   setBrowserViewBounds: (bounds) => ipcRenderer.send('set-browser-view-bounds', bounds),

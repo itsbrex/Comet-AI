@@ -2011,6 +2011,174 @@ ipcMain.handle('extract-page-content', async () => {
   }
 });
 
+// Secure DOM Extraction with filtering and injection detection
+ipcMain.handle('extract-secure-dom', async () => {
+  const view = tabViews.get(activeTabId);
+  if (!view) return { error: 'No active view', content: '', elements: [], metadata: {} };
+  
+  try {
+    const result = await view.webContents.executeJavaScript(`
+      (() => {
+        const BLOCKED_TAGS = ['script', 'style', 'noscript', 'iframe', 'object', 'embed', 'applet', 'form', 'input', 'button', 'select', 'textarea'];
+        const BLOCKED_CLASSES = [/nav/i, /footer/i, /header/i, /sidebar/i, /menu/i, /popup/i, /modal/i, /overlay/i, /cookie/i, /banner/i, /advertisement/i];
+        const PII_PATTERNS = [
+          /\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b/g,
+          /\\b\\d{3}[-.]?\\d{3}[-.]?\\d{4}\\b/g,
+          /Bearer\\s+[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_]+\\.[A-Za-z0-9\\-_]+/gi,
+          /session[_-]?id["\\s:=]+["']?[A-Za-z0-9\\-_]+["']?/gi,
+        ];
+        
+        function shouldBlock(el) {
+          if (BLOCKED_TAGS.includes(el.tagName.toLowerCase())) return true;
+          for (const p of BLOCKED_CLASSES) {
+            if (p.test(el.className) || p.test(el.id)) return true;
+          }
+          return false;
+        }
+        
+        function sanitizeText(text) {
+          let result = text;
+          for (const p of PII_PATTERNS) {
+            result = result.replace(p, '[REDACTED]');
+          }
+          return result.replace(/[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]/g, '').replace(/\\s+/g, ' ').trim();
+        }
+        
+        function extractElements(el, path = '') {
+          if (shouldBlock(el)) return [];
+          const tag = el.tagName.toLowerCase();
+          const xpath = path ? path + '/' + tag : '//' + tag;
+          
+          let text = '';
+          const children = [];
+          
+          for (const node of el.childNodes) {
+            if (node.nodeType === 3) text += node.textContent || '';
+            else if (node.nodeType === 1) {
+              const childResults = extractElements(node, xpath);
+              children.push(...childResults);
+            }
+          }
+          
+          const sanitized = sanitizeText(text);
+          if (!sanitized.trim() && children.length === 0) return [];
+          
+          return [{
+            tag,
+            text: sanitized,
+            xpath,
+            children: children.map(c => ({ tag: c.tag, text: c.text, xpath: c.xpath, children: [] }))
+          }];
+        }
+        
+        const main = document.querySelector('main, article, [role="main"], #content, #main, .content') || document.body;
+        const elements = [];
+        for (const child of main.children) {
+          elements.push(...extractElements(child));
+        }
+        
+        const content = elements.map(e => e.text).filter(Boolean).join('\\n');
+        const fullText = document.body.innerText || content;
+        
+        return {
+          content: sanitizeText(fullText),
+          elements,
+          url: window.location.href,
+          title: document.title,
+          scriptsRemoved: document.querySelectorAll('script').length,
+          stylesRemoved: document.querySelectorAll('style').length,
+          navRemoved: document.querySelectorAll('nav').length
+        };
+      })()
+    `);
+    
+    return {
+      content: result.content || '',
+      elements: result.elements || [],
+      metadata: {
+        url: result.url || '',
+        title: result.title || '',
+        timestamp: Date.now(),
+        injectionDetected: false,
+        filterStats: {
+          piiRemoved: (result.content || '').match(/\[REDACTED\]/g)?.length || 0,
+          scriptsRemoved: result.scriptsRemoved || 0,
+          stylesRemoved: result.stylesRemoved || 0,
+          navRemoved: result.navRemoved || 0,
+          adsRemoved: 0
+        }
+      }
+    };
+  } catch (e) {
+    console.error('[SecureDOM] Extraction failed:', e);
+    return { error: e.message, content: '', elements: [], metadata: {} };
+  }
+});
+
+// DOM Search within current page
+ipcMain.handle('search-dom', async (event, query) => {
+  const view = tabViews.get(activeTabId);
+  if (!view) return { error: 'No active view', results: [] };
+  
+  if (!query || typeof query !== 'string') {
+    return { error: 'Invalid query', results: [] };
+  }
+  
+  try {
+    const results = await view.webContents.executeJavaScript(`
+      (() => {
+        const query = ${JSON.stringify(query)};
+        const searchLower = query.toLowerCase();
+        const results = [];
+        
+        function walk(el, path = '') {
+          if (['script', 'style', 'noscript', 'iframe', 'nav', 'footer', 'header'].includes(el.tagName.toLowerCase())) return;
+          
+          const tag = el.tagName.toLowerCase();
+          const xpath = path ? path + '/' + tag : '//' + tag;
+          
+          let text = '';
+          for (const node of el.childNodes) {
+            if (node.nodeType === 3) text += node.textContent || '';
+            else if (node.nodeType === 1) walk(node, xpath);
+          }
+          
+          const textLower = text.toLowerCase();
+          const idx = textLower.indexOf(searchLower);
+          
+          if (idx !== -1) {
+            const start = Math.max(0, idx - 40);
+            const end = Math.min(text.length, idx + query.length + 40);
+            const context = text.slice(start, end);
+            
+            let score = 10;
+            if (textLower.startsWith(searchLower)) score += 20;
+            if (textLower.includes(' ' + searchLower)) score += 10;
+            if (text.length < 200) score += 15;
+            
+            results.push({
+              text: text.slice(Math.max(0, idx - 20), idx) + '[[' + text.slice(idx, idx + query.length) + ']]' + text.slice(idx + query.length, idx + query.length + 20),
+              context: context,
+              xpath: xpath,
+              score: score,
+              tag: tag
+            });
+          }
+        }
+        
+        walk(document.body);
+        
+        return results.sort((a, b) => b.score - a.score).slice(0, 15);
+      })()
+    `, query);
+    
+    return { results: results || [], query };
+  } catch (e) {
+    console.error('[SecureDOM] Search failed:', e);
+    return { error: e.message, results: [] };
+  }
+});
+
 ipcMain.handle('get-selected-text', async () => {
   const view = tabViews.get(activeTabId);
   if (!view) return '';

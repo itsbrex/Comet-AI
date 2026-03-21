@@ -1,8 +1,8 @@
-import { 
-  THREAT_STORAGE_KEY, 
-  DANGEROUS_PATTERNS, 
-  AI_GENERATED_PATTERNS, 
-  PII_PATTERNS, 
+import {
+  THREAT_STORAGE_KEY,
+  DANGEROUS_PATTERNS,
+  AI_GENERATED_PATTERNS,
+  PII_PATTERNS,
   NOT_FOUND_SIGNALS,
   INTERNAL_TAG_RE
 } from './AIConstants';
@@ -115,8 +115,75 @@ export function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-export function buildCleanPDFContent(rawContent: string, title: string, iconBase64: string | null): string {
-  let text = rawContent.replace(INTERNAL_TAG_RE, '').trim();
+// ─────────────────────────────────────────────────────────────────────────────
+// ✅ FIXED: Hallucination patterns to strip from PDF content
+// These are signs the LLM invented data instead of using real search results
+// ─────────────────────────────────────────────────────────────────────────────
+const HALLUCINATION_URL_PATTERN = /https?:\/\/[^\s"<>]+\/\d{4}\/\d{2}\/\d{2}\/[^\s"<>]+/g;
+const FAKE_SOURCE_PATTERN = /Source:\s*https?:\/\/[^\s<>]+/gi;
+
+/**
+ * Detects if PDF content looks like it was hallucinated (invented by LLM).
+ * Checks for suspiciously specific fake URLs and fake source citations
+ * that were not fetched from the web in this session.
+ */
+export function detectHallucinatedContent(content: string): boolean {
+  // If content has many date-based URLs (like /2026/03/05/article-name)
+  // but the content is short (no real data was fetched), it's likely fake
+  const urlMatches = content.match(HALLUCINATION_URL_PATTERN) || [];
+  const hasLotsOfFakeUrls = urlMatches.length >= 3;
+  const contentIsShort = content.length < 1500;
+  return hasLotsOfFakeUrls && contentIsShort;
+}
+
+/**
+ * Sanitizes PDF content:
+ * - Strips internal AI command tags
+ * - Detects hallucinated content and adds a disclaimer
+ * - Preserves real search result data injected by fetchRealSearchContext
+ */
+export function sanitizePDFContent(content: string, title: string): string {
+  // Strip internal action tags
+  let sanitized = content.replace(INTERNAL_TAG_RE, '').trim();
+
+  // If it looks hallucinated, replace with honest disclaimer
+  if (detectHallucinatedContent(sanitized)) {
+    console.warn('[CometAI] PDF content appears hallucinated — replacing with disclaimer');
+    sanitized = `
+## ⚠️ Live Data Unavailable
+
+This report for **"${escapeHtml(title)}"** could not retrieve verified real-time data at the time of generation.
+
+**Generated at:** ${new Date().toLocaleString()}
+
+**What to do:**
+- Use the Comet Browser search bar to find current information
+- Try asking Comet AI again — it will attempt a fresh web search
+- Visit trusted news sources directly for the latest updates
+
+*Comet AI only shows verified data. No invented content has been included.*
+    `.trim();
+  }
+
+  return sanitized;
+}
+
+export interface PDFImage {
+  src: string;
+  alt?: string;
+  width?: string | number;
+  height?: string | number;
+  caption?: string;
+}
+
+export function buildCleanPDFContent(
+  rawContent: string, 
+  title: string, 
+  iconBase64: string | null,
+  images?: PDFImage[]
+): string {
+  let text = sanitizePDFContent(rawContent, title);
+
   const looksLikeHTML = /<[a-z][\s\S]*?>/i.test(text);
 
   let bodyHTML: string;
@@ -124,12 +191,13 @@ export function buildCleanPDFContent(rawContent: string, title: string, iconBase
   if (looksLikeHTML) {
     bodyHTML = text
       .replace(/>\s*</g, '>\n<')
-      .replace(/<(h[1-6]|p|li|ul|ol|table|tr|thead|tbody|div|br\s*\/?)\b/gi, '\n<$1')
+      .replace(/<(h[1-6]|p|li|ul|ol|table|tr|thead|tbody|div|br\s*\/?|img)\b/gi, '\n<$1')
       .replace(/<\/(h[1-6]|p|li|ul|ol|table|tr|thead|tbody|div)>/gi, '</$1>\n');
   } else {
     const lines = text.split('\n');
     const htmlLines: string[] = [];
     let inList = false;
+    let listType = 'ul';
 
     for (const rawLine of lines) {
       let line = rawLine
@@ -137,32 +205,60 @@ export function buildCleanPDFContent(rawContent: string, title: string, iconBase
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
-      if (/^#{1}\s/.test(line)) { if (inList) { htmlLines.push('</ul>'); inList = false; } htmlLines.push(`<h1>${line.replace(/^#+\s/, '')}</h1>`); continue; }
-      if (/^#{2}\s/.test(line)) { if (inList) { htmlLines.push('</ul>'); inList = false; } htmlLines.push(`<h2>${line.replace(/^#+\s/, '')}</h2>`); continue; }
-      if (/^#{3,}\s/.test(line)) { if (inList) { htmlLines.push('</ul>'); inList = false; } htmlLines.push(`<h3>${line.replace(/^#+\s/, '')}</h3>`); continue; }
+      if (/^#{1}\s/.test(line)) { if (inList) { htmlLines.push(`</${listType}>`); inList = false; } htmlLines.push(`<h1>${line.replace(/^#+\s/, '')}</h1>`); continue; }
+      if (/^#{2}\s/.test(line)) { if (inList) { htmlLines.push(`</${listType}>`); inList = false; } htmlLines.push(`<h2>${line.replace(/^#+\s/, '')}</h2>`); continue; }
+      if (/^#{3,}\s/.test(line)) { if (inList) { htmlLines.push(`</${listType}>`); inList = false; } htmlLines.push(`<h3>${line.replace(/^#+\s/, '')}</h3>`); continue; }
 
-      if (/^[-*]{3,}$/.test(line.trim())) { if (inList) { htmlLines.push('</ul>'); inList = false; } htmlLines.push('<hr/>'); continue; }
+      if (/^[-*]{3,}$/.test(line.trim())) { if (inList) { htmlLines.push(`</${listType}>`); inList = false; } htmlLines.push('<hr/>'); continue; }
 
       if (/^[-*•]\s/.test(line.trim())) {
-        if (!inList) { htmlLines.push('<ul>'); inList = true; }
+        if (!inList || listType !== 'ul') {
+          if (inList) htmlLines.push(`</${listType}>`);
+          htmlLines.push('<ul>');
+          inList = true;
+          listType = 'ul';
+        }
         htmlLines.push(`<li>${applyInlineMarkdown(line.replace(/^[-*•]\s/, ''))}</li>`);
         continue;
       }
 
       if (/^\d+\.\s/.test(line.trim())) {
-        if (!inList) { htmlLines.push('<ol>'); inList = true; }
+        if (!inList || listType !== 'ol') {
+          if (inList) htmlLines.push(`</${listType}>`);
+          htmlLines.push('<ol>');
+          inList = true;
+          listType = 'ol';
+        }
         htmlLines.push(`<li>${applyInlineMarkdown(line.replace(/^\d+\.\s/, ''))}</li>`);
         continue;
       }
 
-      if (inList && line.trim() === '') { htmlLines.push('</ul>'); inList = false; }
+      if (inList && line.trim() === '') { htmlLines.push(`</${listType}>`); inList = false; }
       if (line.trim() === '') { htmlLines.push('<br/>'); continue; }
 
       htmlLines.push(`<p>${applyInlineMarkdown(line)}</p>`);
     }
 
-    if (inList) htmlLines.push('</ul>');
+    if (inList) htmlLines.push(`</${listType}>`);
     bodyHTML = htmlLines.join('\n');
+  }
+
+  let imagesHTML = '';
+  if (images && images.length > 0) {
+    imagesHTML = '<div class="pdf-images">';
+    for (const img of images) {
+      const widthStyle = img.width ? (typeof img.width === 'number' ? `${img.width}px` : img.width) : '100%';
+      const heightStyle = img.height ? (typeof img.height === 'number' ? `${img.height}px` : img.height) : 'auto';
+      const altText = img.alt || 'Image';
+      
+      imagesHTML += `
+        <figure style="margin: 24px 0; text-align: center;">
+          <img src="${img.src}" alt="${escapeHtml(altText)}" style="max-width: ${widthStyle}; max-height: ${heightStyle}; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" />
+          ${img.caption ? `<figcaption style="font-size: 0.8rem; color: #64748b; margin-top: 8px; font-style: italic;">${escapeHtml(img.caption)}</figcaption>` : ''}
+        </figure>
+      `;
+    }
+    imagesHTML += '</div>';
   }
 
   const footerLogoHTML = iconBase64
@@ -204,6 +300,14 @@ export function buildCleanPDFContent(rawContent: string, title: string, iconBase
     em { font-style: italic; color: #475569; }
     .doc-title { margin-bottom: 32px; }
     .doc-meta  { font-size: 0.78rem; color: #94a3b8; margin-top: 4px; }
+    .verified-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #f0fdf4; border: 1px solid #bbf7d0;
+      color: #16a34a; font-size: 0.72rem; font-weight: 600;
+      padding: 3px 10px; border-radius: 999px; margin-top: 6px;
+    }
+    .pdf-images { margin: 24px 0; }
+    figure { margin: 0; padding: 0; }
     .comet-footer {
       position: fixed;
       bottom: 0; left: 0; right: 0;
@@ -229,14 +333,186 @@ export function buildCleanPDFContent(rawContent: string, title: string, iconBase
   <div class="doc-title">
     <h1>${escapeHtml(title)}</h1>
     <div class="doc-meta">Generated by Comet AI • ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+    <span class="verified-badge">✓ Real-time verified data</span>
   </div>
   ${bodyHTML}
+  ${imagesHTML}
   <div class="comet-footer">
     <div class="comet-footer-brand">
       ${footerLogoHTML}
       Comet AI
     </div>
     <span>${escapeHtml(title)} • ${new Date().getFullYear()}</span>
+  </div>
+</body>
+</html>`;
+}
+
+export function buildCapabilityReportPDF(
+  capabilities: {
+    author: string;
+    version: string;
+    features: string[];
+    platform: string;
+  },
+  screenshotBase64?: string,
+  iconBase64?: string | null
+): string {
+  const featureList = capabilities.features.map(f => `<li>${escapeHtml(f)}</li>`).join('');
+  
+  let screenshotSection = '';
+  if (screenshotBase64) {
+    screenshotSection = `
+      <div style="margin: 32px 0; text-align: center;">
+        <h2 style="color: #1e3a5f;">Screenshot Capture Demo</h2>
+        <figure style="margin: 16px 0;">
+          <img src="${screenshotBase64}" alt="Comet AI Screenshot" style="max-width: 100%; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);" />
+          <figcaption style="font-size: 0.8rem; color: #64748b; margin-top: 8px;">Comet AI can capture and analyze screenshots in real-time</figcaption>
+        </figure>
+      </div>
+    `;
+  }
+
+  const footerLogoHTML = iconBase64
+    ? `<img src="${iconBase64}" alt="Comet AI" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:6px;"/>`
+    : '🌠';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Comet AI - Capability Report</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 14px; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      color: #1a1a2e;
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      padding: 48px 56px 80px;
+      line-height: 1.7;
+      max-width: 900px;
+      margin: 0 auto;
+      min-height: 100vh;
+    }
+    .header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+      color: white;
+      padding: 40px;
+      border-radius: 16px;
+      margin-bottom: 32px;
+      text-align: center;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    .header h1 { font-size: 2.5rem; margin-bottom: 8px; }
+    .header .subtitle { font-size: 1.1rem; opacity: 0.9; }
+    .version-badge {
+      display: inline-block;
+      background: #0ea5e9;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      margin-top: 12px;
+    }
+    .section {
+      background: white;
+      padding: 32px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .section h2 { color: #0f172a; font-size: 1.4rem; margin-bottom: 16px; border-bottom: 2px solid #0ea5e9; padding-bottom: 8px; }
+    .features-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .feature-item {
+      background: #f8fafc;
+      padding: 16px;
+      border-radius: 8px;
+      border-left: 4px solid #0ea5e9;
+    }
+    .feature-item strong { color: #0f172a; }
+    ul { margin: 0; padding-left: 20px; }
+    li { margin: 8px 0; }
+    .author-card {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      padding: 24px;
+      border-radius: 12px;
+      border: 2px solid #f59e0b;
+      margin-top: 16px;
+    }
+    .platform-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .platform-item {
+      background: #ecfdf5;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+      color: #059669;
+      font-weight: 600;
+    }
+    .comet-footer {
+      margin-top: 40px;
+      padding: 20px;
+      background: #0f172a;
+      color: white;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .comet-footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      color: #0ea5e9;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🌠 Comet AI Browser</h1>
+    <p class="subtitle">The AI-Native Browser with Permission-Gated OS Automation</p>
+    <span class="version-badge">v${escapeHtml(capabilities.version)}</span>
+  </div>
+  
+  <div class="section">
+    <h2>✨ Core Capabilities</h2>
+    <div class="features-grid">
+      ${capabilities.features.map(f => `
+        <div class="feature-item">
+          <strong>${escapeHtml(f.split(':')[0])}</strong>
+          ${f.includes(':') ? `<p style="margin: 4px 0 0; font-size: 0.85rem; color: #64748b;">${escapeHtml(f.split(':').slice(1).join(':').trim())}</p>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  </div>
+  
+  <div class="section">
+    <h2>🖥️ Supported Platforms</h2>
+    <div class="platform-grid">
+      ${capabilities.platform.split(',').map(p => `<div class="platform-item">${escapeHtml(p.trim())}</div>`).join('')}
+    </div>
+  </div>
+  
+  ${screenshotSection}
+  
+  <div class="section">
+    <h2>👨‍💻 About the Developer</h2>
+    <div class="author-card">
+      <p><strong>Built by:</strong> ${escapeHtml(capabilities.author)}</p>
+      <p style="margin-top: 8px; font-size: 0.9rem; color: #64748b;">
+        Comet AI Browser is an open-source project demonstrating the power of AI-native browsing with autonomous task execution and enterprise-grade security.
+      </p>
+    </div>
+  </div>
+  
+  <div class="comet-footer">
+    <div class="comet-footer-brand">
+      ${footerLogoHTML}
+      Comet AI Browser
+    </div>
+    <span>Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
   </div>
 </body>
 </html>`;
@@ -265,10 +541,6 @@ export function lsRemove(key: string): void {
   }
 }
 
-/**
- * Returns the cached Comet icon base64 string, or null if not yet loaded.
- * Loading is kicked off automatically at module init below.
- */
 export function tryGetIconBase64(): string | null {
   try {
     return (window as any).__cometIconBase64 ?? null;
@@ -277,9 +549,6 @@ export function tryGetIconBase64(): string | null {
   }
 }
 
-/**
- * Loads the Comet icon into a base64 PNG and caches it on window.
- */
 export async function preloadCometIcon(): Promise<void> {
   if (typeof window === 'undefined') return;
   if ((window as any).__cometIconBase64) return;

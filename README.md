@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.1.1-green)]()
+[![Version](https://img.shields.io/badge/Version-0.2.1.2-blue)]() 🆕 **Patched**
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
 [![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
@@ -27,10 +27,13 @@ Most browsers are built for monetization. Comet is built for **control**.
 - 🔒 Privacy-first — local LLM support via Ollama, no cloud required
 - 💻 OS-level automation with explicit human approval for every action
 - ⚡ Optimized for low-spec hardware — tested on Intel i5-U, 8GB RAM, no GPU
+- 📸 **Screenshot embedding in PDFs** — AI can capture and include screen images in reports
+- 🔍 **Secure DOM Reading** — Filtered page extraction with injection detection
+- 🌐 **In-page DOM Search** — AI can search within current page content
 
 ---
 
-## ✨ Features
+## ✨ Features (v0.2.1.2)
 
 ### 🤖 AI Agent
 - Multi-step autonomous task execution via chained commands
@@ -39,16 +42,19 @@ Most browsers are built for monetization. Comet is built for **control**.
 - Hybrid context: browser history + live web search results
 - Thinking transparency — reasoning shown in collapsible "ThinkingPanel"
 - `<think>` tag parsing for DeepSeek-style chain-of-thought models
+- **[EXPLAIN_CAPABILITIES]** — Real-time demo: searches news, adjusts volume, opens apps, captures screenshots, generates PDF reports
 
 ### 🌐 Browser Capabilities
 - Full Chromium-based browsing via Electron BrowserView
 - Tab management with groups
-- Page content extraction with PII scrubbing
+- **Secure DOM extraction** with PII scrubbing and injection detection
+- **In-page DOM search** — AI can search text within current page
 - OCR-based screen reading (Tesseract.js)
-- Screenshot capture and visual analysis
+- Screenshot capture with visual analysis
 - Built-in ad blocker (~99% accuracy)
 
 ### 📄 Document & Productivity
+- **Enhanced PDF generation** with screenshot/image embedding
 - Single-prompt PDF generation with branded styling
 - PDF viewer with OCR, annotations, zoom, and rotation
 - Unified cart manager across shopping sites
@@ -57,9 +63,11 @@ Most browsers are built for monetization. Comet is built for **control**.
 
 ### 🛡️ Security Model
 - **Triple-Lock Architecture** (see [Security](#-security) section)
-- Prompt injection detection with strike-based banning
-- PII scrubbing before content reaches the LLM
+- **Prompt injection detection** with strike-based banning
+- **PII scrubbing** before content reaches the LLM
+- **Injection pattern detection** in DOM reading
 - All shell commands and native clicks require explicit user approval
+- Read-only DOM mode with automatic security filtering
 
 ### 🤖 AI Provider Support
 | Provider | Type | Notes |
@@ -69,6 +77,17 @@ Most browsers are built for monetization. Comet is built for **control**.
 | Anthropic Claude | Cloud | Strong for long context |
 | Groq | Cloud | Fastest inference |
 | Ollama | Local | Full privacy, no API key |
+
+### 🔧 Real Capabilities Demo
+
+When you use `[EXPLAIN_CAPABILITIES]`, Comet AI demonstrates:
+
+1. **Web Search** — Fetches latest news in real-time
+2. **Shell Commands** — Retrieves WiFi/network information
+3. **System Control** — Adjusts volume and brightness
+4. **App Launching** — Opens Calculator (macOS/Windows/Linux)
+5. **Screenshot Capture** — Takes and embeds screen images
+6. **PDF Generation** — Creates branded reports with screenshots
 
 ---
 

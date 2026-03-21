@@ -1,9 +1,9 @@
 {
   "name": "comet-ai",
-  "version": "0.2.1",
+  "version": "0.2.1.2",
   "private": true,
   "description": "Comet AI Browser - A high-performance, intelligence-driven browsing workspace with local LLM support and advanced productivity features.",
-  "author": "Latestinssan",
+  "author": "Preet Kumar Patel",
   "main": "main.js",
   "homepage": "./",
   "scripts": {
