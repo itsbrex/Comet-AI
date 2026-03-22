@@ -18,7 +18,7 @@
             android:text="Desktop Sync"
             android:textColor="#FFFFFF"
             android:textSize="12sp"
-            android:fontWeight="bold"
+            android:textStyle="bold"
             android:alpha="0.4" />
 
         <TextView
