@@ -461,6 +461,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcpNativePowershell: (script) => ipcRenderer.invoke('mcp-native-powershell', script),
   mcpNativeActiveWindow: () => ipcRenderer.invoke('mcp-native-active-window'),
 
+  // Upgraded MCP Core (Smithery / SSE / Stdio)
+  mcpConnectServer: (config) => ipcRenderer.invoke('mcp-connect-server', config),
+  mcpDisconnectServer: (id) => ipcRenderer.invoke('mcp-disconnect-server', id),
+  mcpListServers: () => ipcRenderer.invoke('mcp-list-servers'),
+  mcpGetTools: () => ipcRenderer.invoke('mcp-get-tools'),
+
   // Web Search v2 (Brave / Tavily / SerpAPI)
   webSearch: (query, provider, count) => ipcRenderer.invoke('web-search', { query, provider, count }),
   webSearchContext: (query, provider) => ipcRenderer.invoke('web-search-context', { query, provider }),

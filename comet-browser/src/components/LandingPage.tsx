@@ -147,6 +147,20 @@ const LandingPage = () => {
         }
     };
 
+    const handleGoogleSignIn = async () => {
+        setIsLoading(true);
+        if (window.electronAPI) {
+            const config = firebaseConfigStorage.load() || getFirebaseConfigFromEnv();
+            const authUrl = `https://browser.ponsrischool.in/auth?client_id=desktop-app&redirect_uri=comet-browser%3A%2F%2Fauth&firebase_config=${btoa(JSON.stringify(config))}`;
+            window.electronAPI.openAuthWindow(authUrl);
+            store.setHasSeenWelcomePage(true);
+        } else {
+            const url = `https://browser.ponsrischool.in/auth?client_id=web-app&redirect_uri=${encodeURIComponent(window.location.origin + '/auth')}`;
+            window.open(url, "_blank");
+            store.setHasSeenWelcomePage(true);
+        }
+    };
+
     // Auth callback is now handled globally in ClientOnlyPage.tsx
     // to ensure user state is synchronized before transitioning views.
 
@@ -234,6 +248,14 @@ const LandingPage = () => {
                                             className="btn-vibrant-cyan flex items-center justify-center gap-3 py-5"
                                         >
                                             Enter Workspace <ArrowRight size={20} />
+                                        </button>
+                                        <button
+                                            onClick={handleGoogleSignIn}
+                                            disabled={isLoading}
+                                            className="btn-vibrant-primary flex items-center justify-center gap-3 py-5"
+                                        >
+                                            <LogIn size={18} className="text-black" />
+                                            {isLoading ? <RefreshCw className="animate-spin" size={18} /> : 'Sign in with Google'}
                                         </button>
                                         <button
                                             onClick={handleLogin}

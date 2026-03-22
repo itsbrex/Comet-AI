@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.1.2-blue)]() 🆕 **Patched**
+[![Version](https://img.shields.io/badge/Version-0.2.3-blue)]() 🆕 **Agentic Power**
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
 [![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
@@ -33,7 +33,7 @@ Most browsers are built for monetization. Comet is built for **control**.
 
 ---
 
-## ✨ Features (v0.2.1.2)
+## ✨ Features (v0.2.3)
 
 ### 🤖 AI Agent
 - Multi-step autonomous task execution via chained commands
@@ -43,6 +43,8 @@ Most browsers are built for monetization. Comet is built for **control**.
 - Thinking transparency — reasoning shown in collapsible "ThinkingPanel"
 - `<think>` tag parsing for DeepSeek-style chain-of-thought models
 - **[EXPLAIN_CAPABILITIES]** — Real-time demo: searches news, adjusts volume, opens apps, captures screenshots, generates PDF reports
+- **Full Agentic Control** — CLICK, FILL_FORM, SCROLL, and COORDINATE-based interaction
+- **Accelerated Action Chains** — Optimized search-to-navigation loop with minimal latency
 
 ### 🌐 Browser Capabilities
 - Full Chromium-based browsing via Electron BrowserView
@@ -54,12 +56,13 @@ Most browsers are built for monetization. Comet is built for **control**.
 - Built-in ad blocker (~99% accuracy)
 
 ### 📄 Document & Productivity
-- **Enhanced PDF generation** with screenshot/image embedding
-- Single-prompt PDF generation with branded styling
-- PDF viewer with OCR, annotations, zoom, and rotation
-- Unified cart manager across shopping sites
-- Autofill for saved addresses and payment methods
-- Unified search (apps, settings, web — one shortcut)
+- **Live PDF Streaming** — Watch reports being generated in real-time
+- **Slide-based Generation** — Use `---` in markdown to create multi-page slides (Presenton logic)
+- **Enhanced PDF generation** with native tables, bold fonts, and custom branding
+- **Screenshot embedding in PDFs** — AI captures and includes screen images in reports
+- **Single-prompt branded reports** — Custom headers/footers with Comet icon
+- **Unified search & cart manager** — Search apps, settings, and web in one shortcut
+- **One-Click Tab Group Closure** — Instantly close all AI-opened tabs
 
 ### 🛡️ Security Model
 - **Triple-Lock Architecture** (see [Security](#-security) section)

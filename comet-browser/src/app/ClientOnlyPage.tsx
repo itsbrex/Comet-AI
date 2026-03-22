@@ -32,6 +32,7 @@ import PresentonStudio from '@/components/PresentonStudio';
 import PasswordManager from '@/components/PasswordManager';
 import ProxyFirewallManager from '@/components/ProxyFirewallManager';
 import P2PSyncManager from '@/components/P2PSyncManager';
+import WelcomeScreen from '@/components/WelcomeScreen';
 
 import CloudSyncConsent from "@/components/CloudSyncConsent";
 import NoNetworkGame from "@/components/DinoGame";
@@ -1388,8 +1389,12 @@ export default function Home() {
         onOpenSettings={() => setShowSettings(true)}
       />
       
-      {!store.hasCompletedStartupSetup && (
-        <StartupSetupUI onComplete={() => store.setHasCompletedStartupSetup(true)} />
+      {!store.hasSeenWelcomePage ? (
+        <WelcomeScreen />
+      ) : (
+        !store.hasCompletedStartupSetup && (
+          <StartupSetupUI onComplete={() => store.setHasCompletedStartupSetup(true)} />
+        )
       )}
 
       <div
@@ -1649,6 +1654,11 @@ export default function Home() {
 
           <div className="flex-1 relative">
             <AnimatePresence mode="wait">
+              {store.activeView === 'landing-page' && (
+                <motion.div key="landing-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[60] bg-[#020205] overflow-auto custom-scrollbar">
+                  <LandingPage />
+                </motion.div>
+              )}
               {store.activeView === 'workspace' && (
                 <motion.div key="workspace" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="absolute inset-0 z-[60] bg-[#020205]">
                   <WorkspaceDashboard />

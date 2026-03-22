@@ -6,7 +6,7 @@ import { useAppStore, BrowserState } from '@/store/useAppStore';
 import {
     Monitor, Shield, Globe, Info, Download,
     ChevronRight, ShieldCheck, Key, Package, Keyboard,
-    Briefcase, ShieldAlert, Database, LogIn, LogOut, History as HistoryIcon, User as UserIcon, Zap, RefreshCw, Languages, Music2
+    Briefcase, ShieldAlert, Database, LogIn, LogOut, History as HistoryIcon, User as UserIcon, Zap, RefreshCw, Languages, Music2, Eye, EyeOff
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import SearchEngineSettings from './SearchEngineSettings';
@@ -29,10 +29,18 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
     const store = useAppStore();
     const setUser = useAppStore((state: BrowserState) => state.setUser);
     const fetchHistory = useAppStore((state: BrowserState) => state.fetchHistory);
-    const [activeSection, setActiveSection] = React.useState(defaultSection);
+    const [activeSection, setActiveSection] = React.useState(store.settingsSection || defaultSection);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [licenseKey, setLicenseKey] = useState("");
     const { isGuestMode, setGuestMode } = useAppStore();
+    const [showFirebaseConfig, setShowFirebaseConfig] = useState(false);
+    const [showMysqlConfig, setShowMysqlConfig] = useState(false);
+
+    useEffect(() => {
+        if (store.settingsSection && store.settingsSection !== activeSection) {
+            setActiveSection(store.settingsSection);
+        }
+    }, [store.settingsSection]);
 
     useEffect(() => {
         // Listen for auth state changes to update the UI
@@ -629,23 +637,35 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
 
                                                 <div className="flex items-center justify-between">
                                                     <p className="text-xs font-bold text-white/60 uppercase tracking-widest">Custom Firebase Config</p>
-                                                    <button
-                                                        onClick={() => store.setCustomFirebaseConfig(null)}
-                                                        className="text-[10px] text-deep-space-accent-neon hover:underline"
-                                                    >
-                                                        Reset to Default
-                                                    </button>
+                                                    <div className="flex items-center gap-4">
+                                                        <button
+                                                            onClick={() => setShowFirebaseConfig(!showFirebaseConfig)}
+                                                            className="text-[10px] text-deep-space-accent-neon flex items-center gap-1 hover:underline"
+                                                            title={showFirebaseConfig ? "Hide Config" : "Show Config"}
+                                                        >
+                                                            {showFirebaseConfig ? <EyeOff size={12} /> : <Eye size={12} />}
+                                                            {showFirebaseConfig ? "Hide" : "Show"}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => store.setCustomFirebaseConfig(null)}
+                                                            className="text-[10px] text-deep-space-accent-neon hover:underline"
+                                                        >
+                                                            Reset to Default
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 <textarea
                                                     className="w-full bg-black/40 border border-white/5 rounded-xl p-4 text-xs font-mono text-deep-space-accent-neon placeholder:text-white/10 h-32 outline-none focus:border-deep-space-accent-neon/30"
                                                     placeholder='{ "apiKey": "...", "authDomain": "...", ... }'
-                                                    value={store.customFirebaseConfig ? JSON.stringify(store.customFirebaseConfig, null, 2) : ''}
+                                                    value={showFirebaseConfig ? (store.customFirebaseConfig ? JSON.stringify(store.customFirebaseConfig, null, 2) : '') : (store.customFirebaseConfig ? '{\n  "apiKey": "****************",\n  "authDomain": "****************",\n  "projectId": "****************",\n  "storageBucket": "****************",\n  "messagingSenderId": "****************",\n  "appId": "****************",\n  "measurementId": "****************"\n}' : '')}
                                                     onChange={(e) => {
+                                                        if (!showFirebaseConfig) return;
                                                         try {
                                                             const config = JSON.parse(e.target.value);
                                                             store.setCustomFirebaseConfig(config);
                                                         } catch { }
                                                     }}
+                                                    readOnly={!showFirebaseConfig}
                                                     disabled={isGuestMode}
                                                 />
                                             </div>
@@ -653,14 +673,24 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
 
                                         {store.backendStrategy === 'mysql' && (
                                             <div className="pt-6 border-t border-white/5">
-                                                <p className="text-xs font-bold text-white/60 uppercase tracking-widest mb-4">SQL Connection Details</p>
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <p className="text-xs font-bold text-white/60 uppercase tracking-widest">SQL Connection Details</p>
+                                                    <button
+                                                        onClick={() => setShowMysqlConfig(!showMysqlConfig)}
+                                                        className="text-[10px] text-deep-space-accent-neon flex items-center gap-1 hover:underline"
+                                                        title={showMysqlConfig ? "Hide Config" : "Show Config"}
+                                                    >
+                                                        {showMysqlConfig ? <EyeOff size={12} /> : <Eye size={12} />}
+                                                        {showMysqlConfig ? "Hide" : "Show"}
+                                                    </button>
+                                                </div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     {['host', 'port', 'user', 'database'].map((field) => (
                                                         <div key={field} className="space-y-1">
                                                             <label htmlFor={field} className="text-[9px] font-black uppercase tracking-widest text-white/20 px-1">{field}</label>
                                                             <input
                                                                 id={field}
-                                                                type="text"
+                                                                type={showMysqlConfig ? "text" : "password"}
                                                                 placeholder={`Enter ${field}`}
                                                                 className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-deep-space-accent-neon/30"
                                                                 value={store.customMysqlConfig?.[field] || ''}
@@ -671,9 +701,9 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                                                     ))}
                                                     <div className="col-span-2 space-y-1">
                                                         <p className="text-[9px] font-black uppercase tracking-widest text-white/20 px-1">password</p>
-                                                        <input
-                                                            type="password"
-                                                            placeholder="Enter database password"
+                                                            <input
+                                                                type={showMysqlConfig ? "text" : "password"}
+                                                                placeholder="Enter database password"
                                                             className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-deep-space-accent-neon/30"
                                                             value={store.customMysqlConfig?.password || ''}
                                                             onChange={(e) => store.setCustomMysqlConfig({ ...store.customMysqlConfig, password: e.target.value })}

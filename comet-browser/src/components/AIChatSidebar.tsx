@@ -11,7 +11,7 @@ import {
   Sparkles,
   Image as ImageIcon,
   Eye, EyeOff, Brain, Search, Loader2, MousePointerClick,
-  CheckCircle2, AlertCircle,
+  CheckCircle2, AlertCircle, Layers,
   Share2, CopyIcon, Trash2, Printer, Cpu, Rocket, Camera, Terminal, MoreHorizontal, Play
 } from 'lucide-react';
 import Tesseract from 'tesseract.js';
@@ -133,6 +133,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     localLlmMode, autoGeminiModelUpdates, geminiModel,
     setTheme: storeSetTheme,
     ollamaModelsList, setOllamaModelsList, setOllamaModel, geminiModel: storeGeminiModel,
+    hasSeenNeuralSetup, setHasSeenNeuralSetup,
   } = store;
 
   // Core state
@@ -156,7 +157,6 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [thinkingText, setThinkingText] = useState<string>('');
   const [isThinking, setIsThinking] = useState(false);
   const thinkingIdCounter = useRef(0);
-  const hasShownSetupGuide = useRef(false);
 
   // Refs & Workers
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -180,6 +180,8 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [ollamaModels, setOllamaModels] = useState<{ name: string; modified_at: string }[]>([]);
   const [groqSpeed, setGroqSpeed] = useState<string | null>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [streamingPDFContent, setStreamingPDFContent] = useState('');
 
   const [permissionPending, setPermissionPending] = useState<any | null>(null);
   const [showModelPicker, setShowModelPicker] = useState(false);
@@ -216,7 +218,18 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     actionType: string, action: string, target: string, what: string, reason: string,
     risk: 'low' | 'medium' | 'high' = 'low'
   ): Promise<boolean> => {
+    // 1. If low risk, auto-approve
     if (risk === 'low') return true;
+
+    // 2. Check if user already granted this action permanently
+    const permKey = `${actionType}:${target || what}`;
+    if (window.electronAPI?.permCheck) {
+      const res = await window.electronAPI.permCheck(permKey);
+      if (res.granted) {
+        console.log(`[Permission] Pre-authorized via store: ${permKey}`);
+        return true;
+      }
+    }
 
     let highRiskQr = null;
     if (risk === 'high' && window.electronAPI?.generateHighRiskQr) {
@@ -343,8 +356,8 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     // Show setup guide if AI is not configured. After first show, don't block—
     // let the user try anyway (they may have set a key via store directly).
     if (!isAiSetup()) {
-      if (!hasShownSetupGuide.current) {
-        hasShownSetupGuide.current = true;
+      if (!hasSeenNeuralSetup) {
+        setHasSeenNeuralSetup(true);
         setShowSetupGuide(true);
       }
       // Still fall through and attempt to send — the error from main.js will explain
@@ -591,8 +604,198 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
             output = `Navigated to internal page: ${page}`;
           } else {
             setActiveView('browser');
-            store.addTab(targetUrl); // ✨ ALWAYS create a new tab for AI navigations
+            store.addTab(targetUrl, 'ai-session'); // ✨ ALWAYS create a new tab for AI navigations
             output = `Opened new tab and navigated to ${targetUrl}`;
+          }
+          break;
+        }
+
+        case 'CLICK_ELEMENT': {
+          const selector = command.value.split('|')[0].trim();
+          const clickStepId = addThinkingStep(`Clicking element: ${selector}...`);
+          try {
+            const res = await window.electronAPI.clickElement(selector);
+            if (res.success) {
+              output = `Successfully clicked element: ${selector}`;
+              resolveThinkingStep(clickStepId, 'done', 'Element clicked');
+            } else {
+              output = `Failed to click element: ${res.error}`;
+              resolveThinkingStep(clickStepId, 'error', res.error);
+            }
+          } catch (e: any) {
+            output = `Click error: ${e.message}`;
+            resolveThinkingStep(clickStepId, 'error', e.message);
+          }
+          break;
+        }
+
+        case 'CLICK_AT': {
+          const coords = command.value.split('|')[0].trim();
+          const [x, y] = coords.split(',').map(s => parseInt(s.trim()));
+          const clickAtStepId = addThinkingStep(`Clicking at (${x}, ${y})...`);
+          try {
+            const res = await window.electronAPI.performClick({ x, y });
+            if (res.success) {
+              output = `Clicked at coordinates (${x}, ${y})`;
+              resolveThinkingStep(clickAtStepId, 'done', 'Clicked at coords');
+            } else {
+              output = `Failed to click at coords: ${res.error}`;
+              resolveThinkingStep(clickAtStepId, 'error', res.error);
+            }
+          } catch (e: any) {
+            output = `Click error: ${e.message}`;
+            resolveThinkingStep(clickAtStepId, 'error', e.message);
+          }
+          break;
+        }
+
+        case 'FIND_AND_CLICK': {
+          const textToFind = command.value.split('|')[0].trim();
+          const findClickStepId = addThinkingStep(`Finding and clicking: "${textToFind}"...`);
+          try {
+            const res = await window.electronAPI.findAndClickText(textToFind);
+            if (res.success) {
+              output = `Found and clicked text: "${textToFind}"`;
+              resolveThinkingStep(findClickStepId, 'done', 'Text found and clicked');
+            } else {
+              output = `Could not find text: "${textToFind}"`;
+              resolveThinkingStep(findClickStepId, 'error', 'Text not found');
+            }
+          } catch (e: any) {
+            output = `Find and click error: ${e.message}`;
+            resolveThinkingStep(findClickStepId, 'error', e.message);
+          }
+          break;
+        }
+
+        case 'FILL_FORM': {
+          const parts = command.value.split('|').map(s => s.trim());
+          const selector = parts[0];
+          const value = parts[1];
+          const fillStepId = addThinkingStep(`Filling form element ${selector}...`);
+          try {
+            const res = await window.electronAPI.typeText(selector, value);
+            if (res.success) {
+              output = `Filled ${selector} with value: ${value}`;
+              resolveThinkingStep(fillStepId, 'done', 'Form field filled');
+            } else {
+              output = `Failed to fill form: ${res.error}`;
+              resolveThinkingStep(fillStepId, 'error', res.error);
+            }
+          } catch (e: any) {
+            output = `Fill error: ${e.message}`;
+            resolveThinkingStep(fillStepId, 'error', e.message);
+          }
+          break;
+        }
+
+        case 'SCROLL_TO': {
+          const parts = command.value.split('|').map(s => s.trim());
+          const selector = parts[0];
+          const scrollStepId = addThinkingStep(`Scrolling to ${selector}...`);
+          try {
+            const code = `document.querySelector('${selector}')?.scrollIntoView({ behavior: 'smooth' })`;
+            await window.electronAPI.executeJavaScript(code);
+            output = `Scrolled to element: ${selector}`;
+            resolveThinkingStep(scrollStepId, 'done', 'Scrolled to element');
+          } catch (e: any) {
+            output = `Scroll error: ${e.message}`;
+            resolveThinkingStep(scrollStepId, 'error', e.message);
+          }
+          break;
+        }
+
+        case 'CLICK_ELEMENT': {
+          const selector = command.value.split('|')[0].trim();
+          const clickStepId = addThinkingStep(`Clicking element: ${selector}...`);
+          try {
+            const res = await window.electronAPI.clickElement(selector);
+            if (res.success) {
+              output = `Successfully clicked element: ${selector}`;
+              resolveThinkingStep(clickStepId, 'done', 'Element clicked');
+            } else {
+              output = `Failed to click element: ${res.error}`;
+              resolveThinkingStep(clickStepId, 'error', res.error);
+            }
+          } catch (e: any) {
+            output = `Click error: ${e.message}`;
+            resolveThinkingStep(clickStepId, 'error', e.message);
+          }
+          break;
+        }
+
+        case 'CLICK_AT': {
+          const coords = command.value.split('|')[0].trim();
+          const [x, y] = coords.split(',').map(s => parseInt(s.trim()));
+          const clickAtStepId = addThinkingStep(`Clicking at (${x}, ${y})...`);
+          try {
+            const res = await window.electronAPI.performClick({ x, y });
+            if (res.success) {
+              output = `Clicked at coordinates (${x}, ${y})`;
+              resolveThinkingStep(clickAtStepId, 'done', 'Clicked at coords');
+            } else {
+              output = `Failed to click at coords: ${res.error}`;
+              resolveThinkingStep(clickAtStepId, 'error', res.error);
+            }
+          } catch (e: any) {
+            output = `Click error: ${e.message}`;
+            resolveThinkingStep(clickAtStepId, 'error', e.message);
+          }
+          break;
+        }
+
+        case 'FIND_AND_CLICK': {
+          const textToFind = command.value.split('|')[0].trim();
+          const findClickStepId = addThinkingStep(`Finding and clicking: "${textToFind}"...`);
+          try {
+            const res = await window.electronAPI.findAndClickText(textToFind);
+            if (res.success) {
+              output = `Found and clicked text: "${textToFind}"`;
+              resolveThinkingStep(findClickStepId, 'done', 'Text found and clicked');
+            } else {
+              output = `Could not find text: "${textToFind}"`;
+              resolveThinkingStep(findClickStepId, 'error', 'Text not found');
+            }
+          } catch (e: any) {
+            output = `Find and click error: ${e.message}`;
+            resolveThinkingStep(findClickStepId, 'error', e.message);
+          }
+          break;
+        }
+
+        case 'FILL_FORM': {
+          const parts = command.value.split('|').map(s => s.trim());
+          const selector = parts[0];
+          const value = parts[1];
+          const fillStepId = addThinkingStep(`Filling form element ${selector}...`);
+          try {
+            const res = await window.electronAPI.typeText(selector, value);
+            if (res.success) {
+              output = `Filled ${selector} with value: ${value}`;
+              resolveThinkingStep(fillStepId, 'done', 'Form field filled');
+            } else {
+              output = `Failed to fill form: ${res.error}`;
+              resolveThinkingStep(fillStepId, 'error', res.error);
+            }
+          } catch (e: any) {
+            output = `Fill error: ${e.message}`;
+            resolveThinkingStep(fillStepId, 'error', e.message);
+          }
+          break;
+        }
+
+        case 'SCROLL_TO': {
+          const parts = command.value.split('|').map(s => s.trim());
+          const selector = parts[0];
+          const scrollStepId = addThinkingStep(`Scrolling to ${selector}...`);
+          try {
+            const code = `document.querySelector('${selector}')?.scrollIntoView({ behavior: 'smooth' })`;
+            await window.electronAPI.executeJavaScript(code);
+            output = `Scrolled to element: ${selector}`;
+            resolveThinkingStep(scrollStepId, 'done', 'Scrolled to element');
+          } catch (e: any) {
+            output = `Scroll error: ${e.message}`;
+            resolveThinkingStep(scrollStepId, 'error', e.message);
           }
           break;
         }
@@ -612,7 +815,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
           setActiveView('browser');
 
-          store.addTab(searchUrl); // ✨ ALWAYS create a new tab for deep web searches
+          store.addTab(searchUrl, 'ai-session'); // ✨ ALWAYS create a new tab for deep web searches
           output = `Opened new tab for: "${query}"`;
 
           // Fetch real results and store in vector memory for LLM context
@@ -633,8 +836,8 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
             output = `Search results for "${query}":\n${snippets.join('\n')}`;
           } else {
-            // Fallback: wait for the search page to load and try DOM / OCR extraction
-            await new Promise(resolve => setTimeout(resolve, 3500));
+            // Fallback: wait for the search page to load slightly and try DOM / OCR extraction
+            await new Promise(resolve => setTimeout(resolve, 1500));
             try {
               const domRes = await window.electronAPI.extractPageContent();
               if (domRes && domRes.content && domRes.content.length > 100) {
@@ -858,8 +1061,16 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
           await preloadCometIconLocal();
           const iconSource = (window as any).__cometIconBase64 || null;
+          
+          setIsGeneratingPDF(true);
+          setStreamingPDFContent(`Generating PDF: ${pdfTitle}...`);
+          
           const cleanHTML = buildCleanPDFContent(pdfContent, pdfTitle, iconSource, pdfImages.length > 0 ? pdfImages : undefined);
           const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML);
+          
+          setIsGeneratingPDF(false);
+          setStreamingPDFContent('');
+          
           output = res.success ? `PDF "${pdfTitle}" generated and saved.` : `Error: ${res.error}`;
           break;
         }
@@ -1198,6 +1409,12 @@ I've successfully executed the following real tasks:
           break;
         }
 
+        case 'OPEN_MCP_SETTINGS': {
+          store.openMcpSettings();
+          output = 'Opening MCP Settings panel...';
+          break;
+        }
+
         case 'DOM_READ_FILTERED': {
           const query = command.value.trim();
           const readStepId = addThinkingStep('Reading secure DOM...');
@@ -1494,6 +1711,38 @@ I've successfully executed the following real tasks:
         )}
       </AnimatePresence>
 
+      {/* Live PDF Generation Overlay */}
+      <AnimatePresence>
+        {isGeneratingPDF && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-x-6 top-32 z-[1000] p-6 rounded-[2.5rem] bg-gradient-to-br from-white/10 to-transparent border border-white/20 backdrop-blur-2xl shadow-[0_30px_100px_rgba(0,0,0,0.5)] overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500 via-purple-500 to-sky-500 animate-[shimmer_2s_infinite] bg-[length:200%_100%]" />
+            <div className="flex flex-col items-center gap-6 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
+                <FileText size={32} className="text-sky-400 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-[0.3em] text-white">Live PDF Streaming</h3>
+                <p className="text-[10px] text-white/40 uppercase tracking-tighter mt-2 font-bold leading-relaxed max-w-[200px]">
+                  {streamingPDFContent}
+                </p>
+              </div>
+              <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  className="h-full bg-sky-500"
+                  animate={{ width: ["0%", "100%"] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Terminal Panel */}
       <AnimatePresence>
         {showTerminal && terminalLogs.length > 0 && (
@@ -1540,7 +1789,15 @@ I've successfully executed the following real tasks:
           <div className="absolute inset-0 z-[10001] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
             <ClickPermissionModal
               context={permissionPending.context}
-              onAllow={() => { permissionPending.resolve(true); setPermissionPending(null); }}
+              onAllow={async (alwaysAllow) => { 
+                const ctx = permissionPending.context;
+                if (alwaysAllow && window.electronAPI?.permGrant) {
+                  const permKey = `${ctx.actionType}:${ctx.target || ctx.what}`;
+                  await window.electronAPI.permGrant(permKey, 'execute', ctx.action, false);
+                }
+                permissionPending.resolve(true); 
+                setPermissionPending(null); 
+              }}
               onDeny={() => { permissionPending.resolve(false); setPermissionPending(null); }}
             />
           </div>
@@ -1584,6 +1841,15 @@ I've successfully executed the following real tasks:
             <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-2.5 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-all">
               {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </button>
+            {store.tabs.some(t => t.groupId === 'ai-session') && (
+              <button 
+                onClick={() => store.closeTabGroup('ai-session')} 
+                className="p-2.5 rounded-xl hover:bg-red-500/10 text-red-400/60 hover:text-red-400 transition-all border border-red-500/10"
+                title="Close AI Session Tabs"
+              >
+                <Layers size={18} />
+              </button>
+            )}
             <button onClick={props.toggleCollapse} className="p-2.5 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-all">
               <X size={18} />
             </button>

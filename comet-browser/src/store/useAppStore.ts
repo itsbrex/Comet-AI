@@ -26,11 +26,13 @@ export interface BrowserState {
         isSuspended?: boolean;
         priority?: 'low' | 'normal' | 'high';
         keepAlive?: boolean;
+        groupId?: string;
     }>;
     activeTabId: string;
-    addTab: (url?: string) => void;
+    addTab: (url?: string, groupId?: string) => void;
     addIncognitoTab: (url?: string) => void;
     removeTab: (id: string) => void;
+    closeTabGroup: (groupId: string) => void;
     updateTab: (id: string, updates: Partial<{ url: string; title: string; isAudible?: boolean; isLoading?: boolean; isSuspended?: boolean; priority?: 'low' | 'normal' | 'high'; keepAlive?: boolean }>) => void;
     suspendTab: (id: string) => void;
     resumeTab: (id: string) => void;
@@ -79,7 +81,9 @@ export interface BrowserState {
 
     // View and UI
     activeView: string;
+    settingsSection: string;
     setActiveView: (view: string) => void;
+    setSettingsSection: (section: string) => void;
 
     // Guest mode and sync
     isGuestMode: boolean;
@@ -136,8 +140,16 @@ export interface BrowserState {
     setHasSeenAiMistakeWarning: (val: boolean) => void;
     mcpServerPort: number;
     setMcpServerPort: (port: number) => void;
+    mcpServers: Array<{ id: string; name: string; url: string; status: 'online' | 'offline' | 'connecting'; type?: string; tools?: any[] }>;
+    addMcpServer: (server: { name: string; url: string; type?: string }) => Promise<void>;
+    removeMcpServer: (id: string) => Promise<void>;
+    syncMcpServers: () => Promise<void>;
+    updateMcpServerStatus: (id: string, status: 'online' | 'offline' | 'connecting') => void;
+    updateMcpServerTools: (id: string, tools: any[]) => void;
     additionalAIInstructions: string;
     setAdditionalAIInstructions: (instructions: string) => void;
+    hasSeenNeuralSetup: boolean;
+    setHasSeenNeuralSetup: (seen: boolean) => void;
 
     // AI Safety
     aiSafetyMode: boolean; // If true, AI asks for confirmation before critical actions
@@ -251,11 +263,7 @@ export interface BrowserState {
     enableAdblocker: boolean;
     setEnableAdblocker: (enable: boolean) => void;
 
-    // MCP Servers
-    mcpServers: Array<{ id: string; name: string; url: string; status: 'online' | 'offline' | 'connecting' }>;
-    addMcpServer: (server: { name: string; url: string }) => void;
-    removeMcpServer: (id: string) => void;
-    updateMcpServerStatus: (id: string, status: 'online' | 'offline' | 'connecting') => void;
+    openMcpSettings: () => void;
 }
 
 export const useAppStore = create<BrowserState>()(
@@ -310,6 +318,8 @@ export const useAppStore = create<BrowserState>()(
 
             // View and UI
             activeView: 'browser',
+            settingsSection: 'profile',
+            setSettingsSection: (section: string) => set({ settingsSection: section }),
 
             // Guest mode and sync
             isGuestMode: false,
@@ -337,6 +347,8 @@ export const useAppStore = create<BrowserState>()(
             geminiModel: MODEL_REGISTRY.google.pro.id,
             mcpServerPort: 3001,
             additionalAIInstructions: '',
+            hasSeenNeuralSetup: false,
+            setHasSeenNeuralSetup: (seen: boolean) => set({ hasSeenNeuralSetup: seen }),
  
             // Theme settings
             theme: 'system',
@@ -433,15 +445,80 @@ export const useAppStore = create<BrowserState>()(
 
             // MCP Servers
             mcpServers: [],
-            addMcpServer: (server: { name: string; url: string }) => set((state: BrowserState) => ({
-                mcpServers: [...state.mcpServers, { ...server, id: `mcp-${Date.now()}`, status: 'connecting' }]
-            })),
-            removeMcpServer: (id: string) => set((state: BrowserState) => ({
-                mcpServers: state.mcpServers.filter(s => s.id !== id)
-            })),
+            addMcpServer: async (server: { name: string; url: string }) => {
+                const id = `mcp-${Date.now()}`;
+                if (window.electronAPI) {
+                    set((state: BrowserState) => ({
+                        mcpServers: [...state.mcpServers, { ...server, id, status: 'connecting' }]
+                    }));
+                    const res = await window.electronAPI.mcpConnectServer({ ...server, id });
+                    set((state: BrowserState) => ({
+                        mcpServers: state.mcpServers.map(s => s.id === id ? { ...s, status: res.success ? 'online' : 'offline' } : s)
+                    }));
+                } else {
+                    set((state: BrowserState) => ({
+                        mcpServers: [...state.mcpServers, { ...server, id, status: 'online' }]
+                    }));
+                }
+            },
+            removeMcpServer: async (id: string) => {
+                if (window.electronAPI) {
+                    await window.electronAPI.mcpDisconnectServer(id);
+                }
+                set((state: BrowserState) => ({
+                    mcpServers: state.mcpServers.filter(s => s.id !== id)
+                }));
+            },
             updateMcpServerStatus: (id: string, status: 'online' | 'offline' | 'connecting') => set((state: BrowserState) => ({
                 mcpServers: state.mcpServers.map(s => s.id === id ? { ...s, status } : s)
             })),
+            updateMcpServerTools: (id: string, tools: any[]) => set((state: BrowserState) => ({
+                mcpServers: state.mcpServers.map(s => s.id === id ? { ...s, tools } : s)
+            })),
+            syncMcpServers: async () => {
+                if (window.electronAPI) {
+                    const res = await window.electronAPI.mcpListServers();
+                    if (res && res.success) {
+                        set({ mcpServers: res.servers });
+                    }
+                }
+            },
+
+            openMcpSettings: () => {
+                set({ activeView: 'settings', settingsSection: 'mcp' });
+            },
+
+            closeTabGroup: (groupId: string) => {
+                const state = get();
+                const tabsToRemove = state.tabs.filter(t => t.groupId === groupId);
+                tabsToRemove.forEach(t => {
+                    const id = t.id;
+                    if (window.electronAPI) window.electronAPI.destroyView(id);
+                });
+                set((state: BrowserState) => {
+                    const newTabs = state.tabs.filter(t => t.groupId !== groupId);
+                    if (newTabs.length === 0) {
+                        const defaultId = 'default';
+                        const defaultUrl = state.defaultUrl || 'https://www.google.com';
+                        if (window.electronAPI) window.electronAPI.createView({ tabId: defaultId, url: defaultUrl });
+                        return {
+                            tabs: [{ id: defaultId, url: defaultUrl, title: 'New Tab', isLoading: false }],
+                            activeTabId: defaultId,
+                            currentUrl: defaultUrl
+                        };
+                    }
+                    // If active tab was in group, switch to last remaining tab
+                    let newActiveId = state.activeTabId;
+                    if (tabsToRemove.some(t => t.id === state.activeTabId)) {
+                        newActiveId = newTabs[newTabs.length - 1].id;
+                    }
+                    return {
+                        tabs: newTabs,
+                        activeTabId: newActiveId,
+                        currentUrl: newTabs.find(t => t.id === newActiveId)?.url || state.currentUrl
+                    };
+                });
+            },
 
             // URL and navigation
             setDefaultUrl: (url: string) => set({ defaultUrl: url }),
@@ -752,7 +829,7 @@ export const useAppStore = create<BrowserState>()(
                 unifiedCart: state.unifiedCart.filter((item: any) => item.id !== itemId)
             })),
 
-            addTab: (url?: string) => {
+            addTab: (url?: string, groupId?: string) => {
                 const state = get();
                 // Use search engine URL if no URL provided
                 const getSearchEngineUrl = (): string => {
@@ -791,7 +868,8 @@ export const useAppStore = create<BrowserState>()(
                         title: 'New Tab',
                         isLoading: true, // Default to true for new tabs
                         lastAccessed: Date.now(),
-                        priority: 'high' as const
+                        priority: 'high' as const,
+                        groupId
                     }];
 
                     // Enforce 50 tab limit

@@ -65,6 +65,8 @@ const { VoiceService } = require('./src/lib/voice-service.js');
 const { WorkflowRecorder } = require('./src/lib/workflow-recorder.js');
 const { PopSearchService, popSearchService } = require('./src/lib/pop-search-service.js');
 const { getRecommendedGeminiModel } = require('./src/lib/modelRegistry.js');
+const { mcpManager } = require('./src/lib/mcp-server-registry.js');
+
 
 const permissionStore = new PermissionStore();
 let cometAiEngine = null;
@@ -465,7 +467,9 @@ const llmGenerateHandler = async (messages, options = {}) => {
       return llmCache.get(cacheKey);
     }
 
-    console.log(`[LLM-Generate] Starting generation with model: ${modelInstance.modelId}`);
+    const mcpTools = await mcpManager.getTools(permissionStore);
+    
+    console.log(`[LLM-Generate] Starting generation with model: ${modelInstance.modelId} and ${Object.keys(mcpTools).length} MCP tools.`);
     
     const providerOptions = buildProviderOptions(providerId, options, config);
     const { text, reasoning } = await generateText({
@@ -474,6 +478,8 @@ const llmGenerateHandler = async (messages, options = {}) => {
       messages: chatMessages,
       temperature: 0.7,
       maxTokens: 8192,
+      tools: mcpTools,
+      maxSteps: 5, // Allow tool usage steps
       providerOptions: {
         ...providerOptions,
       }
@@ -566,12 +572,15 @@ const llmStreamHandler = async (event, messages, options = {}) => {
     const { streamText } = await import('ai');
     const { modelInstance, systemPrompt, chatMessages, providerId, config } = await prepareLLM(messages, options);
     const providerOptions = buildProviderOptions(providerId, options, config);
+    const mcpTools = await mcpManager.getTools(permissionStore);
     const result = await streamText({
       model: modelInstance,
       system: systemPrompt,
       messages: chatMessages,
       temperature: 0.7,
       maxTokens: 8192,
+      tools: mcpTools,
+      maxSteps: 5,
       providerOptions: { ...providerOptions }
     });
 
@@ -4820,6 +4829,51 @@ app.whenReady().then(() => {
   });
 
   // ============================================================================
+  // UPGRADED MCP CORE — Smithery + Tool Aggregation
+  // ============================================================================
+
+  ipcMain.handle('mcp-connect-server', async (event, config) => {
+    console.log(`[Main] Connecting to MCP server: ${config.name} (${config.url})`);
+    const id = config.id || `mcp-${Date.now()}`;
+    const success = await mcpManager.connect(id, config);
+    if (success) {
+      const servers = store.get('mcp_servers') || [];
+      if (!servers.find(s => s.id === id)) {
+        servers.push({ ...config, id });
+        store.set('mcp_servers', servers);
+      }
+    }
+    return { success, id };
+  });
+
+  ipcMain.handle('mcp-disconnect-server', async (event, id) => {
+    console.log(`[Main] Disconnecting MCP server: ${id}`);
+    await mcpManager.disconnect(id);
+    const servers = store.get('mcp_servers') || [];
+    const filtered = servers.filter(s => s.id !== id);
+    if (filtered.length !== servers.length) {
+      store.set('mcp_servers', filtered);
+    }
+    return { success: true };
+  });
+
+  ipcMain.handle('mcp-list-servers', async () => {
+    return { success: true, servers: mcpManager.getAllServers() };
+  });
+
+  ipcMain.handle('mcp-get-tools', async () => {
+    const tools = await mcpManager.getTools();
+    return { success: true, tools };
+  });
+
+  ipcMain.handle('mcp-command', async (event, { command, data }) => {
+      // Compatibility with existing frontend calls if any
+      if (command === 'connect') return await mcpManager.connect(data.id, data);
+      if (command === 'list') return mcpManager.getAllServers();
+      return { error: 'Unknown MCP core command' };
+  });
+
+  // ============================================================================
   // WEB SEARCH v2 — Multi-provider (Brave / Tavily / SerpAPI)
   // ============================================================================
 
@@ -5136,6 +5190,29 @@ app.whenReady().then(() => {
     // Initial registration from store
     const savedShortcuts = store.get('shortcuts') || [];
     registerGlobalShortcuts(savedShortcuts);
+
+    // Reconnect MCP Servers
+    const mcpServers = store.get('mcp_servers');
+    if (mcpServers && mcpServers.length > 0) {
+      console.log(`[Main] Reconnecting ${mcpServers.length} MCP servers...`);
+      mcpServers.forEach(server => {
+        mcpManager.connect(server.id, server).catch(err => {
+          console.error(`[Main] Failed to reconnect MCP server ${server.name}:`, err);
+        });
+      });
+    } else {
+      // Add a few high-value default MCP servers for first-time use
+      const defaultServers = [
+        { id: 'google-search', name: 'Google Search (Smithery)', url: 'https://smithery.ai/server/google-search', status: 'offline' },
+        { id: 'brave-search', name: 'Brave Search', url: 'https://smithery.ai/server/brave-search', status: 'offline' },
+        { id: 'github-mcp', name: 'GitHub Tools', url: 'https://smithery.ai/server/github', status: 'offline' }
+      ];
+      console.log('[Main] No MCP servers found, loading defaults.');
+      // Actually connect them if desired, or just list them in UI.
+      // For now we'll just store them so UI shows them.
+      store.set('mcp_servers', defaultServers);
+      defaultServers.forEach(s => mcpManager.connect(s.id, s).catch(() => {}));
+    }
   });
 
   ipcMain.on('update-shortcuts', (event, shortcuts) => {

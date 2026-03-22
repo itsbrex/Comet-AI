@@ -7,6 +7,7 @@ import {
   LogIn, User, Sparkles, Shield, Cpu, 
   Zap, Globe, ChevronRight, Rocket, Terminal, Layers
 } from 'lucide-react';
+import { firebaseConfigStorage } from '@/lib/firebaseConfigStorage';
 
 const FeatureCard = ({ icon, title, desc, delay }: { icon: React.ReactNode, title: string, desc: string, delay: number }) => (
     <motion.div
@@ -29,6 +30,29 @@ const WelcomeScreen = () => {
 
     const handleSignIn = () => {
         setHasSeenWelcomePage(true);
+    };
+
+    const getFirebaseConfigFromEnv = () => ({
+        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
+        measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+    });
+
+    const handleGoogleSignIn = async () => {
+        if (window.electronAPI) {
+            const config = firebaseConfigStorage.load() || getFirebaseConfigFromEnv();
+            const authUrl = `https://browser.ponsrischool.in/auth?client_id=desktop-app&redirect_uri=comet-browser%3A%2F%2Fauth&firebase_config=${btoa(JSON.stringify(config))}`;
+            window.electronAPI.openAuthWindow(authUrl);
+            setHasSeenWelcomePage(true);
+        } else {
+            const url = `https://browser.ponsrischool.in/auth?client_id=web-app&redirect_uri=${encodeURIComponent(window.location.origin + '/auth')}`;
+            window.open(url, "_blank");
+            setHasSeenWelcomePage(true);
+        }
     };
 
     const handleGuestMode = () => {
@@ -78,29 +102,36 @@ const WelcomeScreen = () => {
                         </p>
                     </motion.div>
 
-                    <motion.div 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.6 }}
-                        className="flex flex-col sm:flex-row gap-4 pt-4"
-                    >
-                        <button
-                            onClick={handleSignIn}
-                            className="group relative px-10 py-5 bg-deep-space-accent-neon text-black rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] overflow-hidden transition-all shadow-[0_10px_40px_rgba(0,255,242,0.2)] hover:shadow-[0_15px_60px_rgba(0,255,242,0.4)] hover:scale-105 active:scale-95"
-                        >
-                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                            <span className="relative z-10 flex items-center justify-center gap-3">
-                                Initialize Core <Rocket size={18} />
-                            </span>
-                        </button>
-                        
-                        <button
-                            onClick={handleGuestMode}
-                            className="px-10 py-5 bg-white/5 border border-white/10 text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] hover:bg-white/10 transition-all active:scale-95 flex items-center justify-center gap-3"
-                        >
-                            Guest Mode <ChevronRight size={18} />
-                        </button>
-                    </motion.div>
+                        <div className="flex flex-col gap-4 pt-4">
+                            <button
+                                onClick={handleGoogleSignIn}
+                                className="group relative px-10 py-5 bg-white text-black rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] overflow-hidden transition-all shadow-[0_10px_40px_rgba(255,255,255,0.1)] hover:shadow-[0_15px_60px_rgba(255,255,255,0.2)] hover:scale-105 active:scale-95"
+                            >
+                                <div className="absolute inset-0 bg-deep-space-accent-neon/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                                <span className="relative z-10 flex items-center justify-center gap-3">
+                                    Sign in with Google <LogIn size={18} />
+                                </span>
+                            </button>
+
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                <button
+                                    onClick={handleSignIn}
+                                    className="flex-1 group relative px-8 py-4 bg-deep-space-accent-neon text-black rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] overflow-hidden transition-all shadow-[0_10px_40px_rgba(0,255,242,0.1)] hover:scale-105 active:scale-95"
+                                >
+                                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                                    <span className="relative z-10 flex items-center justify-center gap-3">
+                                        Initialize Core <Rocket size={16} />
+                                    </span>
+                                </button>
+                                
+                                <button
+                                    onClick={handleGuestMode}
+                                    className="flex-1 px-8 py-4 bg-white/5 border border-white/10 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-all active:scale-95 flex items-center justify-center gap-3"
+                                >
+                                    Guest Mode <ChevronRight size={16} />
+                                </button>
+                            </div>
+                        </div>
 
                     <div className="pt-8 flex items-center gap-12 border-t border-white/5">
                         <div>

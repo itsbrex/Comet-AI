@@ -280,7 +280,7 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
     } else if (data == "comet-ai://connect") {
       navigatorKey.currentState?.pushNamed('/connect-desktop');
     } else if (data.startsWith("comet-ai://approve")) {
-      navigatorKey.currentState?.pushNamed('/approve-action', arguments: {'data': data});
+      navigatorKey.currentState?.pushNamed('/approve', arguments: {'data': data});
     } else if (data.startsWith('http://') || data.startsWith('https://')) {
       final windowModel = Provider.of<WindowModel>(navigatorKey.currentContext!, listen: false);
       windowModel.addTab(WebViewModel(url: WebUri(data)));

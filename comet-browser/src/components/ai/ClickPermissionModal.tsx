@@ -12,7 +12,7 @@ interface ClickPermissionModalProps {
     what?: string;
     highRiskQr?: string | null;  // Now expects a JSON string with {qrImage, pin, token}
   };
-  onAllow: () => void;
+  onAllow: (alwaysAllow?: boolean) => void;
   onDeny: () => void;
 }
 
@@ -23,6 +23,7 @@ const RISK_CONFIG = {
 };
 
 const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAllow, onDeny }: ClickPermissionModalProps) {
+  const [alwaysAllow, setAlwaysAllow] = React.useState(false);
   const risk = RISK_CONFIG[context.risk || 'medium'];
 
   let qrData = null;
@@ -105,6 +106,25 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
         )}
       </div>
 
+      {/* "Remember Choice" for non-high risk */}
+      {context.risk !== 'high' && (
+        <label className="px-5 py-2 flex items-center gap-3 cursor-pointer group">
+          <div 
+            onClick={() => setAlwaysAllow(!alwaysAllow)}
+            className={`w-5 h-5 rounded-md border transition-all flex items-center justify-center ${alwaysAllow ? 'bg-sky-500 border-sky-500 text-white' : 'border-white/10 bg-white/5 group-hover:border-white/20'}`}
+          >
+            {alwaysAllow && <Zap size={12} fill="currentColor" />}
+          </div>
+          <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest group-hover:text-white/60 transition-colors">Remember my choice for this action</span>
+          <input 
+            type="checkbox" 
+            className="hidden" 
+            checked={alwaysAllow} 
+            onChange={(e) => setAlwaysAllow(e.target.checked)} 
+          />
+        </label>
+      )}
+
       {/* Buttons */}
       <div className="px-5 pb-5 flex gap-3">
         <button
@@ -114,7 +134,7 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
           ✕ Deny
         </button>
         <button
-          onClick={onAllow}
+          onClick={() => onAllow(alwaysAllow)}
           className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg ${
             context.risk === 'high' ? 'bg-red-500/80 hover:bg-red-500 text-white' :
             context.risk === 'medium' ? 'bg-amber-500/80 hover:bg-amber-500 text-white' :

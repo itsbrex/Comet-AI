@@ -119,38 +119,19 @@ export function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ✅ FIXED: Hallucination patterns to strip from PDF content
-// These are signs the LLM invented data instead of using real search results
-// ─────────────────────────────────────────────────────────────────────────────
 const HALLUCINATION_URL_PATTERN = /https?:\/\/[^\s"<>]+\/\d{4}\/\d{2}\/\d{2}\/[^\s"<>]+/g;
 const FAKE_SOURCE_PATTERN = /Source:\s*https?:\/\/[^\s<>]+/gi;
 
-/**
- * Detects if PDF content looks like it was hallucinated (invented by LLM).
- * Checks for suspiciously specific fake URLs and fake source citations
- * that were not fetched from the web in this session.
- */
 export function detectHallucinatedContent(content: string): boolean {
-  // If content has many date-based URLs (like /2026/03/05/article-name)
-  // but the content is short (no real data was fetched), it's likely fake
   const urlMatches = content.match(HALLUCINATION_URL_PATTERN) || [];
   const hasLotsOfFakeUrls = urlMatches.length >= 3;
   const contentIsShort = content.length < 1500;
   return hasLotsOfFakeUrls && contentIsShort;
 }
 
-/**
- * Sanitizes PDF content:
- * - Strips internal AI command tags
- * - Detects hallucinated content and adds a disclaimer
- * - Preserves real search result data injected by fetchRealSearchContext
- */
 export function sanitizePDFContent(content: string, title: string): string {
-  // Strip internal action tags
   let sanitized = content.replace(INTERNAL_TAG_RE, '').trim();
 
-  // If it looks hallucinated, replace with honest disclaimer
   if (detectHallucinatedContent(sanitized)) {
     console.warn('[CometAI] PDF content appears hallucinated — replacing with disclaimer');
     sanitized = `
@@ -180,142 +161,132 @@ export interface PDFImage {
   caption?: string;
 }
 
+export interface PDFStyles {
+  background?: string; // CSS color or gradient
+  outlineColor?: string;
+  accentColor?: string;
+}
+
+export function buildBodyFromMarkdown(text: string): string {
+  const looksLikeHTML = /<[a-z][\s\S]*?>/i.test(text);
+  if (looksLikeHTML) {
+    return text
+      .replace(/>\s*</g, '>\n<')
+      .replace(/<(h[1-6]|p|li|ul|ol|table|tr|thead|tbody|div|br\s*\/?|img)\b/gi, '\n<$1')
+      .replace(/<\/(h[1-6]|p|li|ul|ol|table|tr|thead|tbody|div)>/gi, '</$1>\n');
+  }
+
+  const processedText = text
+    .replace(/\*\*\[[^\n\]]*$/gm, '')
+    .replace(INTERNAL_TAG_RE, '')
+    .replace(/\*\*\s*$/gm, '');
+
+  const lines = processedText.split('\n');
+  const htmlLines: string[] = [];
+  let inList = false;
+  let listType = 'ul';
+  let inCodeFence = false;
+  let codeLang = '';
+  let codeBuffer: string[] = [];
+  let tableBuffer: string[] = [];
+  let inTable = false;
+
+  const flushList = () => { if (inList) { htmlLines.push(`</${listType}>`); inList = false; } };
+  const flushTable = () => {
+    if (!inTable || tableBuffer.length === 0) { inTable = false; tableBuffer = []; return; }
+    inTable = false;
+    const allRows = tableBuffer;
+    const dataRows = allRows.filter(r => !/^\s*\|?[-:|\s]+\|?\s*$/.test(r));
+    if (dataRows.length === 0) { tableBuffer = []; return; }
+    let tableHtml = '<table>';
+    dataRows.forEach((row, i) => {
+      const parts = row.replace(/^\||\|$/g, '').split('|').map(c => applyInlineMarkdown(c.trim()));
+      if (i === 0) {
+        tableHtml += `<thead><tr>${parts.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+      } else {
+        tableHtml += `<tr>${parts.map(c => `<td>${c}</td>`).join('')}</tr>`;
+      }
+    });
+    tableHtml += '</tbody></table>';
+    htmlLines.push(tableHtml);
+    tableBuffer = [];
+  };
+
+  for (const rawLine of lines) {
+    if (/^```/.test(rawLine.trim())) {
+      if (!inCodeFence) {
+        flushList(); flushTable();
+        inCodeFence = true;
+        codeLang = rawLine.trim().replace(/^```/, '').trim();
+        codeBuffer = [];
+      } else {
+        inCodeFence = false;
+        const escaped = codeBuffer.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        htmlLines.push(`<pre><code${codeLang ? ` class="language-${codeLang}"` : ''}>${escaped}</code></pre>`);
+        codeBuffer = [];
+      }
+      continue;
+    }
+    if (inCodeFence) { codeBuffer.push(rawLine); continue; }
+
+    if (/^\s*\|/.test(rawLine)) {
+      flushList();
+      inTable = true;
+      tableBuffer.push(rawLine.trim());
+      continue;
+    } else if (inTable) { flushTable(); }
+
+    let line = rawLine.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    if (/^#{1}\s/.test(line))  { flushList(); htmlLines.push(`<h1>${applyInlineMarkdown(line.replace(/^#+\s/, ''))}</h1>`); continue; }
+    if (/^#{2}\s/.test(line))  { flushList(); htmlLines.push(`<h2>${applyInlineMarkdown(line.replace(/^#+\s/, ''))}</h2>`); continue; }
+    if (/^#{3,}\s/.test(line)) { flushList(); htmlLines.push(`<h3>${applyInlineMarkdown(line.replace(/^#+\s/, ''))}</h3>`); continue; }
+    if (/^[-*]{3,}$/.test(line.trim())) { flushList(); htmlLines.push('<hr/>'); continue; }
+    if (/^&gt;\s/.test(line.trim())) {
+      flushList();
+      htmlLines.push(`<blockquote>${applyInlineMarkdown(line.trim().replace(/^&gt;\s/, ''))}</blockquote>`);
+      continue;
+    }
+    if (/^[-*•]\s/.test(line.trim())) {
+      if (!inList || listType !== 'ul') { if (inList) htmlLines.push(`</${listType}>`); htmlLines.push('<ul>'); inList = true; listType = 'ul'; }
+      htmlLines.push(`<li>${applyInlineMarkdown(line.trim().replace(/^[-*•]\s/, ''))}</li>`);
+      continue;
+    }
+    if (/^\d+\.\s/.test(line.trim())) {
+      if (!inList || listType !== 'ol') { if (inList) htmlLines.push(`</${listType}>`); htmlLines.push('<ol>'); inList = true; listType = 'ol'; }
+      htmlLines.push(`<li>${applyInlineMarkdown(line.trim().replace(/^\d+\.\s/, ''))}</li>`);
+      continue;
+    }
+    if (line.trim() === '') { flushList(); htmlLines.push('<br/>'); continue; }
+    flushList();
+    htmlLines.push(`<p>${applyInlineMarkdown(line)}</p>`);
+  }
+  flushList(); flushTable();
+  if (inCodeFence && codeBuffer.length > 0) {
+    const escaped = codeBuffer.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    htmlLines.push(`<pre><code>${escaped}</code></pre>`);
+  }
+  return htmlLines.join('\n');
+}
+
 export function buildCleanPDFContent(
   rawContent: string, 
   title: string, 
   iconBase64: string | null,
-  images?: PDFImage[]
+  images?: PDFImage[],
+  styles?: PDFStyles
 ): string {
   let text = sanitizePDFContent(rawContent, title);
+  text = text.replace(/\$\(READ_PAGE_CONTENT\)/g, '[Page Content Summary Included Below]');
+  
+  // Slide logic integration (Presenton style)
+  const slides = text.split(/---\n?/).filter(s => s.trim().length > 10);
+  const isSlideShow = slides.length > 2;
 
-  const looksLikeHTML = /<[a-z][\s\S]*?>/i.test(text);
+  const bg = styles?.background || '#ffffff';
+  const outline = styles?.outlineColor || '#f1f5f9';
+  const accent = styles?.accentColor || '#0ea5e9';
 
-  let bodyHTML: string;
-
-  if (looksLikeHTML) {
-    bodyHTML = text
-      .replace(/>\s*</g, '>\n<')
-      .replace(/<(h[1-6]|p|li|ul|ol|table|tr|thead|tbody|div|br\s*\/?|img)\b/gi, '\n<$1')
-      .replace(/<\/(h[1-6]|p|li|ul|ol|table|tr|thead|tbody|div)>/gi, '</$1>\n');
-  } else {
-    // ── Pre-clean: fix unclosed/malformed markdown before parsing ─────────────
-    // Remove unclosed bold+bracket like **[Note on screenshots...
-    text = text.replace(/\*\*\[[^\n\]]*$/gm, '');
-    // Remove lines that are just raw command tags that leaked through
-    text = text.replace(INTERNAL_TAG_RE, '');
-    // Fix dangling ** at end of line
-    text = text.replace(/\*\*\s*$/gm, '');
-
-    const lines = text.split('\n');
-    const htmlLines: string[] = [];
-    let inList = false;
-    let listType = 'ul';
-    let inCodeFence = false;
-    let codeLang = '';
-    let codeBuffer: string[] = [];
-    let tableBuffer: string[] = [];
-    let inTable = false;
-
-    const flushList = () => { if (inList) { htmlLines.push(`</${listType}>`); inList = false; } };
-    const flushTable = () => {
-      if (!inTable || tableBuffer.length === 0) { inTable = false; tableBuffer = []; return; }
-      inTable = false;
-      // Separate header row, separator row, and data rows
-      const allRows = tableBuffer;
-      const dataRows = allRows.filter(r => !/^\s*\|?[-:|\s]+\|?\s*$/.test(r));
-      if (dataRows.length === 0) { tableBuffer = []; return; }
-      let tableHtml = '<table>';
-      dataRows.forEach((row, i) => {
-        const parts = row.replace(/^\||\|$/g, '').split('|').map(c => applyInlineMarkdown(c.trim()));
-        if (i === 0) {
-          tableHtml += `<thead><tr>${parts.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>`;
-        } else {
-          tableHtml += `<tr>${parts.map(c => `<td>${c}</td>`).join('')}</tr>`;
-        }
-      });
-      tableHtml += '</tbody></table>';
-      htmlLines.push(tableHtml);
-      tableBuffer = [];
-    };
-
-    for (const rawLine of lines) {
-      // ── Code fence ──────────────────────────────────────────────────────────
-      if (/^```/.test(rawLine.trim())) {
-        if (!inCodeFence) {
-          flushList(); flushTable();
-          inCodeFence = true;
-          codeLang = rawLine.trim().replace(/^```/, '').trim();
-          codeBuffer = [];
-        } else {
-          inCodeFence = false;
-          const escaped = codeBuffer.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-          htmlLines.push(`<pre><code${codeLang ? ` class="language-${codeLang}"` : ''}>${escaped}</code></pre>`);
-          codeBuffer = [];
-        }
-        continue;
-      }
-      if (inCodeFence) { codeBuffer.push(rawLine); continue; }
-
-      // ── Pipe table row ──────────────────────────────────────────────────────
-      if (/^\s*\|/.test(rawLine)) {
-        flushList();
-        inTable = true;
-        tableBuffer.push(rawLine.trim());
-        continue;
-      } else if (inTable) {
-        flushTable();
-      }
-
-      let line = rawLine
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-
-      // ── Headings ────────────────────────────────────────────────────────────
-      if (/^#{1}\s/.test(line))  { flushList(); htmlLines.push(`<h1>${applyInlineMarkdown(line.replace(/^#+\s/, ''))}</h1>`); continue; }
-      if (/^#{2}\s/.test(line))  { flushList(); htmlLines.push(`<h2>${applyInlineMarkdown(line.replace(/^#+\s/, ''))}</h2>`); continue; }
-      if (/^#{3,}\s/.test(line)) { flushList(); htmlLines.push(`<h3>${applyInlineMarkdown(line.replace(/^#+\s/, ''))}</h3>`); continue; }
-
-      // ── Horizontal rule ─────────────────────────────────────────────────────
-      if (/^[-*]{3,}$/.test(line.trim())) { flushList(); htmlLines.push('<hr/>'); continue; }
-
-      // ── Blockquote ──────────────────────────────────────────────────────────
-      if (/^&gt;\s/.test(line.trim())) {
-        flushList();
-        htmlLines.push(`<blockquote>${applyInlineMarkdown(line.trim().replace(/^&gt;\s/, ''))}</blockquote>`);
-        continue;
-      }
-
-      // ── Unordered list ──────────────────────────────────────────────────────
-      if (/^[-*•]\s/.test(line.trim())) {
-        if (!inList || listType !== 'ul') { if (inList) htmlLines.push(`</${listType}>`); htmlLines.push('<ul>'); inList = true; listType = 'ul'; }
-        htmlLines.push(`<li>${applyInlineMarkdown(line.trim().replace(/^[-*•]\s/, ''))}</li>`);
-        continue;
-      }
-
-      // ── Ordered list ────────────────────────────────────────────────────────
-      if (/^\d+\.\s/.test(line.trim())) {
-        if (!inList || listType !== 'ol') { if (inList) htmlLines.push(`</${listType}>`); htmlLines.push('<ol>'); inList = true; listType = 'ol'; }
-        htmlLines.push(`<li>${applyInlineMarkdown(line.trim().replace(/^\d+\.\s/, ''))}</li>`);
-        continue;
-      }
-
-      // ── Empty line ──────────────────────────────────────────────────────────
-      if (line.trim() === '') { flushList(); htmlLines.push('<br/>'); continue; }
-
-      // ── Paragraph ───────────────────────────────────────────────────────────
-      flushList();
-      htmlLines.push(`<p>${applyInlineMarkdown(line)}</p>`);
-    }
-
-    flushList();
-    flushTable();
-    if (inCodeFence && codeBuffer.length > 0) {
-      const escaped = codeBuffer.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      htmlLines.push(`<pre><code>${escaped}</code></pre>`);
-    }
-    bodyHTML = htmlLines.join('\n');
-  }
+  const bodyHTML = buildBodyFromMarkdown(text);
 
   let imagesHTML = '';
   if (images && images.length > 0) {
@@ -323,98 +294,117 @@ export function buildCleanPDFContent(
     for (const img of images) {
       const widthStyle = img.width ? (typeof img.width === 'number' ? `${img.width}px` : img.width) : '100%';
       const heightStyle = img.height ? (typeof img.height === 'number' ? `${img.height}px` : img.height) : 'auto';
-      const altText = img.alt || 'Image';
-      
       imagesHTML += `
-        <figure style="margin: 24px 0; text-align: center;">
-          <img src="${img.src}" alt="${escapeHtml(altText)}" style="max-width: ${widthStyle}; max-height: ${heightStyle}; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" />
-          ${img.caption ? `<figcaption style="font-size: 0.8rem; color: #64748b; margin-top: 8px; font-style: italic;">${escapeHtml(img.caption)}</figcaption>` : ''}
+        <figure style="margin: 32px 0; text-align: center;">
+          <img src="${img.src}" alt="${escapeHtml(img.alt || 'Image')}" style="max-width: ${widthStyle}; max-height: ${heightStyle}; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); border: 1px solid #e2e8f0;" />
+          ${img.caption ? `<figcaption style="font-size: 0.85rem; color: #64748b; margin-top: 12px; font-style: italic;">${escapeHtml(img.caption)}</figcaption>` : ''}
         </figure>
       `;
     }
     imagesHTML += '</div>';
   }
 
+  const headerLogoHTML = iconBase64
+    ? `<img src="${iconBase64}" alt="Comet Logo" style="width:32px;height:32px;object-fit:contain;"/>`
+    : '🌠';
+
   const footerLogoHTML = iconBase64
-    ? `<img src="${iconBase64}" alt="Comet AI" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:6px;"/>`
+    ? `<img src="${iconBase64}" alt="Comet AI" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:6px;"/>`
     : '🌠';
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <title>${escapeHtml(title)}</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;600&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { font-size: 14px; }
     body {
       font-family: 'Inter', system-ui, sans-serif;
-      color: #1a1a2e;
-      background: #ffffff;
-      padding: 48px 56px 80px;
+      color: #1e293b;
+      background: ${bg};
+      padding: 0;
       line-height: 1.7;
+      min-height: 100vh;
+    }
+    .page-break { page-break-before: always; height: 0; margin-top: 40px; border-top: 1px dashed ${outline}; }
+    .slide {
+      min-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 60px;
+      border: 4px solid ${outline};
+      border-radius: 40px;
+      margin-bottom: 60px;
+      background: white;
+      box-shadow: 0 40px 100px rgba(0,0,0,0.05);
+      position: relative;
+      overflow: hidden;
+    }
+    .slide::after {
+      content: ''; position: absolute; bottom: -20px; right: -20px; width: 100px; height: 100px;
+      background: gradient(to br, transparent, ${accent}20); border-radius: 50%; filter: blur(40px);
+    }
+    .page-container {
       max-width: 860px;
       margin: 0 auto;
+      padding: 40px 60px 100px;
+      border: 1px solid ${outline};
+      background: rgba(255,255,255,0.9);
+      min-height: calc(100vh - 40px);
     }
-    h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; color: #0f0f23; border-bottom: 3px solid #0ea5e9; padding-bottom: 10px; }
-    h2 { font-size: 1.35rem; font-weight: 600; margin: 28px 0 10px; color: #1e3a5f; }
-    h3 { font-size: 1.1rem; font-weight: 600; margin: 20px 0 8px; color: #2563eb; }
-    p  { margin: 8px 0; }
-    ul, ol { margin: 10px 0 10px 24px; }
-    li { margin: 4px 0; }
-    hr { border: none; border-top: 1px solid #e2e8f0; margin: 24px 0; }
-    table { border-collapse: collapse; width: 100%; margin: 16px 0; }
-    th { background: #0ea5e9; color: white; padding: 8px 12px; text-align: left; font-size: 0.85rem; }
-    td { padding: 7px 12px; border-bottom: 1px solid #e2e8f0; font-size: 0.85rem; }
-    tr:nth-child(even) td { background: #f8fafc; }
-    code { font-family: 'Fira Code', monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.82em; }
-    pre  { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; margin: 16px 0; font-size: 0.82em; line-height: 1.5; }
-    strong { font-weight: 600; }
-    em { font-style: italic; color: #475569; }
-    .doc-title { margin-bottom: 32px; }
-    .doc-meta  { font-size: 0.78rem; color: #94a3b8; margin-top: 4px; }
-    .verified-badge {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: #f0fdf4; border: 1px solid #bbf7d0;
-      color: #16a34a; font-size: 0.72rem; font-weight: 600;
-      padding: 3px 10px; border-radius: 999px; margin-top: 6px;
-    }
-    .pdf-images { margin: 24px 0; }
-    figure { margin: 0; padding: 0; }
-    .comet-footer {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
+    header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 56px;
-      border-top: 1px solid #e2e8f0;
-      background: #ffffff;
-      font-size: 0.72rem;
-      color: #94a3b8;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #f1f5f9;
     }
-    .comet-footer-brand {
+    .brand {
       display: flex;
-      align-items: center;
-      gap: 6px;
-      font-weight: 600;
-      color: #0ea5e9;
+      align-items: center; gap: 12px;
+      font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.25rem; color: #0f172a;
     }
+    .brand span { color: ${accent}; }
+    h1 { 
+      font-family: 'Outfit', sans-serif; font-size: 2.25rem; font-weight: 700; 
+      margin-bottom: 12px; color: #0f172a; line-height: 1.2;
+    }
+    h2 { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 600; margin: 32px 0 12px; color: #1e293b; }
+    h3 { font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 600; margin: 24px 0 10px; color: ${accent}; }
+    table { border-collapse: collapse; width: 100%; margin: 24px 0; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }
+    th { background: #f8fafc; color: #475569; padding: 12px 16px; text-align: left; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; }
+    td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+    code { font-family: monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: ${accent}; }
+    pre { background: #0f172a; color: #f8fafc; padding: 20px; border-radius: 12px; overflow-x: auto; margin: 24px 0; }
+    blockquote { border-left: 4px solid ${accent}; padding: 12px 24px; background: #f0f9ff; color: #1e40af; border-radius: 0 8px 8px 0; margin: 24px 0; }
+    .footer {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 15px 60px; background: #ffffff; border-top: 1px solid #f1f5f9;
+      font-size: 0.75rem; color: #94a3b8;
+    }
+    .footer-brand { display: flex; align-items: center; gap: 6px; font-weight: 600; color: ${accent}; }
   </style>
 </head>
 <body>
-  <div class="doc-title">
-    <h1>${escapeHtml(title)}</h1>
-    <div class="doc-meta">Generated by Comet AI • ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+  <div class="page-container">
+    <header>
+      <div class="brand">${headerLogoHTML} Comet<span>AI</span></div>
+      <div style="font-size: 0.75rem; font-weight: 600; color: #16a34a; background: #f0fdf4; padding: 4px 12px; border-radius: 999px;">✨ Real-time Verified</div>
+    </header>
+    <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 24px;">Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} • By Comet AI</div>
+    ${isSlideShow 
+      ? slides.map((s: string, i: number) => `<div class="slide ${i > 0 ? 'page-break' : ''}">${buildBodyFromMarkdown(s)}</div>`).join('\n')
+      : `<h1>${escapeHtml(title)}</h1>${bodyHTML}`
+    }
+    ${imagesHTML}
   </div>
-  ${bodyHTML}
-  ${imagesHTML}
-  <div class="comet-footer">
-    <div class="comet-footer-brand">
-      ${footerLogoHTML}
-      Comet AI
-    </div>
+  <div class="footer">
+    <div class="footer-brand">${footerLogoHTML} Comet AI</div>
     <span>${escapeHtml(title)} • ${new Date().getFullYear()}</span>
   </div>
 </body>
@@ -422,170 +412,46 @@ export function buildCleanPDFContent(
 }
 
 export function buildCapabilityReportPDF(
-  capabilities: {
-    author: string;
-    version: string;
-    features: string[];
-    platform: string;
-  },
+  capabilities: { author: string; version: string; features: string[]; platform: string; },
   screenshotBase64?: string,
   iconBase64?: string | null
 ): string {
-  const featureList = capabilities.features.map(f => `<li>${escapeHtml(f)}</li>`).join('');
-  
   let screenshotSection = '';
   if (screenshotBase64) {
     screenshotSection = `
-      <div style="margin: 32px 0; text-align: center;">
-        <h2 style="color: #1e3a5f;">Screenshot Capture Demo</h2>
-        <figure style="margin: 16px 0;">
-          <img src="${screenshotBase64}" alt="Comet AI Screenshot" style="max-width: 100%; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);" />
-          <figcaption style="font-size: 0.8rem; color: #64748b; margin-top: 8px;">Comet AI can capture and analyze screenshots in real-time</figcaption>
-        </figure>
+      <div style="margin: 40px 0; text-align: center;">
+        <h2 style="color: #0f172a;">Visual Intelligence</h2>
+        <img src="${screenshotBase64}" style="max-width: 100%; border-radius: 16px; box-shadow: 0 12px 40px rgba(0,0,0,0.18);" />
       </div>
     `;
   }
-
-  const footerLogoHTML = iconBase64
-    ? `<img src="${iconBase64}" alt="Comet AI" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:6px;"/>`
-    : '🌠';
-
+  const logo = iconBase64 ? `<img src="${iconBase64}" style="width:40px;height:40px;"/>` : '🌠';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <title>Comet AI - Capability Report</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { font-size: 14px; }
-    body {
-      font-family: 'Inter', system-ui, sans-serif;
-      color: #1a1a2e;
-      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-      padding: 48px 56px 80px;
-      line-height: 1.7;
-      max-width: 900px;
-      margin: 0 auto;
-      min-height: 100vh;
-    }
-    .header {
-      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
-      color: white;
-      padding: 40px;
-      border-radius: 16px;
-      margin-bottom: 32px;
-      text-align: center;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-    }
-    .header h1 { font-size: 2.5rem; margin-bottom: 8px; }
-    .header .subtitle { font-size: 1.1rem; opacity: 0.9; }
-    .version-badge {
-      display: inline-block;
-      background: #0ea5e9;
-      color: white;
-      padding: 4px 12px;
-      border-radius: 999px;
-      font-size: 0.8rem;
-      margin-top: 12px;
-    }
-    .section {
-      background: white;
-      padding: 32px;
-      border-radius: 12px;
-      margin-bottom: 24px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    }
-    .section h2 { color: #0f172a; font-size: 1.4rem; margin-bottom: 16px; border-bottom: 2px solid #0ea5e9; padding-bottom: 8px; }
-    .features-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-    .feature-item {
-      background: #f8fafc;
-      padding: 16px;
-      border-radius: 8px;
-      border-left: 4px solid #0ea5e9;
-    }
-    .feature-item strong { color: #0f172a; }
-    ul { margin: 0; padding-left: 20px; }
-    li { margin: 8px 0; }
-    .author-card {
-      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-      padding: 24px;
-      border-radius: 12px;
-      border: 2px solid #f59e0b;
-      margin-top: 16px;
-    }
-    .platform-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
-    .platform-item {
-      background: #ecfdf5;
-      padding: 12px;
-      border-radius: 8px;
-      text-align: center;
-      color: #059669;
-      font-weight: 600;
-    }
-    .comet-footer {
-      margin-top: 40px;
-      padding: 20px;
-      background: #0f172a;
-      color: white;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .comet-footer-brand {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 600;
-      color: #0ea5e9;
-    }
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700&family=Inter:wght@400;600&display=swap');
+    body { font-family: 'Inter', sans-serif; background: #f8fafc; padding: 60px; }
+    .card { background: white; padding: 40px; border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.05); }
+    .header { background: #0f172a; color: white; padding: 60px; border-radius: 24px; text-align: center; margin-bottom: 40px; }
+    h1 { font-family: 'Outfit', sans-serif; font-size: 3rem; }
+    .feature { background: #f1f5f9; padding: 20px; border-radius: 16px; margin-bottom: 12px; }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>🌠 Comet AI Browser</h1>
-    <p class="subtitle">The AI-Native Browser with Permission-Gated OS Automation</p>
-    <span class="version-badge">v${escapeHtml(capabilities.version)}</span>
+    <div>${logo}</div>
+    <h1>Comet AI Browser</h1>
+    <p>Version ${capabilities.version}</p>
   </div>
-  
-  <div class="section">
-    <h2>✨ Core Capabilities</h2>
-    <div class="features-grid">
-      ${capabilities.features.map(f => `
-        <div class="feature-item">
-          <strong>${escapeHtml(f.split(':')[0])}</strong>
-          ${f.includes(':') ? `<p style="margin: 4px 0 0; font-size: 0.85rem; color: #64748b;">${escapeHtml(f.split(':').slice(1).join(':').trim())}</p>` : ''}
-        </div>
-      `).join('')}
+  <div class="card">
+    <h2>Capabilities</h2>
+    ${capabilities.features.map(f => `<div class="feature"><strong>${f.split(':')[0]}</strong>: ${f.split(':').slice(1).join(':')}</div>`).join('')}
+    ${screenshotSection}
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+      <strong>Author:</strong> ${capabilities.author}
     </div>
-  </div>
-  
-  <div class="section">
-    <h2>🖥️ Supported Platforms</h2>
-    <div class="platform-grid">
-      ${capabilities.platform.split(',').map(p => `<div class="platform-item">${escapeHtml(p.trim())}</div>`).join('')}
-    </div>
-  </div>
-  
-  ${screenshotSection}
-  
-  <div class="section">
-    <h2>👨‍💻 About the Developer</h2>
-    <div class="author-card">
-      <p><strong>Built by:</strong> ${escapeHtml(capabilities.author)}</p>
-      <p style="margin-top: 8px; font-size: 0.9rem; color: #64748b;">
-        Comet AI Browser is an open-source project demonstrating the power of AI-native browsing with autonomous task execution and enterprise-grade security.
-      </p>
-    </div>
-  </div>
-  
-  <div class="comet-footer">
-    <div class="comet-footer-brand">
-      ${footerLogoHTML}
-      Comet AI Browser
-    </div>
-    <span>Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
   </div>
 </body>
 </html>`;
@@ -595,31 +461,19 @@ export function lsGet<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
+  } catch { return fallback; }
 }
 
 export function lsSet(key: string, value: unknown): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-  }
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { }
 }
 
 export function lsRemove(key: string): void {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-  }
+  try { localStorage.removeItem(key); } catch { }
 }
 
 export function tryGetIconBase64(): string | null {
-  try {
-    return (window as any).__cometIconBase64 ?? null;
-  } catch {
-    return null;
-  }
+  try { return (window as any).__cometIconBase64 ?? null; } catch { return null; }
 }
 
 export async function preloadCometIcon(): Promise<void> {
@@ -632,13 +486,10 @@ export async function preloadCometIcon(): Promise<void> {
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         try {
-          const size = Math.max(img.naturalWidth || 32, img.naturalHeight || 32, 1);
           const canvas = document.createElement('canvas');
-          canvas.width = size;
-          canvas.height = size;
-          canvas.getContext('2d')?.drawImage(img, 0, 0, size, size);
+          canvas.width = 32; canvas.height = 32;
+          canvas.getContext('2d')?.drawImage(img, 0, 0, 32, 32);
           const data = canvas.toDataURL('image/png');
-          if (data.length < 100) { resolve(null); return; }
           (window as any).__cometIconBase64 = data;
           resolve(data);
         } catch { resolve(null); }
@@ -649,15 +500,4 @@ export async function preloadCometIcon(): Promise<void> {
 
   if (await tryCanvas('/icon.png')) return;
   if (await tryCanvas('/icon.ico')) return;
-
-  try {
-    const api = (window as any).electronAPI;
-    if (typeof api?.readFileAsBase64 === 'function') {
-      const base64 = await api.readFileAsBase64('icon.ico');
-      if (base64) {
-        (window as any).__cometIconBase64 = `data:image/x-icon;base64,${base64}`;
-        return;
-      }
-    }
-  } catch { }
 }

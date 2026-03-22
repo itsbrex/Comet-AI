@@ -115,6 +115,28 @@ See `CRASH_FIX.md` for detailed troubleshooting guide.
 
 ---
 
+## MCP Integration & AI Agency (Current)
+
+### 🔗 Model Context Protocol (MCP) Support
+- **Full MCP Integration**: Connect external Model Context Protocol (MCP) servers to gain new tools and access remote data.
+- **Preset Servers**: Out-of-the-box support for GitHub, Google Drive, Dropbox, and more.
+- **Centralized MCP Panel**: New dedicated settings section to manage all connected servers.
+- **"Refresh All" Functionality**: One-click tool list synchronization for all active servers.
+- **Dynamic Tool Discovery**: Automatic detection and display of available tools for each server.
+
+### 🤖 AI Agency Improvements
+- **New AI Command**: Added `[OPEN_MCP_SETTINGS]` to allow the AI to programmatically open the integration panel.
+- **Permission-Gated Execution**: AI can only execute MCP tools from servers authorized by the user.
+- **Smart Integration Prompts**: AI now recognizes when to ask for a new server connection to fulfill a user request.
+- **Refined System Instructions**: Enhanced AI's understanding of external file fetching and repository access.
+
+### 🎨 UI/UX Enhancements
+- **Deep-Linked Settings**: Programmatic navigation to specific settings sections (e.g., straight to MCP).
+- **Responsive Server Cards**: Premium UI for managing server status, tools, and connections.
+- **Improved Information Hierarchy**: Better visibility for active tools and server states.
+
+---
+
 ## Migration Notes
 
 ### For Developers

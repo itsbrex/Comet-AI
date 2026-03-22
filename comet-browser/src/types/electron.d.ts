@@ -115,6 +115,11 @@ declare global {
 
             // MCP Support
             mcpCommand: (command: string, data: any) => Promise<any>;
+            mcpConnectServer: (config: { id: string; name: string; url: string; type?: string }) => Promise<{ success: boolean; error?: string }>;
+            mcpDisconnectServer: (id: string) => Promise<{ success: boolean; error?: string }>;
+            mcpListServers: () => Promise<{ success: boolean; servers: any[], error?: string }>;
+            mcpGetTools: (serverId: string) => Promise<{ success: boolean; tools: any[], error?: string }>;
+            mcpCallTool: (serverId: string, toolName: string, args: any) => Promise<{ success: boolean, result?: any; error?: string }>;
 
             // Database & Sync
             initDatabase: (config: { host?: string; port?: number; user?: string; password?: string; database?: string }) => Promise<{ success: boolean; error?: string }>;

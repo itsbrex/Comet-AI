@@ -150,15 +150,24 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
   Future<void> _scanQRCode(String qrData) async {
     try {
       final uri = Uri.parse(qrData);
-      if (uri.scheme == 'comet-ai' && uri.host == 'connect') {
-        final ip = uri.queryParameters['ip'];
-        final port = uri.queryParameters['port'];
-        final deviceId = uri.queryParameters['device'];
+      if (uri.scheme == 'comet-ai') {
+        if (uri.host == 'connect') {
+          final ip = uri.queryParameters['ip'];
+          final port = uri.queryParameters['port'];
+          final deviceId = uri.queryParameters['device'];
 
-        if (ip != null && port != null && deviceId != null) {
-          _showPairingCodeDialog(ip, int.parse(port), deviceId);
+          if (ip != null && port != null && deviceId != null) {
+            _showPairingCodeDialog(ip, int.parse(port), deviceId);
+          } else {
+            throw Exception('Invalid QR code data');
+          }
+        } else if (uri.host == 'approve') {
+          // Navigate to approval screen
+          if (mounted) {
+            Navigator.pushNamed(context, '/approve', arguments: {'data': qrData});
+          }
         } else {
-          throw Exception('Invalid QR code data');
+          throw Exception('Unknown Comet-AI action: ${uri.host}');
         }
       } else {
         throw Exception('Not a Comet-AI QR code');

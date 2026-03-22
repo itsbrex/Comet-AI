@@ -69,7 +69,7 @@ The AI sees **pixels, not executable HTML.**
 
 ### Action Engine
 
-[NAVIGATE: url] [CLICK: text/selector] [TYPE: text | selector] [SCROLL: direction] [EXTRACT_DATA: query] [GENERATE_PDF: title | content] [SCREENSHOT_AND_ANALYZE] [EXEC_DESKTOP: intent]
+[NAVIGATE: url] [CLICK: text/selector] [TYPE: text | selector] [SCROLL: direction] [EXTRACT_DATA: query] [GENERATE_PDF: title | content] [SCREENSHOT_AND_ANALYZE] [EXEC_DESKTOP: intent] [OPEN_MCP_SETTINGS]
 
 ### Agent Capabilities
 - Self-correcting navigation loop
@@ -249,7 +249,7 @@ Framework: Electron + Next.js
 
 ## 🚀 Project Status: v0.2.1 "The Control Update"
 
-Comet v0.2.1 focuses on advanced AI reliability, architectural stability, and robust local LLM execution. It introduces the Neural Action Queue for autonomous web interaction.
+Comet v0.2.1 focuses on advanced AI reliability, architectural stability, and robust local LLM execution. It introduces the Neural Action Queue for autonomous web interaction and full **Model Context Protocol (MCP)** integration for external data fetching.
 
 ---
 
@@ -263,6 +263,7 @@ Comet v0.2.1 focuses on advanced AI reliability, architectural stability, and ro
 *   **Google OAuth Integration**: Seamlessly sign in with Google for a personalized experience.
 *   **Secure Auth Relay**: Deep-link synchronization using custom protocol handlers (`comet-browser://`).
 *   **Export Actions**: One-click export of AI chats to PDF or Text.
+*   **Centralized MCP Integration**: Connect external services like GitHub, Google Drive, and Dropbox via the Model Context Protocol. AI can now fetch files and repos with user permission.
 
 ### 🔐 Security & Privacy
 *   **Native Firewall & Ad-Blocker**: Military-grade performance ad and tracker blocking.
