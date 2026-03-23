@@ -33,5 +33,5 @@ export const defaultShortcuts: Shortcut[] = [
     { accelerator: 'CommandOrControl+0', action: 'zoom-reset' },
     { accelerator: 'Alt+Space', action: 'spotlight-search' },
     { accelerator: 'CommandOrControl+Shift+S', action: 'pop-search' },
-    { accelerator: 'Capslock+S', action: 'toggle-spotlight' },
+    { accelerator: 'Alt+S', action: 'toggle-spotlight' },
 ];

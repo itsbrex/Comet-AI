@@ -336,14 +336,30 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                                 <div className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/5 space-y-8">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <p className="font-bold text-white mb-1">AI Overview</p>
-                                            <p className="text-xs text-white/30 mb-6">Get AI-powered summaries and insights on search results.</p>
+                                            <p className="font-bold text-white mb-1">AI Agent Assist</p>
+                                            <p className="text-xs text-white/30 mb-6">Master switch for all AI assistance features.</p>
                                         </div>
                                         <label className="relative inline-flex items-center cursor-pointer">
                                             <input
                                                 type="checkbox"
                                                 checked={store.enableAIAssist}
                                                 onChange={() => store.setEnableAIAssist(!store.enableAIAssist)}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="relative w-11 h-6 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-deep-space-accent-neon" />
+                                        </label>
+                                    </div>
+
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="font-bold text-white mb-1">AI Overview</p>
+                                            <p className="text-xs text-white/30 mb-6">Get AI-powered summaries and insights on search results.</p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={store.enableAiOverview}
+                                                onChange={() => store.setEnableAiOverview(!store.enableAiOverview)}
                                                 className="sr-only peer"
                                             />
                                             <div className="relative w-11 h-6 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-deep-space-accent-neon" />

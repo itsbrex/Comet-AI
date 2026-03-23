@@ -131,6 +131,10 @@ export interface BrowserState {
     setLocalLLMModel: (model: string) => void;
     setLocalLlmMode: (mode: 'light' | 'normal' | 'heavy') => void;
 
+    // AI Overview
+    enableAiOverview: boolean;
+    setEnableAiOverview: (enable: boolean) => void;
+
     // AI Permission
     askForAiPermission: boolean;
     setAskForAiPermission: (val: boolean) => void;
@@ -344,6 +348,11 @@ export const useAppStore = create<BrowserState>()(
             localLLMModel: '',
             localLlmMode: 'normal',
             autoGeminiModelUpdates: true,
+
+            // AI Overview
+            enableAiOverview: false,
+            setEnableAiOverview: (enable: boolean) => set({ enableAiOverview: enable }),
+
             geminiModel: MODEL_REGISTRY.google.pro.id,
             mcpServerPort: 3001,
             additionalAIInstructions: '',

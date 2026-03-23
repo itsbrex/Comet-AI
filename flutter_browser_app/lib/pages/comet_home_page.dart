@@ -102,6 +102,7 @@ class _CometHomePageState extends State<CometHomePage>
         windowModel.addTab(
           WebViewModel(url: url),
         );
+        Navigator.pushNamed(context, '/browser');
       }
     }
   }

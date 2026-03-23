@@ -3728,115 +3728,173 @@ app.whenReady().then(() => {
     }
   });
 
+  // Export Chat as TXT
+  ipcMain.handle('export-chat-txt', async (event, content) => {
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export Chat History',
+      defaultPath: path.join(app.getPath('downloads'), `comet-chat-session-${Date.now()}.txt`),
+      filters: [{ name: 'Text Files', extensions: ['txt'] }]
+    });
+
+    if (!canceled && filePath) {
+      try {
+        fs.writeFileSync(filePath, content);
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    }
+    return { success: false, error: 'Canceled' };
+  });
+
   // PDF Generation IPC (High-Fidelity HTML-to-PDF)
   ipcMain.handle('generate-pdf', async (event, title, content) => {
     let workerWindow = null;
     try {
-      // Use hidden window to render the HTML properly for printing
       workerWindow = new BrowserWindow({
         show: false,
         webPreferences: { offscreen: true }
       });
 
-      // Wrap content if it's not a full HTML document
+      const iconPath = path.join(__dirname, 'public/icon.png');
+      let iconBase64 = '';
+      try {
+        iconBase64 = fs.readFileSync(iconPath).toString('base64');
+      } catch (e) {
+        console.warn("Could not load icon for PDF branding");
+      }
+
       const isFullHTML = /<html/i.test(content);
       const htmlToRender = isFullHTML ? content : `
         <!DOCTYPE html>
         <html>
         <head>
           <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono&display=swap');
             body { 
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-              padding: 50px; 
+              font-family: 'Inter', -apple-system, sans-serif; 
+              padding: 60px; 
               line-height: 1.6; 
-              color: #1a1a1a;
+              color: #0f172a;
               background: #ffffff;
             }
-            h1 { 
-              color: #0369a1; 
-              border-bottom: 2px solid #e0f2fe; 
-              padding-bottom: 20px; 
-              margin-bottom: 40px;
-              font-size: 2.5rem;
-              text-align: center;
-              font-weight: 800;
-              letter-spacing: -0.05em;
+            .page-container {
+              position: relative;
+              min-height: 100%;
             }
-            .header-info {
+            .header {
               display: flex;
               align-items: center;
-              justify-content: center;
-              gap: 15px;
-              margin-bottom: 50px;
-            }
-            .meta { 
-              font-size: 0.85rem; 
-              color: #64748b; 
-              text-align: center;
-              margin-bottom: 50px;
-              text-transform: uppercase;
-              letter-spacing: 0.1em;
-            }
-            .footer { 
-              position: fixed; 
-              bottom: 30px; 
-              left: 50px; 
-              right: 50px; 
-              border-top: 1px solid #f1f5f9; 
-              padding-top: 15px; 
-              font-size: 0.75rem; 
-              color: #94a3b8; 
-              display: flex; 
               justify-content: space-between;
-              align-items: center;
+              border-bottom: 2px solid #f1f5f9;
+              padding-bottom: 20px;
+              margin-bottom: 40px;
             }
             .branding {
               display: flex;
               align-items: center;
-              gap: 8px;
-              font-weight: 900;
+              gap: 12px;
               color: #0ea5e9;
-              letter-spacing: 0.1em;
               text-transform: uppercase;
+              font-weight: 900;
+              letter-spacing: 0.1em;
+              font-size: 1.2rem;
+            }
+            h1 { 
+              color: #020617; 
+              margin: 20px 0;
+              font-size: 2.2rem;
+              font-weight: 900;
+              letter-spacing: -0.04em;
+              line-height: 1.1;
+            }
+            .meta { 
+              font-size: 0.8rem; 
+              color: #64748b; 
+              text-transform: uppercase;
+              letter-spacing: 0.15em;
+              font-weight: 700;
+              margin-bottom: 40px;
+            }
+            .content-section {
+              background: #fff;
+              border-radius: 20px;
             }
             pre { 
-              background: #f8fafc; 
-              padding: 20px; 
-              border-radius: 12px; 
-              border: 1px solid #e2e8f0; 
-              font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+              background: #0f172a; 
+              color: #e2e8f0;
+              padding: 24px; 
+              border-radius: 16px; 
+              font-family: 'JetBrains Mono', monospace;
               overflow-x: auto;
-              font-size: 0.9rem;
+              font-size: 0.85rem;
+              margin: 20px 0;
+              line-height: 1.5;
             }
             blockquote {
-              border-left: 4px solid #0ea5e9;
-              padding-left: 20px;
-              margin-left: 0;
+              border-left: 6px solid #0ea5e9;
+              padding: 10px 24px;
+              margin: 30px 0;
               color: #475569;
+              background: #f8fafc;
+              border-radius: 0 16px 16px 0;
               font-style: italic;
             }
-            hr { border: 0; border-top: 1px solid #f1f5f9; margin: 40px 0; }
-            table { width: 100%; border-collapse: collapse; margin: 30px 0; }
-            th { text-align: left; border-bottom: 2px solid #f1f5f9; padding: 12px; color: #475569; font-weight: 800; }
-            td { padding: 12px; border-bottom: 1px solid #f8fafc; color: #1e293b; }
+            .tag {
+              display: inline-block;
+              padding: 4px 12px;
+              background: #f1f5f9;
+              border-radius: 6px;
+              font-size: 0.75rem;
+              font-weight: 700;
+              color: #475569;
+              margin-bottom: 15px;
+            }
+            .footer { 
+              position: fixed; 
+              bottom: 40px; 
+              left: 60px; 
+              right: 60px; 
+              border-top: 1px solid #f1f5f9; 
+              padding-top: 20px; 
+              font-size: 0.7rem; 
+              color: #94a3b8; 
+              display: flex; 
+              justify-content: space-between;
+              align-items: center;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+            }
+            hr { border: 0; border-top: 1px solid #f1f5f9; margin: 50px 0; }
+            img { max-width: 100%; border-radius: 16px; margin: 20px 0; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
           </style>
         </head>
         <body>
-          <div class="header-info">
-             <div class="branding" style="font-size: 1.5rem; display: flex; align-items: center; gap: 12px;">
-                <img src="data:image/png;base64,${fs.readFileSync(path.join(__dirname, 'public/icon.png')).toString('base64')}" style="width: 32px; height: 32px;" />
-                Comet-AI
-             </div>
-          </div>
-          <h1>${title || 'Comet AI Document'}</h1>
-          <div class="meta">Verified Intelligence Report • ${new Date().toLocaleDateString()}</div>
-          ${content}
-          <div class="footer">
-            <div class="branding" style="display: flex; align-items: center; gap: 8px;">
-               <img src="data:image/png;base64,${fs.readFileSync(path.join(__dirname, 'public/icon.png')).toString('base64')}" style="width: 20px; height: 20px;" />
-               Comet-AI Browser
+          <div class="page-container">
+            <div class="header">
+              <div class="branding">
+                <img src="data:image/png;base64,${iconBase64}" style="width: 28px; height: 28px; margin: 0;" />
+                Comet AI
+              </div>
+              <div style="font-size: 0.7rem; color: #94a3b8; font-weight: 700;">AUTONOMOUS AGENT REPORT</div>
             </div>
-            <div>Autonomous Agent Workspace • Page 1 of 1</div>
+            
+            <div class="tag">Secure Export</div>
+            <h1>${title || 'Intelligence Document'}</h1>
+            <div class="meta">Generated by Comet Neural Engine • ${new Date().toLocaleString()}</div>
+            
+            <div class="content-section">
+              ${content}
+            </div>
+
+            <div class="footer">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <img src="data:image/png;base64,${iconBase64}" style="width: 16px; height: 16px; margin: 0; filter: grayscale(1); opacity: 0.5;" />
+                Protected by Comet Security
+              </div>
+              <div>Verification ID: COMET-${Math.random().toString(36).substr(2, 9).toUpperCase()}</div>
+            </div>
           </div>
         </body>
         </html>

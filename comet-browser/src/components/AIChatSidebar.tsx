@@ -142,6 +142,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -1516,15 +1517,27 @@ I've successfully executed the following real tasks:
 
   const formatMessageForExport = (m: ExtendedChatMessage) => {
     let result = `${m.role.toUpperCase()}:\n`;
-    if (m.thinkText) result += `\n[THINKING]\n${m.thinkText}\n[/THINKING]\n`;
+    
+    // AI Reasoning / Thinking
+    if (m.thinkText) {
+      result += `\n[AI REASONING]\n${m.thinkText.trim()}\n[/AI REASONING]\n`;
+    }
+    
+    // OCR Sources
+    if (m.isOcr && m.ocrText) {
+      result += `\n[OCR SOURCE: ${m.ocrLabel || 'EXTRACTED_DATA'}]\n${m.ocrText.trim()}\n[/OCR SOURCE]\n`;
+    }
+
+    // Action Chain
     if (m.actionLogs && m.actionLogs.length > 0) {
       result += `\n[ACTION CHAIN]\n`;
-      m.actionLogs.forEach(log => result += `- ${log.type}: ${log.output}\n`);
+      m.actionLogs.forEach((log, index) => {
+        result += `${index + 1}. ${log.type}: ${log.output} (${log.success ? 'SUCCESS' : 'FAILED'})\n`;
+      });
       result += `[/ACTION CHAIN]\n`;
     }
-    if (m.isOcr && m.ocrText) {
-      result += `\n[${m.ocrLabel || 'EXTRACTED_DATA'}]\n${m.ocrText}\n[/${m.ocrLabel || 'EXTRACTED_DATA'}]\n`;
-    }
+    
+    // Media Attachments
     if (m.mediaItems && m.mediaItems.length > 0) {
       result += `\n[MEDIA ATTACHMENTS]\n`;
       m.mediaItems.forEach(item => {
@@ -1533,6 +1546,8 @@ I've successfully executed the following real tasks:
       });
       result += `[/MEDIA ATTACHMENTS]\n`;
     }
+
+    // Main Content
     result += `\n${m.content.trim()}`;
     return result.trim();
   };
@@ -1548,18 +1563,29 @@ I've successfully executed the following real tasks:
     if (messages.length === 0) return;
     setShowActionsMenu(false);
     
-    const formattedMessages = messages.map(m => ({
-      ...m,
-      content: formatMessageForExport(m)
-    }));
+    // Format full session
+    const fullContent = messages.map(m => formatMessageForExport(m)).join('\n\n' + '='.repeat(40) + '\n\n');
 
     if (window.electronAPI) {
       if (format === 'text') {
-        await window.electronAPI.exportChatAsTxt(formattedMessages);
+        const res = await (window.electronAPI as any).exportChatAsTxt(fullContent);
+        if (res?.success) setFeedback('Chat Exported to Downloads');
       } else {
-        await window.electronAPI.exportChatAsPdf(formattedMessages);
+        // Convert markdown-ish text to HTML for high-quality PDF
+        const pdfHtml = `
+          <div style="white-space: pre-wrap; font-size: 14px; color: #1e293b;">
+            ${fullContent.replace(/\[AI REASONING\]/g, '<div style="background:#f8fafc; padding:15px; border-left:4px solid #0ea5e9; margin:10px 0; font-style:italic; font-size:12px; color:#475569;"><strong>AI Reasoning</strong><br/>')
+                         .replace(/\[\/AI REASONING\]/g, '</div>')
+                         .replace(/\[ACTION CHAIN\]/g, '<div style="background:#0f172a; color:#e2e8f0; padding:15px; border-radius:10px; margin:10px 0; font-family:monospace; font-size:11px;"><strong>Action Trace</strong><br/>')
+                         .replace(/\[\/ACTION CHAIN\]/g, '</div>')
+                         .replace(/\n/g, '<br/>')}
+          </div>
+        `;
+        await window.electronAPI.generatePDF('Comet Intelligence Report', pdfHtml);
+        setFeedback('PDF Document Ready');
       }
     }
+    setTimeout(() => setFeedback(null), 3000);
   }, [messages]);
 
   const copyChatToClipboard = useCallback(() => {
@@ -1835,9 +1861,29 @@ I've successfully executed the following real tasks:
             <button onClick={() => setShowCapabilities(!showCapabilities)} className={`p-2.5 rounded-xl transition-all ${showCapabilities ? 'bg-sky-500/20 text-sky-400' : 'hover:bg-white/5 text-white/30 hover:text-white'}`} title="View AI Capabilities">
               <Sparkles size={18} />
             </button>
-            <button onClick={() => setShowLLMProviderSettings(!showLLMProviderSettings)} className="p-2.5 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-all">
-              <MoreVertical size={18} />
-            </button>
+            <div className="relative group">
+               <button className="p-2.5 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-all">
+                 <MoreVertical size={18} />
+               </button>
+               <div className="absolute right-0 top-full mt-2 w-48 bg-[#0a0a0f] border border-white/5 rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100] p-2 backdrop-blur-2xl">
+                 <button onClick={() => exportChat('pdf')} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+                   <Printer size={14} className="text-sky-400" /> Export branded PDF
+                 </button>
+                 <button onClick={() => exportChat('text')} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+                   <FileText size={14} className="text-purple-400" /> Export as .txt
+                 </button>
+                 <button onClick={copyChatToClipboard} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+                   <CopyIcon size={14} className="text-amber-400" /> Copy full session
+                 </button>
+                 <div className="my-1 border-t border-white/5" />
+                 <button onClick={() => setShowLLMProviderSettings(!showLLMProviderSettings)} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+                   <Cpu size={14} className="text-green-400" /> Intelligence Settings
+                 </button>
+                 <button onClick={clearChat} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-red-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 transition-all">
+                   <Trash2 size={14} /> Clear reasoning chain
+                 </button>
+               </div>
+            </div>
             <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-2.5 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-all">
               {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </button>
@@ -2150,6 +2196,19 @@ I've successfully executed the following real tasks:
         setOllamaModels={setOllamaModelsList}
         setError={setError}
       />
+      {/* Feedback Notification */}
+      <AnimatePresence>
+        {feedback && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-sky-500 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-2xl z-[1000] flex items-center gap-2"
+          >
+            <CheckCircle2 size={14} /> {feedback}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

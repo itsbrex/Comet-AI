@@ -40,6 +40,29 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
     super.initState();
     getIntentData();
     _startClipboardMonitoring();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final browserModel = Provider.of<BrowserModel>(context, listen: false);
+      final windowModel = Provider.of<WindowModel>(context, listen: false);
+      final currentWebViewModel =
+          Provider.of<WebViewModel>(context, listen: false);
+
+      browserModel.addListener(_onBrowserModelChanged);
+      windowModel.addListener(_onWindowModelChanged);
+      currentWebViewModel.addListener(_onCurrentWebViewModelChanged);
+    });
+  }
+
+  void _onBrowserModelChanged() {
+    Provider.of<BrowserModel>(context, listen: false).save();
+  }
+
+  void _onWindowModelChanged() {
+    Provider.of<WindowModel>(context, listen: false).saveInfo();
+  }
+
+  void _onCurrentWebViewModelChanged() {
+    Provider.of<WindowModel>(context, listen: false).saveInfo();
   }
 
   void _startClipboardMonitoring() {
@@ -78,6 +101,16 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
   @override
   void dispose() {
     _clipboardMonitor.stopMonitoring();
+
+    final browserModel = Provider.of<BrowserModel>(context, listen: false);
+    final windowModel = Provider.of<WindowModel>(context, listen: false);
+    final currentWebViewModel =
+        Provider.of<WebViewModel>(context, listen: false);
+
+    browserModel.removeListener(_onBrowserModelChanged);
+    windowModel.removeListener(_onWindowModelChanged);
+    currentWebViewModel.removeListener(_onCurrentWebViewModelChanged);
+
     super.dispose();
   }
 
@@ -96,8 +129,10 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
   restore() async {
     final browserModel = Provider.of<BrowserModel>(context, listen: false);
     final windowModel = Provider.of<WindowModel>(context, listen: false);
-    browserModel.restore();
-    windowModel.restoreInfo();
+    if (windowModel.webViewTabs.isEmpty) {
+      await browserModel.restore();
+      await windowModel.restoreInfo();
+    }
   }
 
   @override
@@ -116,20 +151,8 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildBrowser() {
-    final currentWebViewModel =
-        Provider.of<WebViewModel>(context, listen: true);
     final browserModel = Provider.of<BrowserModel>(context, listen: true);
     final windowModel = Provider.of<WindowModel>(context, listen: true);
-
-    browserModel.addListener(() {
-      browserModel.save();
-    });
-    windowModel.addListener(() {
-      windowModel.saveInfo();
-    });
-    currentWebViewModel.addListener(() {
-      windowModel.saveInfo();
-    });
 
     var canShowTabScroller =
         browserModel.showTabScroller && windowModel.webViewTabs.isNotEmpty;
@@ -280,33 +303,8 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
       return CometHomePage(
         onSearch: (value) {
           final windowModel = Provider.of<WindowModel>(context, listen: false);
-          final browserModel =
-              Provider.of<BrowserModel>(context, listen: false);
-          final settings = browserModel.getSettings();
-
-          final String trimmedValue = value.trim();
-          WebUri url;
-
-          // Improved URL detection
-          try {
-            final Uri uri = Uri.parse(trimmedValue);
-            if (Util.isLocalizedContent(uri)) {
-              url = WebUri(trimmedValue);
-            } else if (trimmedValue.contains('.') && !trimmedValue.contains(' ')) {
-              url = trimmedValue.contains('://')
-                  ? WebUri(trimmedValue)
-                  : WebUri("https://$trimmedValue");
-            } else {
-              url = WebUri(settings.searchEngine.searchUrl +
-                  Uri.encodeComponent(trimmedValue));
-            }
-          } catch (e) {
-            url = WebUri(settings.searchEngine.searchUrl +
-                Uri.encodeComponent(trimmedValue));
-          }
-
           windowModel.addTab(
-            WebViewModel(url: url),
+            WebViewModel(url: WebUri(value)),
           );
         },
       );

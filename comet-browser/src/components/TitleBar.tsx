@@ -5,6 +5,7 @@ import { Minus, Square, X, Maximize2, Settings, Search, LogIn } from 'lucide-rea
 import { VirtualizedTabBar } from './VirtualizedTabBar';
 import { useAppStore } from '@/store/useAppStore';
 import { useRouter } from 'next/navigation'; // Import useRouter
+import { firebaseConfigStorage } from '@/lib/firebaseConfigStorage';
 
 interface TitleBarProps {
     onToggleSpotlightSearch: () => void;
@@ -65,8 +66,10 @@ const TitleBar = ({ onToggleSpotlightSearch, onOpenSettings }: TitleBarProps) =>
 
             console.log('[Auth] Opening Google Sign-In in external browser...');
 
-            // Step 3: Open system browser (avoids Electron 401 / unsupported_browser errors)
+            // Step 3: Open system browser with updated logic
             if (window.electronAPI) {
+                const firebaseConfig = firebaseConfigStorage.load() || {};
+                const authUrl = `https://browser.ponsrischool.in/auth?client_id=desktop-app&redirect_uri=comet-browser%3A%2F%2Fauth&firebase_config=${btoa(JSON.stringify(firebaseConfig))}`;
                 window.electronAPI.openAuthWindow(authUrl);
             }
         } catch (err) {

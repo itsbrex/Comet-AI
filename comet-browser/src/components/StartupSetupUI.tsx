@@ -86,7 +86,7 @@ export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
               <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-4">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3">
-                    <img src="https://ollama.com/public/icon-64x64.png" className="w-8 h-8 rounded-lg grayscale invert opacity-80" alt="Ollama" />
+                    <img src="/ai-logos/ollama.png" className="w-8 h-8 rounded-lg object-contain" alt="Ollama" />
                     <div>
                       <h4 className="font-bold text-white mb-1">Local Ollama (Free, Private)</h4>
                       <p className="text-[10px] text-white/40 uppercase tracking-widest font-black leading-relaxed">
@@ -137,14 +137,14 @@ export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
 
               {/* Providers with links */}
               {[
-                { id: 'google', name: 'Google Gemini API', subtitle: 'Cloud Model • Advanced Reasoning', val: store.geminiApiKey, set: store.setGeminiApiKey, link: 'https://aistudio.google.com/app/apikey', icon: '✨' },
-                { id: 'openai', name: 'OpenAI API', subtitle: 'Cloud Model • Advanced Reasoning', val: store.openaiApiKey, set: store.setOpenaiApiKey, link: 'https://platform.openai.com/api-keys', icon: '🟢' },
-                { id: 'groq', name: 'Groq API', subtitle: 'Cloud Model • Lightning Fast', val: store.groqApiKey, set: store.setGroqApiKey, link: 'https://console.groq.com/keys', icon: '⚡' },
+                { id: 'google', name: 'Google Gemini API', subtitle: 'Cloud Model • Advanced Reasoning', val: store.geminiApiKey, set: store.setGeminiApiKey, link: 'https://aistudio.google.com/app/apikey', icon: '/ai-logos/gemini.svg' },
+                { id: 'openai', name: 'OpenAI API', subtitle: 'Cloud Model • Advanced Reasoning', val: store.openaiApiKey, set: store.setOpenaiApiKey, link: 'https://platform.openai.com/api-keys', icon: '/ai-logos/chatgpt.png' },
+                { id: 'groq', name: 'Groq API', subtitle: 'Cloud Model • Lightning Fast', val: store.groqApiKey, set: store.setGroqApiKey, link: 'https://console.groq.com/keys', icon: '/ai-logos/Grok.png' },
               ].map(provider => (
                 <div key={provider.id} className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
-                      <span className="text-xl mt-0.5">{provider.icon}</span>
+                      <img src={provider.icon} className="w-7 h-7 object-contain mt-0.5" alt={provider.name} />
                       <div>
                         <h4 className="font-bold text-white">{provider.name}</h4>
                         <p className="text-[10px] text-sky-400 mt-1 uppercase tracking-widest font-black">{provider.subtitle}</p>

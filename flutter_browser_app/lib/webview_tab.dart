@@ -168,7 +168,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
       initialSettings.userAgent =
           "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36";
     }
-    initialSettings.transparentBackground = true;
+    initialSettings.transparentBackground = false;
 
     initialSettings.safeBrowsingEnabled = true;
     initialSettings.disableDefaultErrorPage = true;
@@ -192,7 +192,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
       pullToRefreshController: _pullToRefreshController,
       findInteractionController: _findInteractionController,
       onWebViewCreated: (controller) async {
-        initialSettings.transparentBackground = true;
+        initialSettings.transparentBackground = false;
         await controller.setSettings(settings: initialSettings);
 
         _webViewController = controller;

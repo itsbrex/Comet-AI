@@ -190,7 +190,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                     {activeProviderId === 'ollama' && (
                       <div className="space-y-4">
                         <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
-                          <Cpu size={14} />
+                          <img src="/ai-logos/ollama.png" className="w-4 h-4 object-contain" alt="Ollama" />
                           <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">Native Ollama Models</span>
                         </div>
 
@@ -411,7 +411,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                     {(activeProviderId === 'google' || activeProviderId === 'google-flash') && (
                       <div className="space-y-4">
                         <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
-                          <Sparkles size={14} />
+                          <img src="/ai-logos/gemini.svg" className="w-4 h-4 object-contain" alt="Gemini" />
                           <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">
                             {geminiPreferences.metadata.friendlyName}
                           </span>
@@ -464,7 +464,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                     {activeProviderId === 'openai' && (
                       <div className="space-y-4">
                         <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
-                          <Cloud size={14} />
+                          <img src="/ai-logos/chatgpt.png" className="w-4 h-4 object-contain" alt="OpenAI" />
                           <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">OpenAI (GPT-4o/o1)</span>
                         </div>
                         <div className="space-y-1">
@@ -493,7 +493,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                     {activeProviderId === 'anthropic' && (
                       <div className="space-y-4">
                         <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
-                          <Shield size={14} />
+                          <img src="/ai-logos/claude.webp" className="w-4 h-4 object-contain" alt="Claude" />
                           <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">Anthropic Claude</span>
                         </div>
                         <div className="space-y-1">
@@ -522,7 +522,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                     {activeProviderId === 'xai' && (
                       <div className="space-y-4">
                         <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
-                          <Cloud size={14} />
+                          <img src="/ai-logos/Grok.png" className="w-4 h-4 object-contain" alt="Grok" />
                           <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">xAI Grok</span>
                         </div>
                         <div className="space-y-1">
@@ -551,7 +551,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                     {activeProviderId === 'groq' && (
                       <div className="space-y-4">
                         <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
-                          <Cpu size={14} />
+                          <img src="/ai-logos/Grok.png" className="w-4 h-4 object-contain" alt="Groq" />
                           <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">Groq (LPU)</span>
                         </div>
                         <div className="space-y-1">

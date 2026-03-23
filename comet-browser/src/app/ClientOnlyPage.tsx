@@ -663,13 +663,29 @@ export default function Home() {
 
   // AI Query Interception
   useEffect(() => {
-    if (window.electronAPI && store.enableAIAssist) {
+    if (window.electronAPI && store.enableAIAssist && store.enableAiOverview) {
       const cleanup = window.electronAPI.onAiQueryDetected((query: any) => {
         runAiOverview(query);
       });
       return cleanup;
     }
-  }, [store.enableAIAssist, runAiOverview]);
+  }, [store.enableAIAssist, store.enableAiOverview, runAiOverview]);
+
+  // Automatic Sidebar & AI Scaling
+  useEffect(() => {
+    const handleSmartScaling = () => {
+      const width = window.innerWidth;
+      if (width < 1200) {
+        if (store.sidebarWidth > 350) store.setSidebarWidth(350);
+      } else if (width > 1800) {
+        if (store.sidebarWidth < 500) store.setSidebarWidth(500);
+      }
+    };
+
+    window.addEventListener('resize', handleSmartScaling);
+    handleSmartScaling(); // Initial call
+    return () => window.removeEventListener('resize', handleSmartScaling);
+  }, [store.sidebarWidth]);
 
   // PWA Service Worker Registration
   useEffect(() => {
@@ -1439,12 +1455,38 @@ export default function Home() {
               animate={{ width: store.isSidebarCollapsed ? 70 : store.sidebarWidth, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }} // Faster transition
-              className={`h-full border-r border-border-color cursor-grab active:cursor-grabbing ${store.sidebarSide === 'left' ? 'order-first' : 'order-last'} no-drag-region bg-black/20`}
+              className={`relative h-full border-r border-border-color cursor-grab active:cursor-grabbing ${store.sidebarSide === 'left' ? 'order-first' : 'order-last'} no-drag-region bg-black/20`}
               onUpdate={() => {
                 // Trigger resize during animation to keep BrowserView in sync
                 if (window.electronAPI) window.dispatchEvent(new Event('resize'));
               }}
             >
+              {/* Manual Resize Handle */}
+              {!store.isSidebarCollapsed && (
+                <div
+                  className={`absolute top-0 bottom-0 w-1 cursor-col-resize z-50 hover:bg-deep-space-accent-neon/30 transition-colors ${store.sidebarSide === 'left' ? 'right-0' : 'left-0'}`}
+                  onMouseDown={(e) => {
+                    const startX = e.clientX;
+                    const startWidth = store.sidebarWidth;
+                    
+                    const onMouseMove = (moveEvent: MouseEvent) => {
+                      const delta = store.sidebarSide === 'left' 
+                        ? moveEvent.clientX - startX 
+                        : startX - moveEvent.clientX;
+                      const newWidth = Math.max(280, Math.min(600, startWidth + delta));
+                      store.setSidebarWidth(newWidth);
+                    };
+                    
+                    const onMouseUp = () => {
+                      document.removeEventListener('mousemove', onMouseMove);
+                      document.removeEventListener('mouseup', onMouseUp);
+                    };
+                    
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                  }}
+                />
+              )}
               <AIChatSidebar
                 studentMode={store.studentMode}
                 toggleStudentMode={() => store.setStudentMode(!store.studentMode)}

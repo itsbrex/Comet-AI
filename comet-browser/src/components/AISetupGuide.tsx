@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Sparkles, Cloud, Cpu, Shield, Key, 
   ChevronRight, ChevronLeft, ExternalLink, 
-  Check, Wifi, Info, Globe, AlertCircle
+  Check, Wifi, Info, Globe, AlertCircle, Download
 } from 'lucide-react';
 
 interface AISetupGuideProps {
@@ -21,11 +21,11 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
   const prevStep = () => setStep(s => Math.max(s - 1, 1));
 
   const providers = [
-    { name: 'Google Gemini', url: 'https://aistudio.google.com/app/apikey', icon: <Sparkles size={16} className="text-deep-space-accent-neon" />, desc: 'Best overall performance & free tier' },
-    { name: 'OpenAI (GPT-4)', url: 'https://platform.openai.com/api-keys', icon: <Cloud size={16} className="text-sky-400" />, desc: 'Industry standard for reasoning' },
-    { name: 'Anthropic Claude', url: 'https://console.anthropic.com/settings/keys', icon: <Shield size={16} className="text-amber-400" />, desc: 'Superior for coding & long context' },
-    { name: 'Groq', url: 'https://console.groq.com/keys', icon: <Cpu size={16} className="text-orange-400" />, desc: 'Ultra-fast inference (LPU)' },
-    { name: 'xAI (Grok)', url: 'https://console.x.ai/', icon: <Globe size={16} className="text-white" />, desc: 'Latest real-time intelligence' },
+    { name: 'Google Gemini', url: 'https://aistudio.google.com/app/apikey', icon: <img src="/ai-logos/gemini.svg" className="w-4 h-4 object-contain" />, desc: 'Best overall performance & free tier' },
+    { name: 'OpenAI (GPT-4)', url: 'https://platform.openai.com/api-keys', icon: <img src="/ai-logos/chatgpt.png" className="w-4 h-4 object-contain" />, desc: 'Industry standard for reasoning' },
+    { name: 'Anthropic Claude', url: 'https://console.anthropic.com/settings/keys', icon: <img src="/ai-logos/claude.webp" className="w-4 h-4 object-contain" />, desc: 'Superior for coding & long context' },
+    { name: 'Ollama (Local)', url: 'https://ollama.com/download', icon: <img src="/ai-logos/ollama.png" className="w-4 h-4 object-contain" />, desc: 'Private and free local inference' },
+    { name: 'xAI (Grok)', url: 'https://console.x.ai/', icon: <img src="/ai-logos/Grok.png" className="w-4 h-4 object-contain" />, desc: 'Latest real-time intelligence' },
   ];
 
   return (
@@ -167,6 +167,21 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
                   </div>
                 </div>
 
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
+                  <div className="text-[10px] font-black text-white/40 uppercase">3. Download Ollama</div>
+                  <p className="text-[10px] text-white/60 leading-relaxed">
+                    If you haven't installed it yet, download Ollama to run models locally:
+                  </p>
+                  <a 
+                    href="https://ollama.com/download" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-2 bg-white/5 border border-white/10 rounded-lg text-[10px] font-black uppercase text-white hover:bg-white/10 transition-all"
+                  >
+                    <Download size={14} /> Download for Mac/Windows/Linux
+                  </a>
+                </div>
+
                 <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/10 flex items-start gap-3">
                   <Info size={14} className="text-blue-400 flex-shrink-0 mt-0.5" />
                   <p className="text-[9px] text-blue-400/80 leading-relaxed font-medium">
@@ -189,16 +204,38 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
                 <Sparkles size={40} className="text-deep-space-accent-neon" />
               </div>
               <div className="text-center space-y-2">
-                <h3 className="text-sm font-black text-white uppercase tracking-widest">Ready for Launch</h3>
-                <p className="text-xs text-white/40 max-w-[200px] leading-relaxed mx-auto">
-                  Click below to open Settings and enter your API keys to begin.
+                <h3 className="text-sm font-black text-white uppercase tracking-widest">Connect your Intelligence</h3>
+                <p className="text-[10px] text-white/40 max-w-[250px] leading-relaxed mx-auto">
+                  Enter your API keys below to activate Cloud features immediately.
                 </p>
               </div>
+
+              <div className="w-full space-y-3">
+                <div className="relative">
+                  <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
+                  <input 
+                    type="password" 
+                    placeholder="Gemini API Key"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-[11px] text-white focus:outline-none focus:border-deep-space-accent-neon/50 transition-all"
+                    onChange={(e) => window.electronAPI && window.dispatchEvent(new CustomEvent('update-api-key', { detail: { provider: 'gemini', key: e.target.value } }))}
+                  />
+                </div>
+                <div className="relative">
+                  <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
+                  <input 
+                    type="password" 
+                    placeholder="OpenAI API Key (Optional)"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-[11px] text-white focus:outline-none focus:border-deep-space-accent-neon/50 transition-all"
+                    onChange={(e) => window.electronAPI && window.dispatchEvent(new CustomEvent('update-api-key', { detail: { provider: 'openai', key: e.target.value } }))}
+                  />
+                </div>
+              </div>
+
               <button 
                 onClick={onComplete}
-                className="px-8 py-3 rounded-2xl bg-deep-space-accent-neon text-black text-xs font-black uppercase tracking-widest hover:scale-105 transition-all shadow-[0_0_20px_rgba(0,255,242,0.3)]"
+                className="w-full py-3 rounded-2xl bg-deep-space-accent-neon text-black text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_20px_rgba(0,255,242,0.3)]"
               >
-                Open Settings
+                Complete Setup
               </button>
             </motion.div>
           )}
