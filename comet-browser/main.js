@@ -959,7 +959,12 @@ async function createWindow() {
       sandbox: false,
       // Enable GPU acceleration for web content
       offscreen: false,
-      webSecurity: true
+      webSecurity: false, // Disable web security to allow file:// protocol
+      allowRunningInsecureContent: true,
+      experimentalFeatures: true,
+      enableRemoteModule: false,
+      contextIsolation: true,
+      additionalArguments: ['--enable-features=VizDisplayCompositor']
     },
     titleBarStyle: 'hidden',
     backgroundColor: '#0D0E1C',
