@@ -6,7 +6,7 @@ import { useAppStore, BrowserState } from '@/store/useAppStore';
 import {
     Monitor, Shield, Globe, Info, Download,
     ChevronRight, ShieldCheck, Key, Package, Keyboard,
-    Briefcase, ShieldAlert, Database, LogIn, LogOut, History as HistoryIcon, User as UserIcon, Zap, RefreshCw, Languages, Music2, Eye, EyeOff
+    Briefcase, ShieldAlert, Database, LogIn, LogOut, History as HistoryIcon, User as UserIcon, Zap, RefreshCw, Languages, Music2, Eye, EyeOff, Lock
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import SearchEngineSettings from './SearchEngineSettings';
@@ -24,6 +24,7 @@ import SyncSettings from './SyncSettings'; // Import the new SyncSettings compon
 import { firebaseConfigStorage } from '@/lib/firebaseConfigStorage';
 import ExtensionSettings from './ExtensionSettings';
 import McpSettings from './McpSettings';
+import PermissionSettings from './PermissionSettings';
 
 const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () => void, defaultSection?: string }) => {
     const store = useAppStore();
@@ -126,6 +127,7 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
         { id: 'performance', icon: <Zap size={18} />, label: 'Performance' },
         { id: 'search', icon: <Globe size={18} />, label: 'Search Engine' },
         { id: 'privacy', icon: <Shield size={18} />, label: 'Privacy & Security' },
+        { id: 'permissions', icon: <Lock size={18} />, label: 'Permissions' },
         { id: 'vault', icon: <Key size={18} />, label: 'Vault & Autofill' },
         { id: 'history', icon: <HistoryIcon size={18} />, label: 'History' },
         { id: 'api-keys', icon: <Key size={18} />, label: 'API Keys' },
@@ -333,113 +335,20 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
 
                         {activeSection === 'privacy' && (
                             <div className="space-y-8">
-                                <div className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/5 space-y-8">
-                                    <div className="flex items-center justify-between">
+                                <div className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/5">
+                                    <div className="flex items-center gap-4 mb-4">
+                                        <Lock size={20} className="text-white/60" />
                                         <div>
-                                            <p className="font-bold text-white mb-1">AI Agent Assist</p>
-                                            <p className="text-xs text-white/30 mb-6">Master switch for all AI assistance features.</p>
+                                            <h3 className="text-sm font-black text-white uppercase tracking-wide">Privacy Settings</h3>
+                                            <p className="text-xs text-white/40">Configure browser privacy options</p>
                                         </div>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={store.enableAIAssist}
-                                                onChange={() => store.setEnableAIAssist(!store.enableAIAssist)}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="relative w-11 h-6 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-deep-space-accent-neon" />
-                                        </label>
                                     </div>
-
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="font-bold text-white mb-1">AI Overview</p>
-                                            <p className="text-xs text-white/30 mb-6">Get AI-powered summaries and insights on search results.</p>
-                                        </div>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={store.enableAiOverview}
-                                                onChange={() => store.setEnableAiOverview(!store.enableAiOverview)}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="relative w-11 h-6 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-deep-space-accent-neon" />
-                                        </label>
-                                    </div>
-
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="font-bold text-white mb-1">Ad Blocker</p>
-                                            <p className="text-xs text-white/30">Enable high-performance ad and tracker blocking.</p>
-                                        </div>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={store.enableAdblocker}
-                                                onChange={() => store.setEnableAdblocker(!store.enableAdblocker)}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="relative w-11 h-6 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-deep-space-accent-neon" />
-                                        </label>
-                                    </div>
-
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="font-bold text-white mb-1">Privacy Permission Prompt</p>
-                                            <p className="text-xs text-white/30">Ask for permission before AI reads current page content.</p>
-                                        </div>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={store.askForAiPermission}
-                                                onChange={() => store.setAskForAiPermission(!store.askForAiPermission)}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="relative w-11 h-6 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-deep-space-accent-neon" />
-                                        </label>
-                                    </div>
-
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="font-bold text-white mb-1">Intelligence Disclaimer Prompt</p>
-                                            <p className="text-xs text-white/30">Show a one-time reminder that AI results should be verified.</p>
-                                        </div>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={!store.hasSeenAiMistakeWarning}
-                                                onChange={() => store.setHasSeenAiMistakeWarning(!store.hasSeenAiMistakeWarning)}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="relative w-11 h-6 bg-white/10 rounded-full peer peer-checked:after:translate-x-full peer peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-deep-space-accent-neon" />
-                                        </label>
-                                    </div>
-
-                                    <div className="h-[1px] bg-white/5 w-full" />
-
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="font-bold text-white mb-1">E2EE Sync Passphrase</p>
-                                                <p className="text-xs text-white/30 tracking-tight">Your data is encrypted locally with this key before syncing. **Developers cannot see your data.**</p>
-                                            </div>
-                                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-400/10 border border-cyan-400/20">
-                                                <ShieldCheck size={12} className="text-cyan-400" />
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Quantum Grade</span>
-                                            </div>
-                                        </div>
-                                        <input
-                                            type="password"
-                                            value={store.syncPassphrase || ''}
-                                            onChange={(e) => store.setSyncPassphrase(e.target.value)}
-                                            placeholder="Enter your private sync passphrase..."
-                                            className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 px-6 text-sm text-white focus:outline-none focus:ring-1 focus:ring-deep-space-accent-neon/50 transition-all placeholder:text-white/10"
-                                            disabled={isGuestMode}
-                                        />
-                                        <p className="text-[10px] text-orange-400/60 font-medium">⚠️ If you lose this passphrase, you cannot decrypt your cloud data on new devices.</p>
-                                    </div>
+                                    <p className="text-white/60 text-sm">Configure macOS permissions in the Permissions section to enable shell commands and automation features.</p>
                                 </div>
                             </div>
                         )}
+
+                        {activeSection === 'permissions' && <PermissionSettings />}
 
                         {activeSection === 'vault' && (
                             <div className="space-y-8">

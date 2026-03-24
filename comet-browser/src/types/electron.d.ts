@@ -63,6 +63,8 @@ declare global {
 
             // Download APIs
             onDownloadStarted: (callback: (filename: string) => void) => () => void;
+            onDownloadProgress: (callback: (data: { name: string, progress: number }) => void) => () => void;
+            onDownloadComplete: (callback: (filename: string) => void) => () => void;
             triggerDownload: (url: string, filename: string) => Promise<boolean>;
             on: (channel: string, listener: (...args: any[]) => void) => () => void; // Generic 'on' for ipcRenderer events
             onAddNewTab: (callback: (url: string) => void) => () => void; // Specific add new tab event
@@ -170,12 +172,13 @@ declare global {
             addNewTab: (url: string) => void;
 
             // Shell Commands
-            executeShellCommand: (command: string) => Promise<{ success: boolean; output?: string; error?: string }>;
+            executeShellCommand: (command: string, preApproved?: boolean) => Promise<{ success: boolean; output?: string; error?: string }>;
 
             // Cross-App Control APIs
             captureScreenRegion: (coords: { x: number; y: number; width: number; height: number }) => Promise<{ success: boolean; image?: string; error?: string }>;
             searchApplications: (query: string) => Promise<{ success: boolean; results: any[]; error?: string }>;
             openExternalApp: (appPath: string) => Promise<{ success: boolean; error?: string }>;
+            openSystemSettings: (url: string) => Promise<{ success: boolean; error?: string }>;
             performCrossAppClick: (coords: { x: number; y: number }) => Promise<{ success: boolean; error?: string }>;
             onOpenUnifiedSearch: (callback: () => void) => () => void;
 
@@ -272,7 +275,8 @@ declare global {
             wifiSyncBroadcast: (data: any) => void;
 
             // Missing APIs
-            generatePDF: (title: string, content: string) => Promise<{ success: boolean; error?: string }>;
+            generatePDF: (title: string, content: string) => Promise<{ success: boolean; fileName?: string; filePath?: string; log?: string; error?: string }>;
+            openPDF: (filePath: string) => Promise<{ success: boolean; error?: string }>;
             getClipboardText: () => Promise<string>;
             setClipboardText: (text: string) => void;
             setVolume: (level: number) => Promise<{ success: boolean; error?: string }>;
@@ -288,6 +292,8 @@ declare global {
             permCheck: (key: string) => Promise<{ granted: boolean }>;
             permList: () => Promise<Array<{ key: string; level: string; granted_at: number; expires_at: number | null; description: string }>>;
             permAuditLog: (limit?: number) => Promise<Array<{ entry: string; timestamp: number }>>;
+            getSecuritySettings: () => Promise<{ autoApproveLowRisk: boolean; autoApproveMidRisk: boolean }>;
+            updateSecuritySettings: (settings: { autoApproveLowRisk?: boolean; autoApproveMidRisk?: boolean }) => Promise<{ success: boolean; settings: { autoApproveLowRisk: boolean; autoApproveMidRisk: boolean } }>;
 
             // Desktop Automation v2 — Robot Service
             robotExecute: (action: {
@@ -373,7 +379,10 @@ declare global {
             generateHighRiskQr: (actionId: string) => Promise<string | null>;
             onMobileApproveHighRisk: (callback: (data: { pin: string; id: string }) => void) => () => void;
             getAppIcon: () => Promise<string | null>;
+            organizeFolder: (path: string) => Promise<{ success: boolean; count?: number; summary?: string; path?: string; error?: string }>;
+
         };
+
     }
 }
 

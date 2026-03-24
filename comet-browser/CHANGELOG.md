@@ -1,5 +1,313 @@
 # Comet Browser - Recent Changes
 
+## Version 0.2.5 - Shell Command Auto-Execution (Current)
+
+### Overview
+Comet v0.2.5 introduces fully automatic shell command execution with zero permission dialogs. Shell commands now run directly without blocking popups.
+
+### March 24, 2026 - Update Details
+
+#### New Features
+
+1. **Auto-Executing Shell Commands**
+   - All shell commands now execute automatically without any permission dialogs
+   - Removed the blocking permission dialog that appeared for every command
+   - Commands go directly to execution after validation
+
+2. **New Permission Settings Panel**
+   - Added dedicated "Permissions" section in Settings (Settings > Permissions)
+   - Lists macOS system permissions: Screen Recording, Accessibility, Automation
+   - "Open Settings" buttons to quickly access System Preferences
+   - Shell command status and auto-approval information
+
+3. **Improved JSON Command Parsing**
+   - Fixed regex pattern for `{"commands": [...]}` format
+   - JSON commands now parse correctly from AI responses
+   - Supports both legacy tag format and new JSON format
+
+4. **Updated AI Instructions**
+   - AI now knows permissions are handled automatically
+   - Removed "requires permission" text from SHELL_COMMAND docs
+   - AI no longer asks user for permission - commands execute directly
+
+#### Technical Changes
+- `checkShellPermission()` now returns `true` for ALL commands (no dialogs)
+- Removed dialog.showMessageBox call from permission check
+- Added PermissionSettings component in Settings panel
+- Added IPC handler `open-system-settings` for opening macOS Preferences
+- Updated preload.js with openSystemSettings API
+
+#### Removed
+- Permission dialog from shell command execution
+- Blocking "macOS Permissions Required" dialog that appeared on every command
+
+---
+
+## Version 0.2.5 - Shell Command Improvements (Earlier)
+
+### Overview
+Comet v0.2.5 introduces major improvements to shell command permissions and the "Always Allow" functionality.
+
+### Removed Features
+- **ORGANIZE_FOLDER command**: Removed native folder organization command
+- AI now uses shell commands (ls, mkdir, mv) to organize folders instead
+
+### New Features
+
+#### 1. Smart Shell Permission Dialog
+- **AI-powered command explanations**: Each shell command now shows what it does
+- **Safety level indicator**: Shows safe/medium/high/critical risk levels
+- **Command analysis**: Automatic detection of potential harms
+
+#### 2. Safe Commands Whitelist
+- Commands like `ls`, `cp`, `mv`, `cat`, `mkdir`, `touch`, `find`, `grep`, `tar`, `git`, `npm`, `node`, `python`, `curl`, `wget`, `open` are recognized as safe
+- After first approval, these commands are permanently allowed (no repeated prompts)
+- Stored in permission store across sessions
+
+#### 3. Permanent "Always Allow"
+- Fixed the session-only bug: "Always Allow" now persists across browser restarts
+- Permissions stored in `comet-permissions.json` in user data folder
+- No more re-approving same commands after restart
+
+#### 4. Shift+Tab Quick Allow
+- **Fixed**: Shift+Tab now works for ALL risk levels (including high-risk)
+- Press Shift+Tab to instantly approve any permission dialog
+- Visual glow feedback when activated
+
+#### 5. Folder Organization via Shell
+- When user asks to organize a folder, AI now:
+  1. Runs `ls <folder>` to see contents
+  2. Runs `mkdir -p` to create category folders (Images, Documents, Videos, etc.)
+  3. Runs `mv` to move files into appropriate folders
+- All commands go through normal permission flow
+
+### Technical Changes
+- `checkShellPermission()` now checks permission store at start
+- `execute-shell-command` IPC accepts `preApproved` flag to skip duplicate dialogs
+- Added SAFE_COMMANDS whitelist in main.js
+- Added `explainCommand()` function for AI-generated explanations
+- Added `analyzeCommandRisk()` function for risk assessment
+
+### Bug Fixes
+- Fixed "Always Allow" not working (was using session-only flag incorrectly)
+- Fixed Shift+Tab not working for high-risk commands
+- Fixed double permission dialogs for shell commands
+
+---
+
+## Version 0.2.4 - JSON Command Update
+
+### 🎯 Overview
+Comet v0.2.4 introduces a comprehensive restructuring of command parsing with dedicated JSON formats, separating PDF generation, action tags, and shell commands from main chat while maintaining full integration in export logs.
+
+### 📦 New Command Parsers
+
+#### 1. PDF Command Parser (`PDFCommandParser.ts`)
+- **Dedicated JSON format** for PDF generation commands
+- Support for extended options: title, subtitle, author, filename, screenshot, attachments, liveData
+- Automatic live data detection for news/reports
+- PDF command validation and sanitization
+- Export format for PDF logs
+
+#### 2. Action Tag Parser (`ActionTagParser.ts`)
+- **Structured JSON format** for all action tags
+- Category classification: navigation, browser, system, media, automation, utility, gmail, meta
+- Permission level tracking: low, medium, high
+- Confidence scoring for command parsing
+- Value extraction with pipe-separated options support
+
+#### 3. Shell Command Parser (`ShellCommandParser.ts`)
+- **Robust shell command validation** with comprehensive security checks
+- Dangerous pattern detection: recursive deletes, fork bombs, disk writes, shutdown commands
+- Risk level assessment: low, medium, high, critical
+- Blocked commands list with safe alternatives
+- Platform-specific command transformations
+- Sanitization and timeout management
+
+### 🏪 Action Logs Store (`ActionLogsStore.ts`)
+- **Separate log management** for PDF, actions, shell, OCR, and DOM
+- Persistent storage to localStorage
+- JSON and text export formats
+- Summary statistics for each log type
+
+### 🔧 Unified Command Parser (`AICommandParser.ts`)
+- **Integrated parser** combining all command types
+- Unified parsing result with metadata
+- Legacy support for backward compatibility
+- Export formatting with JSON structure
+- Category and risk metadata
+
+### 🎨 UI/UX Improvements
+
+#### Action Chain Queue
+- JSON format display for commands
+- Category icons and color coding
+- Permission status indicators
+- Risk level badges for shell commands
+
+#### Export Functionality
+- Separate JSON sections for PDF, actions, and shell logs
+- Structured export format for all command types
+- Full action chain traceability
+
+#### Collapsible Chat Elements
+- OCR results in collapsible panels
+- DOM extraction results with filter statistics
+- Visual distinction between result types
+
+### 📋 Supported Commands (v0.2.4)
+
+#### Navigation Commands
+- `[NAVIGATE: url]` - Navigate to URL
+- `[OPEN_VIEW: view_name]` - Switch workspace view
+- `[RELOAD]` / `[GO_BACK]` / `[GO_FORWARD]` - Browser navigation
+
+#### Browser Commands
+- `[SEARCH: query]` - Default engine search
+- `[WEB_SEARCH: query]` - Real-time web search with RAG
+- `[READ_PAGE_CONTENT]` - Read active tab content
+- `[LIST_OPEN_TABS]` - List all open tabs
+- `[DOM_SEARCH: query]` - Search page DOM
+- `[DOM_READ_FILTERED: query]` - Read DOM with filtering
+
+#### Automation Commands
+- `[CLICK_ELEMENT: selector | reason]` - Click by CSS selector
+- `[FIND_AND_CLICK: text | reason]` - Find and click text
+- `[FILL_FORM: selector | value]` - Fill form field
+- `[SCROLL_TO: selector]` - Scroll to element
+
+#### Media Commands
+- `[SCREENSHOT_AND_ANALYZE]` - Capture and analyze screen
+- `[OCR_SCREEN]` / `[OCR_COORDINATES: x,y,w,h]` - OCR extraction
+- `[SHOW_IMAGE: url | caption]` - Display image
+- `[SHOW_VIDEO: url | title | description]` - Display video card
+
+#### System Commands
+- `[SHELL_COMMAND: command]` - Execute terminal command
+- `[SET_VOLUME: percentage]` - Set system volume
+- `[SET_BRIGHTNESS: percentage]` - Set screen brightness
+- `[OPEN_APP: app_name]` - Launch application
+- `[SET_THEME: dark|light|system]` - Change theme
+
+#### Utility Commands
+- `[GENERATE_PDF: title | options...]` - Create branded PDF
+- `[GENERATE_DIAGRAM: mermaid_code]` - Create Mermaid diagram
+- `[OPEN_PDF: file_path]` - Open PDF in viewer
+- `[ORGANIZE_FOLDER: path]` - Organize folder by type
+- `[WAIT: milliseconds]` - Pause execution
+
+#### Gmail Commands
+- `[GMAIL_AUTHORIZE]` - Authorize Gmail access
+- `[GMAIL_LIST_MESSAGES: query | max]` - List messages
+- `[GMAIL_GET_MESSAGE: id]` - Get message content
+- `[GMAIL_SEND_MESSAGE: to|subject|body]` - Send email
+- `[GMAIL_ADD_LABEL: id|label]` - Add label
+
+#### Meta Commands
+- `[THINK: reasoning]` - Show AI reasoning
+- `[PLAN: description]` - Show AI plan
+- `[EXPLAIN_CAPABILITIES]` - List all capabilities
+- `[OPEN_MCP_SETTINGS]` - Open MCP settings
+
+### 📁 File Structure (v0.2.4)
+
+```
+src/lib/
+├── AICommandParser.ts      # Unified parser (enhanced)
+├── PDFCommandParser.ts     # NEW: PDF command parser
+├── ActionTagParser.ts      # NEW: Action tag parser
+├── ShellCommandParser.ts   # NEW: Shell command parser
+└── ActionLogsStore.ts      # NEW: Action logs store
+```
+
+### 🔒 Security Improvements
+
+#### Shell Command Protection
+- 20+ dangerous pattern signatures
+- Fork bomb detection
+- Recursive delete prevention
+- Privilege escalation blocking
+- Network shell pattern detection
+- Encoded command detection
+
+#### Command Validation
+- Length limits (1000 chars max)
+- Blocked command list
+- Safe alternative suggestions
+- Sanitization of special characters
+
+### 📊 Export Format (v0.2.4)
+
+#### PDF Commands Export
+\`\`\`json
+{
+  "type": "PDF_COMMANDS_EXPORT",
+  "version": "1.0",
+  "commands": [...]
+}
+\`\`\`
+
+#### Action Tags Export
+\`\`\`json
+{
+  "type": "ACTION_TAGS_EXPORT",
+  "version": "1.0",
+  "summary": { "total": 5, "byCategory": {...} },
+  "commands": [...]
+}
+\`\`\`
+
+#### Shell Commands Export
+\`\`\`json
+{
+  "type": "SHELL_COMMANDS_EXPORT",
+  "version": "1.0",
+  "summary": { "riskLevels": {...} },
+  "commands": [...]
+}
+\`\`\`
+
+### 🐛 Bug Fixes
+
+- Fixed duplicate command parsing in switch statements
+- Fixed OCR result display in collapsible panels
+- Fixed DOM extraction statistics display
+- Fixed PDF screenshot capture timing
+- Fixed shell command permission prompts
+
+### 🚀 Performance
+
+- Optimized command parsing with single-pass algorithms
+- Reduced memory footprint for log storage
+- Improved regex patterns for faster matching
+- Lazy loading of parser modules
+
+---
+
+## Version 0.2.3 - Neural Action Queue
+
+### 🎯 Overview
+Enhanced AI reliability with the Neural Action Queue for autonomous web interaction.
+
+### Changes
+- Neural Action Queue for sequential command execution
+- Full MCP integration for external data fetching
+- Command chain visualization
+- Improved permission handling
+
+---
+
+## Version 0.2.2 - Intelligence Update
+
+### Changes
+- Universal Neural Translation
+- Neural Analysis Sidebar
+- Find & Click (OCR)
+- Persistent Neural Memory
+- Google OAuth Integration
+
+---
+
 ## Version 0.1.9 - Browser Enhancements & Bug Fixes
 
 ### 🔧 Major Fixes

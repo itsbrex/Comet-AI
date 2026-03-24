@@ -1,4 +1,10 @@
-#  Comet AI Browser (v0.2.1)!      [Made with Love in India](https://madewithlove.org.in/badge.svg)
+#  Comet AI Browser (v0.2.5)!      [Made with Love in India](https://madewithlove.org.in/badge.svg)
+
+### v0.2.5 New Features
+- **Auto-Executing Shell Commands**: All shell commands now auto-execute without permission dialogs
+- **New Permission Settings**: Dedicated Settings > Permissions section for macOS system permissions
+- **Fixed JSON Parsing**: Improved `{"commands": [...]}` format parsing
+- **Updated AI Instructions**: AI no longer asks for permission, commands execute automatically
 
 
 <div align="center"><a id="top"></a>
@@ -9,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.0--stable-green)]()
+[![Version](https://img.shields.io/badge/Version-0.2.5--stable-green)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 ![Maintained](https://img.shields.io/badge/Maintained-Yes-green)
 ![Hardware](https://img.shields.io/badge/Tested_On-i5--8250U_|_8GB-orange)
@@ -247,9 +253,22 @@ Framework: Electron + Next.js
 ---
 
 
-## 🚀 Project Status: v0.2.1 "The Control Update"
+## 🚀 Project Status: v0.2.4 "The JSON Command Update"
 
-Comet v0.2.1 focuses on advanced AI reliability, architectural stability, and robust local LLM execution. It introduces the Neural Action Queue for autonomous web interaction and full **Model Context Protocol (MCP)** integration for external data fetching.
+Comet v0.2.4 introduces a comprehensive restructuring of command parsing with dedicated JSON formats for:
+- **PDF Generation**: Structured JSON with options for screenshots, attachments, and live data
+- **Action Tags**: Robust JSON parsing with category classification and permission levels
+- **Shell Commands**: Comprehensive security validation with risk assessment
+- **Export Logs**: Separate JSON logs for PDF, actions, and shell commands displayed in exports
+
+### v0.2.4 Key Changes:
+- ✅ Unified command parser integrating PDF, Action, and Shell parsers
+- ✅ Robust shell command validation with dangerous pattern detection
+- ✅ Separate action logs store for PDF, actions, OCR, and DOM results
+- ✅ JSON format support for all command types
+- ✅ Collapsible UI for OCR and DOM results in chat
+- ✅ Enhanced export functionality with structured JSON logs
+- ✅ Action categories: navigation, browser, system, media, automation, utility, gmail, meta
 
 ---
 

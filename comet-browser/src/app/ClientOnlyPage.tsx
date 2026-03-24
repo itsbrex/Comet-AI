@@ -143,7 +143,7 @@ export default function Home() {
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'in_progress' | 'completed' | 'failed'>('idle');
   const [showDownloads, setShowDownloads] = useState(false);
   const [showExtensionsPopup, setShowExtensionsPopup] = useState(false);
-  const [downloads, setDownloads] = useState<Array<{ name: string, status: string }>>([]);
+  const [downloads, setDownloads] = useState<Array<{ name: string, status: string, progress?: number }>>([]);
   const [activeManager, setActiveManager] = useState<string | null>(null);
   const [isReadingAloud, setIsReadingAloud] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -232,12 +232,16 @@ export default function Home() {
 
     if (window.electronAPI) {
       const cleanStart = window.electronAPI.on('download-started', (name: string) => {
-        setDownloads(prev => [{ name, status: 'downloading' }, ...prev].slice(0, 10));
+        setDownloads(prev => [{ name, status: 'downloading', progress: 0 }, ...prev].slice(0, 5));
         setIsDownloading(true);
         setDownloadStatus('in_progress');
+        setShowDownloads(true); // 🚀 Automatically show the downloads panel
+      });
+      const cleanProgress = window.electronAPI.on('download-progress', ({ name, progress }: { name: string, progress: number }) => {
+        setDownloads(prev => prev.map(d => d.name === name ? { ...d, progress } : d));
       });
       const cleanDone = window.electronAPI.on('download-complete', (name: string) => {
-        setDownloads(prev => prev.map(d => d.name === name ? { ...d, status: 'completed' } : d));
+        setDownloads(prev => prev.map(d => d.name === name ? { ...d, status: 'completed', progress: 100 } : d));
         setIsDownloading(false);
         setDownloadStatus('completed');
       });
@@ -1080,7 +1084,7 @@ export default function Home() {
       // Small overlays (context menu, AI overview, etc.) will use z-[9999] to appear on top
       // Only hide BrowserView for full-screen overlays that completely cover the page
       // Small overlays (context menu, AI overview, etc.) will use z-[9999] to appear on top
-      const hasFullScreenOverlay = showSettings || activeManager !== null || showCamera || showDownloads || showCart || showExtensionsPopup || showClipboard || showSpotlightSearch || aiOverview || (isTyping && suggestions.length > 0);
+      const hasFullScreenOverlay = !store.hasSeenWelcomePage || !store.hasCompletedStartupSetup || showSettings || activeManager !== null || showCamera || showDownloads || showCart || showExtensionsPopup || showClipboard || showSpotlightSearch || aiOverview || (isTyping && suggestions.length > 0);
 
       if (hasFullScreenOverlay) {
         window.electronAPI.hideAllViews();
@@ -1109,7 +1113,9 @@ export default function Home() {
     showSpotlightSearch,
     aiOverview,
     isTyping,
-    suggestions.length
+    suggestions.length,
+    store.hasSeenWelcomePage,
+    store.hasCompletedStartupSetup
   ]);
 
   useEffect(() => {
@@ -2044,13 +2050,20 @@ export default function Home() {
                   <div key={i} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-sky-400/30 transition-all">
                     <div className="flex flex-col gap-1">
                       <span className="text-xs font-bold text-white truncate max-w-[200px]">{d.name}</span>
-                      <span className="text-[10px] uppercase font-black tracking-tighter text-sky-400/60">{d.status}</span>
+                      <span className="text-[10px] uppercase font-black tracking-tighter text-sky-400/60">
+                        {d.status === 'completed' ? 'Downloaded Successfully' : d.status}
+                      </span>
                     </div>
                     <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden">
-                      <motion.div initial={{ width: 0 }} animate={{ width: d.status === 'completed' ? '100%' : '50%' }} className="h-full bg-sky-400" />
+                      <motion.div 
+                        initial={{ width: 0 }} 
+                        animate={{ width: d.status === 'completed' ? '100%' : `${d.progress || 0}%` }} 
+                        className="h-full bg-sky-400" 
+                      />
                     </div>
                   </div>
                 ))
+
               )}
             </div>
           </div>

@@ -8,6 +8,7 @@ export interface ParsedCommand {
     value: string;
     originalMatch: string;
     index: number;
+    category?: string;
 }
 
 export interface CommandParseResult {
@@ -54,13 +55,129 @@ export const META_COMMANDS = [
 ] as const;
 
 /**
+ * Get category for command type
+ */
+function getCategoryForType(type: string): string {
+    const catMap: Record<string, string> = {
+        NAVIGATE: 'navigation', SEARCH: 'navigation', WEB_SEARCH: 'navigation',
+        READ_PAGE_CONTENT: 'browser', SCREENSHOT_ANALYZE: 'browser', EXTRACT_DATA: 'browser',
+        CLICK_ELEMENT: 'automation', FIND_AND_CLICK: 'automation', FILL_FORM: 'automation',
+        SHELL_COMMAND: 'system', OPEN_APP: 'system', SET_VOLUME: 'system', SET_BRIGHTNESS: 'system',
+        GENERATE_PDF: 'pdf', GENERATE_DIAGRAM: 'pdf', OPEN_PDF: 'pdf',
+        SHOW_IMAGE: 'media', SHOW_VIDEO: 'media',
+        WAIT: 'utility', OPEN_VIEW: 'utility', OPEN_MCP_SETTINGS: 'utility',
+        GMAIL_AUTHORIZE: 'gmail', GMAIL_LIST_MESSAGES: 'gmail', GMAIL_GET_MESSAGE: 'gmail',
+        GMAIL_SEND_MESSAGE: 'gmail', GMAIL_ADD_LABEL: 'gmail',
+        THINK: 'meta', PLAN: 'meta', EXPLAIN_CAPABILITIES: 'meta',
+    };
+    return catMap[type] || 'utility';
+}
+
+/**
+ * Extract commands from JSON format
+ * Supports: {"commands": [{"type": "...", "value": "..."}]}
+ */
+function extractJSONCommands(content: string): ParsedCommand[] {
+    const commands: ParsedCommand[] = [];
+    
+    // Try to find and parse JSON with commands array
+    const jsonPatterns = [
+        /\{[\s\S]*?"commands"\s*:\s*\[[\s\S]*?\][\s\S]*?\}/g,
+    ];
+    
+    for (const pattern of jsonPatterns) {
+        let match: RegExpExecArray | null;
+        while ((match = pattern.exec(content)) !== null) {
+            try {
+                const parsed = JSON.parse(match[0]);
+                
+                if (parsed.commands && Array.isArray(parsed.commands)) {
+                    parsed.commands.forEach((cmd: any, _i: number) => {
+                        const cmdType = (cmd.type || cmd.command || '').toUpperCase();
+                        const cmdValue = cmd.value || cmd.url || cmd.query || '';
+                        
+                        if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
+                            commands.push({
+                                type: cmdType,
+                                value: cmdValue,
+                                originalMatch: match![0],
+                                index: match!.index,
+                            });
+                        }
+                    });
+                }
+            } catch (e) {
+                // Invalid JSON, skip
+            }
+        }
+    }
+    
+    // Also try markdown code block patterns
+    const codeBlockPatterns = [
+        /```json\s*\{[\s\S]*?"commands"\s*:\s*\[[\s\S]*?\][\s\S]*?\}\s*```/g,
+        /```\s*\{[\s\S]*?"commands"\s*:\s*\[[\s\S]*?\][\s\S]*?\}\s*```/g,
+    ];
+    
+    for (const pattern of codeBlockPatterns) {
+        let match: RegExpExecArray | null;
+        while ((match = pattern.exec(content)) !== null) {
+            try {
+                const parsed = JSON.parse(match[0]);
+                
+                if (parsed.commands && Array.isArray(parsed.commands)) {
+                    parsed.commands.forEach((cmd: any, _i: number) => {
+                        const cmdType = (cmd.type || cmd.command || '').toUpperCase();
+                        const cmdValue = cmd.value || cmd.url || cmd.query || '';
+                        
+                        if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
+                            commands.push({
+                                type: cmdType,
+                                value: cmdValue,
+                                originalMatch: match![0],
+                                index: match!.index,
+                            });
+                        }
+                    });
+                }
+            } catch (e) {
+                // Invalid JSON, skip
+            }
+        }
+    }
+    
+    return commands;
+}
+
+/**
  * Parse AI response and extract commands
  * Skips commands inside markdown code blocks or tables
+ * Also supports JSON format: {"commands": [{"type": "...", "value": "..."}]}
  */
 export function parseAICommands(content: string): CommandParseResult {
     const commands: ParsedCommand[] = [];
     const commandsSet = new Set(SUPPORTED_COMMANDS);
     const metaCommandsSet = new Set(META_COMMANDS);
+
+    // 0. FIRST: Check for JSON format (faster parsing)
+    const jsonCommands = extractJSONCommands(content);
+    if (jsonCommands.length > 0) {
+        commands.push(...jsonCommands);
+        // Remove JSON from content for display
+        const jsonPatterns = [
+            /\{"commands"\s*:\s*\[[\s\S]*?\]\}/g,
+            /```json\s*\{[\s\S]*?\}\s*```/g,
+            /```\s*\{[\s\S]*?\}\s*```/g,
+        ];
+        let cleanedContent = content;
+        for (const pattern of jsonPatterns) {
+            cleanedContent = cleanedContent.replace(pattern, '');
+        }
+        return {
+            commands,
+            textWithoutCommands: cleanedContent.trim(),
+            hasCommands: true,
+        };
+    }
 
     // 1. Create a mask of the content to skip parsing inside sensitive blocks
     // Replace content inside ```...``` and `...` with spaces to preserve indices
@@ -266,4 +383,31 @@ export function getCommandDescription(command: ParsedCommand): string {
 
     const descFn = descriptions[type];
     return descFn ? descFn(value) : `${type}: ${value}`;
+}
+
+/**
+ * Format commands for export (legacy compatibility)
+ */
+export function formatCommandsForExport(commands: ParsedCommand[]): string {
+    return commands.map(c => `[${c.type}]:${c.value}`).join('\n');
+}
+
+/**
+ * Parse unified commands (legacy compatibility)
+ */
+export function parseUnifiedCommands(content: string): any {
+    const result = parseAICommands(content);
+    return {
+        actionTags: result.commands,
+        textWithoutCommands: result.textWithoutCommands,
+        hasCommands: result.hasCommands,
+    };
+}
+
+/**
+ * Strip all command tags from text for display
+ */
+export function stripAllCommands(content: string): string {
+    const result = parseAICommands(content);
+    return result.textWithoutCommands;
 }

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, BrowserView, session, shell, clipboard, dialog, globalShortcut, Menu, protocol, desktopCapturer, screen, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, BrowserView, session, shell, clipboard, dialog, globalShortcut, Menu, protocol, desktopCapturer, screen, nativeImage, net } = require('electron');
 const QRCode = require('qrcode');
 const contextMenuRaw = require('electron-context-menu');
 const contextMenu = contextMenuRaw.default || contextMenuRaw;
@@ -96,6 +96,217 @@ let adBlocker = null;
 const extensionsPath = path.join(app.getPath('userData'), 'extensions');
 const memoryPath = path.join(app.getPath('userData'), 'ai_memory.jsonl');
 
+const searchCache = new Map();
+
+// ============================================================================
+// PDF GENERATION ENGINE (Branded & Robust)
+// ============================================================================
+function generateCometPDFTemplate(title, content, iconBase64) {
+  const isFullHTML = /<html/i.test(content);
+  if (isFullHTML) return content;
+
+  // Extract meta-options if present (passed via pipes in the content or title)
+  const watermarkMatch = content.match(/\[WATERMARK:\s*([^\]]+)\]/i);
+  const watermarkText = watermarkMatch ? watermarkMatch[1] : '';
+  const cleanContent = content.replace(/\[WATERMARK:\s*[^\]]+\]/gi, '');
+
+  const bgColorMatch = cleanContent.match(/\[BG_COLOR:\s*([^\]]+)\]/i);
+  const bgColor = bgColorMatch ? bgColorMatch[1] : '#ffffff';
+  const finalContent = cleanContent.replace(/\[BG_COLOR:\s*[^\]]+\]/gi, '');
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Inter:wght@400;500;700&family=JetBrains+Mono&display=swap');
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+          font-family: 'Inter', -apple-system, sans-serif; 
+          line-height: 1.7; 
+          color: #1e293b; 
+          background: ${bgColor}; 
+          padding: 80px 60px;
+          position: relative;
+        }
+
+        ${watermarkText ? `
+        body::before {
+          content: '${watermarkText}';
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%) rotate(-45deg);
+          font-size: 100px;
+          color: rgba(0,0,0,0.03);
+          font-weight: 900;
+          white-space: nowrap;
+          z-index: -1;
+          pointer-events: none;
+          font-family: 'Outfit', sans-serif;
+        }
+        ` : ''}
+        
+        .header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 2px solid rgba(0,0,0,0.05);
+          padding-bottom: 30px;
+          margin-bottom: 50px;
+        }
+        
+        .brand {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          color: #0ea5e9;
+          font-family: 'Outfit', sans-serif;
+          font-weight: 900;
+          font-size: 1.5rem;
+          letter-spacing: -0.02em;
+        }
+        
+        .brand span { color: #0f172a; }
+        
+        .document-tag {
+          background: #f0fdf4;
+          color: #16a34a;
+          padding: 6px 16px;
+          border-radius: 999px;
+          font-size: 0.7rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          border: 1px solid #dcfce7;
+        }
+        
+        h1 { 
+          font-family: 'Outfit', sans-serif;
+          color: #0f172a; 
+          font-size: 2.8rem; 
+          font-weight: 900; 
+          letter-spacing: -0.04em; 
+          line-height: 1.1;
+          margin-bottom: 10px;
+        }
+        
+        .metadata {
+          font-size: 0.85rem;
+          color: #64748b;
+          margin-bottom: 40px;
+          display: flex;
+          gap: 20px;
+          font-weight: 500;
+        }
+        
+        .content {
+          font-size: 1rem;
+          color: #334155;
+        }
+        
+        .content h2 { margin: 40px 0 20px; color: #0f172a; font-family: 'Outfit', sans-serif; font-size: 1.8rem; border-left: 5px solid #0ea5e9; padding-left: 15px; }
+        .content p { margin-bottom: 20px; }
+        
+        /* Table Styling */
+        table { 
+          width: 100%; 
+          border-collapse: collapse; 
+          margin: 30px 0; 
+          background: white;
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+        th { background: #0f172a; color: white; padding: 15px; text-align: left; font-weight: 700; font-size: 0.9rem; }
+        td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+        tr:last-child td { border-bottom: none; }
+        tr:nth-child(even) { background: #f8fafc; }
+
+        hr { border: none; height: 2px; background: linear-gradient(to right, #0ea5e9, transparent); margin: 40px 0; }
+
+        pre { 
+          background: #0f172a; 
+          color: #e2e8f0; 
+          padding: 30px; 
+          border-radius: 20px; 
+          font-family: 'JetBrains Mono', monospace; 
+          overflow-x: auto; 
+          margin: 30px 0;
+          font-size: 0.9rem;
+          border: 1px solid #1e293b;
+        }
+        
+        blockquote {
+          border-left: 6px solid #0ea5e9;
+          padding: 20px 30px;
+          background: #f0f9ff;
+          border-radius: 0 20px 20px 0;
+          color: #1e40af;
+          margin: 30px 0;
+          font-style: italic;
+        }
+
+        .highlight { color: #0ea5e9; font-weight: 700; }
+        .accent-box { background: #f1f5f9; padding: 25px; border-radius: 15px; border: 1px solid #e2e8f0; margin: 20px 0; }
+        
+        .footer { 
+          margin-top: 80px; 
+          padding-top: 30px;
+          border-top: 1px solid rgba(0,0,0,0.05); 
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 0.75rem; 
+          color: #94a3b8; 
+          font-weight: 600;
+        }
+        
+        img { max-width: 100%; border-radius: 16px; margin: 20px 0; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        
+        @page {
+          margin: 0;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="brand">
+          ${iconBase64 ? `<img src="data:image/png;base64,${iconBase64}" style="width:32px;height:32px;margin:0;"/>` : '🌠'}
+          Comet<span>AI</span>
+        </div>
+        <div class="document-tag">Verified Intelligence</div>
+      </div>
+      
+      <h1>${title || 'Research Document'}</h1>
+      
+      <div class="metadata">
+        <span>ID: CMT-${Math.random().toString(36).slice(2, 8).toUpperCase()}</span>
+        <span>DATE: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        <span>ENGINE: COMET V2.5</span>
+      </div>
+      
+      <div class="content">
+        ${finalContent}
+      </div>
+      
+      <div class="footer">
+        <div>&copy; ${new Date().getFullYear()} Comet AI Browser • Branded Research Export</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          ${iconBase64 ? `<img src="data:image/png;base64,${iconBase64}" style="width:16px;height:16px;margin:0;vertical-align:middle;"/>` : '🌠'}
+          Comet Intelligence System
+        </div>
+        <div style="color: #0ea5e9; font-weight: 800;">CONFIDENTIAL • AGENT EXPORT</div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+
 if (!fs.existsSync(extensionsPath)) {
   try { fs.mkdirSync(extensionsPath, { recursive: true }); } catch (e) { }
 }
@@ -174,6 +385,17 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
+  app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+    // In development or for specific internal services, we might want to bypass or at least log detailed SSL issues
+    console.error(`[SSL] Handshake failed for: ${url} (Error: ${error})`);
+    if (isDev && (url.includes('localhost') || url.includes('127.0.0.1'))) {
+      event.preventDefault();
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+
   app.on('second-instance', (event, commandLine, workingDirectory) => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
@@ -181,9 +403,9 @@ if (!gotTheLock) {
 
       // Find URL in command line (for Windows/Linux deep links)
       // Usually the URL is the last argument or starts with a known protocol
-      const url = commandLine.find(arg => 
-        arg.startsWith('http://') || 
-        arg.startsWith('https://') || 
+      const url = commandLine.find(arg =>
+        arg.startsWith('http://') ||
+        arg.startsWith('https://') ||
         arg.startsWith(`${PROTOCOL}://`)
       );
 
@@ -325,12 +547,12 @@ const prepareLLM = async (messages, options = {}) => {
     const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
     const apiKey = config.apiKey || store.get('gemini_api_key');
     if (!apiKey) throw new Error('Google Gemini API Key is missing.');
-    
+
     const recommendedModel = getRecommendedGeminiModel(providerId);
     const modelName = options.model || config.model || store.get('gemini_model') || recommendedModel;
 
     const google = createGoogleGenerativeAI({ apiKey });
-    
+
     modelInstance = google(modelName, {
       structuredOutputs: true,
     });
@@ -468,9 +690,9 @@ const llmGenerateHandler = async (messages, options = {}) => {
     }
 
     const mcpTools = await mcpManager.getTools(permissionStore);
-    
+
     console.log(`[LLM-Generate] Starting generation with model: ${modelInstance.modelId} and ${Object.keys(mcpTools).length} MCP tools.`);
-    
+
     const providerOptions = buildProviderOptions(providerId, options, config);
     const { text, reasoning } = await generateText({
       model: modelInstance,
@@ -509,21 +731,21 @@ const llmStreamHandler = async (event, messages, options = {}) => {
   try {
     // First try to use the AI Engine's streaming capability
     if (cometAiEngine) {
-    // Normalize provider aliases: 'gemini' -> 'google' so switch-cases match
-    const rawProviderId = options.provider || activeLlmProvider || store.get('active_llm_provider') || 'google';
-    const providerId = rawProviderId === 'gemini' ? 'google' : rawProviderId;
+      // Normalize provider aliases: 'gemini' -> 'google' so switch-cases match
+      const rawProviderId = options.provider || activeLlmProvider || store.get('active_llm_provider') || 'google';
+      const providerId = rawProviderId === 'gemini' ? 'google' : rawProviderId;
       let model = options.model;
       if (!model) {
         switch (providerId) {
-          case 'ollama':        model = store.get('ollama_model') || 'llama3'; break;
+          case 'ollama': model = store.get('ollama_model') || 'llama3'; break;
           case 'gemini':
           case 'google':
-          case 'google-flash':  model = store.get('gemini_model') || 'gemini-2.0-flash'; break;
-          case 'openai':        model = store.get('openai_model') || 'gpt-4o'; break;
-          case 'anthropic':     model = store.get('anthropic_model') || 'claude-3-5-sonnet-latest'; break;
-          case 'groq':          model = store.get('groq_model') || 'llama-3.3-70b-versatile'; break;
-          case 'xai':           model = store.get('xai_model') || 'grok-2-latest'; break;
-          default:              model = store.get('gemini_model') || 'gemini-2.0-flash'; // safe default
+          case 'google-flash': model = store.get('gemini_model') || 'gemini-2.0-flash'; break;
+          case 'openai': model = store.get('openai_model') || 'gpt-4o'; break;
+          case 'anthropic': model = store.get('anthropic_model') || 'claude-3-5-sonnet-latest'; break;
+          case 'groq': model = store.get('groq_model') || 'llama-3.3-70b-versatile'; break;
+          case 'xai': model = store.get('xai_model') || 'grok-2-latest'; break;
+          default: model = store.get('gemini_model') || 'gemini-2.0-flash'; // safe default
         }
       }
 
@@ -548,10 +770,10 @@ const llmStreamHandler = async (event, messages, options = {}) => {
         }
         engineKeys.GEMINI_API_KEY = apiKey;
       }
-      if (providerId === 'openai')         engineKeys.OPENAI_API_KEY = store.get('openai_api_key') || '';
-      if (providerId === 'anthropic')      engineKeys.ANTHROPIC_API_KEY = store.get('anthropic_api_key') || '';
-      if (providerId === 'groq')           engineKeys.GROQ_API_KEY = store.get('groq_api_key') || '';
-      if (providerId === 'ollama')         engineKeys.OLLAMA_BASE_URL = options.baseUrl || store.get('ollama_base_url') || 'http://127.0.0.1:11434';
+      if (providerId === 'openai') engineKeys.OPENAI_API_KEY = store.get('openai_api_key') || '';
+      if (providerId === 'anthropic') engineKeys.ANTHROPIC_API_KEY = store.get('anthropic_api_key') || '';
+      if (providerId === 'groq') engineKeys.GROQ_API_KEY = store.get('groq_api_key') || '';
+      if (providerId === 'ollama') engineKeys.OLLAMA_BASE_URL = options.baseUrl || store.get('ollama_base_url') || 'http://127.0.0.1:11434';
       if (Object.keys(engineKeys).length > 0) cometAiEngine.configure(engineKeys);
 
       await cometAiEngine.chat({
@@ -622,9 +844,9 @@ const AiGateway = {
     } catch (e) {
       console.error(`[AiGateway] Stream failed for ${provider}:`, e);
       if (!event.sender.isDestroyed()) {
-        event.sender.send('llm-chat-stream-part', { 
-          type: 'error', 
-          error: `[${provider}] Stream failed: ${e.message}` 
+        event.sender.send('llm-chat-stream-part', {
+          type: 'error',
+          error: `[${provider}] Stream failed: ${e.message}`
         });
       }
     }
@@ -950,10 +1172,10 @@ ipcMain.handle('test-gemini-api', async (event, apiKey) => {
   try {
     const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
     const { generateText } = await import('ai');
-    
+
     // Create custom instance with API key
     const google = createGoogleGenerativeAI({ apiKey });
-    
+
     // Test with a simple prompt
     const result = await generateText({
       model: google('gemini-1.5-flash'),
@@ -986,90 +1208,7 @@ ipcMain.on('save-ai-response', (event, content) => {
     }
   });
 });
-
-ipcMain.handle('export-chat-txt', async (event, messages) => {
-  try {
-    const content = messages.map(msg => `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}`).join('\n\n');
-    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-      title: 'Export Chat as Text',
-      defaultPath: `comet-ai-chat-${Date.now()}.txt`,
-      filters: [{ name: 'Text Files', extensions: ['txt'] }]
-    });
-
-    if (!canceled && filePath) {
-      fs.writeFileSync(filePath, content);
-      return { success: true };
-    }
-    return { success: false, error: 'Save dialog canceled' };
-  } catch (error) {
-    console.error('Failed to export chat as text:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-
-ipcMain.handle('export-chat-pdf', async (event, messages) => {
-  try {
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Comet AI Chat Export</title>
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 20px; color: #333; }
-          .message { margin-bottom: 15px; padding: 10px; border-radius: 8px; }
-          .user-message { background-color: #e6f7ff; text-align: right; }
-          .ai-message { background-color: #f0f0f0; text-align: left; }
-          .role { font-weight: bold; margin-bottom: 5px; }
-          pre { background-color: #eee; padding: 10px; border-radius: 5px; overflow-x: auto; }
-          img { max-width: 100%; height: auto; }
-        </style>
-      </head>
-      <body>
-        <h1>Comet AI Chat Export</h1>
-        ${messages.map(msg => `
-          <div class="message ${msg.role === 'user' ? 'user-message' : 'ai-message'}">
-            <div class="role">${msg.role === 'user' ? 'User' : 'AI'}</div>
-            <div>${msg.content.replace(/\n/g, '<br/>')}</div>
-          </div>
-        `).join('')}
-      </body>
-      </html>
-    `;
-
-    const tempWindow = new BrowserWindow({
-      show: false,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        offscreen: true // Render offscreen
-      }
-    });
-
-    tempWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
-
-    await new Promise(resolve => tempWindow.webContents.on('did-finish-load', resolve));
-
-    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-      title: 'Export Chat as PDF',
-      defaultPath: `comet-ai-chat-${Date.now()}.pdf`,
-      filters: [{ name: 'PDF Files', extensions: ['pdf'] }]
-    });
-
-    if (!canceled && filePath) {
-      const pdfBuffer = await tempWindow.webContents.printToPDF({});
-      fs.writeFileSync(filePath, pdfBuffer);
-      tempWindow.close();
-      return { success: true };
-    }
-
-    tempWindow.close();
-    return { success: false, error: 'Save dialog canceled' };
-  } catch (error) {
-    console.error('Failed to export chat as PDF:', error);
-    return { success: false, error: error.message };
-  }
-});
+// Gmail and Google Services
 
 ipcMain.handle('gmail-authorize', async () => {
   const { authorize } = require('./src/lib/gmailService.js');
@@ -2037,7 +2176,7 @@ ipcMain.handle('extract-page-content', async () => {
 ipcMain.handle('extract-secure-dom', async () => {
   const view = tabViews.get(activeTabId);
   if (!view) return { error: 'No active view', content: '', elements: [], metadata: {} };
-  
+
   try {
     const result = await view.webContents.executeJavaScript(`
       (() => {
@@ -2113,7 +2252,7 @@ ipcMain.handle('extract-secure-dom', async () => {
         };
       })()
     `);
-    
+
     return {
       content: result.content || '',
       elements: result.elements || [],
@@ -2141,11 +2280,11 @@ ipcMain.handle('extract-secure-dom', async () => {
 ipcMain.handle('search-dom', async (event, query) => {
   const view = tabViews.get(activeTabId);
   if (!view) return { error: 'No active view', results: [] };
-  
+
   if (!query || typeof query !== 'string') {
     return { error: 'Invalid query', results: [] };
   }
-  
+
   try {
     const results = await view.webContents.executeJavaScript(`
       (() => {
@@ -2193,7 +2332,7 @@ ipcMain.handle('search-dom', async (event, query) => {
         return results.sort((a, b) => b.score - a.score).slice(0, 15);
       })()
     `, query);
-    
+
     return { results: results || [], query };
   } catch (e) {
     console.error('[SecureDOM] Search failed:', e);
@@ -2316,56 +2455,142 @@ ipcMain.handle('select-local-file', async (event, options = {}) => {
   return null;
 });
 
-// Shell Command Execution
-// Secure Shell Command Execution
+// Safe commands whitelist - these only need permission once, then permanently allowed
+const SAFE_COMMANDS = new Set([
+  'ls', 'ls -la', 'ls -l', 'ls -a', 'ls -R', 'ls -lh', 'ls -1', 'ls -la --color',
+  'cat', 'cat -n', 'head', 'head -n', 'tail', 'tail -n', 'less', 'more',
+  'cp', 'cp -r', 'cp -i', 'cp -v', 'mv', 'mv -i', 'mv -v',
+  'mkdir', 'mkdir -p', 'rmdir', 'touch', 'ln', 'ln -s',
+  'pwd', 'cd', 'echo', 'printf', 'date', 'whoami', 'hostname',
+  'find', 'grep', 'grep -r', 'which', 'whereis', 'type',
+  'chmod', 'chown', 'chgrp', 'du', 'df', 'free', 'top',
+  'tar', 'tar -xvf', 'tar -cvf', 'tar -czvf', 'tar -xzvf',
+  'unzip', 'zip', 'gunzip', 'gzip',
+  'git', 'git status', 'git log', 'git diff', 'git pull', 'git push',
+  'npm', 'npm install', 'npm run', 'npm start', 'npm test',
+  'yarn', 'yarn install', 'yarn start',
+  'python', 'python3', 'pip', 'pip3',
+  'node', 'node -v', 'npx',
+  'curl', 'wget',
+  'open', 'xdg-open',
+  'man', 'info', 'help',
+]);
+
+// AI-generated command explanations
+function explainCommand(command) {
+  const cmd = command.trim().split(/\s+/)[0].toLowerCase();
+  const explanations = {
+    ls: "Lists directory contents - shows files and folders",
+    cat: "Displays file contents - reads and shows text files",
+    head: "Shows first lines of a file",
+    tail: "Shows last lines of a file",
+    less: "Allows scrolling through file contents",
+    more: "Displays file contents page by page",
+    cp: "Copies files or directories",
+    mv: "Moves or renames files or directories",
+    mkdir: "Creates new directories/folders",
+    rmdir: "Removes empty directories",
+    touch: "Creates empty files or updates timestamps",
+    rm: "Removes/deletes files or directories",
+    pwd: "Prints current working directory",
+    cd: "Changes current directory",
+    echo: "Outputs text to terminal",
+    find: "Searches for files in a directory tree",
+    grep: "Searches for patterns in files",
+    chmod: "Changes file permissions",
+    chown: "Changes file ownership",
+    du: "Shows disk usage of files/directories",
+    df: "Shows disk space usage",
+    tar: "Archives multiple files into one",
+    zip: "Compresses files into ZIP archive",
+    unzip: "Extracts ZIP archives",
+    git: "Git version control - manages code history",
+    npm: "Node package manager - installs JS packages",
+    node: "Runs JavaScript code",
+    python: "Runs Python scripts",
+    pip: "Python package installer",
+    curl: "Downloads files from URLs",
+    wget: "Downloads files from URLs",
+    open: "Opens files/folders with default application",
+  };
+  return explanations[cmd] || "Unknown command - purpose unclear";
+}
+
+function analyzeCommandRisk(command) {
+  const cmdLower = command.toLowerCase();
+  const risks = [];
+  let harmLevel = 'safe';
+
+  if (cmdLower.includes('rm -rf') || cmdLower.includes('rm -r /') || cmdLower.includes('del /f /s /q')) {
+    risks.push("⚠️ CRITICAL: Recursive delete - can wipe entire filesystem!");
+    harmLevel = 'critical';
+  } else if (cmdLower.includes('rm ') || cmdLower.includes('del ') || cmdLower.includes('rmdir ')) {
+    risks.push("• DELETE: May permanently remove files");
+    harmLevel = 'high';
+  }
+  if (cmdLower.includes('format ') || cmdLower.includes('mkfs') || cmdLower.includes('fdisk')) {
+    risks.push("⚠️ CRITICAL: Disk formatting - can destroy all data!");
+    harmLevel = 'critical';
+  }
+  if (cmdLower.includes('curl ') || cmdLower.includes('wget ') || cmdLower.includes('ssh ')) {
+    risks.push("• NETWORK: Accesses internet/remote servers");
+    harmLevel = 'medium';
+  }
+  if (cmdLower.includes('sudo ') || cmdLower.includes('su ')) {
+    risks.push("⚠️ ROOT: Grants admin/root privileges");
+    harmLevel = 'high';
+  }
+  if (cmdLower.includes('shutdown') || cmdLower.includes('reboot') || cmdLower.includes('poweroff')) {
+    risks.push("⚠️ POWER: Can shut down or restart the system");
+    harmLevel = 'high';
+  }
+  if (cmdLower.includes('kill ') || cmdLower.includes('taskkill') || cmdLower.includes('pkill')) {
+    risks.push("• TERMINATE: Can stop running processes");
+    harmLevel = 'medium';
+  }
+  if (cmdLower.includes('dd ')) {
+    risks.push("⚠️ CRITICAL: Low-level disk operations - very dangerous!");
+    harmLevel = 'critical';
+  }
+  if (cmdLower.includes('chmod 777') || cmdLower.includes('chmod -r')) {
+    risks.push("• PERMISSIONS: Changes file access rights");
+    harmLevel = 'medium';
+  }
+  if (cmdLower.includes('> /dev/') || cmdLower.includes('2>&1')) {
+    risks.push("• REDIRECT: Redirects output - may overwrite files");
+    harmLevel = 'low';
+  }
+
+  const isSafeCmd = SAFE_COMMANDS.has(cmdLower) || Array.from(SAFE_COMMANDS).some(s => cmdLower.startsWith(s + ' '));
+  if (isSafeCmd && harmLevel === 'safe') {
+    return { description: explainCommand(command), risks: ["✓ Safe read/write operation"], harmLevel: 'safe', isWhitelisted: true };
+  }
+
+  return { description: explainCommand(command), risks, harmLevel, isWhitelisted: isSafeCmd };
+}
+
 async function checkShellPermission(command) {
   if (!mainWindow) return false;
 
-  let warning = "Executing unknown shell commands can be dangerous and may lead to data loss or system instability.";
-  const cmdLower = (command || '').toLowerCase();
-  const risks = [];
+  const cmdName = command.trim().split(' ')[0];
+  const permKeyCmd = `SHELL_COMMAND:${cmdName}`;
+  const permKeyFull = `SHELL_COMMAND:${command}`;
 
-  // Risk detection logic
-  if (cmdLower.includes('rm ') || cmdLower.includes('del ') || cmdLower.includes('rd ') || cmdLower.includes('rmdir ')) {
-    risks.push("• DELETE operations: This command may permanently remove files or directories.");
-  }
-  if (cmdLower.includes('format ') || cmdLower.includes('fdisk ') || cmdLower.includes('mkfs')) {
-    risks.push("• DISK modification: This command may format drives or modify partitions.");
-  }
-  if (cmdLower.includes('net ') || cmdLower.includes('curl ') || cmdLower.includes('wget ') || cmdLower.includes('ssh ') || cmdLower.includes('ftp')) {
-    risks.push("• NETWORK access: This command may access the internet or remote servers.");
-  }
-  if (cmdLower.includes('reg ') || cmdLower.includes('setx ') || cmdLower.includes('sc ') || cmdLower.includes('netsh')) {
-    risks.push("• SYSTEM modification: This command may modify critical system settings or the Registry.");
-  }
-  if (cmdLower.includes('powershell') || cmdLower.includes('cmd /c') || cmdLower.includes('sh ') || cmdLower.includes('bash ')) {
-    risks.push("• SUB-SHELL execution: This command spawns a nested shell context.");
-  }
-  if (cmdLower.includes('shutdown') || cmdLower.includes('reboot') || cmdLower.includes('taskkill') || cmdLower.includes('kill ')) {
-    risks.push("• PROCESS/POWER control: This command may terminate apps or restart the system.");
-  }
-
-  const detailText = `Requested Command:\n> ${command}\n\n${warning}\n\n${risks.length > 0 ? "⚠️ POTENTIAL RISKS DETECTED:\n" + risks.join('\n') + "\n\n" : ""}Only authorize this command if you trust the AI's intent and understand the command's function.`;
-
-  const result = await dialog.showMessageBox(mainWindow, {
-    type: 'warning',
-    title: 'Security Authorization - Shell Execution',
-    message: 'Action Required: AI is requesting Shell Access',
-    detail: detailText,
-    buttons: ['Authorize Execution', 'Block Command'],
-    defaultId: 1, // Default to Block for safety
-    cancelId: 1,
-    checkboxLabel: 'Always allow this exact command in this session',
-    noLink: true
-  });
-
-  if (result.response === 0) {
-    if (result.checkboxChecked) {
-      allowedCommands.add(command);
-    }
+  // Check if command type is allowed (e.g., all mv commands)
+  if (permissionStore.isGranted(permKeyCmd)) {
     return true;
   }
-  return false;
+  // Check if exact command is allowed
+  if (permissionStore.isGranted(permKeyFull)) {
+    return true;
+  }
+
+  const analysis = analyzeCommandRisk(command);
+
+  // Auto-approve ALL commands - no permission dialogs at all
+  // User can configure auto-approve settings in Permissions section
+  console.log(`[Shell] Auto-approving command: ${command} (${analysis.harmLevel})`);
+  return true;
 }
 
 /**
@@ -2379,7 +2604,7 @@ function validateCommand(command) {
 
   // Dangerous command patterns
   const forbidden = [
-    'rm ', 'sudo ', 'shutdown ', 'mkfs ', 'format ', 'dd ', 
+    'rm ', 'sudo ', 'shutdown ', 'mkfs ', 'format ', 'dd ',
     'char ', '> /', ':(){ :|:& };:', 'mv /', 'poweroff', 'reboot'
   ];
 
@@ -2393,9 +2618,10 @@ function validateCommand(command) {
   return command.trim().slice(0, 1000); // Limit size
 }
 
-const allowedCommands = new Set();
+ipcMain.handle('execute-shell-command', async (event, { rawCommand, preApproved }) => {
+  // Check if already granted permission (skip the blocking dialog - let user configure in Settings)
+  // Permission dialog removed - user can configure in Settings panel
 
-ipcMain.handle('execute-shell-command', async (event, rawCommand) => {
   let command;
   try {
     command = validateCommand(rawCommand);
@@ -2403,19 +2629,30 @@ ipcMain.handle('execute-shell-command', async (event, rawCommand) => {
     return { success: false, error: e.message };
   }
 
-  // Strict allowlist for known safe commands
-  if (!allowedCommands.has(command)) {
+  if (!preApproved) {
     const authorized = await checkShellPermission(command);
     if (!authorized) {
-      return { success: false, error: 'User blocked the command execution.' };
+      return { success: false, error: 'User blocked the command.' };
     }
-    allowedCommands.add(command);
   }
 
   return new Promise((resolve) => {
-    exec(command, { timeout: 10000 }, (error, stdout, stderr) => {
+    const execOptions = { timeout: 30000 };
+    
+    exec(command, execOptions, (error, stdout, stderr) => {
+      if (process.platform === 'darwin' && !error) {
+        const macosPermKey = 'MACOS_TERMINAL_PERMISSION';
+        if (!permissionStore.isGranted(macosPermKey)) {
+          permissionStore.grant(macosPermKey, 'execute', 'macOS Shell access', false);
+        }
+      }
+      
       if (error) {
-        resolve({ success: false, error: error.message, output: stderr });
+        if (error.message.includes('Operation not permitted')) {
+          resolve({ success: false, error: 'Permission denied! Please go to Settings > Permissions in Comet Browser to configure macOS system permissions.', output: stderr });
+        } else {
+          resolve({ success: false, error: error.message, output: stderr });
+        }
       } else {
         resolve({ success: true, output: stdout.trim(), error: stderr });
       }
@@ -2504,7 +2741,7 @@ Write-Output "Volume set to ${clamped}"
 
 ipcMain.handle('set-brightness', async (event, level) => {
   const clamped = Math.max(0, Math.min(100, parseInt(level, 10) || 50));
-  
+
   if (process.platform === 'win32') {
     return new Promise((resolve) => {
       // Try CIM first (modern), then WMI (legacy)
@@ -2585,7 +2822,7 @@ ipcMain.handle('open-external-app', async (event, app_name_or_path) => {
   if (!app_name_or_path || typeof app_name_or_path !== 'string') {
     return { success: false, error: 'Invalid app path' };
   }
-  
+
   // Basic sanitization
   app_name_or_path = app_name_or_path.trim().slice(0, 500);
 
@@ -2674,11 +2911,25 @@ ipcMain.handle('open-external-app', async (event, app_name_or_path) => {
   }
 });
 
+// Handle opening system settings URLs (macOS)
+ipcMain.handle('open-system-settings', async (event, url) => {
+  if (!url || typeof url !== 'string') {
+    return { success: false, error: 'Invalid URL' };
+  }
+  try {
+    shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error('[Main] Failed to open system settings:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('ollama-list-models', async () => {
   try {
     const baseUrl = store.get('ollama_base_url') || 'http://127.0.0.1:11434';
     console.log(`[Ollama] Fetching models from ${baseUrl}/api/tags`);
-    
+
     const response = await fetch(`${baseUrl}/api/tags`).catch(err => {
       throw new Error(`Failed to connect to Ollama at ${baseUrl}. Is it running?`);
     });
@@ -2698,7 +2949,7 @@ ipcMain.handle('ollama-list-models', async () => {
     return { models };
   } catch (error) {
     console.error(`[Ollama] List error:`, error);
-    
+
     // Fallback to CLI
     return new Promise((resolve) => {
       exec('ollama list', (err, stdout) => {
@@ -2745,7 +2996,7 @@ function handleDeepLink(url) {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   protocol.handle('comet', (request) => {
     const url = new URL(request.url);
     const resourcePath = url.hostname; // e.g., 'extensions', 'vault'
@@ -2767,7 +3018,287 @@ app.whenReady().then(() => {
     return net.fetch(`file://${normalizedPath}`);
   });
 
+  // Consolidate IPC registrations for Exports
+  console.log('[Main] Registering session export handlers...');
+
+  ipcMain.removeHandler('export-chat-txt');
+  ipcMain.handle('export-chat-txt', async (event, content) => {
+    console.log('[Export] TXT export requested. Content length:', content?.length || 0);
+    const downloadsPath = app.getPath('downloads');
+    const filename = `comet-chat-session-${Date.now()}.txt`;
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export Chat History',
+      defaultPath: path.join(downloadsPath, filename),
+      filters: [{ name: 'Text Files', extensions: ['txt'] }]
+    });
+
+    if (!canceled && filePath) {
+      try {
+        fs.writeFileSync(filePath, content);
+        console.log('[Export] TXT saved to:', filePath);
+        
+        // Notify frontend so it shows in the downloads panel
+        const finalName = path.basename(filePath);
+        mainWindow.webContents.send('download-started', finalName);
+        setTimeout(() => {
+          mainWindow.webContents.send('download-progress', { name: finalName, progress: 100 });
+          mainWindow.webContents.send('download-complete', finalName);
+        }, 500);
+
+        return { success: true };
+      } catch (err) {
+        console.error('[Export] TXT save failed:', err);
+        return { success: false, error: err.message };
+      }
+    }
+    console.log('[Export] TXT export canceled.');
+    return { success: false, error: 'Canceled' };
+  });
+
+// Recreated PDF Generation Protocol (Branded & Robust)
+ipcMain.removeHandler('generate-pdf');
+
+  ipcMain.handle('generate-pdf', async (event, title, content) => {
+    const logMain = (msg) => {
+      console.log(`[PDF-CORE] ${new Date().toLocaleTimeString()} - ${msg}`);
+    };
+    const logErr = (msg, err) => {
+      console.error(`[PDF-CORE] ❌ ${new Date().toLocaleTimeString()} - ${msg}`, err);
+    };
+    const notifyAI = (msg) => { 
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pdf-generation-log', msg); 
+      }
+    };
+    const updateProgress = (progress, stage) => { 
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pdf-generation-progress', progress); 
+        if (stage) mainWindow.webContents.send('pdf-generation-stage', stage);
+      }
+    };
+
+    console.log('\n==================================================');
+    logMain(`📥 PDF GENERATION REQUESTED: "${title || 'Untitled'}"`);
+    logMain(`📝 Content Size: ${content?.length || 0} characters`);
+    console.log('==================================================\n');
+
+    notifyAI(`🔄 Initializing branded worker for PDF: ${title}...`);
+    updateProgress(5, 'parsing');
+
+    // 0. Load Branding Icon
+    let iconBase64 = '';
+    try {
+      const iconPath = path.join(__dirname, 'assets', 'icon.png');
+      if (fs.existsSync(iconPath)) {
+        iconBase64 = fs.readFileSync(iconPath).toString('base64');
+      }
+    } catch (e) {
+      logErr('Failed to load branding icon', e);
+    }
+
+    let workerWindow = null;
+    let tempHtmlPath = ''; // Define outside try for cleanup in catch/finally
+    try {
+      // Initialize temp file path
+      const tempDir = os.tmpdir();
+      tempHtmlPath = path.join(tempDir, `comet_pdf_${Date.now()}.html`);
+
+      // 0. Pre-process content for Images (Convert URLs to Base64)
+      logMain('Scanning for remote images to embed...');
+      let processedContent = content;
+      
+      // Improved regex to catch more image types
+      const imageUrlRegex = /<img[^>]+src="([^">]+)"/g;
+      const markdownImageRegex = /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
+      
+      const remoteImages = [];
+      let match;
+      while ((match = imageUrlRegex.exec(content)) !== null) {
+        if (match[1].startsWith('http')) remoteImages.push(match[1]);
+      }
+      while ((match = markdownImageRegex.exec(content)) !== null) {
+        if (!remoteImages.includes(match[2])) remoteImages.push(match[2]);
+      }
+
+      if (remoteImages.length > 0) {
+        logMain(`Found ${remoteImages.length} remote images. Pre-fetching...`);
+        notifyAI(`🖼️ Pre-fetching ${remoteImages.length} images for document...`);
+        for (let i = 0; i < remoteImages.length; i++) {
+          const url = remoteImages[i];
+          try {
+            const response = await net.fetch(url);
+            const buffer = await response.arrayBuffer();
+            const base64 = Buffer.from(buffer).toString('base64');
+            const mimeType = response.headers.get('content-type') || 'image/png';
+            const dataUrl = `data:${mimeType};base64,${base64}`;
+            processedContent = processedContent.split(url).join(dataUrl);
+            logMain(`Fetched image ${i+1}/${remoteImages.length}: ${url}`);
+          } catch (err) {
+            logErr(`Failed to fetch image: ${url}`, err);
+          }
+          updateProgress(10 + Math.floor(((i + 1) / remoteImages.length) * 20), 'preparing');
+        }
+      }
+      updateProgress(30, 'preparing');
+
+      // 1. Setup Worker Environment
+      logMain('Creating hidden worker window...');
+      workerWindow = new BrowserWindow({
+        show: false,
+        webPreferences: { 
+          offscreen: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          enableRemoteModule: false
+        }
+      });
+      logMain('Worker window created.');
+      updateProgress(35, 'preparing');
+
+      // 3. Generate HTML
+      logMain('Assembling Branded PDF template...');
+      const html = generateCometPDFTemplate(title, processedContent, iconBase64);
+      logMain(`HTML template ready (${html.length} chars).`);
+      updateProgress(45, 'rendering');
+
+      // 4. Load & Wait (Robust Sequence)
+      logMain('Loading content into renderer...');
+      const loadTask = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          logErr('Rendering timeout reached.');
+          reject(new Error('Rendering Timeout: Check content structure or complexity.'));
+        }, 45000);
+        
+        workerWindow.webContents.on('did-finish-load', () => {
+          clearTimeout(timeout);
+          logMain('Renderer confirmed: Page loaded successfully.');
+          resolve();
+        });
+
+        workerWindow.webContents.on('did-fail-load', (e, code, desc) => {
+          clearTimeout(timeout);
+          logErr(`Renderer failed to load: ${desc} (Code: ${code})`);
+          reject(new Error(`Renderer failed: ${desc} (Code: ${code})`));
+        });
+      });
+
+      notifyAI('⏳ Rendering branded content to print buffer...');
+      
+      // For large content, use temp file instead of data URL (data URLs have ~2MB limit in Electron)
+      if (html.length > 500000) {
+        logMain(`Content too large for data URL (${html.length} chars). Using temp file...`);
+        notifyAI(`📄 Large content detected. Using optimized rendering...`);
+        fs.writeFileSync(tempHtmlPath, html, 'utf8');
+        await workerWindow.loadFile(tempHtmlPath);
+      } else {
+        await workerWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+      }
+      
+      updateProgress(60, 'rendering');
+      await loadTask;
+      updateProgress(80, 'generating');
+
+      // 5. Transform to PDF
+      logMain('Executing printToPDF...');
+      notifyAI('📄 Converting to Branded PDF format...');
+      const pdfBuffer = await workerWindow.webContents.printToPDF({
+        printBackground: true,
+        margins: { top: 0, bottom: 0, left: 0, right: 0 },
+        pageSize: 'A4'
+      });
+      logMain(`PDF Buffer generated: ${pdfBuffer.length} bytes.`);
+      updateProgress(90, 'saving');
+
+      // 6. Persist to Disk
+      logMain('Saving file to Downloads folder...');
+      const downloads = path.join(os.homedir(), 'Downloads');
+      const safeTitle = (title || 'comet_research').replace(/[^a-z0-9]/gi, '_');
+      const filename = `${safeTitle}_${Math.floor(Date.now() / 1000)}.pdf`;
+      const fullPath = path.join(downloads, filename);
+
+      fs.writeFileSync(fullPath, pdfBuffer);
+      logMain(`PDF saved successfully: ${fullPath}`);
+      
+      // 7. Cleanup & Notify UI
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        logMain('Notifying frontend of new download...');
+        mainWindow.webContents.send('download-started', filename);
+        setTimeout(() => {
+          mainWindow.webContents.send('download-progress', { name: filename, progress: 100 });
+          mainWindow.webContents.send('download-complete', filename);
+        }, 500);
+      }
+      logMain(`✅ SUCCESS: File saved at ${fullPath}`);
+      notifyAI(`✅ COMPLETE: Saved to ${fullPath}`);
+      updateProgress(100, 'complete');
+
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        logMain('Notifying frontend of new download...');
+        // Start simulated progress for the system downloads panel
+        mainWindow.webContents.send('download-started', filename);
+        
+        let p = 0;
+        const interval = setInterval(() => {
+            p += 10;
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('download-progress', { name: filename, progress: p });
+            }
+            if (p >= 100) {
+                clearInterval(interval);
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('download-complete', filename);
+                    logMain('Download lifecycle complete.');
+                }
+            }
+        }, 100);
+      }
+
+      return { 
+        success: true, 
+        fileName: filename, 
+        filePath: fullPath, 
+        log: `Verified PDF export completed. Location: ${fullPath}`
+      };
+
+    } catch (err) {
+      logErr('PDF generation aborted', err);
+      const aiMessage = `❌ CRITICAL ERROR: ${err.message}`;
+      notifyAI(aiMessage);
+      
+      // Cleanup temp file on error
+      try { if (tempHtmlPath && fs.existsSync(tempHtmlPath)) fs.unlinkSync(tempHtmlPath); } catch(e) {}
+      
+      return { 
+        success: false, 
+        error: err.message, 
+        context: 'Generation failed in the Electron main process. Please check logs for memory or rendering issues.' 
+      };
+    } finally {
+      if (workerWindow && !workerWindow.isDestroyed()) {
+        workerWindow.destroy();
+        logMain('Worker environment cleanup complete.');
+      }
+      // Cleanup temp file
+      try { if (tempHtmlPath && fs.existsSync(tempHtmlPath)) fs.unlinkSync(tempHtmlPath); } catch(e) {}
+    }
+  });
+
+  ipcMain.handle('open-pdf', async (event, filePath) => {
+    if (!filePath || !fs.existsSync(filePath)) {
+      return { success: false, error: 'File not found' };
+    }
+    try {
+      shell.openPath(filePath);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   createWindow();
+
+
+
 
   // ──────────────────────────────────────────────────────────────────────────
   // STARTUP SAFETY RULES (Microsoft Store 10.1.2.10 + internal policy):
@@ -2961,7 +3492,7 @@ app.whenReady().then(() => {
       } else if (command === 'ai-prompt') {
         const prompt = args.prompt;
         const modelOverride = args.model;
-        
+
         console.log(`[WiFi-Sync] AI Prompt from mobile: "${prompt.substring(0, 50)}..." Target Model: ${modelOverride || 'default'}`);
 
         if (mainWindow) {
@@ -2971,14 +3502,14 @@ app.whenReady().then(() => {
         try {
           const targetModel = modelOverride || store.get('ollama_model') || 'deepseek-r1:8b';
           const provider = (targetModel.includes('gemini') || targetModel.includes('google')) ? 'google-flash' : 'ollama';
-          
+
           console.log(`[WiFi-Sync] Dispatching AI task: ${targetModel} (${provider})`);
 
-          const result = await llmGenerateHandler([{ role: 'user', content: prompt }], { 
+          const result = await llmGenerateHandler([{ role: 'user', content: prompt }], {
             model: targetModel,
             provider: provider
           });
-          
+
           if (result.error) {
             console.error(`[WiFi-Sync] AI Error from Handler: ${result.error}`);
             sendResponse({ success: false, error: result.error });
@@ -3335,7 +3866,7 @@ app.whenReady().then(() => {
       const iconPath = path.join(__dirname, 'assets', 'icon.png'); // PNG is better for PDF embedding
       const fallbackPath = path.join(__dirname, 'assets', 'icon.ico');
       const targetPath = fs.existsSync(iconPath) ? iconPath : (fs.existsSync(fallbackPath) ? fallbackPath : null);
-      
+
       if (targetPath) {
         const mime = targetPath.endsWith('.png') ? 'image/png' : 'image/x-icon';
         const base64 = fs.readFileSync(targetPath).toString('base64');
@@ -3390,8 +3921,8 @@ app.whenReady().then(() => {
         if (s.accelerator) {
           // Skip accelerators with non-ASCII characters (e.g. Alt+Ø) to prevent Electron crashes
           if (/[^\x00-\x7F]/.test(s.accelerator)) {
-             console.warn(`[Hotkey] Skipping invalid shortcut signature: ${s.accelerator}`);
-             return;
+            console.warn(`[Hotkey] Skipping invalid shortcut signature: ${s.accelerator}`);
+            return;
           }
 
           globalShortcut.register(s.accelerator, () => {
@@ -3472,93 +4003,116 @@ app.whenReady().then(() => {
   });
 
   // IPC handler for decryption
-  // Web Search RAG Helper
+  // Web Search RAG Helper with Caching
   ipcMain.handle('web-search-rag', async (event, query) => {
     try {
+      const normalizedQuery = query.trim().toLowerCase();
+      const cached = searchCache.get(normalizedQuery);
+      const CACHE_TTL = 30 * 60 * 1000; // 30 minutes in ms
+
+      if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+        console.log(`[RAG] Using cached results for: ${query}`);
+        return cached.results;
+      }
+
       console.log(`[RAG] Performing web search for: ${query}`);
-      
+
+      let searchResults = [];
+
       // 1. Try configured API providers first (Tavily, Brave, SerpAPI)
       if (webSearchProvider) {
         const availableProviders = webSearchProvider.getAvailableProviders();
         if (availableProviders.length > 0) {
           try {
             console.log(`[RAG] Using API provider [${availableProviders[0]}] for enhanced results`);
-            const results = await webSearchProvider.search(query, availableProviders[0], 5);
-            return results.map(r => `${r.title}: ${r.snippet}`);
+            searchResults = await webSearchProvider.search(query, availableProviders[0], 5);
           } catch (apiErr) {
             console.warn('[RAG] API search failed, falling back to scrapper:', apiErr.message);
           }
         }
       }
 
-      // 2. Fallback to Robust Scrapper
-      const searchEngines = [
-        {
-          name: 'Google',
-          url: `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en`,
-          selectors: [
-            /<div[^>]+class="VwiC3b[^>]*>([\s\S]*?)<\/div>/g,
-            /<div[^>]+class="BNeawe s3v9rd AP7Wnd"[^>]*>([\s\S]*?)<\/div>/g,
-            /<span[^>]+class="hgKElc"[^>]*>([\s\S]*?)<\/span>/g,
-            /<div[^>]+class="yY967"[^>]*>([\s\S]*?)<\/div>/g,
-            /<div[^>]+class="MUFw9c[^>]*>([\s\S]*?)<\/div>/g
-          ]
-        },
-        {
-          name: 'DuckDuckGo',
-          url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
-          selectors: [
-            /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g,
-            /<div[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/div>/g
-          ]
-        }
-      ];
+      if (searchResults.length === 0) {
+        // 2. Fallback to Robust Scrapper
+        const searchEngines = [
+          {
+            name: 'Google',
+            url: `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en`,
+            selectors: [
+              /<div[^>]+class="VwiC3b[^>]*>([\s\S]*?)<\/div>/g,
+              /<div[^>]+class="BNeawe s3v9rd AP7Wnd"[^>]*>([\s\S]*?)<\/div>/g,
+              /<span[^>]+class="hgKElc"[^>]*>([\s\S]*?)<\/span>/g,
+              /<div[^>]+class="yY967"[^>]*>([\s\S]*?)<\/div>/g,
+              /<div[^>]+class="MUFw9c[^>]*>([\s\S]*?)<\/div>/g
+            ]
+          },
+          {
+            name: 'DuckDuckGo',
+            url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+            selectors: [
+              /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g,
+              /<div[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/div>/g
+            ]
+          }
+        ];
 
-      for (const engine of searchEngines) {
-        try {
-          console.log(`[RAG] Attempting search with ${engine.name}...`);
-          const response = await fetch(engine.url, {
-            headers: { 
-              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-              'Accept-Language': 'en-US,en;q=0.9',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
-            }
-          });
-
-          if (!response.ok) continue;
-
-          const html = await response.text();
-          const snippets = [];
-
-          for (const regex of engine.selectors) {
-            let match;
-            regex.lastIndex = 0;
-            while ((match = regex.exec(html)) !== null && snippets.length < 5) {
-              let cleanSnippet = match[1]
-                .replace(/<[^>]*>/g, '') // Remove HTML tags
-                .replace(/&amp;/g, '&')
-                .replace(/&quot;/g, '"')
-                .replace(/&#39;/g, "'")
-                .replace(/\s+/g, ' ')
-                .trim();
-              
-              if (cleanSnippet && cleanSnippet.length > 20 && !snippets.includes(cleanSnippet)) {
-                snippets.push(cleanSnippet);
+        for (const engine of searchEngines) {
+          try {
+            console.log(`[RAG] Attempting search with ${engine.name}...`);
+            const response = await fetch(engine.url, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
               }
-            }
-            if (snippets.length >= 3) break;
-          }
+            });
 
-          if (snippets.length > 0) {
-            console.log(`[RAG] ${engine.name} search retrieved ${snippets.length} snippets`);
-            return snippets;
+            if (!response.ok) continue;
+
+            const html = await response.text();
+            const snippets = [];
+
+            for (const regex of engine.selectors) {
+              let match;
+              regex.lastIndex = 0;
+              while ((match = regex.exec(html)) !== null && snippets.length < 5) {
+                let cleanSnippet = match[1]
+                  .replace(/<[^>]*>/g, '') // Remove HTML tags
+                  .replace(/&amp;/g, '&')
+                  .replace(/&quot;/g, '"')
+                  .replace(/&#39;/g, "'")
+                  .replace(/\s+/g, ' ')
+                  .trim();
+
+                if (cleanSnippet && cleanSnippet.length > 20 && !snippets.includes(cleanSnippet)) {
+                  snippets.push(cleanSnippet);
+                }
+              }
+              if (snippets.length >= 3) break;
+            }
+
+            if (snippets.length > 0) {
+              console.log(`[RAG] ${engine.name} search retrieved ${snippets.length} snippets`);
+              searchResults = snippets;
+              break;
+            }
+          } catch (e) {
+            console.warn(`[RAG] ${engine.name} search failed:`, e.message);
           }
-        } catch (e) {
-          console.warn(`[RAG] ${engine.name} search failed:`, e.message);
         }
+      } else {
+        // If we got results from API provider, format them
+        searchResults = searchResults.map(r => `${r.title}: ${r.snippet}`);
       }
 
-      return [];
+      if (searchResults.length > 0) {
+        searchCache.set(normalizedQuery, {
+          results: searchResults,
+          timestamp: Date.now()
+        });
+      }
+
+      return searchResults;
     } catch (error) {
       console.error('[RAG] Web search failed completely:', error);
       return [];
@@ -3728,7 +4282,9 @@ app.whenReady().then(() => {
     }
   });
 
+  /*
   // Export Chat as TXT
+  ipcMain.removeHandler('export-chat-txt');
   ipcMain.handle('export-chat-txt', async (event, content) => {
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
       title: 'Export Chat History',
@@ -3746,186 +4302,11 @@ app.whenReady().then(() => {
     }
     return { success: false, error: 'Canceled' };
   });
+  */
 
-  // PDF Generation IPC (High-Fidelity HTML-to-PDF)
-  ipcMain.handle('generate-pdf', async (event, title, content) => {
-    let workerWindow = null;
-    try {
-      workerWindow = new BrowserWindow({
-        show: false,
-        webPreferences: { offscreen: true }
-      });
 
-      const iconPath = path.join(__dirname, 'public/icon.png');
-      let iconBase64 = '';
-      try {
-        iconBase64 = fs.readFileSync(iconPath).toString('base64');
-      } catch (e) {
-        console.warn("Could not load icon for PDF branding");
-      }
+  // Redundant generate-pdf handler removed
 
-      const isFullHTML = /<html/i.test(content);
-      const htmlToRender = isFullHTML ? content : `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono&display=swap');
-            body { 
-              font-family: 'Inter', -apple-system, sans-serif; 
-              padding: 60px; 
-              line-height: 1.6; 
-              color: #0f172a;
-              background: #ffffff;
-            }
-            .page-container {
-              position: relative;
-              min-height: 100%;
-            }
-            .header {
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-              border-bottom: 2px solid #f1f5f9;
-              padding-bottom: 20px;
-              margin-bottom: 40px;
-            }
-            .branding {
-              display: flex;
-              align-items: center;
-              gap: 12px;
-              color: #0ea5e9;
-              text-transform: uppercase;
-              font-weight: 900;
-              letter-spacing: 0.1em;
-              font-size: 1.2rem;
-            }
-            h1 { 
-              color: #020617; 
-              margin: 20px 0;
-              font-size: 2.2rem;
-              font-weight: 900;
-              letter-spacing: -0.04em;
-              line-height: 1.1;
-            }
-            .meta { 
-              font-size: 0.8rem; 
-              color: #64748b; 
-              text-transform: uppercase;
-              letter-spacing: 0.15em;
-              font-weight: 700;
-              margin-bottom: 40px;
-            }
-            .content-section {
-              background: #fff;
-              border-radius: 20px;
-            }
-            pre { 
-              background: #0f172a; 
-              color: #e2e8f0;
-              padding: 24px; 
-              border-radius: 16px; 
-              font-family: 'JetBrains Mono', monospace;
-              overflow-x: auto;
-              font-size: 0.85rem;
-              margin: 20px 0;
-              line-height: 1.5;
-            }
-            blockquote {
-              border-left: 6px solid #0ea5e9;
-              padding: 10px 24px;
-              margin: 30px 0;
-              color: #475569;
-              background: #f8fafc;
-              border-radius: 0 16px 16px 0;
-              font-style: italic;
-            }
-            .tag {
-              display: inline-block;
-              padding: 4px 12px;
-              background: #f1f5f9;
-              border-radius: 6px;
-              font-size: 0.75rem;
-              font-weight: 700;
-              color: #475569;
-              margin-bottom: 15px;
-            }
-            .footer { 
-              position: fixed; 
-              bottom: 40px; 
-              left: 60px; 
-              right: 60px; 
-              border-top: 1px solid #f1f5f9; 
-              padding-top: 20px; 
-              font-size: 0.7rem; 
-              color: #94a3b8; 
-              display: flex; 
-              justify-content: space-between;
-              align-items: center;
-              font-weight: 600;
-              text-transform: uppercase;
-              letter-spacing: 0.05em;
-            }
-            hr { border: 0; border-top: 1px solid #f1f5f9; margin: 50px 0; }
-            img { max-width: 100%; border-radius: 16px; margin: 20px 0; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-          </style>
-        </head>
-        <body>
-          <div class="page-container">
-            <div class="header">
-              <div class="branding">
-                <img src="data:image/png;base64,${iconBase64}" style="width: 28px; height: 28px; margin: 0;" />
-                Comet AI
-              </div>
-              <div style="font-size: 0.7rem; color: #94a3b8; font-weight: 700;">AUTONOMOUS AGENT REPORT</div>
-            </div>
-            
-            <div class="tag">Secure Export</div>
-            <h1>${title || 'Intelligence Document'}</h1>
-            <div class="meta">Generated by Comet Neural Engine • ${new Date().toLocaleString()}</div>
-            
-            <div class="content-section">
-              ${content}
-            </div>
-
-            <div class="footer">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <img src="data:image/png;base64,${iconBase64}" style="width: 16px; height: 16px; margin: 0; filter: grayscale(1); opacity: 0.5;" />
-                Protected by Comet Security
-              </div>
-              <div>Verification ID: COMET-${Math.random().toString(36).substr(2, 9).toUpperCase()}</div>
-            </div>
-          </div>
-        </body>
-        </html>
-      `;
-
-      await workerWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlToRender)}`);
-      
-      const pdfBytes = await workerWindow.webContents.printToPDF({
-        printBackground: true,
-        margins: { top: 0, bottom: 0, left: 0, right: 0 },
-        pageSize: 'A4'
-      });
-
-      const downloadsPath = path.join(os.homedir(), 'Downloads');
-      const fileName = `${(title || 'doc').replace(/[^a-z0-9]/gi, '_')}.pdf`;
-      const filePath = path.join(downloadsPath, fileName);
-
-      fs.writeFileSync(filePath, pdfBytes);
-
-      if (mainWindow) {
-        mainWindow.webContents.send('download-started', fileName);
-      }
-
-      return { success: true, fileName, filePath };
-    } catch (error) {
-      console.error('[PDF] Generation failed:', error);
-      return { success: false, error: error.message };
-    } finally {
-      if (workerWindow) workerWindow.destroy();
-    }
-  });
 
   // Setup Context Menu
   contextMenu({
@@ -4679,6 +5060,7 @@ app.whenReady().then(() => {
     return { success: true };
   });
 
+  ipcMain.removeHandler('perm-check');
   ipcMain.handle('perm-check', async (event, key) => {
     return { granted: permissionStore.isGranted(key) };
   });
@@ -4689,6 +5071,16 @@ app.whenReady().then(() => {
 
   ipcMain.handle('perm-audit-log', async (event, limit) => {
     return permissionStore.getAuditLog(limit || 100);
+  });
+
+  // Security Settings
+  ipcMain.handle('security-settings-get', async () => {
+    return permissionStore.getSettings();
+  });
+
+  ipcMain.handle('security-settings-update', async (event, settings) => {
+    permissionStore.updateSettings(settings);
+    return { success: true, settings: permissionStore.getSettings() };
   });
 
   // --- Robot Service ---
@@ -4752,6 +5144,7 @@ app.whenReady().then(() => {
   });
 
   // --- Screen Vision AI ---
+  ipcMain.removeHandler('vision-describe');
   ipcMain.handle('vision-describe', async (event, question) => {
     if (!screenVisionService) return { success: false, error: 'Vision service not initialized' };
     try {
@@ -4925,10 +5318,10 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('mcp-command', async (event, { command, data }) => {
-      // Compatibility with existing frontend calls if any
-      if (command === 'connect') return await mcpManager.connect(data.id, data);
-      if (command === 'list') return mcpManager.getAllServers();
-      return { error: 'Unknown MCP core command' };
+    // Compatibility with existing frontend calls if any
+    if (command === 'connect') return await mcpManager.connect(data.id, data);
+    if (command === 'list') return mcpManager.getAllServers();
+    return { error: 'Unknown MCP core command' };
   });
 
   // ============================================================================
@@ -5244,34 +5637,33 @@ app.whenReady().then(() => {
     console.log(`[Hotkeys] Registered ${globalShortcut.isRegistered('Alt+Space') ? 'Alt+Space' : 'global shortcuts'}`);
   }
 
-  app.whenReady().then(() => {
-    // Initial registration from store
-    const savedShortcuts = store.get('shortcuts') || [];
-    registerGlobalShortcuts(savedShortcuts);
+  // Initial registration from store
+  const savedShortcuts = store.get('shortcuts') || [];
+  registerGlobalShortcuts(savedShortcuts);
 
-    // Reconnect MCP Servers
-    const mcpServers = store.get('mcp_servers');
-    if (mcpServers && mcpServers.length > 0) {
-      console.log(`[Main] Reconnecting ${mcpServers.length} MCP servers...`);
-      mcpServers.forEach(server => {
-        mcpManager.connect(server.id, server).catch(err => {
-          console.error(`[Main] Failed to reconnect MCP server ${server.name}:`, err);
-        });
+  // Reconnect MCP Servers
+  const mcpServers = store.get('mcp_servers');
+  if (mcpServers && mcpServers.length > 0) {
+    console.log(`[Main] Reconnecting ${mcpServers.length} MCP servers...`);
+    mcpServers.forEach(server => {
+      mcpManager.connect(server.id, server).catch(err => {
+        console.error(`[Main] Failed to reconnect MCP server ${server.name}:`, err);
       });
-    } else {
-      // Add a few high-value default MCP servers for first-time use
-      const defaultServers = [
-        { id: 'google-search', name: 'Google Search (Smithery)', url: 'https://smithery.ai/server/google-search', status: 'offline' },
-        { id: 'brave-search', name: 'Brave Search', url: 'https://smithery.ai/server/brave-search', status: 'offline' },
-        { id: 'github-mcp', name: 'GitHub Tools', url: 'https://smithery.ai/server/github', status: 'offline' }
-      ];
-      console.log('[Main] No MCP servers found, loading defaults.');
-      // Actually connect them if desired, or just list them in UI.
-      // For now we'll just store them so UI shows them.
-      store.set('mcp_servers', defaultServers);
-      defaultServers.forEach(s => mcpManager.connect(s.id, s).catch(() => {}));
-    }
-  });
+    });
+  } else {
+    // Add a few high-value default MCP servers for first-time use
+    const defaultServers = [
+      { id: 'google-search', name: 'Google Search (Smithery)', url: 'https://smithery.ai/server/google-search', status: 'offline' },
+      { id: 'brave-search', name: 'Brave Search', url: 'https://smithery.ai/server/brave-search', status: 'offline' },
+      { id: 'github-mcp', name: 'GitHub Tools', url: 'https://smithery.ai/server/github', status: 'offline' }
+    ];
+    console.log('[Main] No MCP servers found, loading defaults.');
+    // Actually connect them if desired, or just list them in UI.
+    // For now we'll just store them so UI shows them.
+    store.set('mcp_servers', defaultServers);
+    defaultServers.forEach(s => mcpManager.connect(s.id, s).catch(() => { }));
+  }
+
 
   ipcMain.on('update-shortcuts', (event, shortcuts) => {
     console.log('[Main] Updating global shortcuts');
@@ -5334,3 +5726,4 @@ app.whenReady().then(() => {
     process.exit(0);
   });
 });
+

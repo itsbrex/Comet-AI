@@ -44,12 +44,15 @@ import {
 } from './ai/AIUtils';
 import {
   COMET_CAPABILITIES, SYSTEM_INSTRUCTIONS, LANGUAGE_MAP, INTERNAL_TAG_RE,
-  queryRequiresSearch   // ← NEW: imported from AIConstants
+  queryRequiresSearch
 } from './ai/AIConstants';
 import { useAppStore } from '@/store/useAppStore';
 import { BrowserAI } from '@/lib/BrowserAI';
 import { Security } from '@/lib/Security';
-import { prepareCommandsForExecution } from '@/lib/AICommandParser';
+import { prepareCommandsForExecution, formatCommandsForExport, parseUnifiedCommands, stripAllCommands } from '@/lib/AICommandParser';
+import { aiCommandOutput, stripCommandsFromOutput, parseCommandsFromAIOutput, hasCommands } from '@/lib/AICommandOutput';
+import { searchContextStore } from '@/lib/SearchContextStore';
+import { actionLogsStore, type ActionLog } from '@/lib/ActionLogsStore';
 import { buildFrontendReasoningOptions, type LlmMode } from '@/lib/aiReasoningOptions';
 import { getRecommendedGeminiModel } from '@/lib/modelRegistry';
 import firebaseService from '@/lib/FirebaseService';
@@ -183,6 +186,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [groqSpeed, setGroqSpeed] = useState<string | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [streamingPDFContent, setStreamingPDFContent] = useState('');
+  const [pdfProgress, setPdfProgress] = useState(0);
 
   const [permissionPending, setPermissionPending] = useState<any | null>(null);
   const [showModelPicker, setShowModelPicker] = useState(false);
@@ -191,6 +195,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [terminalLogs, setTerminalLogs] = useState<Array<{ id: string; command: string; output: string; success: boolean; timestamp: number }>>([]);
   const [showTerminal, setShowTerminal] = useState(false);
   const terminalEndRef = useRef<HTMLDivElement>(null);
+  const terminalLogIdCounter = useRef(0);
 
   // DOM Search State
   const [domSearchResults, setDOMSearchResults] = useState<DOMSearchResult[]>([]);
@@ -267,8 +272,16 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   // ✅ NEW: fetchRealSearchContext
   // Runs 3 real web searches and returns combined verified results.
   // Called BEFORE the LLM so it gets real data instead of hallucinating.
+  // Results are cached for 5 minutes to avoid re-searching.
   // ---------------------------------------------------------------------------
   const fetchRealSearchContext = useCallback(async (topic: string): Promise<string> => {
+    // Check if we have recent search for this topic
+    const recentContext = searchContextStore.hasRecentSearch(topic);
+    if (recentContext) {
+      console.log('[CometAI] Using cached search for:', topic);
+      return recentContext.content;
+    }
+
     const currentDate = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     const queries = [
       `${topic} news today`,
@@ -293,7 +306,14 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
       }
     }
 
-    return results.join('\n\n');
+    const combinedResults = results.join('\n\n');
+    
+    // Store in context for future use
+    if (combinedResults) {
+      searchContextStore.addWebSearch(topic, combinedResults);
+    }
+
+    return combinedResults;
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -436,10 +456,27 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
         }
       }
 
+      // ✅ NEW: Browser State Injection (Active Tab & Open Tabs)
+      let browserStateContext = '';
+      try {
+        const tabs: any[] = await window.electronAPI.getOpenTabs();
+        const activeTab = tabs.find(t => t.active) || tabs[0];
+        if (tabs.length > 0) {
+          browserStateContext = `[BROWSER STATE]\n- ACTIVE TAB: ${activeTab?.title || 'Unknown'} (${activeTab?.url || currentUrl || 'N/A'})\n- OPEN TABS (${tabs.length}):\n${tabs.map((t, idx) => `  ${idx + 1}. ${t.title} (${t.url}) ${t.active ? '[ACTIVE]' : ''}`).join('\n')}`;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch browser state for LLM context', e);
+      }
+
       // LLM Request — Build context with REAL data injected
       const aiId = addThinkingStep('LLM Processing...');
 
+      // Get recent search context to avoid re-searching
+      const searchContextSummary = searchContextStore.getContextSummary();
+
       const contextBlock = [
+        searchContextSummary !== 'No recent context available.' ? `[📚 RECENT CONTEXT — CHECK THIS BEFORE SEARCHING!]\n${searchContextSummary}` : '',
+        browserStateContext,
         contextItems.length > 0
           ? `[RAG MEMORY]\n${contextItems.map(c => c.text).join('\n')}`
           : '',
@@ -477,15 +514,31 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
         if (response.error) throw new Error(response.error);
 
         // Clean up text format to remove the action commands from the visible message
-        const { commands, responseText } = prepareCommandsForExecution(response.text);
+        let { commands, responseText } = prepareCommandsForExecution(response.text);
+        
+        // Also check for AI_COMMANDS section format
+        if (hasCommands(response.text)) {
+          const aiCommandsSection = parseCommandsFromAIOutput(response.text);
+          if (aiCommandsSection.length > 0) {
+            commands = [...commands, ...aiCommandsSection];
+          }
+          responseText = stripCommandsFromOutput(response.text);
+        }
+        
+        // Also strip any remaining command tags/JSON for display
+        responseText = stripAllCommands(responseText);
 
-        // Update the last visible message to hide the raw command syntax from the user
+        // Update the last visible message to include the response content and reasoning
         setMessages(prev => {
           if (prev.length === 0) return prev;
           const updated = [...prev];
           const lastIdx = updated.length - 1;
           if (updated[lastIdx].role === 'model') {
-             updated[lastIdx] = { ...updated[lastIdx], content: responseText };
+             updated[lastIdx] = { 
+               ...updated[lastIdx], 
+               content: responseText,
+               thinkText: response.thought // 🚀 PERSIST reasoning for exports/copy
+             };
           }
           return updated;
         });
@@ -504,6 +557,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           id: `cmd-${Date.now()}-${iterations}-${i}`,
           type: c.type,
           value: c.value,
+          context: responseText, // 🚀 PASS the visible message content as context for the PDF generator
           status: 'pending',
           timestamp: Date.now()
         }));
@@ -842,16 +896,28 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
             try {
               const domRes = await window.electronAPI.extractPageContent();
               if (domRes && domRes.content && domRes.content.length > 100) {
-                const scrubbed = scrubbedContent(domRes.content);
-                output = `Search results for "${query}" (fallback DOM) (${scrubbed.length} chars):\n${scrubbed.substring(0, 4000)}...`;
+                const scrubbed = scrubbedContent(domRes.content).substring(0, 1000); // 🚀 Truncate fallback DOM
+                output = `Search results for "${query}" (fallback DOM snippet):\n${scrubbed}...`;
                 await BrowserAI.addToVectorMemory(scrubbed, { type: 'web_search_fallback', query, url: searchUrl });
                 setMessages(prev => {
                   const last = prev[prev.length - 1];
                   const newOcrLabel = `WEB_SEARCH_FALLBACK_DOM`;
                   if (last && last.role === 'model') {
-                    return [...prev.slice(0, -1), { ...last, isOcr: true, ocrLabel: newOcrLabel, ocrText: scrubbed }];
+                    // Update last message with truncated text
+                    return [...prev.slice(0, -1), { 
+                      ...last, 
+                      isOcr: true, 
+                      ocrLabel: newOcrLabel, 
+                      ocrText: `${scrubbed}\n\n[Content truncated for clarity. Use specific DOM_SEARCH for more detail.]` 
+                    }];
                   }
-                  return [...prev, { role: 'model', content: '', isOcr: true, ocrLabel: newOcrLabel, ocrText: scrubbed } as ExtendedChatMessage];
+                  return [...prev, { 
+                    role: 'model', 
+                    content: 'I pulled some fallback content from the search page.', 
+                    isOcr: true, 
+                    ocrLabel: newOcrLabel, 
+                    ocrText: scrubbed 
+                  } as ExtendedChatMessage];
                 });
               } else {
                 let ocrText = '';
@@ -891,6 +957,10 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
             const scrubbed = scrubbedContent(res.content);
             output = `Page content read successfully (${scrubbed.length} chars):\n${scrubbed.substring(0, 4000)}...`;
             await BrowserAI.addToVectorMemory(scrubbed, { type: 'page_content', url: currentUrl });
+            
+            // Store in context for reuse
+            searchContextStore.addPageContent(currentUrl, res.title || currentUrl, scrubbed);
+            
             setMessages(prev => {
               const last = prev[prev.length - 1];
               if (last && last.role === 'model') {
@@ -928,21 +998,23 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
         case 'SHELL_COMMAND': {
           let confirmed = chainApprovedRef.current;
+          let preApproved = false;
           if (!confirmed) {
             setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'awaiting_permission' } : cmd));
             confirmed = await requestActionPermission(
               'SHELL_COMMAND', 'Execute Shell Command', 'Terminal', command.value,
-              'The AI needs to run this command to complete your task.', 'high'
+              'The AI needs to run this command to complete your task.', 'low'
             );
+            preApproved = confirmed;
             if (confirmed) chainApprovedRef.current = true;
           }
           setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
-          const logId = `term-${Date.now()}`;
+          const logId = `term-${Date.now()}-${terminalLogIdCounter.current++}`;
           const logEntry = { id: logId, command: command.value, output: '', success: false, timestamp: Date.now() };
           if (confirmed) {
             setShowTerminal(true);
             setTerminalLogs(prev => [...prev, { ...logEntry, output: '⏳ Running...' }]);
-            const res = await window.electronAPI.executeShellCommand(command.value);
+            const res = await window.electronAPI.executeShellCommand(command.value, preApproved);
             const cmdOutput = res.success ? (res.output || '(no output)') : `Error: ${res.error}`;
             setTerminalLogs(prev => prev.map(l => l.id === logId
               ? { ...l, output: cmdOutput, success: !!res.success }
@@ -972,6 +1044,13 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           break;
         }
 
+        case 'OPEN_PDF': {
+          const filePath = command.value;
+          const res = await window.electronAPI.openPDF(filePath);
+          output = res.success ? `Opened PDF: ${filePath}` : `Failed to open PDF: ${res.error}`;
+          break;
+        }
+
         // ✅ FIXED: GENERATE_PDF now supports screenshots, custom title/author/subtitle
         // Format: [GENERATE_PDF: title | screenshot:yes | author:Name | subtitle:Subtitle | content...]
         case 'GENERATE_PDF': {
@@ -993,16 +1072,29 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           }
 
           // First non-option part is always the title if no explicit title: key
-          const pdfTitle = options.title || contentParts[0]?.trim() || 'Document';
+          let pdfTitle = options.title || contentParts[0]?.trim() || 'Document';
+          
+          // Fix for "title | actual title" or "title: actual title"
+          if (pdfTitle.toLowerCase() === 'title' && contentParts[1]) {
+            pdfTitle = contentParts[1];
+            contentParts.splice(0, 1); // Remove 'title' part
+          }
+
           const pdfSubtitle = options.subtitle || '';
           const pdfAuthor = options.author || 'Comet AI';
           const shouldScreenshot = options.screenshot?.toLowerCase() === 'yes' || options.screenshot?.toLowerCase() === 'true';
+          const shouldIncludeAttachments = options.attachments?.toLowerCase() !== 'no';
           let pdfContent = (options.title ? contentParts : contentParts.slice(1)).join('|').trim();
+
+          // ✅ NEW: If content is just a placeholder like "content", use the full message text passed in context
+          if (command.context && (pdfContent.length < 50 || /\[content\]|placeholder|lorem ipsum/i.test(pdfContent) || pdfContent.toLowerCase() === 'content')) {
+            pdfContent = command.context;
+          }
 
           // Detect if this PDF needs live/current data
           const isDataPDF = /news|update|report|today|latest|tech|market|sports|daily/i.test(pdfTitle);
-          const contentTooShort = pdfContent.length < 200;
-          const hasFakePlaceholder = /\[content\]|\[details\]|placeholder|lorem ipsum/i.test(pdfContent);
+          const contentTooShort = pdfContent.length < 200 && !isDataPDF;
+          const hasFakePlaceholder = /\[content\]|\[details\]|placeholder|lorem ipsum/i.test(pdfContent) || pdfContent.toLowerCase() === 'content';
 
           if (isDataPDF || contentTooShort || hasFakePlaceholder) {
             const searchId = addThinkingStep(`🔍 Fetching real data for "${pdfTitle}"...`);
@@ -1031,6 +1123,23 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           // ── Capture browser page screenshot (active tab only) ──────────────
           // Uses Electron's webContents.capturePage() via captureBrowserViewScreenshot
           const pdfImages: import('./ai/AIUtils').PDFImage[] = [];
+
+          // ── Include user-uploaded attachments ──────────────────────────────
+          if (shouldIncludeAttachments) {
+            // Get all attachments from the entire current conversation history
+            const allAttachments = messages.flatMap(m => (m as ExtendedChatMessage).attachments || []);
+            if (allAttachments.length > 0) {
+              allAttachments.forEach((data, i) => {
+                pdfImages.push({
+                  src: data,
+                  alt: `User Attachment ${i + 1}`,
+                  caption: `User-provided visual data #${i + 1}`,
+                  width: '100%'
+                });
+              });
+            }
+          }
+
           if (shouldScreenshot) {
             const ssId = addThinkingStep('📸 Capturing browser page for PDF...');
             try {
@@ -1064,15 +1173,33 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           const iconSource = (window as any).__cometIconBase64 || null;
           
           setIsGeneratingPDF(true);
+          setPdfProgress(0);
+          setShowTerminal(true);
           setStreamingPDFContent(`Generating PDF: ${pdfTitle}...`);
+
+          // Replicate slide logic for the success message UI
+          const slides = pdfContent.split(/---\n?/).filter(s => s.trim().length > 10);
+          const isSlideShow = slides.length > 2;
           
           const cleanHTML = buildCleanPDFContent(pdfContent, pdfTitle, iconSource, pdfImages.length > 0 ? pdfImages : undefined);
-          const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML);
+          const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML) as any;
           
           setIsGeneratingPDF(false);
+          setPdfProgress(100);
           setStreamingPDFContent('');
           
-          output = res.success ? `PDF "${pdfTitle}" generated and saved.` : `Error: ${res.error}`;
+          if (res.success) {
+            output = `✅ **PDF GENERATION SUCCESSFUL**\n\n### 📄 Document Overview\n- **Title:** ${pdfTitle}\n- **Pages:** ${isSlideShow ? slides.length : '1'}\n- **Format:** ${isSlideShow ? 'Slide Deck (Presenton Style)' : 'Standard Report'}\n- **📁 File Path:** \`${res.filePath}\`\n- **Status:** ✅ Downloaded Successfully\n\nYou can find the PDF at: **${res.filePath}**\n\nWould you like me to open the document for you?`;
+            
+            // Add a special message with an "Open PDF" button
+            setMessages(prev => [...prev, {
+              role: 'model',
+              content: `📄 **PDF Generated: ${res.fileName}**\n\n📁 Location: ${res.filePath}`,
+              actionLogs: [{ type: 'PDF_READY', output: res.filePath, success: true }]
+            } as ExtendedChatMessage]);
+          } else {
+            output = `❌ PDF GENERATION FAILED\n- Error: ${res.error}\n- Context: Please verify title and content format.`;
+          }
           break;
         }
 
@@ -1298,6 +1425,7 @@ I've successfully executed the following real tasks:
         }
 
         case 'RELOAD':
+
           await window.electronAPI.reload();
           output = 'Active page reloaded.';
           break;
@@ -1523,28 +1651,42 @@ I've successfully executed the following real tasks:
       result += `\n[AI REASONING]\n${m.thinkText.trim()}\n[/AI REASONING]\n`;
     }
     
-    // OCR Sources
+    // OCR Sources (Collapsible in UI, shown as structured data in export)
     if (m.isOcr && m.ocrText) {
-      result += `\n[OCR SOURCE: ${m.ocrLabel || 'EXTRACTED_DATA'}]\n${m.ocrText.trim()}\n[/OCR SOURCE]\n`;
+      result += `\n[OCR_RESULT]\n${JSON.stringify({
+        type: 'OCR_EXTRACTION',
+        label: m.ocrLabel || 'EXTRACTED_DATA',
+        textLength: m.ocrText.length,
+        content: m.ocrText.trim()
+      }, null, 2)}\n[/OCR_RESULT]\n`;
     }
 
-    // Action Chain
+    // Action Chain (Separate JSON format)
     if (m.actionLogs && m.actionLogs.length > 0) {
-      result += `\n[ACTION CHAIN]\n`;
-      m.actionLogs.forEach((log, index) => {
-        result += `${index + 1}. ${log.type}: ${log.output} (${log.success ? 'SUCCESS' : 'FAILED'})\n`;
-      });
-      result += `[/ACTION CHAIN]\n`;
+      result += `\n[ACTION_CHAIN_JSON]\n${JSON.stringify({
+        type: 'ACTION_CHAIN_EXPORT',
+        version: '1.0',
+        exportTimestamp: Date.now(),
+        actions: m.actionLogs.map((log, index) => ({
+          index: index + 1,
+          type: log.type,
+          success: log.success,
+          output: log.output
+        }))
+      }, null, 2)}\n[/ACTION_CHAIN_JSON]\n`;
     }
     
     // Media Attachments
     if (m.mediaItems && m.mediaItems.length > 0) {
-      result += `\n[MEDIA ATTACHMENTS]\n`;
-      m.mediaItems.forEach(item => {
-        if (item.type === 'image') result += `- IMAGE: ${item.url} (${item.caption || 'no caption'})\n`;
-        if (item.type === 'video') result += `- VIDEO: ${item.videoUrl} (${item.title})\n`;
-      });
-      result += `[/MEDIA ATTACHMENTS]\n`;
+      result += `\n[MEDIA_ATTACHMENTS_JSON]\n${JSON.stringify({
+        type: 'MEDIA_EXPORT',
+        version: '1.0',
+        attachments: m.mediaItems.map(item => ({
+          type: item.type,
+          ...(item.type === 'image' ? { url: item.url, caption: item.caption } : {}),
+          ...(item.type === 'video' ? { videoUrl: item.videoUrl, title: item.title, description: item.description } : {})
+        }))
+      }, null, 2)}\n[/MEDIA_ATTACHMENTS_JSON]\n`;
     }
 
     // Main Content
@@ -1566,23 +1708,43 @@ I've successfully executed the following real tasks:
     // Format full session
     const fullContent = messages.map(m => formatMessageForExport(m)).join('\n\n' + '='.repeat(40) + '\n\n');
 
+    // Include action logs in export (separate from main chat)
+    const actionLogsExport = actionLogsStore.exportAsJSON();
+    const shellLogsExport = actionLogsStore.getShellLogs().length > 0 
+      ? actionLogsStore.exportAsText().split('[SHELL_COMMANDS_LOG]')[1] || ''
+      : '';
+
     if (window.electronAPI) {
       if (format === 'text') {
-        const res = await (window.electronAPI as any).exportChatAsTxt(fullContent);
-        if (res?.success) setFeedback('Chat Exported to Downloads');
+        const exportContent = `${fullContent}\n\n${'='.repeat(60)}\nACTION LOGS (v0.2.4 JSON Format)\n${'='.repeat(60)}\n\n${actionLogsExport}`;
+        const res = await (window.electronAPI as any).exportChatAsTxt(exportContent);
+        if (res?.success) setFeedback('Chat & Action Logs Exported to Downloads');
       } else {
-        // Convert markdown-ish text to HTML for high-quality PDF
-        const pdfHtml = `
+        // Convert markdown-ish text to HTML for high-quality branded PDF
+        const bodyContent = `
           <div style="white-space: pre-wrap; font-size: 14px; color: #1e293b;">
             ${fullContent.replace(/\[AI REASONING\]/g, '<div style="background:#f8fafc; padding:15px; border-left:4px solid #0ea5e9; margin:10px 0; font-style:italic; font-size:12px; color:#475569;"><strong>AI Reasoning</strong><br/>')
                          .replace(/\[\/AI REASONING\]/g, '</div>')
-                         .replace(/\[ACTION CHAIN\]/g, '<div style="background:#0f172a; color:#e2e8f0; padding:15px; border-radius:10px; margin:10px 0; font-family:monospace; font-size:11px;"><strong>Action Trace</strong><br/>')
-                         .replace(/\[\/ACTION CHAIN\]/g, '</div>')
+                         .replace(/\[ACTION_CHAIN_JSON\]/g, '<div style="background:#0f172a; color:#e2e8f0; padding:15px; border-radius:10px; margin:10px 0; font-family:monospace; font-size:11px;"><strong>Action Chain (JSON)</strong><br/><pre style="font-size:10px; overflow-x:auto;">')
+                         .replace(/\[\/ACTION_CHAIN_JSON\]/g, '</pre></div>')
+                         .replace(/\[OCR_RESULT\]/g, '<div style="background:#fef3c7; padding:15px; border-left:4px solid #f59e0b; margin:10px 0; font-size:12px; color:#92400e;"><strong>OCR Result</strong><br/><pre style="font-size:10px; overflow-x:auto;">')
+                         .replace(/\[\/OCR_RESULT\]/g, '</pre></div>')
+                         .replace(/\[MEDIA_ATTACHMENTS_JSON\]/g, '<div style="background:#dbeafe; padding:15px; border-left:4px solid #3b82f6; margin:10px 0; font-size:12px; color:#1e40af;"><strong>Media Attachments (JSON)</strong><br/><pre style="font-size:10px; overflow-x:auto;">')
+                         .replace(/\[\/MEDIA_ATTACHMENTS_JSON\]/g, '</pre></div>')
                          .replace(/\n/g, '<br/>')}
           </div>
+          <div style="margin-top:40px; padding:20px; background:#f8fafc; border-top:2px solid #e2e8f0;">
+            <h2 style="font-size:16px; color:#0f172a; margin-bottom:10px;">Action Logs (Separate)</h2>
+            <pre style="font-size:11px; color:#475569; white-space:pre-wrap; word-break:break-all;">${actionLogsExport}</pre>
+          </div>
         `;
-        await window.electronAPI.generatePDF('Comet Intelligence Report', pdfHtml);
-        setFeedback('PDF Document Ready');
+        
+        await preloadCometIconLocal();
+        const iconSource = (window as any).__cometIconBase64 || null;
+        const bandedHtml = buildCleanPDFContent(bodyContent, 'Comet Intelligence Report', iconSource);
+        
+        await window.electronAPI.generatePDF('Comet Intelligence Report', bandedHtml);
+        setFeedback('PDF Document Ready with Action Logs');
       }
     }
     setTimeout(() => setFeedback(null), 3000);
@@ -1625,19 +1787,39 @@ I've successfully executed the following real tasks:
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.shiftKey && e.key === 'Tab' && permissionPending) {
-        const { risk } = permissionPending.context;
-        if (risk === 'low' || risk === 'medium') {
-          e.preventDefault();
-          setShiftTabGlow(true);
-          setTimeout(() => setShiftTabGlow(false), 900);
-          permissionPending.resolve(true);
-          setPermissionPending(null);
-        }
+        e.preventDefault();
+        setShiftTabGlow(true);
+        setTimeout(() => setShiftTabGlow(false), 900);
+        permissionPending.resolve(true);
+        setPermissionPending(null);
       }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [permissionPending]);
+
+  useEffect(() => {
+    if (window.electronAPI && window.electronAPI.on) {
+      const unsub = window.electronAPI.on('pdf-generation-log', (log: string) => {
+        setTerminalLogs(prev => [...prev, {
+          id: `pdf-${Date.now()}-${terminalLogIdCounter.current++}`,
+          command: 'GENERATE_PDF',
+          output: log,
+          success: !log.includes('❌'),
+          timestamp: Date.now()
+        }]);
+      });
+
+      const unsubProgress = window.electronAPI.on('pdf-generation-progress', (progress: number) => {
+        setPdfProgress(progress);
+      });
+
+      return () => {
+        unsub();
+        unsubProgress();
+      };
+    }
+  }, []);
 
   useEffect(() => {
     if (window.electronAPI && window.electronAPI.onMobileApproveHighRisk) {
@@ -1760,8 +1942,9 @@ I've successfully executed the following real tasks:
               <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
                 <motion.div 
                   className="h-full bg-sky-500"
-                  animate={{ width: ["0%", "100%"] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                  initial={{ width: "0%" }}
+                  animate={{ width: `${pdfProgress}%` }}
+                  transition={{ duration: 0.5 }}
                 />
               </div>
             </div>
@@ -1783,15 +1966,15 @@ I've successfully executed the following real tasks:
             <div className="flex items-center justify-between px-4 py-2 bg-[#111118] border-b border-white/5">
               <div className="flex items-center gap-2">
                 <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-red-500/80" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
+                  <button onClick={() => setShowTerminal(false)} className="w-3 h-3 rounded-full bg-red-500/80 hover:bg-red-400 transition-colors" title="Close Terminal" />
+                  <button onClick={() => setTerminalLogs([])} className="w-3 h-3 rounded-full bg-yellow-500/80 hover:bg-yellow-400 transition-colors" title="Clear Terminal" />
                   <div className="w-3 h-3 rounded-full bg-green-500/80" />
                 </div>
                 <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-widest ml-2">Comet Terminal</span>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setTerminalLogs([])} className="text-[9px] text-white/20 hover:text-white/50 font-mono uppercase tracking-widest transition-colors">clear</button>
-                <button onClick={() => setShowTerminal(false)} className="text-white/20 hover:text-white/60 transition-colors"><X size={12} /></button>
+                <button onClick={() => setTerminalLogs([])} className="text-[9px] text-white/20 hover:text-white/50 font-mono uppercase tracking-widest transition-colors">Clear</button>
+                <button onClick={() => setShowTerminal(false)} className="text-white/20 hover:text-white/60 transition-colors"><X size={14} /></button>
               </div>
             </div>
             <div className="overflow-y-auto modern-scrollbar p-3 space-y-2 font-mono text-[11px]" style={{ maxHeight: '170px' }}>
@@ -1959,10 +2142,43 @@ I've successfully executed the following real tasks:
                     <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={{
                       code({ node, className, children, ...rest }) {
                         const match = /language-(\w+)/.exec(className || '');
+                        const codeContent = String(children).replace(/\n$/, '');
+
+                        // ✨ Special handling for Mermaid diagrams
+                        if (match && match[1] === 'mermaid' && (window as any).mermaid) {
+                          return (
+                            <div className="my-5 rounded-3xl overflow-hidden border border-white/5 bg-slate-900/50 p-6 flex flex-col items-center shadow-2xl">
+                              <div 
+                                className="mermaid w-full flex justify-center"
+                                dangerouslySetInnerHTML={{ __html: codeContent }}
+                                ref={(el) => {
+                                  if (el && (window as any).mermaid) {
+                                    (window as any).mermaid.contentLoaded();
+                                  }
+                                }}
+                              />
+                            </div>
+                          );
+                        }
+
                         return match ? (
-                          <div className="my-5 rounded-3xl overflow-hidden border border-white/5 shadow-2xl"><SyntaxHighlighter style={dracula as any} language={match[1]} PreTag="div" customStyle={{ margin: 0, padding: '1.5rem', fontSize: '11px' }}>{String(children)}</SyntaxHighlighter></div>
-                        ) : <code className="bg-white/10 px-2 py-0.5 rounded-lg text-[12px] font-mono text-sky-300" {...rest}>{children}</code>;
+                          <div className="my-5 rounded-3xl overflow-hidden border border-white/5 shadow-2xl">
+                            <SyntaxHighlighter 
+                              style={dracula as any} 
+                              language={match[1]} 
+                              PreTag="div" 
+                              customStyle={{ margin: 0, padding: '1.5rem', fontSize: '11px' }}
+                            >
+                              {codeContent}
+                            </SyntaxHighlighter>
+                          </div>
+                        ) : (
+                          <code className="bg-white/10 px-2 py-0.5 rounded-lg text-[12px] font-mono text-sky-300" {...rest}>
+                            {children}
+                          </code>
+                        );
                       }
+
                     }}>
                       {displayContent}
                     </ReactMarkdown>
@@ -2064,24 +2280,32 @@ I've successfully executed the following real tasks:
                         const isRead = log.type.includes('READ') || log.type.includes('EXTRACT');
                         const isClick = log.type.includes('CLICK');
                         const isOcr = log.type.includes('SCREENSHOT') || log.type.includes('OCR') || log.type.includes('VISION');
-                        
+                        const isPdf = log.type === 'PDF_READY';
+
                         let colorClass = log.success ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' : 'bg-red-500/10 border-red-500/30 text-red-400';
                         if (log.success) {
                            if (isClick) colorClass = 'bg-amber-500/10 border-amber-500/30 text-amber-500';
                            else if (isOcr) colorClass = 'bg-purple-500/10 border-purple-500/30 text-purple-400';
+                           else if (isPdf) colorClass = 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-pointer hover:bg-emerald-500/20';
                         }
-                        
+
                         return (
-                          <div key={idx} className={`px-3 py-1.5 rounded-full flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest border transition-all duration-300 hover:scale-105 shadow-sm active:scale-95 cursor-default ${colorClass}`} title={log.output}>
+                          <div 
+                            key={idx} 
+                            onClick={() => isPdf && window.electronAPI.openPDF(log.output)}
+                            className={`px-3 py-1.5 rounded-full flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest border transition-all duration-300 hover:scale-105 shadow-sm active:scale-95 ${colorClass}`} 
+                            title={isPdf ? 'Click to open PDF' : log.output}
+                          >
                             {isSearch && <Search size={12} />}
-                            {isRead && <FileText size={12} />}
+                            {(isRead || isPdf) && <FileText size={12} />}
                             {isClick && <MousePointerClick size={12} />}
                             {isOcr && <Camera size={12} />}
-                            {!isSearch && !isRead && !isClick && !isOcr && (log.success ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />)}
-                            <span>{log.type.replace(/_/g, ' ')}</span>
+                            {!isSearch && !isRead && !isClick && !isOcr && !isPdf && (log.success ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />)}
+                            <span>{isPdf ? 'Open PDF' : log.type.replace(/_/g, ' ')}</span>
                           </div>
                         );
                       })}
+
                     </div>
                   )}
                   

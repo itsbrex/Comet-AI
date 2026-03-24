@@ -67,11 +67,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('tab-loading-status', subscription);
   },
 
-  // Download Started Listener
+  // Download Listeners
   onDownloadStarted: (callback) => {
     const subscription = (event, filename) => callback(filename);
     ipcRenderer.on('download-started', subscription);
     return () => ipcRenderer.removeListener('download-started', subscription);
+  },
+  onDownloadProgress: (callback) => {
+    const subscription = (event, data) => callback(data);
+    ipcRenderer.on('download-progress', subscription);
+    return () => ipcRenderer.removeListener('download-progress', subscription);
+  },
+  onDownloadComplete: (callback) => {
+    const subscription = (event, filename) => callback(filename);
+    ipcRenderer.on('download-complete', subscription);
+    return () => ipcRenderer.removeListener('download-complete', subscription);
   },
   onTabLoaded: (callback) => {
     const subscription = (event, { tabId, url }) => callback({ tabId, url });
@@ -158,6 +168,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   capturePageHtml: () => ipcRenderer.invoke('capture-page-html'),
   saveOfflinePage: (data) => ipcRenderer.invoke('save-offline-page', data),
   generatePDF: (title, content) => ipcRenderer.invoke('generate-pdf', title, content),
+  openPDF: (filePath) => ipcRenderer.invoke('open-pdf', filePath),
 
   // Utils
   setUserId: (userId) => ipcRenderer.send('set-user-id', userId),
@@ -359,9 +370,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // Shell Command Execution (for brightness, volume, WiFi, Bluetooth, etc.)
-  executeShellCommand: (command) => ipcRenderer.invoke('execute-shell-command', command),
+  executeShellCommand: (command, preApproved = false) => ipcRenderer.invoke('execute-shell-command', { rawCommand: command, preApproved }),
   setVolume: (level) => ipcRenderer.invoke('set-volume', level),
   setBrightness: (level) => ipcRenderer.invoke('set-brightness', level),
+
+  // System Settings
+  openSystemSettings: (url) => ipcRenderer.invoke('open-system-settings', url),
 
   // Cross-App Control APIs
   captureScreenRegion: (region) => ipcRenderer.invoke('capture-screen-region', region),
@@ -416,6 +430,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   permCheck: (key) => ipcRenderer.invoke('perm-check', key),
   permList: () => ipcRenderer.invoke('perm-list'),
   permAuditLog: (limit) => ipcRenderer.invoke('perm-audit-log', limit),
+
+  // Security Settings
+  getSecuritySettings: () => ipcRenderer.invoke('security-settings-get'),
+  updateSecuritySettings: (settings) => ipcRenderer.invoke('security-settings-update', settings),
 
   // Robot Service (gated desktop automation)
   robotExecute: (action) => ipcRenderer.invoke('robot-execute', action),

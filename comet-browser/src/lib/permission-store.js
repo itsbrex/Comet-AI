@@ -10,12 +10,17 @@ class PermissionStore {
     this.auditLog = [];
     this.storePath = null;
     this.loaded = false;
+    this.settings = {
+      autoApproveLowRisk: false,
+      autoApproveMidRisk: false,
+    };
   }
 
   async load() {
     if (this.loaded) return;
     const userDataPath = app.getPath('userData');
     this.storePath = path.join(userDataPath, 'comet-permissions.json');
+    this.settingsPath = path.join(userDataPath, 'comet-security-settings.json');
     this.auditPath = path.join(userDataPath, 'comet-audit.jsonl');
 
     try {
@@ -26,10 +31,38 @@ class PermissionStore {
           this.permissions.set(key, row);
         }
       }
+      if (fs.existsSync(this.settingsPath)) {
+        const settings = JSON.parse(fs.readFileSync(this.settingsPath, 'utf-8'));
+        this.settings = { ...this.settings, ...settings };
+      }
     } catch (e) {
       console.warn('[PermissionStore] Failed to load:', e.message);
     }
     this.loaded = true;
+  }
+
+  getSettings() {
+    return { ...this.settings };
+  }
+
+  updateSettings(newSettings) {
+    this.settings = { ...this.settings, ...newSettings };
+    this._saveSettings();
+  }
+
+  _saveSettings() {
+    if (!this.settingsPath) return;
+    try {
+      fs.writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2));
+    } catch (e) {
+      console.error('[PermissionStore] Failed to save settings:', e.message);
+    }
+  }
+
+  isAutoExecutable(riskLevel) {
+    if (riskLevel === 'low' && this.settings.autoApproveLowRisk) return true;
+    if (riskLevel === 'medium' && this.settings.autoApproveMidRisk) return true;
+    return false;
   }
 
   _save() {

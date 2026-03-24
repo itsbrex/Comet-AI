@@ -130,28 +130,12 @@ export function detectHallucinatedContent(content: string): boolean {
 }
 
 export function sanitizePDFContent(content: string, title: string): string {
-  let sanitized = content.replace(INTERNAL_TAG_RE, '').trim();
-
-  if (detectHallucinatedContent(sanitized)) {
-    console.warn('[CometAI] PDF content appears hallucinated — replacing with disclaimer');
-    sanitized = `
-## ⚠️ Live Data Unavailable
-
-This report for **"${escapeHtml(title)}"** could not retrieve verified real-time data at the time of generation.
-
-**Generated at:** ${new Date().toLocaleString()}
-
-**What to do:**
-- Use the Comet Browser search bar to find current information
-- Try asking Comet AI again — it will attempt a fresh web search
-- Visit trusted news sources directly for the latest updates
-
-*Comet AI only shows verified data. No invented content has been included.*
-    `.trim();
-  }
-
+  // Relaxed: Automatically include sources and content without strict hallucination checks
+  // as per user request to avoid "too strict" verification.
+  const sanitized = content.replace(INTERNAL_TAG_RE, '').trim();
   return sanitized;
 }
+
 
 export interface PDFImage {
   src: string;
@@ -335,17 +319,25 @@ export function buildCleanPDFContent(
       flex-direction: column;
       justify-content: center;
       padding: 60px;
-      border: 4px solid ${outline};
+      border: 2px solid ${outline};
       border-radius: 40px;
       margin-bottom: 60px;
       background: white;
       box-shadow: 0 40px 100px rgba(0,0,0,0.05);
       position: relative;
       overflow: hidden;
+      page-break-after: always;
     }
-    .slide::after {
-      content: ''; position: absolute; bottom: -20px; right: -20px; width: 100px; height: 100px;
-      background: gradient(to br, transparent, ${accent}20); border-radius: 50%; filter: blur(40px);
+    .slide-number {
+      position: absolute; top: 30px; right: 40px; font-size: 0.75rem; 
+      font-weight: 800; color: ${accent}; text-transform: uppercase;
+      letter-spacing: 0.1em; opacity: 0.5;
+    }
+    .slide-content { position: relative; z-index: 10; }
+    .slide-decoration {
+      position: absolute; bottom: -50px; left: -50px; width: 200px; height: 200px;
+      background: radial-gradient(circle, ${accent}10 0%, transparent 70%);
+      border-radius: 50%; z-index: 1;
     }
     .page-container {
       max-width: 860px;
@@ -398,7 +390,12 @@ export function buildCleanPDFContent(
     </header>
     <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 24px;">Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} • By Comet AI</div>
     ${isSlideShow 
-      ? slides.map((s: string, i: number) => `<div class="slide ${i > 0 ? 'page-break' : ''}">${buildBodyFromMarkdown(s)}</div>`).join('\n')
+      ? slides.map((s: string, i: number) => `
+        <div class="slide ${i > 0 ? 'page-break' : ''}">
+          <div class="slide-number">Step ${i + 1} of ${slides.length}</div>
+          <div class="slide-content">${buildBodyFromMarkdown(s)}</div>
+          <div class="slide-decoration"></div>
+        </div>`).join('\n')
       : `<h1>${escapeHtml(title)}</h1>${bodyHTML}`
     }
     ${imagesHTML}
