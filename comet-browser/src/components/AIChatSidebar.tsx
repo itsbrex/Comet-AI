@@ -959,7 +959,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
             await BrowserAI.addToVectorMemory(scrubbed, { type: 'page_content', url: currentUrl });
             
             // Store in context for reuse
-            searchContextStore.addPageContent(currentUrl, res.title || currentUrl, scrubbed);
+            searchContextStore.addPageContent(currentUrl, currentUrl, scrubbed);
             
             setMessages(prev => {
               const last = prev[prev.length - 1];
