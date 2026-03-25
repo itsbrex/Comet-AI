@@ -229,10 +229,10 @@ export default function Home() {
         }
       }
     }
+  });
 
-    // Download event listeners - separate useEffect for proper React hooks
-    useEffect(() => {
-      if (!window.electronAPI) return;
+  useEffect(() => {
+    if (!window.electronAPI) return;
       
       const cleanStart = window.electronAPI.on('download-started', ({ name, path }: { name: string, path?: string }) => {
         setDownloads(prev => {
@@ -268,6 +268,7 @@ export default function Home() {
       };
     }, []);
 
+  useEffect(() => {
     if (window.electronAPI) {
       const cleanExtInstalled = window.electronAPI.on('extension-installed', ({ name, id }: { name: string, id: string }) => {
         const providerId = store.aiProvider || 'ollama';
@@ -296,9 +297,6 @@ export default function Home() {
       });
 
       return () => {
-        cleanStart();
-        cleanDone();
-        cleanFail();
         cleanExtInstalled();
         cleanTheme();
         cleanTranslation();
