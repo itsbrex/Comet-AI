@@ -277,6 +277,7 @@ declare global {
             // Missing APIs
             generatePDF: (title: string, content: string) => Promise<{ success: boolean; fileName?: string; filePath?: string; log?: string; error?: string }>;
             openPDF: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+            openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
             getClipboardText: () => Promise<string>;
             setClipboardText: (text: string) => void;
             setVolume: (level: number) => Promise<{ success: boolean; error?: string }>;

@@ -25,72 +25,95 @@ class ScreenVisionService {
       return this._describeWithGemini(question);
     }
 
-    const imageData = await this.captureBase64();
+    try {
+      const imageData = await this.captureBase64();
+      if (!imageData) {
+        throw new Error('Failed to capture screen');
+      }
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: 'image/jpeg', data: imageData },
-            },
-            {
-              type: 'text',
-              text: question || 'Describe what is currently displayed on this screen in 2-3 sentences.',
-            },
-          ],
-        }],
-      }),
-    });
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: 'image/jpeg', data: imageData },
+              },
+              {
+                type: 'text',
+                text: question || 'Describe what is currently displayed on this screen in 2-3 sentences.',
+              },
+            ],
+          }],
+        }),
+      });
 
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Vision API error ${res.status}: ${err}`);
+      if (!res.ok) {
+        const err = await res.text();
+        // Fallback to Gemini if Anthropic fails
+        console.warn('[Vision] Anthropic failed, trying Gemini:', err);
+        return this._describeWithGemini(question);
+      }
+
+      const data = await res.json();
+      return data.content?.[0]?.text || '';
+    } catch (err) {
+      console.error('[Vision] Describe failed:', err.message);
+      // Try fallback
+      try {
+        return await this._describeWithGemini(question);
+      } catch (fallbackErr) {
+        throw new Error(`Vision failed: ${err.message}. Fallback also failed: ${fallbackErr.message}`);
+      }
     }
-
-    const data = await res.json();
-    return data.content?.[0]?.text || '';
   }
 
   async _describeWithGemini(question) {
     const apiKey = this.aiEngine._getKey('GEMINI_API_KEY');
     if (!apiKey) throw new Error('No vision-capable API key configured (need ANTHROPIC_API_KEY or GEMINI_API_KEY)');
 
-    const imageData = await this.captureBase64();
-
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inlineData: { mimeType: 'image/jpeg', data: imageData } },
-              { text: question || 'Describe what is currently displayed on this screen in 2-3 sentences.' },
-            ],
-          }],
-        }),
+    try {
+      const imageData = await this.captureBase64();
+      if (!imageData) {
+        throw new Error('Failed to capture screen for Gemini');
       }
-    );
 
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Gemini Vision API error ${res.status}: ${err}`);
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { inlineData: { mimeType: 'image/jpeg', data: imageData } },
+                { text: question || 'Describe what is currently displayed on this screen in 2-3 sentences.' },
+              ],
+            }],
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Gemini Vision API error ${res.status}: ${err}`);
+      }
+
+      const data = await res.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } catch (err) {
+      console.error('[Vision] Gemini failed:', err.message);
+      throw err;
     }
-
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
 
   async analyzeAndAct(question, tesseractService, robotService, permissionStore) {

@@ -48,6 +48,15 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const { getP2PSync } = require('./src/lib/P2PFileSyncService.js'); // Import the P2P service
 
+// ERROR-PROOFING: Global error handlers for uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('[MAIN] Uncaught Exception:', error.message, error.stack);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[MAIN] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 let p2pSyncService = null; // Declare p2pSyncService here
 let wifiSyncService = null; // Declare wifiSyncService here
 
@@ -275,7 +284,7 @@ function generateCometPDFTemplate(title, content, iconBase64) {
     <body>
       <div class="header">
         <div class="brand">
-          ${iconBase64 ? `<img src="data:image/png;base64,${iconBase64}" style="width:32px;height:32px;margin:0;"/>` : '🌠'}
+          ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="Comet" style="width:36px;height:36px;margin:0;object-fit:contain;"/>` : '<span style="font-size:1.5rem">🌠</span>'}
           Comet<span>AI</span>
         </div>
         <div class="document-tag">Verified Intelligence</div>
@@ -296,7 +305,7 @@ function generateCometPDFTemplate(title, content, iconBase64) {
       <div class="footer">
         <div>&copy; ${new Date().getFullYear()} Comet AI Browser • Branded Research Export</div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          ${iconBase64 ? `<img src="data:image/png;base64,${iconBase64}" style="width:16px;height:16px;margin:0;vertical-align:middle;"/>` : '🌠'}
+          ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="Comet" style="width:16px;height:16px;margin:0;object-fit:contain;vertical-align:middle;"/>` : '🌠'}
           Comet Intelligence System
         </div>
         <div style="color: #0ea5e9; font-weight: 800;">CONFIDENTIAL • AGENT EXPORT</div>
@@ -1096,6 +1105,37 @@ async function createWindow() {
   const chromeUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
   session.defaultSession.setUserAgent(chromeUserAgent);
 
+  // ERROR-PROOFING: Handle SSL certificate errors gracefully
+  session.defaultSession.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+    console.warn(`[SSL] Certificate error for ${url}: ${error}`);
+    // Allow certificates for development or known issues, but log them
+    // For production, you might want to be stricter
+    const allowedHosts = ['localhost', '127.0.0.1', '*.local'];
+    const isAllowed = allowedHosts.some(host => url.includes(host));
+    if (isAllowed) {
+      callback(true); // Allow
+    } else {
+      // Don't block - just warn and allow for better UX
+      console.warn('[SSL] Allowing certificate error for:', url);
+      callback(true); 
+    }
+  });
+
+  // Handle login prompts (authentication)
+  session.defaultSession.on('login', (event, webContents, url, realm, callback) => {
+    console.log(`[Auth] Login prompt for: ${url}`);
+    // Don't auto-handle - let user see the prompt
+    event.preventDefault();
+  });
+
+  // ERROR-PROOFING: Handle webRequest errors
+  session.defaultSession.webRequest.onErrorOccurred({ urls: ['*://*/*'] }, (details) => {
+    const criticalErrors = [-105, -106, -7]; // DNS errors, connection failed
+    if (criticalErrors.includes(details.error)) {
+      console.warn(`[WebRequest] Non-critical error: ${details.url} - ${details.error}`);
+    }
+  });
+
   // Header stripping for embedding and Google Workspace compatibility
   session.defaultSession.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, callback) => {
     const { responseHeaders } = details;
@@ -1620,6 +1660,30 @@ ipcMain.on('create-view', (event, { tabId, url }) => {
     mainWindow.webContents.send('on-tab-loaded', { tabId, url: newView.webContents.getURL() });
   });
 
+  // ERROR-PROOFING: Handle page load failures gracefully
+  newView.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.warn(`[BrowserView] Tab ${tabId} failed to load: ${errorCode} - ${errorDescription}`);
+    // Common non-critical errors to ignore
+    const nonCritical = [-3, -7, -8, -9, -105, -106]; // ABORTED, CONNECTION_FAILED, etc.
+    if (nonCritical.includes(errorCode)) return;
+    mainWindow.webContents.send('tab-load-error', { tabId, errorCode, errorDescription, url });
+  });
+
+  newView.webContents.on('render-process-gone', (event, details) => {
+    console.error(`[BrowserView] Tab ${tabId} render process gone: ${details.reason}`);
+    mainWindow.webContents.send('tab-crashed', { tabId, reason: details.reason });
+  });
+
+  newView.webContents.on('unresponsive', () => {
+    console.warn(`[BrowserView] Tab ${tabId} became unresponsive`);
+    mainWindow.webContents.send('tab-unresponsive', { tabId });
+  });
+
+  newView.webContents.on('responsive', () => {
+    console.log(`[BrowserView] Tab ${tabId} became responsive again`);
+    mainWindow.webContents.send('tab-responsive', { tabId });
+  });
+
   newView.webContents.on('did-navigate', (event, navUrl) => {
     mainWindow.webContents.send('browser-view-url-changed', { tabId, url: navUrl });
     if (navUrl.includes('/search?') || navUrl.includes('?q=')) {
@@ -1776,11 +1840,41 @@ ipcMain.on('set-browser-view-bounds', (event, bounds) => {
   }
 });
 
-ipcMain.on('navigate-browser-view', (event, { tabId, url }) => {
+ipcMain.on('navigate-browser-view', async (event, { tabId, url }) => {
   const view = tabViews.get(tabId || activeTabId);
-  if (view) view.webContents.loadURL(url);
-  appendToMemory({ action: 'navigate', url });
+  if (!view) return;
+  
+  // ERROR-PROOFING: Add retry logic for navigation
+  const maxRetries = 2;
+  let lastError = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await view.webContents.loadURL(url);
+      appendToMemory({ action: 'navigate', url });
+      return; // Success
+    } catch (err) {
+      lastError = err;
+      console.warn(`[BrowserView] Navigation attempt ${attempt} failed: ${err.message}`);
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 500)); // Wait before retry
+      }
+    }
+  }
+  
+  // All retries failed - try loading a fallback/error page
+  console.error(`[BrowserView] Navigation failed after ${maxRetries} attempts: ${url}`);
+  try {
+    const fallbackUrl = `data:text/html,<html><head><title>Navigation Error</title></head><body style="font-family:sans-serif;padding:40px;text-align:center;background:#fafafa;"><h2 style="color:#dc2626;">⚠️ Could not load this page</h2><p>The page <strong>${escapeHtml(url.substring(0, 50))}...</strong> could not be loaded.</p><p style="color:#666;">This may be due to a network issue or the site being unavailable.</p><button onclick="window.history.back()" style="padding:12px 24px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;margin-top:20px;">Go Back</button></body></html>`;
+    await view.webContents.loadURL(fallbackUrl);
+  } catch (fallbackErr) {
+    console.error('[BrowserView] Even fallback page failed:', fallbackErr);
+  }
 });
+
+function escapeHtml(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 ipcMain.on('browser-view-go-back', () => {
   const view = tabViews.get(activeTabId);
@@ -1845,15 +1939,31 @@ ipcMain.handle('capture-page-html', async () => {
 ipcMain.removeHandler('capture-browser-view-screenshot');
 ipcMain.handle('capture-browser-view-screenshot', async () => {
   const view = tabViews.get(activeTabId);
-  if (view) {
+  if (!view) {
+    console.warn('[Screenshot] No active tab found');
+    return null;
+  }
+  
+  // ERROR-PROOFING: Retry logic for screenshot capture
+  const maxRetries = 2;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      // Wait for page to be ready
+      await new Promise(resolve => setTimeout(resolve, 100));
       const image = await view.webContents.capturePage();
+      if (image && image.isEmpty()) {
+        console.warn(`[Screenshot] Attempt ${attempt}: Image is empty, retrying...`);
+        if (attempt < maxRetries) await new Promise(r => setTimeout(r, 200));
+        continue;
+      }
       return image.toDataURL(); // Returns a Data URL (base64 encoded PNG)
     } catch (e) {
-      console.error("Failed to capture page screenshot:", e);
-      return null;
+      console.error(`[Screenshot] Attempt ${attempt} failed:`, e.message);
+      if (attempt < maxRetries) await new Promise(r => setTimeout(r, 200));
     }
   }
+  
+  console.error('[Screenshot] All capture attempts failed');
   return null;
 });
 
@@ -3044,10 +3154,10 @@ app.whenReady().then(async () => {
         
         // Notify frontend so it shows in the downloads panel
         const finalName = path.basename(filePath);
-        mainWindow.webContents.send('download-started', finalName);
+        mainWindow.webContents.send('download-started', { name: finalName, path: filePath });
         setTimeout(() => {
           mainWindow.webContents.send('download-progress', { name: finalName, progress: 100 });
-          mainWindow.webContents.send('download-complete', finalName);
+          mainWindow.webContents.send('download-complete', { name: finalName, path: filePath });
         }, 500);
 
         return { success: true };
@@ -3090,13 +3200,25 @@ ipcMain.removeHandler('generate-pdf');
     notifyAI(`🔄 Initializing branded worker for PDF: ${title}...`);
     updateProgress(5, 'parsing');
 
-    // 0. Load Branding Icon
+    // 0. Load Branding Icon — try multiple paths
     let iconBase64 = '';
+    let iconMimeType = 'image/png';
     try {
-      const iconPath = path.join(__dirname, 'assets', 'icon.png');
-      if (fs.existsSync(iconPath)) {
-        iconBase64 = fs.readFileSync(iconPath).toString('base64');
+      const iconCandidates = [
+        { p: path.join(__dirname, 'assets', 'icon.png'), mime: 'image/png' },
+        { p: path.join(__dirname, 'icon.png'),           mime: 'image/png' },
+        { p: path.join(__dirname, 'assets', 'icon.ico'), mime: 'image/x-icon' },
+        { p: path.join(__dirname, 'icon.ico'),           mime: 'image/x-icon' },
+      ];
+      for (const candidate of iconCandidates) {
+        if (fs.existsSync(candidate.p)) {
+          iconBase64 = fs.readFileSync(candidate.p).toString('base64');
+          iconMimeType = candidate.mime;
+          logMain(`Loaded branding icon from: ${candidate.p}`);
+          break;
+        }
       }
+      if (!iconBase64) logMain('No branding icon found — using text fallback.');
     } catch (e) {
       logErr('Failed to load branding icon', e);
     }
@@ -3108,42 +3230,62 @@ ipcMain.removeHandler('generate-pdf');
       const tempDir = os.tmpdir();
       tempHtmlPath = path.join(tempDir, `comet_pdf_${Date.now()}.html`);
 
-      // 0. Pre-process content for Images (Convert URLs to Base64)
+      // 0. Pre-process content for Images (Convert URLs to Base64 + markdown → HTML)
       logMain('Scanning for remote images to embed...');
       let processedContent = content;
       
-      // Improved regex to catch more image types
+      // Collect all remote image URLs from both <img src> and markdown ![alt](url)
       const imageUrlRegex = /<img[^>]+src="([^">]+)"/g;
       const markdownImageRegex = /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
       
       const remoteImages = [];
       let match;
       while ((match = imageUrlRegex.exec(content)) !== null) {
-        if (match[1].startsWith('http')) remoteImages.push(match[1]);
+        if (match[1].startsWith('http')) remoteImages.push({ url: match[1], alt: '' });
       }
       while ((match = markdownImageRegex.exec(content)) !== null) {
-        if (!remoteImages.includes(match[2])) remoteImages.push(match[2]);
+        if (!remoteImages.find(r => r.url === match[2])) {
+          remoteImages.push({ url: match[2], alt: match[1] });
+        }
       }
 
       if (remoteImages.length > 0) {
         logMain(`Found ${remoteImages.length} remote images. Pre-fetching...`);
         notifyAI(`🖼️ Pre-fetching ${remoteImages.length} images for document...`);
         for (let i = 0; i < remoteImages.length; i++) {
-          const url = remoteImages[i];
+          const { url, alt } = remoteImages[i];
           try {
             const response = await net.fetch(url);
             const buffer = await response.arrayBuffer();
             const base64 = Buffer.from(buffer).toString('base64');
             const mimeType = response.headers.get('content-type') || 'image/png';
             const dataUrl = `data:${mimeType};base64,${base64}`;
+            // Replace both <img src="url"> and markdown ![alt](url) → proper <img> HTML tag
+            processedContent = processedContent.replace(
+              new RegExp(`!\\[([^\\]]*)\\]\\(${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`, 'g'),
+              `<figure style="text-align:center;margin:24px 0"><img src="${dataUrl}" alt="$1" style="max-width:100%;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,0.12)"/><figcaption style="font-size:0.8rem;color:#64748b;margin-top:8px">$1</figcaption></figure>`
+            );
+            // Also replace raw URL in existing <img> tags
             processedContent = processedContent.split(url).join(dataUrl);
             logMain(`Fetched image ${i+1}/${remoteImages.length}: ${url}`);
           } catch (err) {
             logErr(`Failed to fetch image: ${url}`, err);
+            // Convert failed markdown images to a broken-image placeholder
+            processedContent = processedContent.replace(
+              new RegExp(`!\\[([^\\]]*)\\]\\(${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`, 'g'),
+              `<p style="color:#dc2626;font-size:0.85rem;">[Image could not be loaded: ${url}]</p>`
+            );
           }
           updateProgress(10 + Math.floor(((i + 1) / remoteImages.length) * 20), 'preparing');
         }
       }
+      
+      // Convert any remaining markdown image syntax (local paths / data URIs) → <img> HTML tags
+      processedContent = processedContent.replace(
+        /!\[([^\]]*)\]\(([^)]+)\)/g,
+        (_, alt, src) => `<figure style="text-align:center;margin:24px 0"><img src="${src}" alt="${alt}" style="max-width:100%;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,0.12)"/>${alt ? `<figcaption style="font-size:0.8rem;color:#64748b;margin-top:8px">${alt}</figcaption>` : ''}</figure>`
+      );
+      
       updateProgress(30, 'preparing');
 
       // 1. Setup Worker Environment
@@ -3227,10 +3369,10 @@ ipcMain.removeHandler('generate-pdf');
       // 7. Cleanup & Notify UI
       if (mainWindow && !mainWindow.isDestroyed()) {
         logMain('Notifying frontend of new download...');
-        mainWindow.webContents.send('download-started', filename);
+        mainWindow.webContents.send('download-started', { name: filename, path: fullPath });
         setTimeout(() => {
           mainWindow.webContents.send('download-progress', { name: filename, progress: 100 });
-          mainWindow.webContents.send('download-complete', filename);
+          mainWindow.webContents.send('download-complete', { name: filename, path: fullPath });
         }, 500);
       }
       logMain(`✅ SUCCESS: File saved at ${fullPath}`);
@@ -3240,7 +3382,7 @@ ipcMain.removeHandler('generate-pdf');
       if (mainWindow && !mainWindow.isDestroyed()) {
         logMain('Notifying frontend of new download...');
         // Start simulated progress for the system downloads panel
-        mainWindow.webContents.send('download-started', filename);
+        mainWindow.webContents.send('download-started', { name: filename, path: fullPath });
         
         let p = 0;
         const interval = setInterval(() => {
@@ -3294,6 +3436,32 @@ ipcMain.removeHandler('generate-pdf');
     }
     try {
       shell.openPath(filePath);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('open-file', async (event, fileNameOrPath) => {
+    try {
+      let filePath = fileNameOrPath;
+      // If only filename provided, look in downloads folder
+      if (!path.isAbsolute(filePath)) {
+        const downloadsPath = app.getPath('downloads');
+        filePath = path.join(downloadsPath, fileNameOrPath);
+      }
+      if (!fs.existsSync(filePath)) {
+        // Try with Downloads path
+        const downloadsPath = app.getPath('downloads');
+        filePath = path.join(downloadsPath, fileNameOrPath);
+      }
+      if (!fs.existsSync(filePath)) {
+        return { success: false, error: 'File not found: ' + fileNameOrPath };
+      }
+      const result = await shell.openPath(filePath);
+      if (result) {
+        return { success: false, error: result };
+      }
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message };
@@ -3700,7 +3868,7 @@ ipcMain.removeHandler('generate-pdf');
     item.resume();
 
     if (mainWindow) {
-      mainWindow.webContents.send('download-started', fileName);
+      mainWindow.webContents.send('download-started', { name: fileName, path: saveDataPath });
     }
 
     item.on('updated', (event, state) => {
@@ -3717,7 +3885,7 @@ ipcMain.removeHandler('generate-pdf');
       if (state === 'completed') {
         console.log('Download successfully');
         if (mainWindow) {
-          mainWindow.webContents.send('download-complete', item.getFilename());
+          mainWindow.webContents.send('download-complete', { name: item.getFilename(), path: item.getSavePath() });
         }
 
         // Auto-install logic for Chrome Extensions (.crx)

@@ -47,6 +47,15 @@
                 <data android:scheme="about" />
                 <data android:scheme="javascript" />
             </intent-filter>
+            
+            <!-- Custom scheme for deep linking -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="comet-ai" />
+            </intent-filter>
+            
             <!--  For these schemes where any of these particular MIME types
                   have been supplied, we are a good candidate. -->
             <intent-filter>

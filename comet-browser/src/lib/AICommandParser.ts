@@ -89,7 +89,11 @@ function extractJSONCommands(content: string): ParsedCommand[] {
         let match: RegExpExecArray | null;
         while ((match = pattern.exec(content)) !== null) {
             try {
-                const parsed = JSON.parse(match[0]);
+                // Sanitize unescaped newlines inside strings before parsing
+                let rawJson = match[0];
+                rawJson = rawJson.replace(/(?<=:\s*"(?:\\"|[^"])*)\n(?=(?:\\"|[^"])*")/g, '\\n');
+                
+                const parsed = JSON.parse(rawJson);
                 
                 if (parsed.commands && Array.isArray(parsed.commands)) {
                     parsed.commands.forEach((cmd: any, _i: number) => {
@@ -107,7 +111,21 @@ function extractJSONCommands(content: string): ParsedCommand[] {
                     });
                 }
             } catch (e) {
-                // Invalid JSON, skip
+                // Invalid JSON, fallback to brute-force extraction
+                const fbRegex = /"type"\s*:\s*"([^"]+)"\s*,\s*"value"\s*:\s*"([\s\S]*?)"(?=\s*\})/g;
+                let fbMatch;
+                while ((fbMatch = fbRegex.exec(match[0])) !== null) {
+                    const cmdType = fbMatch[1].toUpperCase();
+                    const cmdValue = fbMatch[2].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                    if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
+                        commands.push({
+                            type: cmdType,
+                            value: cmdValue,
+                            originalMatch: match![0],
+                            index: match!.index,
+                        });
+                    }
+                }
             }
         }
     }
@@ -122,7 +140,14 @@ function extractJSONCommands(content: string): ParsedCommand[] {
         let match: RegExpExecArray | null;
         while ((match = pattern.exec(content)) !== null) {
             try {
-                const parsed = JSON.parse(match[0]);
+                // 1) Strip wrapping backticks and tags
+                let rawJson = match[0].replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+                
+                // 2) Sanitize unescaped newlines inside the JSON strings 
+                // This is a common hallucination where LLMs put real \n inside "value": "..." 
+                rawJson = rawJson.replace(/(?<=:\s*"(?:\\"|[^"])*)\n(?=(?:\\"|[^"])*")/g, '\\n');
+                
+                const parsed = JSON.parse(rawJson);
                 
                 if (parsed.commands && Array.isArray(parsed.commands)) {
                     parsed.commands.forEach((cmd: any, _i: number) => {
@@ -140,7 +165,21 @@ function extractJSONCommands(content: string): ParsedCommand[] {
                     });
                 }
             } catch (e) {
-                // Invalid JSON, skip
+                // Invalid JSON, fallback to brute-force extraction
+                const fbRegex = /"type"\s*:\s*"([^"]+)"\s*,\s*"value"\s*:\s*"([\s\S]*?)"(?=\s*\})/g;
+                let fbMatch;
+                while ((fbMatch = fbRegex.exec(match[0])) !== null) {
+                    const cmdType = fbMatch[1].toUpperCase();
+                    const cmdValue = fbMatch[2].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                    if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
+                        commands.push({
+                            type: cmdType,
+                            value: cmdValue,
+                            originalMatch: match![0],
+                            index: match!.index,
+                        });
+                    }
+                }
             }
         }
     }
@@ -157,26 +196,68 @@ export function parseAICommands(content: string): CommandParseResult {
     const commands: ParsedCommand[] = [];
     const commandsSet = new Set(SUPPORTED_COMMANDS);
     const metaCommandsSet = new Set(META_COMMANDS);
+    
+    // Deduplication set - tracks "type:value" to avoid duplicates
+    const seenCommands = new Set<string>();
+
+    // Helper to add unique commands only
+    const addUniqueCommand = (cmd: ParsedCommand) => {
+        const key = `${cmd.type}:${cmd.value}`;
+        if (!seenCommands.has(key)) {
+            seenCommands.add(key);
+            commands.push(cmd);
+        }
+    };
 
     // 0. FIRST: Check for JSON format (faster parsing)
     const jsonCommands = extractJSONCommands(content);
     if (jsonCommands.length > 0) {
-        commands.push(...jsonCommands);
-        // Remove JSON from content for display
-        const jsonPatterns = [
-            /\{"commands"\s*:\s*\[[\s\S]*?\]\}/g,
-            /```json\s*\{[\s\S]*?\}\s*```/g,
-            /```\s*\{[\s\S]*?\}\s*```/g,
-        ];
-        let cleanedContent = content;
-        for (const pattern of jsonPatterns) {
-            cleanedContent = cleanedContent.replace(pattern, '');
+        // Deduplicate JSON commands
+        jsonCommands.forEach(addUniqueCommand);
+        
+        if (commands.length > 0) {
+            // Remove JSON from content for display
+            const jsonPatterns = [
+                /\{"commands"\s*:\s*\[[\s\S]*?\]\}/g,
+                /```json\s*\{[\s\S]*?\}\s*```/g,
+                /```\s*\{[\s\S]*?\}\s*```/g,
+            ];
+            let cleanedContent = content;
+            for (const pattern of jsonPatterns) {
+                cleanedContent = cleanedContent.replace(pattern, '');
+            }
+            return {
+                commands,
+                textWithoutCommands: cleanedContent.trim(),
+                hasCommands: true,
+            };
         }
-        return {
-            commands,
-            textWithoutCommands: cleanedContent.trim(),
-            hasCommands: true,
-        };
+    }
+
+    // 0b. Also extract from HTML comment format <!-- AI_COMMANDS_START -->...<!-- AI_COMMANDS_END -->
+    const htmlCommentPattern = /<!--\s*AI_COMMANDS_START\s*-->[\s\S]*?<!--\s*AI_COMMANDS_END\s*-->/gi;
+    let htmlMatch;
+    while ((htmlMatch = htmlCommentPattern.exec(content)) !== null) {
+        const commandsSection = htmlMatch[0].replace(/<!--\s*AI_COMMANDS_START\s*-->/gi, '').replace(/<!--\s*AI_COMMANDS_END\s*-->/gi, '');
+        const lines = commandsSection.split('\n');
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            // Parse [COMMAND]:value format from HTML comments
+            const match = trimmed.match(/^\[([A-Z_]+)\]:(.*)$/);
+            if (match) {
+                const cmdType = match[1].toUpperCase();
+                const cmdValue = match[2] || '';
+                if (cmdType && commandsSet.has(cmdType as CommandType) && !metaCommandsSet.has(cmdType as any)) {
+                    addUniqueCommand({
+                        type: cmdType,
+                        value: cmdValue,
+                        originalMatch: trimmed,
+                        index: htmlMatch.index + htmlMatch[0].indexOf(trimmed),
+                    });
+                }
+            }
+        }
     }
 
     // 1. Create a mask of the content to skip parsing inside sensitive blocks
@@ -189,6 +270,9 @@ export function parseAICommands(content: string): CommandParseResult {
     // Mask inline code
     mask = mask.replace(/`.*?`/g, (match) => ' '.repeat(match.length));
     
+    // Mask thinking blocks (<think>, <thinking>, <thought>)
+    mask = mask.replace(/<(think|thinking|thought)>[\s\S]*?<\/\1>/gi, (match) => ' '.repeat(match.length));
+    
     // Mask markdown tables (lines with at least 3 '|' characters)
     const lines = mask.split('\n');
     mask = lines.map(line => {
@@ -200,7 +284,8 @@ export function parseAICommands(content: string): CommandParseResult {
 
     // 2. Build regex dynamically from supported commands
     const commandPattern = SUPPORTED_COMMANDS.join('|');
-    const commandRegex = new RegExp(`\\[(${commandPattern})(?::\\s*([^\\]]+?))?\\]`, 'gi');
+    // Allow spaces inside brackets: e.g., [ WEB_SEARCH: google ]
+    const commandRegex = new RegExp(`\\[\\s*(${commandPattern})\\s*(?::\\s*([^\\]]+?))?\\s*\\]`, 'gi');
 
     let match;
     commandRegex.lastIndex = 0;
@@ -221,7 +306,7 @@ export function parseAICommands(content: string): CommandParseResult {
             value = value.substring(1, value.length - 1).trim();
         }
 
-        commands.push({
+        addUniqueCommand({
             type,
             value,
             originalMatch: content.substring(match.index, match.index + fullMatch.length),

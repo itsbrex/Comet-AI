@@ -6,7 +6,7 @@ import { useAppStore, BrowserState } from '@/store/useAppStore';
 import {
     Monitor, Shield, Globe, Info, Download,
     ChevronRight, ShieldCheck, Key, Package, Keyboard,
-    Briefcase, ShieldAlert, Database, LogIn, LogOut, History as HistoryIcon, User as UserIcon, Zap, RefreshCw, Languages, Music2, Eye, EyeOff, Lock
+    Briefcase, ShieldAlert, Database, LogIn, LogOut, History as HistoryIcon, User as UserIcon, Zap, RefreshCw, Languages, Music2, Eye, EyeOff, Lock, BookOpen, Sparkles
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import SearchEngineSettings from './SearchEngineSettings';
@@ -665,12 +665,56 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                         {activeSection === 'api-keys' && <ApiKeysSettings />}
 
                         {activeSection === 'about' && (
-                            <div className="text-center py-20">
-                                <img src="icon.png" alt="Comet Icon" className="w-24 h-24 mx-auto mb-8 shadow-2xl animate-pulse" />
-                                <h2 className="text-5xl font-black tracking-tighter mb-4">{store.appName}</h2>
-                                <p className="text-white/40 max-w-md mx-auto mb-10 text-sm leading-relaxed font-medium">
+                            <div className="text-center py-16 space-y-8">
+                                <img src="icon.png" alt="Comet Icon" className="w-24 h-24 mx-auto mb-2 shadow-2xl drop-shadow-[0_0_20px_rgba(56,189,248,0.4)] animate-pulse" />
+                                <h2 className="text-5xl font-black tracking-tighter">{store.appName}</h2>
+                                <p className="text-white/40 max-w-md mx-auto text-sm leading-relaxed font-medium">
                                     A performance-hardened Chromium shell with native AI orchestration, optimized for decentralized workflows.
                                 </p>
+
+                                {/* Onboarding Actions */}
+                                <div className="max-w-sm mx-auto space-y-4 pt-4">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20 mb-6">Onboarding</p>
+
+                                    <button
+                                        onClick={() => {
+                                            store.setHasSeenWelcomePage(false);
+                                            onClose();
+                                        }}
+                                        className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 hover:border-sky-500/40 transition-all group"
+                                    >
+                                        <div className="w-10 h-10 rounded-xl bg-sky-500/20 flex items-center justify-center text-sky-400 group-hover:bg-sky-500 group-hover:text-black transition-all flex-shrink-0">
+                                            <Sparkles size={18} />
+                                        </div>
+                                        <div className="text-left flex-1">
+                                            <p className="text-sm font-black text-white uppercase tracking-wide">View Welcome Screen</p>
+                                            <p className="text-[10px] text-white/40 mt-0.5">Re-launch the intro &amp; sign-in screen</p>
+                                        </div>
+                                        <ChevronRight size={16} className="text-white/20 group-hover:text-sky-400 transition-colors" />
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            store.setHasCompletedStartupSetup(false);
+                                            onClose();
+                                        }}
+                                        className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 hover:border-violet-500/40 transition-all group"
+                                    >
+                                        <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center text-violet-400 group-hover:bg-violet-500 group-hover:text-black transition-all flex-shrink-0">
+                                            <BookOpen size={18} />
+                                        </div>
+                                        <div className="text-left flex-1">
+                                            <p className="text-sm font-black text-white uppercase tracking-wide">View Setup Guide</p>
+                                            <p className="text-[10px] text-white/40 mt-0.5">Replay the AI &amp; API key configuration wizard</p>
+                                        </div>
+                                        <ChevronRight size={16} className="text-white/20 group-hover:text-violet-400 transition-colors" />
+                                    </button>
+                                </div>
+
+                                <div className="pt-6 border-t border-white/5 max-w-sm mx-auto">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20">Version v0.2.0 Stable</p>
+                                    <p className="text-[10px] text-white/20 mt-1">Comet Intelligence System • Enhancement Update</p>
+                                </div>
                             </div>
                         )}
                     </div>

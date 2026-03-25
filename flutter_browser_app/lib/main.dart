@@ -20,6 +20,7 @@ import 'package:window_manager_plus/window_manager_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:app_links/app_links.dart';
 import 'sync_service.dart';
 
 import 'browser.dart';
@@ -216,10 +217,13 @@ class CometAIApp extends StatefulWidget {
 
 class _CometAIAppState extends State<CometAIApp> with WindowListener {
   late final AppLifecycleListener? _appLifecycleListener;
+  late final AppLinks _appLinks;
+  StreamSubscription<Uri>? _linkSubscription;
 
   @override
   void initState() {
     super.initState();
+    _initDeepLinks();
 
     if (Util.isDesktop()) {
       WindowManagerPlus.current.addListener(this);
@@ -233,6 +237,38 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
       }
     } else {
       _appLifecycleListener = null;
+    }
+  }
+
+  Future<void> _initDeepLinks() async {
+    _appLinks = AppLinks();
+    
+    // Check initial link if app was in cold state (terminated)
+    try {
+      final initialUri = await _appLinks.getInitialLink();
+      if (initialUri != null) {
+        _handleDeepLink(initialUri);
+      }
+    } catch (e) {
+      print("Failed to get initial uri: $e");
+    }
+
+    // Attach a listener to the stream
+    _linkSubscription = _appLinks.uriLinkStream.listen((uri) {
+      _handleDeepLink(uri);
+    }, onError: (err) {
+      print("Failed to handle incoming uri: $err");
+    });
+  }
+
+  void _handleDeepLink(Uri uri) {
+    if (uri.scheme == 'comet-ai') {
+      if (uri.host == 'connect' || uri.host == 'approve') {
+        // Delay to allow navigator to initialize
+        Future.delayed(const Duration(milliseconds: 500), () {
+          navigatorKey.currentState?.pushNamed('/connect-desktop', arguments: {'qrData': uri.toString()});
+        });
+      }
     }
   }
 
@@ -251,6 +287,7 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
       WindowManagerPlus.current.removeListener(this);
     }
     _appLifecycleListener?.dispose();
+    _linkSubscription?.cancel();
     super.dispose();
   }
 

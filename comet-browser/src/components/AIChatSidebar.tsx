@@ -28,6 +28,15 @@ import CollapsibleOCRMessage from './ai/CollapsibleOCRMessage';
 import MessageActions from './ai/MessageActions';
 import ClickPermissionModal from './ai/ClickPermissionModal';
 import ConversationHistoryPanel, { type Conversation, type ChatMessage } from './ai/ConversationHistoryPanel';
+import {
+  robustJSONParse,
+  extractAIReasoning,
+  extractOCRResult,
+  extractActionChain,
+  extractMediaAttachments,
+  cleanTagsFromText,
+  extractActionCommands
+} from './ai/RobustParsers';
 import AISetupGuide from './ai/AISetupGuide';
 import ThinkingIndicator from './ThinkingIndicator';
 import LLMProviderSettings from './LLMProviderSettings';
@@ -39,8 +48,9 @@ import { secureDOMReader, type DOMSearchResult, type FilteredDOMResult } from '.
 // Logic & Utils
 import {
   getThreatRecord, setThreatRecord, checkThreat, scrubbedContent,
-  isFailedPageContent, extractSiteFromContext, buildCleanPDFContent,
-  lsGet, lsSet, lsRemove, preloadCometIcon, tryGetIconBase64
+  isFailedPageContent, extractSiteFromContext, buildCleanPDFContent, buildPDFFromJSON,
+  lsGet, lsSet, lsRemove, preloadCometIcon, tryGetIconBase64,
+  type PDFImage, type PDFActionLog, type PDFOCRData, generateSmartPDF, PDF_ICONS, getIcon
 } from './ai/AIUtils';
 import {
   COMET_CAPABILITIES, SYSTEM_INSTRUCTIONS, LANGUAGE_MAP, INTERNAL_TAG_RE,
@@ -50,7 +60,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { BrowserAI } from '@/lib/BrowserAI';
 import { Security } from '@/lib/Security';
 import { prepareCommandsForExecution, formatCommandsForExport, parseUnifiedCommands, stripAllCommands } from '@/lib/AICommandParser';
-import { aiCommandOutput, stripCommandsFromOutput, parseCommandsFromAIOutput, hasCommands } from '@/lib/AICommandOutput';
+import { aiCommandOutput, stripCommandsFromOutput } from '@/lib/AICommandOutput';
 import { searchContextStore } from '@/lib/SearchContextStore';
 import { actionLogsStore, type ActionLog } from '@/lib/ActionLogsStore';
 import { buildFrontendReasoningOptions, type LlmMode } from '@/lib/aiReasoningOptions';
@@ -514,16 +524,8 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
         if (response.error) throw new Error(response.error);
 
         // Clean up text format to remove the action commands from the visible message
+        // parseAICommands now handles ALL formats (JSON, brackets, HTML comments) with built-in deduplication
         let { commands, responseText } = prepareCommandsForExecution(response.text);
-        
-        // Also check for AI_COMMANDS section format
-        if (hasCommands(response.text)) {
-          const aiCommandsSection = parseCommandsFromAIOutput(response.text);
-          if (aiCommandsSection.length > 0) {
-            commands = [...commands, ...aiCommandsSection];
-          }
-          responseText = stripCommandsFromOutput(response.text);
-        }
         
         // Also strip any remaining command tags/JSON for display
         responseText = stripAllCommands(responseText);
@@ -1181,7 +1183,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           const slides = pdfContent.split(/---\n?/).filter(s => s.trim().length > 10);
           const isSlideShow = slides.length > 2;
           
-          const cleanHTML = buildCleanPDFContent(pdfContent, pdfTitle, iconSource, pdfImages.length > 0 ? pdfImages : undefined);
+          const cleanHTML = generateSmartPDF(pdfContent, iconSource, pdfImages.length > 0 ? pdfImages : undefined);
           const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML) as any;
           
           setIsGeneratingPDF(false);
@@ -1444,19 +1446,53 @@ I've successfully executed the following real tasks:
         case 'OCR_SCREEN':
         case 'SCREENSHOT_AND_ANALYZE': {
           const stepId = addThinkingStep('Capturing screenshot...', 'Taking screenshot and running OCR');
-          await new Promise(resolve => setTimeout(resolve, 2000));
           try {
             let ocrText = '';
-            if (window.electronAPI.visionDescribe) {
-              const visionRes = await window.electronAPI.visionDescribe('What is on this screen? Extract all visible text.');
-              ocrText = typeof visionRes === 'string' ? visionRes : ((visionRes as any)?.description || '');
-            } else if (window.electronAPI.ocrScreenText) {
-              const ocrRes = await window.electronAPI.ocrScreenText();
-              ocrText = typeof ocrRes === 'string' ? ocrRes : ((ocrRes as any)?.text || '');
+            
+            // First try: Capture browser view screenshot (most reliable for browser content)
+            if (window.electronAPI.captureBrowserViewScreenshot) {
+              const screenshotData = await window.electronAPI.captureBrowserViewScreenshot();
+              if (screenshotData) {
+                // Run Tesseract OCR on the captured image
+                try {
+                  const { data } = await Tesseract.recognize(screenshotData, 'eng', {
+                    logger: (m: any) => {
+                      if (m.status === 'recognizing text') {
+                        setPdfProgress(Math.round(m.progress * 100));
+                      }
+                    }
+                  });
+                  ocrText = data?.text || '';
+                } catch (tessErr: any) {
+                  console.error('Tesseract OCR failed:', tessErr);
+                }
+              }
             }
-            resolveThinkingStep(stepId, 'done', 'Screenshot captured');
+            
+            // Fallback: Try vision describe if OCR didn't work
+            if (!ocrText && window.electronAPI.visionDescribe) {
+              try {
+                const visionRes = await window.electronAPI.visionDescribe('What is on this screen? Extract all visible text, buttons, links, and content.');
+                ocrText = typeof visionRes === 'string' ? visionRes : ((visionRes as any)?.description || '');
+              } catch (visionErr: any) {
+                console.error('Vision describe failed:', visionErr);
+              }
+            }
+            
+            // Final fallback: Try basic OCR
+            if (!ocrText && window.electronAPI.ocrScreenText) {
+              try {
+                const ocrRes = await window.electronAPI.ocrScreenText();
+                ocrText = typeof ocrRes === 'string' ? ocrRes : ((ocrRes as any)?.text || '');
+              } catch (ocrErr: any) {
+                console.error('OCR screen text failed:', ocrErr);
+              }
+            }
+            
+            resolveThinkingStep(stepId, 'done', ocrText ? 'Screenshot captured and analyzed' : 'Screenshot captured');
+            
             if (ocrText) {
-              output = `Screenshot analyzed. OCR text (${ocrText.length} chars):\n${ocrText.substring(0, 4000)}...`;
+              output = `📸 **Screenshot Analyzed** (${ocrText.length} chars)\n\n${ocrText.substring(0, 4000)}${ocrText.length > 4000 ? '\n\n_(truncated)..._' : ''}`;
               await BrowserAI.addToVectorMemory(ocrText, { type: 'screenshot_ocr', url: currentUrl });
               setMessages(prev => {
                 const last = prev[prev.length - 1];
@@ -1468,11 +1504,11 @@ I've successfully executed the following real tasks:
                 return [...prev, { role: 'model', content: '', isOcr: true, ocrLabel: 'SCREENSHOT_ANALYSIS', ocrText: ocrText } as ExtendedChatMessage];
               });
             } else {
-              output = 'Screenshot captured but no text detected.';
+              output = '⚠️ Screenshot captured but no text detected. The page may be empty or contain only images.';
             }
           } catch (e: any) {
             resolveThinkingStep(stepId, 'error', e.message);
-            output = `Screenshot failed: ${e.message}`;
+            output = `❌ Screenshot failed: ${e.message}`;
           }
           break;
         }
@@ -1720,18 +1756,50 @@ I've successfully executed the following real tasks:
         const res = await (window.electronAPI as any).exportChatAsTxt(exportContent);
         if (res?.success) setFeedback('Chat & Action Logs Exported to Downloads');
       } else {
-        // Convert markdown-ish text to HTML for high-quality branded PDF
+        // Robustly convert tags to HTML using multi-stage parsing
+        const convertTagsToHTML = (text: string): string => {
+          let html = text;
+          
+          // AI Reasoning tags
+          const reasoningBlocks = extractAIReasoning(text);
+          for (const block of reasoningBlocks) {
+            const escaped = block.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            html = html.replace(
+              new RegExp(`\\[?\\s*AI REASONING\\s*\\]?\\s*${block.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\[?\\s*/AI REASONING\\s*\\]?`, 'gi'),
+              `<div style="background:#f8fafc; padding:15px; border-left:4px solid #0ea5e9; margin:10px 0; font-style:italic; font-size:12px; color:#475569;"><strong>AI Reasoning</strong><br/>${escaped}</div>`
+            );
+          }
+          
+          // OCR Result tags
+          const ocrResult = extractOCRResult(text);
+          if (ocrResult.success && ocrResult.data) {
+            const jsonStr = JSON.stringify(ocrResult.data, null, 2).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            html = html.replace(/\[\s*OCR_RESULT\s*\][\s\S]*?\[\s*\/OCR_RESULT\s*\]/gi,
+              `<div style="background:#fef3c7; padding:15px; border-left:4px solid #f59e0b; margin:10px 0; font-size:12px; color:#92400e;"><strong>OCR Result</strong><br/><pre style="font-size:10px; overflow-x:auto;">${jsonStr}</pre></div>`);
+          }
+          
+          // Action Chain JSON tags
+          const actionChain = extractActionChain(text);
+          if (actionChain.success && actionChain.data) {
+            const jsonStr = JSON.stringify(actionChain.data, null, 2).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            html = html.replace(/\[\s*ACTION_CHAIN_JSON\s*\][\s\S]*?\[\s*\/ACTION_CHAIN_JSON\s*\]/gi,
+              `<div style="background:#0f172a; color:#e2e8f0; padding:15px; border-radius:10px; margin:10px 0; font-family:monospace; font-size:11px;"><strong>Action Chain (JSON)</strong><br/><pre style="font-size:10px; overflow-x:auto;">${jsonStr}</pre></div>`);
+          }
+          
+          // Media Attachments JSON tags
+          const mediaResult = extractMediaAttachments(text);
+          if (mediaResult.success && mediaResult.data) {
+            const jsonStr = JSON.stringify(mediaResult.data, null, 2).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            html = html.replace(/\[\s*MEDIA_ATTACHMENTS_JSON\s*\][\s\S]*?\[\s*\/MEDIA_ATTACHMENTS_JSON\s*\]/gi,
+              `<div style="background:#dbeafe; padding:15px; border-left:4px solid #3b82f6; margin:10px 0; font-size:12px; color:#1e40af;"><strong>Media Attachments (JSON)</strong><br/><pre style="font-size:10px; overflow-x:auto;">${jsonStr}</pre></div>`);
+          }
+          
+          return html.replace(/\n/g, '<br/>');
+        };
+        
         const bodyContent = `
           <div style="white-space: pre-wrap; font-size: 14px; color: #1e293b;">
-            ${fullContent.replace(/\[AI REASONING\]/g, '<div style="background:#f8fafc; padding:15px; border-left:4px solid #0ea5e9; margin:10px 0; font-style:italic; font-size:12px; color:#475569;"><strong>AI Reasoning</strong><br/>')
-                         .replace(/\[\/AI REASONING\]/g, '</div>')
-                         .replace(/\[ACTION_CHAIN_JSON\]/g, '<div style="background:#0f172a; color:#e2e8f0; padding:15px; border-radius:10px; margin:10px 0; font-family:monospace; font-size:11px;"><strong>Action Chain (JSON)</strong><br/><pre style="font-size:10px; overflow-x:auto;">')
-                         .replace(/\[\/ACTION_CHAIN_JSON\]/g, '</pre></div>')
-                         .replace(/\[OCR_RESULT\]/g, '<div style="background:#fef3c7; padding:15px; border-left:4px solid #f59e0b; margin:10px 0; font-size:12px; color:#92400e;"><strong>OCR Result</strong><br/><pre style="font-size:10px; overflow-x:auto;">')
-                         .replace(/\[\/OCR_RESULT\]/g, '</pre></div>')
-                         .replace(/\[MEDIA_ATTACHMENTS_JSON\]/g, '<div style="background:#dbeafe; padding:15px; border-left:4px solid #3b82f6; margin:10px 0; font-size:12px; color:#1e40af;"><strong>Media Attachments (JSON)</strong><br/><pre style="font-size:10px; overflow-x:auto;">')
-                         .replace(/\[\/MEDIA_ATTACHMENTS_JSON\]/g, '</pre></div>')
-                         .replace(/\n/g, '<br/>')}
+            ${convertTagsToHTML(fullContent)}
           </div>
           <div style="margin-top:40px; padding:20px; background:#f8fafc; border-top:2px solid #e2e8f0;">
             <h2 style="font-size:16px; color:#0f172a; margin-bottom:10px;">Action Logs (Separate)</h2>
@@ -1741,7 +1809,7 @@ I've successfully executed the following real tasks:
         
         await preloadCometIconLocal();
         const iconSource = (window as any).__cometIconBase64 || null;
-        const bandedHtml = buildCleanPDFContent(bodyContent, 'Comet Intelligence Report', iconSource);
+        const bandedHtml = generateSmartPDF(bodyContent, iconSource);
         
         await window.electronAPI.generatePDF('Comet Intelligence Report', bandedHtml);
         setFeedback('PDF Document Ready with Action Logs');

@@ -61,7 +61,7 @@ export const NOT_FOUND_SIGNALS = [
   "access denied", "403 forbidden",
 ];
 
-export const INTERNAL_TAG_RE = /\[(?:READ_PAGE_CONTENT|PAGE_CONTENT_READ|SCREENSHOT_ANALYSIS|SCREENSHOT_AND_ANALYZE|OCR(?:_COORDINATES|_SCREEN)?|EXTRACTED|EXTRACT_DATA|OPEN_TABS|EMAILS|LIST_OPEN_TABS|NAVIGATE|SEARCH|WEB_SEARCH|FIND_AND_CLICK|CLICK_ELEMENT|CLICK_AT|CLICK_APP_ELEMENT|FILL_FORM|SCROLL_TO|SHELL_COMMAND|OPEN_APP|SET_THEME|SET_VOLUME|SET_BRIGHTNESS|RELOAD|GO_BACK|GO_FORWARD|WAIT|GUIDE_CLICK|GENERATE_PDF|GENERATE_DIAGRAM|OPEN_PRESENTON|EXPLAIN_CAPABILITIES|OPEN_PDF|OPEN_VIEW|GMAIL_\w+|CREATE_NEW_TAB_GROUP|SHOW_IMAGE|SHOW_VIDEO|OPEN_MCP_SETTINGS)[^\]]*\]/gi;
+export const INTERNAL_TAG_RE = /\[\s*(?:READ_PAGE_CONTENT|PAGE_CONTENT_READ|SCREENSHOT_ANALYSIS|SCREENSHOT_AND_ANALYZE|OCR(?:_COORDINATES|_SCREEN)?|EXTRACTED|EXTRACT_DATA|OPEN_TABS|EMAILS|LIST_OPEN_TABS|NAVIGATE|SEARCH|WEB_SEARCH|FIND_AND_CLICK|CLICK_ELEMENT|CLICK_AT|CLICK_APP_ELEMENT|FILL_FORM|SCROLL_TO|SHELL_COMMAND|OPEN_APP|SET_THEME|SET_VOLUME|SET_BRIGHTNESS|RELOAD|GO_BACK|GO_FORWARD|WAIT|GUIDE_CLICK|GENERATE_PDF|GENERATE_DIAGRAM|OPEN_PRESENTON|EXPLAIN_CAPABILITIES|OPEN_PDF|OPEN_VIEW|GMAIL_\w+|CREATE_NEW_TAB_GROUP|SHOW_IMAGE|SHOW_VIDEO|OPEN_MCP_SETTINGS|AI REASONING|ACTION_CHAIN_JSON|OCR_RESULT|MEDIA_ATTACHMENTS_JSON)[^\]]*\]/gi;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Queries that ALWAYS require a web search before answering
@@ -126,14 +126,13 @@ Examples: GitHub (repos/files), Google Drive (docs/pdfs), Dropbox (cloud storage
 - Dangerous commands show a dialog handled by the system
 - The "Always Allow" option persists forever
 
-USE JSON FORMAT (FASTER & RECOMMENDED):
+USE JSON FORMAT FOR SHORT COMMANDS (FASTER & RECOMMENDED):
 
 \`\`\`json
 {
   "commands": [
     {"type": "SHELL_COMMAND", "value": "ls ~/Downloads"},
-    {"type": "NAVIGATE", "value": "https://example.com"},
-    {"type": "GENERATE_PDF", "value": "Report Title|author:Name|content..."}
+    {"type": "NAVIGATE", "value": "https://example.com"}
   ]
 }
 \`\`\`
@@ -142,6 +141,9 @@ JSON Format:
 - Put JSON in code block: \`\`\`json { "commands": [...] } \`\`\` at end of response
 - Each command: {"type": "COMMAND", "value": "..."}
 - User sees ONLY your text, not the JSON
+
+⚠️ EXCEPTIONS TO JSON FORMAT:
+For GENERATE_PDF and long text commands, ALWAYS use the Bracket syntax instead to avoid markdown/newline JSON escaping errors!
 
 OR Legacy Tags:
 <!-- AI_COMMANDS_START -->
@@ -224,13 +226,16 @@ FOR NEWS / CURRENT EVENTS:
 FOR PDF GENERATION WITH REAL DATA:
   Step 1: [WEB_SEARCH: <topic> today] (if needed)
   Step 2: [GENERATE_PDF: Report Title | author:Your Name | This is the content from your search results...]
-  ⚠️  NEVER skip to GENERATE_PDF without the search steps above if data is unknown.
+  Step 3: Wait for [PDF_READY: /path/to/pdf.pdf] in your action history.
+  Step 4: Answer the user confirming that the PDF generation was successful and verified.
+  ⚠️ NEVER skip to GENERATE_PDF without the search steps above if data is unknown.
+  ⚠️ ALWAYS use the Bracket Syntax [GENERATE_PDF: ...] instead of JSON to prevent unescaped newline errors.
 
   When [GENERATE_PDF] is triggered:
   - A beautiful PDF panel opens showing live progress
   - Shows stages: Parsing → Preparing → Rendering → Generating → Saving
   - Automatically saves to Downloads folder
-  - User can click "Open File" when complete
+  - Emits [PDF_READY] to your transcript when finished.
 
 FOR WEBSITE DATA:
   Step 1: [NAVIGATE: https://example.com]
@@ -312,7 +317,7 @@ FOR WEBSITE DATA:
 ❌ Wrong: [ WEB_SEARCH : news today ] (NEVER add spaces around braces or colons)
 
 1. Each command on its own line. NEVER combine on one line.
-2. CRITICAL: When you use an ACTION COMMAND (like [WEB_SEARCH: ...] or [NAVIGATE: ...]), STOP ALL PROSE. Do NOT write your final user response in the same message.
+2. CRITICAL: When you use an ACTION COMMAND (like [WEB_SEARCH: ...] or [NAVIGATE: ...]), STOP ALL PROSE. Do NOT write your final user response in the same message.[do not use action tags in think block]
 3. Only output the action tags (and <think> blocks if needed), then STOP writing. The system will execute the actions, feed you the results, and THEN you should write your user-facing response in the NEXT turn.
 
 ✅ Correct:

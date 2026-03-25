@@ -1,6 +1,68 @@
 # Comet Browser - Recent Changes
 
-## Version 0.2.5 - Shell Command Auto-Execution (Current)
+## Version 0.2.4-stable - PDF & OCR Improvements (Current)
+
+### Overview
+Comet v0.2.4-stable introduces major improvements to PDF generation, OCR/screenshot functionality, and bug fixes for duplicate commands.
+
+### March 26, 2026 - Update Details
+
+#### New Features
+
+1. **Enhanced PDF Generation with JSON Support**
+   - AI can now generate structured JSON-based PDFs with multi-page support
+   - New `buildEnhancedPDFFromJSON` function for JSON-to-PDF conversion
+   - Added `generateSmartPDF` with automatic fallback (JSON → markdown)
+   - Page detail levels: brief, standard, detailed - AI controls content density per page
+   - Icon library with 70+ emoji icons for PDF sections
+   - Table of Contents auto-generation for multi-page PDFs
+
+2. **Screenshot & OCR Improvements**
+   - Fixed `SCREENSHOT_AND_ANALYZE` command with proper error handling
+   - Now uses `captureBrowserViewScreenshot` for accurate browser content capture
+   - Added Tesseract.js OCR on captured images
+   - Fallback chain: Browser screenshot → Tesseract OCR → Vision AI → Basic OCR
+   - ScreenVisionService now has Claude-to-Gemini fallback
+
+3. **Error-Proof Browser**
+   - Added `did-fail-load`, `render-process-gone`, `unresponsive` handlers for BrowserView
+   - Navigation retry logic (2 attempts before fallback error page)
+   - SSL certificate handling - allows dev certificates, logs warnings
+   - Global uncaught exception handlers in main process
+   - Non-critical error filtering (Criteo, GPU warnings)
+
+4. **Download Panel Fixes**
+   - Fixed duplicate file entries showing in downloads panel
+   - Proper useEffect cleanup for download event listeners
+   - Added "Click to Open" functionality for completed downloads
+   - Downloads now store full file path for opening
+
+#### Bug Fixes
+
+1. **Command Parsing - No More Duplicates**
+   - Root cause: Two separate parsers (AICommandParser + AICommandOutput) extracting same commands
+   - Added deduplication in `parseAICommands` using `Set<string>` tracking `type:value`
+   - HTML comment format now supported in main parser: `<!-- AI_COMMANDS_START -->`
+   - Removed redundant `parseCommandsFromAIOutput` call in AIChatSidebar
+
+2. **PDF Generation - No More Duplicates**
+   - Fixed duplicate PDF generation by deduplicating commands before execution
+
+3. **CSS Fixes for PDF**
+   - Removed rounded corners from tables, code blocks, images
+   - Changed `overflow: hidden` to `overflow: visible` to prevent text hiding
+   - Added `table-layout: fixed` for proper table rendering
+
+#### Technical Changes
+- Added new types: `PDFDetailLevel`, `PDFPage`, `PDFSection`, `EnhancedPDFData`
+- Added `PDF_ICONS` constant with 70+ icon mappings
+- Added `getIcon()` function for icon resolution
+- Added `open-file` IPC handler for opening downloaded files
+- Updated download events to include file path: `{ name, path }`
+
+---
+
+## Version 0.2.5 - Shell Command Auto-Execution
 
 ### Overview
 Comet v0.2.5 introduces fully automatic shell command execution with zero permission dialogs. Shell commands now run directly without blocking popups.

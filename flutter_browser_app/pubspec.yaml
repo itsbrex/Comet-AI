@@ -76,6 +76,7 @@ dependencies:
   qr_flutter: ^4.1.0
   http: ^1.2.0
   translator: ^1.0.1
+  app_links: ^7.0.0
 
 dev_dependencies:
   flutter_test:

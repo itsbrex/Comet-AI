@@ -6,6 +6,7 @@ import {
   NOT_FOUND_SIGNALS,
   INTERNAL_TAG_RE
 } from './AIConstants';
+import { cleanTagsFromText } from './RobustParsers';
 
 export interface ThreatRecord {
   strikes?: number;
@@ -130,9 +131,9 @@ export function detectHallucinatedContent(content: string): boolean {
 }
 
 export function sanitizePDFContent(content: string, title: string): string {
-  // Relaxed: Automatically include sources and content without strict hallucination checks
-  // as per user request to avoid "too strict" verification.
-  const sanitized = content.replace(INTERNAL_TAG_RE, '').trim();
+  // Use robust parser to clean tags while preserving content structure
+  const cleaned = cleanTagsFromText(content);
+  const sanitized = cleaned.replace(INTERNAL_TAG_RE, '').trim();
   return sanitized;
 }
 
@@ -182,7 +183,7 @@ export function buildBodyFromMarkdown(text: string): string {
     const allRows = tableBuffer;
     const dataRows = allRows.filter(r => !/^\s*\|?[-:|\s]+\|?\s*$/.test(r));
     if (dataRows.length === 0) { tableBuffer = []; return; }
-    let tableHtml = '<table>';
+    let tableHtml = '<div class="table-wrapper"><table>';
     dataRows.forEach((row, i) => {
       const parts = row.replace(/^\||\|$/g, '').split('|').map(c => applyInlineMarkdown(c.trim()));
       if (i === 0) {
@@ -191,7 +192,7 @@ export function buildBodyFromMarkdown(text: string): string {
         tableHtml += `<tr>${parts.map(c => `<td>${c}</td>`).join('')}</tr>`;
       }
     });
-    tableHtml += '</tbody></table>';
+    tableHtml += '</tbody></table></div>';
     htmlLines.push(tableHtml);
     tableBuffer = [];
   };
@@ -276,12 +277,12 @@ export function buildCleanPDFContent(
   if (images && images.length > 0) {
     imagesHTML = '<div class="pdf-images">';
     for (const img of images) {
-      const widthStyle = img.width ? (typeof img.width === 'number' ? `${img.width}px` : img.width) : '100%';
-      const heightStyle = img.height ? (typeof img.height === 'number' ? `${img.height}px` : img.height) : 'auto';
+      const safeSrc = img.src && img.src.startsWith('data:') ? img.src : (img.src || '');
+      if (!safeSrc) continue;
       imagesHTML += `
-        <figure style="margin: 32px 0; text-align: center;">
-          <img src="${img.src}" alt="${escapeHtml(img.alt || 'Image')}" style="max-width: ${widthStyle}; max-height: ${heightStyle}; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); border: 1px solid #e2e8f0;" />
-          ${img.caption ? `<figcaption style="font-size: 0.85rem; color: #64748b; margin-top: 12px; font-style: italic;">${escapeHtml(img.caption)}</figcaption>` : ''}
+        <figure>
+          <img src="${safeSrc}" alt="${escapeHtml(img.alt || 'Image')}" />
+          ${img.caption ? `<figcaption>${escapeHtml(img.caption)}</figcaption>` : ''}
         </figure>
       `;
     }
@@ -344,8 +345,9 @@ export function buildCleanPDFContent(
       margin: 0 auto;
       padding: 40px 60px 100px;
       border: 1px solid ${outline};
-      background: rgba(255,255,255,0.9);
+      background: #ffffff;
       min-height: calc(100vh - 40px);
+      overflow: visible;
     }
     header {
       display: flex;
@@ -367,12 +369,13 @@ export function buildCleanPDFContent(
     }
     h2 { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 600; margin: 32px 0 12px; color: #1e293b; }
     h3 { font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 600; margin: 24px 0 10px; color: ${accent}; }
-    table { border-collapse: collapse; width: 100%; margin: 24px 0; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }
-    th { background: #f8fafc; color: #475569; padding: 12px 16px; text-align: left; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; }
-    td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
-    code { font-family: monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: ${accent}; }
-    pre { background: #0f172a; color: #f8fafc; padding: 20px; border-radius: 12px; overflow-x: auto; margin: 24px 0; }
-    blockquote { border-left: 4px solid ${accent}; padding: 12px 24px; background: #f0f9ff; color: #1e40af; border-radius: 0 8px 8px 0; margin: 24px 0; }
+    table { border-collapse: collapse; width: 100%; margin: 24px 0; border: 1px solid #e2e8f0; table-layout: fixed; word-wrap: break-word; }
+    th { background: #f8fafc; color: #475569; padding: 12px 16px; text-align: left; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; width: auto; border-bottom: 2px solid #e2e8f0; }
+    td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; word-break: break-word; max-width: 300px; }
+    .table-wrapper { overflow-x: auto; margin: 24px 0; max-width: 100%; }
+    code { font-family: monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 2px; color: ${accent}; }
+    pre { background: #0f172a; color: #f8fafc; padding: 16px; overflow-x: auto; margin: 24px 0; white-space: pre-wrap; word-break: break-all; }
+    blockquote { border-left: 4px solid ${accent}; padding: 12px 24px; background: #f0f9ff; color: #1e40af; margin: 24px 0; }
     .footer {
       position: fixed; bottom: 0; left: 0; right: 0;
       display: flex; align-items: center; justify-content: space-between;
@@ -380,6 +383,10 @@ export function buildCleanPDFContent(
       font-size: 0.75rem; color: #94a3b8;
     }
     .footer-brand { display: flex; align-items: center; gap: 6px; font-weight: 600; color: ${accent}; }
+    .pdf-images { margin: 32px 0; clear: both; }
+    .pdf-images figure { margin: 24px 0; text-align: center; page-break-inside: avoid; clear: both; display: block; }
+    .pdf-images img { max-width: 100%; width: auto; height: auto; max-height: 600px; border: 1px solid #e2e8f0; display: block; margin: 0 auto; }
+    .pdf-images figcaption { font-size: 0.85rem; color: #64748b; margin-top: 12px; font-style: italic; text-align: center; }
   </style>
 </head>
 <body>
@@ -406,6 +413,438 @@ export function buildCleanPDFContent(
   </div>
 </body>
 </html>`;
+}
+
+export interface PDFActionLog {
+  index: number;
+  type: string;
+  success: boolean;
+  output: string;
+}
+
+export interface PDFOCRData {
+  type: string;
+  label: string;
+  textLength: number;
+  content: string;
+}
+
+export interface PDFMediaAttachment {
+  type: string;
+  url?: string;
+  caption?: string;
+  videoUrl?: string;
+  title?: string;
+  description?: string;
+}
+
+export interface PDFContentData {
+  title: string;
+  content: string;
+  author?: string;
+  subtitle?: string;
+  actionLogs?: PDFActionLog[];
+  ocrData?: PDFOCRData[];
+  mediaAttachments?: PDFMediaAttachment[];
+}
+
+export type PDFDetailLevel = 'brief' | 'standard' | 'detailed';
+
+export interface PDFPage {
+  title: string;
+  content: string;
+  icon?: string;
+  detailLevel: PDFDetailLevel;
+  sections?: PDFSection[];
+}
+
+export interface PDFSection {
+  title: string;
+  content: string;
+  icon?: string;
+  detailLevel?: PDFDetailLevel;
+}
+
+export interface EnhancedPDFData {
+  title: string;
+  subtitle?: string;
+  author?: string;
+  pages: PDFPage[];
+  includeActionLogs?: boolean;
+  includeOCRData?: boolean;
+  theme?: 'default' | 'dark' | 'minimal';
+}
+
+export const PDF_ICONS: Record<string, string> = {
+  document: '📄', summary: '📋', analysis: '🔍', data: '💾', chart: '📊',
+  image: '🖼️', link: '🔗', warning: '⚠️', success: '✅', error: '❌',
+  info: 'ℹ️', star: '⭐', fire: '🔥', rocket: '🚀', brain: '🧠',
+  eye: '👁️', search: '🔎', gear: '⚙️', lightbulb: '💡', target: '🎯',
+  trophy: '🏆', medal: '🏅', shield: '🛡️', lock: '🔒', key: '🔑',
+  phone: '📱', laptop: '💻', cloud: '☁️', database: '🗄️', server: '🖥️',
+  user: '👤', users: '👥', calendar: '📅', clock: '🕐', mail: '📧',
+  flag: '🚩', pin: '📌', bookmark: '🔖', starFilled: '⭐', heart: '❤️',
+  thumbsUp: '👍', thumbsDown: '👎', fireEmoji: '🔥', sparkles: '✨',
+  zapper: '⚡', wave: '👋', check: '✓', cross: '✗', arrowRight: '→',
+  arrowDown: '↓', up: '↑', download: '📥', upload: '📤', folder: '📁',
+  file: '📄', video: '🎬', audio: '🎵', code: '💻', terminal: '⬛',
+  bug: '🐛', test: '🧪', factory: '🏭', robot: '🤖', alien: '👽',
+  crown: '👑', gem: '💎', pearl: '🔮', sun: '☀️', moon: '🌙',
+  cloudEmoji: '🌤️', rain: '🌧️', snow: '❄️', tree: '🌲', flower: '🌸',
+};
+
+export function getIcon(iconName: string): string {
+  return PDF_ICONS[iconName.toLowerCase()] || PDF_ICONS.document;
+}
+
+export function getDetailLevelStyles(level: PDFDetailLevel): { fontSize: string; padding: string; maxContentLength: number } {
+  switch (level) {
+    case 'brief':
+      return { fontSize: '0.85rem', padding: '12px', maxContentLength: 500 };
+    case 'detailed':
+      return { fontSize: '1rem', padding: '20px', maxContentLength: 10000 };
+    default:
+      return { fontSize: '0.9rem', padding: '16px', maxContentLength: 3000 };
+  }
+}
+
+export function buildPDFFromJSON(
+  data: PDFContentData,
+  iconBase64: string | null,
+  images?: PDFImage[]
+): string {
+  const accent = '#0ea5e9';
+  const outline = '#f1f5f9';
+  
+  let htmlContent = `<h1>${escapeHtml(data.title)}</h1>`;
+  
+  if (data.subtitle) {
+    htmlContent += `<p style="font-size: 1.1rem; color: #64748b; margin-bottom: 8px;">${escapeHtml(data.subtitle)}</p>`;
+  }
+  
+  if (data.author) {
+    htmlContent += `<p style="font-size: 0.9rem; color: #475569; margin-bottom: 24px;"><strong>Author:</strong> ${escapeHtml(data.author)}</p>`;
+  }
+  
+  const bodyContent = buildBodyFromMarkdown(data.content);
+  htmlContent += bodyContent;
+  
+  if (data.ocrData && data.ocrData.length > 0) {
+    htmlContent += `<div style="margin-top: 32px; padding: 20px; background: #fffbeb; border-left: 4px solid #f59e0b;">
+      <h3 style="color: #92400e; margin-bottom: 12px;">📄 Extracted Data (${data.ocrData.length} sources)</h3>`;
+    for (const ocr of data.ocrData) {
+      htmlContent += `<div style="margin-bottom: 16px;">
+        <p style="font-weight: 600; color: #b45309;">${escapeHtml(ocr.label)} (${ocr.textLength} chars)</p>
+        <pre style="background: #fff; padding: 12px; border-radius: 4px; font-size: 0.85rem; overflow-x: auto; white-space: pre-wrap;">${escapeHtml(ocr.content.substring(0, 1000))}${ocr.content.length > 1000 ? '...' : ''}</pre>
+      </div>`;
+    }
+    htmlContent += `</div>`;
+  }
+  
+  if (data.actionLogs && data.actionLogs.length > 0) {
+    htmlContent += `<div style="margin-top: 32px; padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0;">
+      <h3 style="color: #0f172a; margin-bottom: 12px;">🔄 Action Chain (${data.actionLogs.length} actions)</h3>
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+        <thead><tr style="background: #f1f5f9;">
+          <th style="padding: 8px; text-align: left;">#</th>
+          <th style="padding: 8px; text-align: left;">Action</th>
+          <th style="padding: 8px; text-align: left;">Status</th>
+          <th style="padding: 8px; text-align: left;">Output</th>
+        </tr></thead><tbody>`;
+    for (const log of data.actionLogs) {
+      const statusIcon = log.success ? '✅' : '❌';
+      const outputPreview = log.output.length > 80 ? log.output.substring(0, 80) + '...' : log.output;
+      htmlContent += `<tr style="border-bottom: 1px solid #f1f5f9;">
+        <td style="padding: 8px;">${log.index}</td>
+        <td style="padding: 8px; font-weight: 600;">${escapeHtml(log.type)}</td>
+        <td style="padding: 8px;">${statusIcon}</td>
+        <td style="padding: 8px; color: #64748b;">${escapeHtml(outputPreview)}</td>
+      </tr>`;
+    }
+    htmlContent += `</tbody></table></div>`;
+  }
+  
+  let imagesHTML = '';
+  if (images && images.length > 0) {
+    imagesHTML = '<div class="pdf-images">';
+    for (const img of images) {
+      const safeSrc = img.src && img.src.startsWith('data:') ? img.src : (img.src || '');
+      if (!safeSrc) continue;
+      imagesHTML += `
+        <figure>
+          <img src="${safeSrc}" alt="${escapeHtml(img.alt || 'Image')}" />
+          ${img.caption ? `<figcaption>${escapeHtml(img.caption)}</figcaption>` : ''}
+        </figure>
+      `;
+    }
+    imagesHTML += '</div>';
+  }
+
+  const headerLogoHTML = iconBase64
+    ? `<img src="${iconBase64}" alt="Comet Logo" style="width:32px;height:32px;object-fit:contain;"/>`
+    : '🌠';
+
+  const footerLogoHTML = iconBase64
+    ? `<img src="${iconBase64}" alt="Comet AI" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:6px;"/>`
+    : '🌠';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;600&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 14px; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      color: #1e293b;
+      background: #ffffff;
+      padding: 0;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+    .page-break { page-break-before: always; height: 0; margin-top: 40px; }
+    .page-container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 40px 60px 100px;
+      border: 1px solid ${outline};
+      background: #ffffff;
+      min-height: calc(100vh - 40px);
+      overflow: visible;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .brand {
+      display: flex;
+      align-items: center; gap: 12px;
+      font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.25rem; color: #0f172a;
+    }
+    .brand span { color: ${accent}; }
+    h1 { 
+      font-family: 'Outfit', sans-serif; font-size: 2.25rem; font-weight: 700; 
+      margin-bottom: 12px; color: #0f172a; line-height: 1.2;
+    }
+    h2 { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 600; margin: 32px 0 12px; color: #1e293b; }
+    h3 { font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 600; margin: 24px 0 10px; color: ${accent}; }
+    table { border-collapse: collapse; width: 100%; margin: 24px 0; border: 1px solid #e2e8f0; }
+    th { background: #f8fafc; color: #475569; padding: 12px 16px; text-align: left; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
+    td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+    pre { background: #0f172a; color: #f8fafc; padding: 16px; overflow-x: auto; margin: 24px 0; white-space: pre-wrap; word-break: break-all; }
+    .footer {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 15px 60px; background: #ffffff; border-top: 1px solid #f1f5f9;
+      font-size: 0.75rem; color: #94a3b8;
+    }
+    .footer-brand { display: flex; align-items: center; gap: 6px; font-weight: 600; color: ${accent}; }
+    .pdf-images { margin: 32px 0; clear: both; }
+    .pdf-images figure { margin: 24px 0; text-align: center; page-break-inside: avoid; clear: both; display: block; }
+    .pdf-images img { max-width: 100%; width: auto; height: auto; max-height: 600px; display: block; margin: 0 auto; }
+    .pdf-images figcaption { font-size: 0.85rem; color: #64748b; margin-top: 12px; font-style: italic; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <header>
+      <div class="brand">${headerLogoHTML} Comet<span>AI</span></div>
+      <div style="font-size: 0.75rem; font-weight: 600; color: #16a34a; background: #f0fdf4; padding: 4px 12px;">✓ Verified</div>
+    </header>
+    <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 24px;">Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} • By Comet AI</div>
+    ${htmlContent}
+    ${imagesHTML}
+  </div>
+  <div class="footer">
+    <div class="footer-brand">${footerLogoHTML} Comet AI</div>
+    <span>${escapeHtml(data.title)} • ${new Date().getFullYear()}</span>
+  </div>
+</body>
+</html>`;
+}
+
+export function buildEnhancedPDFFromJSON(
+  data: EnhancedPDFData,
+  iconBase64: string | null,
+  images?: PDFImage[],
+  actionLogs?: PDFActionLog[],
+  ocrData?: PDFOCRData[]
+): string {
+  const accent = data.theme === 'dark' ? '#22d3ee' : '#0ea5e9';
+  const outline = data.theme === 'dark' ? '#334155' : '#f1f5f9';
+  const bgColor = data.theme === 'dark' ? '#0f172a' : '#ffffff';
+  const textColor = data.theme === 'dark' ? '#f1f5f9' : '#1e293b';
+  const mutedColor = data.theme === 'dark' ? '#94a3b8' : '#64748b';
+  
+  const headerLogoHTML = iconBase64
+    ? `<img src="${iconBase64}" alt="Comet Logo" style="width:32px;height:32px;object-fit:contain;"/>`
+    : '🌠';
+  const footerLogoHTML = iconBase64
+    ? `<img src="${iconBase64}" alt="Comet AI" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;margin-right:6px;"/>`
+    : '🌠';
+
+  let pagesHTML = '';
+  
+  for (let i = 0; i < data.pages.length; i++) {
+    const page = data.pages[i];
+    const pageStyles = getDetailLevelStyles(page.detailLevel);
+    const pageIcon = page.icon ? getIcon(page.icon) : '';
+    
+    let sectionsHTML = '';
+    
+    if (page.sections && page.sections.length > 0) {
+      for (const section of page.sections) {
+        const sectionIcon = section.icon ? getIcon(section.icon) : '📋';
+        const sectionStyles = section.detailLevel ? getDetailLevelStyles(section.detailLevel) : pageStyles;
+        const sectionContent = section.content.length > sectionStyles.maxContentLength 
+          ? section.content.substring(0, sectionStyles.maxContentLength) + '...'
+          : section.content;
+        
+        sectionsHTML += `
+          <div style="margin-bottom: 24px; padding: ${sectionStyles.padding};">
+            <h3 style="color: ${accent}; margin-bottom: 8px; font-size: 1.1rem;">
+              ${sectionIcon} ${escapeHtml(section.title)}
+            </h3>
+            <div style="font-size: ${sectionStyles.fontSize}; line-height: 1.6;">${buildBodyFromMarkdown(sectionContent)}</div>
+          </div>
+        `;
+      }
+    } else {
+      const content = page.content.length > pageStyles.maxContentLength
+        ? page.content.substring(0, pageStyles.maxContentLength) + '...'
+        : page.content;
+      sectionsHTML = `<div style="font-size: ${pageStyles.fontSize}; padding: ${pageStyles.padding};">${buildBodyFromMarkdown(content)}</div>`;
+    }
+    
+    const isLastPage = i === data.pages.length - 1;
+    
+    pagesHTML += `
+      <div class="page-section" data-page="${i + 1}">
+        <div style="margin-bottom: 32px; padding-bottom: 16px; border-bottom: 2px solid ${outline};">
+          <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.5rem; color: ${textColor}; margin-bottom: 8px;">
+            ${pageIcon} ${escapeHtml(page.title)}
+          </h2>
+          <span style="font-size: 0.75rem; color: ${mutedColor}; text-transform: uppercase; letter-spacing: 0.5px;">
+            ${page.detailLevel === 'brief' ? 'Quick View' : page.detailLevel === 'detailed' ? 'In-Depth Analysis' : 'Standard'} • Page ${i + 1} of ${data.pages.length}
+          </span>
+        </div>
+        ${sectionsHTML}
+      </div>
+      ${!isLastPage ? '<div class="page-break"></div>' : ''}
+    `;
+  }
+
+  let imagesHTML = '';
+  if (images && images.length > 0) {
+    imagesHTML = '<div class="pdf-images" style="margin-top: 40px;">';
+    for (const img of images) {
+      const safeSrc = img.src && img.src.startsWith('data:') ? img.src : (img.src || '');
+      if (!safeSrc) continue;
+      imagesHTML += `
+        <figure>
+          <img src="${safeSrc}" alt="${escapeHtml(img.alt || 'Image')}" />
+          ${img.caption ? `<figcaption>${escapeHtml(img.caption)}</figcaption>` : ''}
+        </figure>
+      `;
+    }
+    imagesHTML += '</div>';
+  }
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;600&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 14px; }
+    body { font-family: 'Inter', system-ui, sans-serif; color: ${textColor}; background: ${bgColor}; padding: 0; line-height: 1.7; min-height: 100vh; }
+    .page-break { page-break-before: always; height: 0; margin-top: 40px; }
+    .page-container { max-width: 860px; margin: 0 auto; padding: 40px 60px 100px; border: 1px solid ${outline}; background: ${bgColor}; min-height: calc(100vh - 40px); overflow: visible; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid ${outline}; }
+    .brand { display: flex; align-items: center; gap: 12px; font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.25rem; color: ${textColor}; }
+    .brand span { color: ${accent}; }
+    h1 { font-family: 'Outfit', sans-serif; font-size: 2.25rem; font-weight: 700; margin-bottom: 12px; color: ${textColor}; line-height: 1.2; }
+    h2 { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 600; margin: 32px 0 12px; color: ${textColor}; }
+    h3 { font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 600; margin: 24px 0 10px; color: ${accent}; }
+    table { border-collapse: collapse; width: 100%; margin: 24px 0; border: 1px solid ${outline}; }
+    th { background: ${data.theme === 'dark' ? '#1e293b' : '#f8fafc'}; color: ${mutedColor}; padding: 12px 16px; text-align: left; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; border-bottom: 2px solid ${outline}; }
+    td { padding: 10px 16px; border-bottom: 1px solid ${outline}; font-size: 0.9rem; }
+    pre { background: ${data.theme === 'dark' ? '#1e293b' : '#0f172a'}; color: #f8fafc; padding: 16px; overflow-x: auto; margin: 24px 0; white-space: pre-wrap; word-break: break-all; }
+    blockquote { border-left: 4px solid ${accent}; padding: 12px 24px; background: ${data.theme === 'dark' ? '#1e293b' : '#f0f9ff'}; color: ${textColor}; margin: 24px 0; }
+    .footer { position: fixed; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 15px 60px; background: ${bgColor}; border-top: 1px solid ${outline}; font-size: 0.75rem; color: ${mutedColor}; }
+    .footer-brand { display: flex; align-items: center; gap: 6px; font-weight: 600; color: ${accent}; }
+    .pdf-images { margin: 32px 0; clear: both; }
+    .pdf-images figure { margin: 24px 0; text-align: center; page-break-inside: avoid; clear: both; display: block; }
+    .pdf-images img { max-width: 100%; width: auto; height: auto; max-height: 600px; display: block; margin: 0 auto; }
+    .pdf-images figcaption { font-size: 0.85rem; color: ${mutedColor}; margin-top: 12px; font-style: italic; text-align: center; }
+    .toc { background: ${data.theme === 'dark' ? '#1e293b' : '#f8fafc'}; padding: 24px; margin-bottom: 32px; border-radius: 8px; }
+    .toc-item { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid ${outline}; }
+    .toc-item:last-child { border-bottom: none; }
+    .toc-page { color: ${accent}; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <header>
+      <div class="brand">${headerLogoHTML} Comet<span>AI</span></div>
+      <div style="font-size: 0.75rem; font-weight: 600; color: #16a34a; background: #f0fdf4; padding: 4px 12px;">✓ AI Generated</div>
+    </header>
+    <div style="font-size: 0.85rem; color: ${mutedColor}; margin-bottom: 24px;">Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} • By Comet AI</div>
+    
+    <h1>${escapeHtml(data.title)}</h1>
+    ${data.subtitle ? `<p style="font-size: 1.1rem; color: ${mutedColor}; margin-bottom: 8px;">${escapeHtml(data.subtitle)}</p>` : ''}
+    ${data.author ? `<p style="font-size: 0.9rem; color: ${mutedColor}; margin-bottom: 24px;"><strong>Author:</strong> ${escapeHtml(data.author)}</p>` : ''}
+    
+    ${data.pages.length > 1 ? `
+    <div class="toc">
+      <h3 style="margin-bottom: 16px;">📑 Table of Contents</h3>
+      ${data.pages.map((p, i) => `
+        <div class="toc-item">
+          <span>${p.icon ? getIcon(p.icon) : ''} ${escapeHtml(p.title)}</span>
+          <span class="toc-page">Page ${i + 1}</span>
+        </div>
+      `).join('')}
+    </div>
+    ` : ''}
+    
+    ${pagesHTML}
+    ${imagesHTML}
+  </div>
+  <div class="footer">
+    <div class="footer-brand">${footerLogoHTML} Comet AI</div>
+    <span>${escapeHtml(data.title)} • ${new Date().getFullYear()}</span>
+  </div>
+</body>
+</html>`;
+}
+
+export function generateSmartPDF(
+  content: string,
+  iconBase64: string | null,
+  images?: PDFImage[],
+  actionLogs?: PDFActionLog[],
+  ocrData?: PDFOCRData[]
+): string {
+  try {
+    const jsonMatch = content.match(/\{[\s\S]*"pages"[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]) as EnhancedPDFData;
+      if (parsed.pages && Array.isArray(parsed.pages) && parsed.pages.length > 0) {
+        return buildEnhancedPDFFromJSON(parsed, iconBase64, images, actionLogs, ocrData);
+      }
+    }
+  } catch (e) {
+    console.log('JSON parsing failed, using fallback:', e);
+  }
+  
+  return buildCleanPDFContent(content, 'Comet AI Report', iconBase64, images);
 }
 
 export function buildCapabilityReportPDF(

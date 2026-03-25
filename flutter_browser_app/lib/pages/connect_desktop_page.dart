@@ -33,6 +33,25 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
     _startDiscovery();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null && args.containsKey('qrData')) {
+      final qrData = args['qrData'] as String?;
+      if (qrData != null && qrData.isNotEmpty) {
+        // Process the deep link data as if it were scanned
+        // But clear the argument so it doesn't process again on rebuild
+        args.remove('qrData');
+        Future.delayed(Duration.zero, () {
+          if (mounted) {
+             _scanQRCode(qrData);
+          }
+        });
+      }
+    }
+  }
+
   void _startDiscovery() {
     SyncService().startDiscovery();
     _discoverySubscription = SyncService().onDeviceDiscovered.listen((device) {

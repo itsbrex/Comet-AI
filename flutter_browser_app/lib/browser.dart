@@ -82,17 +82,50 @@ class _BrowserState extends State<Browser> with SingleTickerProviderStateMixin {
   }
 
   getIntentData() async {
-    if (Util.isAndroid()) {
-      String? url = await platform.invokeMethod("getIntentData");
-      if (url != null) {
-        if (mounted) {
-          final windowModel = Provider.of<WindowModel>(context, listen: false);
+    if (!Util.isAndroid()) return;
+    try {
+      final dynamic raw = await platform.invokeMethod('getIntentData');
+      if (raw == null) return;
+
+      // New format: Map<String, String?> from updated MainActivity
+      final Map<String, dynamic> data = Map<String, dynamic>.from(raw is Map ? raw : {});
+      final String? action = data['action'] as String?;
+      final String? query  = data['query']  as String?;
+      final String? url    = data['url']    as String?;
+
+      if (!mounted) return;
+
+      if (action == 'view' && url != null && url.isNotEmpty) {
+        // Standard deep-link / browser URL → open in WebView tab
+        final windowModel = Provider.of<WindowModel>(context, listen: false);
+        windowModel.addTab(WebViewTab(
+          key: GlobalKey(),
+          webViewModel: WebViewModel(url: WebUri(url)),
+        ));
+      } else if (action == 'search') {
+        // Widget search bar tapped (no typed query yet) → just open the app
+        // If a query was pre-filled (e.g. from OS web-search intent) navigate to it
+        final windowModel = Provider.of<WindowModel>(context, listen: false);
+        final browserModel = Provider.of<BrowserModel>(context, listen: false);
+        final settings     = browserModel.getSettings();
+        if (query != null && query.isNotEmpty) {
+          final uri = WebUri(settings.searchEngine.searchUrl + query);
           windowModel.addTab(WebViewTab(
             key: GlobalKey(),
-            webViewModel: WebViewModel(url: WebUri(url)),
+            webViewModel: WebViewModel(url: uri),
           ));
         }
+        // If no query → app is open, user lands on home page / search bar
+      } else if (action == 'voice') {
+        // Mic icon: open the app on home so the user can tap the mic there
+        // (Full voice recognition requires a separate plugin; placeholder navigation)
+      } else if (action == 'ai') {
+        // AI sparkle → open full-screen AI chat
+        Navigator.of(context).pushNamed('/ai-chat',
+            arguments: {'initialMessage': query?.isNotEmpty == true ? query : 'Hello!'});
       }
+    } catch (e) {
+      debugPrint('[Widget] getIntentData error: $e');
     }
   }
 
