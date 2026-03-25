@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_browser/models/browser_model.dart';
 import 'package:flutter_browser/models/webview_model.dart';
@@ -14,6 +14,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:window_manager_plus/window_manager_plus.dart';
 import 'package:path/path.dart' as p;
@@ -21,16 +22,14 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'sync_service.dart';
 
-import 'package:google_fonts/google_fonts.dart';
-
 import 'browser.dart';
 import 'pages/comet_home_page.dart';
 import 'pages/splash_screen.dart';
 import 'pages/connect_desktop_page.dart';
 import 'pages/settings/main.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'pages/ai_chat_page.dart';
 import 'pages/agent_chat_page.dart';
-import 'pages/approve_action_page.dart';
 
 // ignore: non_constant_identifier_names
 late final String WEB_ARCHIVE_DIR;
@@ -68,22 +67,16 @@ void _handleSharedMedia(List<SharedMediaFile> sharedFiles) {
   // Navigate to AI chat with the shared content
   Future.delayed(const Duration(milliseconds: 500), () {
     if (file.type == SharedMediaType.image) {
-      navigatorKey.currentState?.pushNamed(
-        '/ai-chat',
-        arguments: {'initialMessage': 'Explain this image: ${file.path}'},
-      );
+      navigatorKey.currentState?.pushNamed('/ai-chat',
+          arguments: {'initialMessage': 'Explain this image: ${file.path}'});
     } else {
       String message = file.path;
       if (message.startsWith('>>')) {
-        navigatorKey.currentState?.pushNamed(
-          '/agent-chat',
-          arguments: {'task': message.substring(2).trim()},
-        );
+        navigatorKey.currentState?.pushNamed('/agent-chat',
+            arguments: {'task': message.substring(2).trim()});
       } else {
-        navigatorKey.currentState?.pushNamed(
-          '/ai-chat',
-          arguments: {'initialMessage': message},
-        );
+        navigatorKey.currentState
+            ?.pushNamed('/ai-chat', arguments: {'initialMessage': message});
       }
     }
   });
@@ -139,9 +132,8 @@ void main(List<String> args) async {
     WindowOptions windowOptions = WindowOptions(
       center: true,
       backgroundColor: Colors.transparent,
-      titleBarStyle: Util.isWindows()
-          ? TitleBarStyle.normal
-          : TitleBarStyle.hidden,
+      titleBarStyle:
+          Util.isWindows() ? TitleBarStyle.normal : TitleBarStyle.hidden,
       minimumSize: const Size(1280, 720),
       size: const Size(1280, 720),
     );
@@ -191,17 +183,6 @@ void main(List<String> args) async {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       if (data?.text != null) {
         SyncService().sendClipboard(data!.text!);
-      }
-
-      // Check for image in clipboard
-      try {
-        final Uint8List? imageBytes = await const MethodChannel('com.comet_ai_com.comet_ai.intent_data')
-            .invokeMethod('getClipboardImage');
-        if (imageBytes != null) {
-          SyncService().sendImageClipboard(imageBytes);
-        }
-      } catch (e) {
-        // ignore
       }
     });
   } catch (e) {
@@ -253,50 +234,6 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
     } else {
       _appLifecycleListener = null;
     }
-
-    _setupIntentListener();
-  }
-
-  void _setupIntentListener() {
-    const MethodChannel(
-      'com.comet_ai_com.comet_ai.intent_data',
-    ).setMethodCallHandler((call) async {
-      if (call.method == "onIntentReceived") {
-        final String? data = call.arguments;
-        if (data != null && data.isNotEmpty) {
-          _handleIntentData(data);
-        }
-      }
-    });
-  }
-
-  void _handleIntentData(String data) {
-    if (data == "comet-ai://search") {
-      navigatorKey.currentState?.pushNamedAndRemoveUntil('/home', (route) => false, arguments: {'focus': true});
-    } else if (data == "comet-ai://voice") {
-      navigatorKey.currentState?.pushNamedAndRemoveUntil('/home', (route) => false, arguments: {'focus': true, 'voice': true});
-    } else if (data == "comet-ai://terminal") {
-      navigatorKey.currentState?.pushNamed('/settings');
-    } else if (data == "comet-ai://connect") {
-      navigatorKey.currentState?.pushNamed('/connect-desktop');
-    } else if (data.startsWith("comet-ai://approve")) {
-      navigatorKey.currentState?.pushNamed('/approve', arguments: {'data': data});
-    } else if (data.startsWith('http://') || data.startsWith('https://')) {
-      final windowModel = Provider.of<WindowModel>(navigatorKey.currentContext!, listen: false);
-      windowModel.addTab(WebViewModel(url: WebUri(data)));
-      navigatorKey.currentState?.pushNamed('/browser');
-    } else if (data.startsWith('>>')) {
-      navigatorKey.currentState?.pushNamed('/agent-chat', arguments: {'initialTask': data.substring(2).trim()});
-    } else if (data.startsWith('>')) {
-      navigatorKey.currentState?.pushNamed('/ai-chat', arguments: {'initialMessage': data.substring(1).trim()});
-    } else {
-      final windowModel = Provider.of<WindowModel>(navigatorKey.currentContext!, listen: false);
-      final browserModel = Provider.of<BrowserModel>(navigatorKey.currentContext!, listen: false);
-      final settings = browserModel.getSettings();
-      final url = WebUri(settings.searchEngine.searchUrl + Uri.encodeComponent(data));
-      windowModel.addTab(WebViewModel(url: url));
-      navigatorKey.currentState?.pushNamed('/browser');
-    }
   }
 
   void _handleStateChange(AppLifecycleState state) {
@@ -332,6 +269,7 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
           primary: Color(0xFF00E5FF),
           secondary: Color(0xFFD500F9),
           surface: Color(0xFF121212),
+          background: Colors.black,
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,
@@ -351,24 +289,16 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
         '/browser': (context) => const Browser(),
         '/settings': (context) => const SettingsPage(),
         '/ai-chat': (context) {
-          final args =
-              ModalRoute.of(context)!.settings.arguments
-                  as Map<String, dynamic>?;
+          final args = ModalRoute.of(context)!.settings.arguments
+              as Map<String, dynamic>?;
           final message = args?['initialMessage'] ?? "Hello, how can I help?";
           return FullScreenAIChat(initialMessage: message);
         },
         '/agent-chat': (context) {
-          final args =
-              ModalRoute.of(context)!.settings.arguments
-                  as Map<String, dynamic>?;
+          final args = ModalRoute.of(context)!.settings.arguments
+              as Map<String, dynamic>?;
           final task = args?['task'] ?? "";
           return AgentChatPage(initialTask: task);
-        },
-        '/approve': (context) {
-          final args =
-              ModalRoute.of(context)!.settings.arguments
-                  as Map<String, dynamic>?;
-          return ApproveActionPage(arguments: args ?? {});
         },
       },
     );

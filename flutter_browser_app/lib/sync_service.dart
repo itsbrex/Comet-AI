@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'dart:io';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:path_provider/path_provider.dart';
@@ -33,57 +33,27 @@ class SyncService {
   Future<void> initialize(String userId, {String? customDeviceId}) async {
     this.userId = userId;
     if (customDeviceId != null) {
-      deviceId = customDeviceId;
+      this.deviceId = customDeviceId;
     } else {
       try {
         final dir = await getApplicationDocumentsDirectory();
         final file = File('${dir.path}/device_id.txt');
         if (await file.exists()) {
-          deviceId = await file.readAsString();
+          this.deviceId = await file.readAsString();
         } else {
-          deviceId = const Uuid().v4();
-          await file.writeAsString(deviceId!);
+          this.deviceId = const Uuid().v4();
+          await file.writeAsString(this.deviceId!);
         }
       } catch (e) {
         print('[Sync] Error loading/saving device ID: $e');
-        deviceId = const Uuid().v4();
+        this.deviceId = const Uuid().v4();
       }
     }
     print('[Sync] Initialized for user: $userId, device: $deviceId');
-    _attemptAutoReconnect();
-  }
-
-  Future<void> _saveLastConnectedDevice(String ip, int port, String targetDeviceId, String? pairingCode) async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/last_connected_device.json');
-      await file.writeAsString(jsonEncode({
-        'ip': ip,
-        'port': port,
-        'deviceId': targetDeviceId,
-        'pairingCode': pairingCode,
-      }));
-    } catch (e) {
-      print('[Sync] Failed to save last connected device: $e');
-    }
-  }
-
-  Future<void> _attemptAutoReconnect() async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/last_connected_device.json');
-      if (await file.exists()) {
-        final data = jsonDecode(await file.readAsString());
-        print('[Sync] Attempting auto-reconnect to: ${data['ip']}');
-        await connectToDesktop(data['ip'], data['port'], data['deviceId'], pairingCode: data['pairingCode']);
-      }
-    } catch (e) {
-      print('[Sync] Auto-reconnect failed or no previous device: $e');
-    }
   }
 
   Future<void> connect(String targetDeviceId) async {
-    remoteDeviceId = targetDeviceId;
+    this.remoteDeviceId = targetDeviceId;
     _signalRef = FirebaseDatabase.instance.ref('p2p_signals/$userId/$deviceId');
 
     _signalRef!.onValue.listen((event) {
@@ -151,12 +121,7 @@ class SyncService {
         _lastSentClipboard = msg['text'];
         Clipboard.setData(ClipboardData(text: msg['text']));
         _clipboardController.add(msg['text']);
-        print('[Sync] Clipboard text synced');
-      } else if (msg['type'] == 'clipboard-sync-image') {
-        final Uint8List bytes = base64Decode(msg['image']);
-        const MethodChannel('com.comet_ai_com.comet_ai.intent_data')
-            .invokeMethod('setClipboardImage', bytes);
-        print('[Sync] Clipboard image synced');
+        print('[Sync] Clipboard synced: ${msg['text']}');
       } else if (msg['type'] == 'history-sync') {
         _historyController.add(msg['data']);
         print('[Sync] History synced');
@@ -211,27 +176,6 @@ class SyncService {
         RTCDataChannelMessage(
           jsonEncode({'type': 'clipboard-sync', 'text': text}),
         ),
-      );
-    }
-    if (isConnectedToDesktop && _desktopSocket != null) {
-      _desktopSocket!.add(
-        jsonEncode({'type': 'clipboard-sync', 'text': text}),
-      );
-    }
-  }
-
-  void sendImageClipboard(Uint8List bytes) {
-    final String base64Image = base64Encode(bytes);
-    if (isConnected && _dataChannel != null) {
-      _dataChannel!.send(
-        RTCDataChannelMessage(
-          jsonEncode({'type': 'clipboard-sync-image', 'image': base64Image}),
-        ),
-      );
-    }
-    if (isConnectedToDesktop && _desktopSocket != null) {
-      _desktopSocket!.add(
-        jsonEncode({'type': 'clipboard-sync-image', 'image': base64Image}),
       );
     }
   }
@@ -329,9 +273,8 @@ class SyncService {
                 msg['authenticated'] == true) {
               if (!completer.isCompleted) completer.complete();
             } else if (msg['type'] == 'error' && msg['code'] == 'AUTH_FAILED') {
-              if (!completer.isCompleted) {
+              if (!completer.isCompleted)
                 completer.completeError('AUTH_FAILED');
-              }
             }
           } catch (_) {}
           _handleDesktopMessage(data);
@@ -360,7 +303,6 @@ class SyncService {
       await completer.future.timeout(const Duration(seconds: 10));
 
       isConnectedToDesktop = true;
-      _saveLastConnectedDevice(ip, port, deviceId, pairingCode);
       print('[Sync] Connected and Authenticated to desktop at $ip:$port');
     } catch (e) {
       _desktopSocket?.close();
@@ -382,11 +324,6 @@ class SyncService {
         _lastSentClipboard = msg['text'];
         Clipboard.setData(ClipboardData(text: msg['text']));
         _clipboardController.add(msg['text']);
-      } else if (msg['type'] == 'clipboard-sync-image') {
-        final Uint8List bytes = base64Decode(msg['image']);
-        const MethodChannel('com.comet_ai_com.comet_ai.intent_data')
-            .invokeMethod('setClipboardImage', bytes);
-        print('[Sync] Desktop image clipboard synced');
       } else if (msg['type'] == 'agent-task') {
         final task = msg['task'];
         if (task != null) {
@@ -430,7 +367,7 @@ class SyncService {
             (msg) => msg['commandId'] == commandId,
             orElse: () => {'error': 'Timeout'},
           )
-          .timeout(const Duration(seconds: 60));
+          .timeout(const Duration(seconds: 30));
 
       return response;
     } catch (e) {

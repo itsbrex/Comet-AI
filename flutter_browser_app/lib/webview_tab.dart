@@ -33,6 +33,8 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
   FindInteractionController? _findInteractionController;
   bool _isWindowClosed = false;
   final FocusNode _focusNode = FocusNode();
+  int _lastScrollY = 0;
+  Timer? _appBarTimer;
 
   final TextEditingController _httpAuthUsernameController =
       TextEditingController();
@@ -168,7 +170,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
       initialSettings.userAgent =
           "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36";
     }
-    initialSettings.transparentBackground = false;
+    initialSettings.transparentBackground = true;
 
     initialSettings.safeBrowsingEnabled = true;
     initialSettings.disableDefaultErrorPage = true;
@@ -192,7 +194,7 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
       pullToRefreshController: _pullToRefreshController,
       findInteractionController: _findInteractionController,
       onWebViewCreated: (controller) async {
-        initialSettings.transparentBackground = false;
+        initialSettings.transparentBackground = true;
         await controller.setSettings(settings: initialSettings);
 
         _webViewController = controller;
@@ -299,7 +301,28 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
         }
       },
       onScrollChanged: (controller, x, y) {
-        // App bar auto-hide disabled to fix unusual scroll animation
+        if (isCurrentTab(currentWebViewModel)) {
+          // Add a small threshold and delay to prevent lag/flicker
+          final int delta = (y - _lastScrollY).abs();
+          if (delta > 10) {
+            _appBarTimer?.cancel();
+            _appBarTimer = Timer(const Duration(milliseconds: 150), () {
+              if (!mounted) return;
+              if (y > _lastScrollY && y > 150) {
+                // Scrolling down
+                if (currentWebViewModel.isAppBarVisible) {
+                  currentWebViewModel.isAppBarVisible = false;
+                }
+              } else if (y < _lastScrollY - 20 || y < 50) {
+                // Scrolling up or at top
+                if (!currentWebViewModel.isAppBarVisible) {
+                  currentWebViewModel.isAppBarVisible = true;
+                }
+              }
+            });
+          }
+          _lastScrollY = y;
+        }
       },
       onUpdateVisitedHistory: (controller, url, androidIsReload) async {
         widget.webViewModel.url = url;
@@ -484,11 +507,14 @@ class _WebViewTabState extends State<WebViewTab> with WidgetsBindingObserver {
         windowModel.notifyWebViewTabUpdated();
       },
       onCreateWindow: (controller, createWindowRequest) async {
-        var webViewModel = WebViewModel(
-          url: WebUri("about:blank"),
-          windowId: createWindowRequest.windowId,
+        var webViewTab = WebViewTab(
+          key: GlobalKey(),
+          webViewModel: WebViewModel(
+              url: WebUri("about:blank"),
+              windowId: createWindowRequest.windowId),
         );
-        windowModel.addTab(webViewModel);
+
+        windowModel.addTab(webViewTab);
 
         return true;
       },

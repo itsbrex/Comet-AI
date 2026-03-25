@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_browser/models/browser_model.dart';
 import 'package:flutter_browser/models/webview_model.dart';
 import 'package:flutter_browser/util.dart';
-
+import 'package:flutter_browser/webview_tab.dart';
 import 'package:flutter_font_icons/flutter_font_icons.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:provider/provider.dart';
@@ -44,8 +45,11 @@ class _ProjectInfoPopupState extends State<ProjectInfoPopup> {
         onPressed: () {
           final windowModel = Provider.of<WindowModel>(context, listen: false);
           windowModel.addTab(
-            WebViewModel(
-              url: WebUri("https://browser.ponsrischool.in"),
+            WebViewTab(
+              key: GlobalKey(),
+              webViewModel: WebViewModel(
+                url: WebUri("https://browser.ponsrischool.in"),
+              ),
             ),
           );
           Navigator.pop(context);
@@ -70,8 +74,11 @@ class _ProjectInfoPopupState extends State<ProjectInfoPopup> {
         onPressed: () {
           final windowModel = Provider.of<WindowModel>(context, listen: false);
           windowModel.addTab(
-            WebViewModel(
-              url: WebUri("https://github.com/Preet3627/Comet-AI"),
+            WebViewTab(
+              key: GlobalKey(),
+              webViewModel: WebViewModel(
+                url: WebUri("https://github.com/Preet3627/Comet-AI"),
+              ),
             ),
           );
           Navigator.pop(context);

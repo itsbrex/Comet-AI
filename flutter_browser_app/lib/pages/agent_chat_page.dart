@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:provider/provider.dart';
 import 'package:collection/collection.dart';
@@ -16,10 +17,10 @@ class AgentChatPage extends StatefulWidget {
   final InAppWebViewController? webViewController;
 
   const AgentChatPage({
-    super.key,
+    Key? key,
     required this.initialTask,
     this.webViewController,
-  });
+  }) : super(key: key);
 
   @override
   State<AgentChatPage> createState() => _AgentChatPageState();
@@ -176,7 +177,7 @@ class _AgentChatPageState extends State<AgentChatPage>
       final windowModel = Provider.of<WindowModel>(context, listen: false);
       final currentTab = windowModel.getCurrentTab();
       if (currentTab != null) {
-        controller = currentTab.webViewController;
+        controller = currentTab.webViewModel.webViewController;
       }
     }
 
@@ -253,7 +254,7 @@ class _AgentChatPageState extends State<AgentChatPage>
         _agentService = CometAgentService(
           apiKey: _apiKey!,
           model: settings.geminiModel,
-          webViewController: currentTab.webViewController,
+          webViewController: currentTab.webViewModel.webViewController,
         );
         // Re-hook listeners
         _hookAgentListeners();

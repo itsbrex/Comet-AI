@@ -10,7 +10,7 @@ import '../models/browser_model.dart';
 import '../models/webview_model.dart';
 import '../models/window_model.dart';
 import '../util.dart';
-
+import '../webview_tab.dart';
 
 class DesktopAppBar extends StatefulWidget {
   final bool showTabs;
@@ -28,8 +28,8 @@ class _DesktopAppBarState extends State<DesktopAppBar> {
 
     final tabSelectors = !widget.showTabs
         ? <Widget>[]
-        : windowModel.webViewTabs.map((webViewModel) {
-            final index = windowModel.webViewTabs.indexOf(webViewModel);
+        : windowModel.webViewTabs.map((webViewTab) {
+            final index = windowModel.webViewTabs.indexOf(webViewTab);
             final currentIndex = windowModel.getCurrentTabIndex();
 
             return Flexible(
@@ -40,7 +40,7 @@ class _DesktopAppBarState extends State<DesktopAppBar> {
                     children: [
                       Expanded(
                           child: WebViewTabSelector(
-                              tab: webViewModel, index: index)),
+                              tab: webViewTab, index: index)),
                       SizedBox(
                         height: 15,
                         child: VerticalDivider(
@@ -264,12 +264,15 @@ class _DesktopAppBarState extends State<DesktopAppBar> {
     final browserModel = Provider.of<BrowserModel>(context, listen: false);
     final windowModel = Provider.of<WindowModel>(context, listen: false);
     final settings = browserModel.getSettings();
-    windowModel.addTab(WebViewModel(url: WebUri(settings.searchEngine.url)));
+    windowModel.addTab(WebViewTab(
+      key: GlobalKey(),
+      webViewModel: WebViewModel(url: WebUri(settings.searchEngine.url)),
+    ));
   }
 }
 
 class WebViewTabSelector extends StatefulWidget {
-  final WebViewModel tab;
+  final WebViewTab tab;
   final int index;
 
   const WebViewTabSelector({super.key, required this.tab, required this.index});
@@ -291,17 +294,17 @@ class _WebViewTabSelectorState extends State<WebViewTabSelector> {
     final windowModel = Provider.of<WindowModel>(context, listen: true);
     final isCurrentTab = windowModel.getCurrentTabIndex() == widget.index;
 
-    final webViewModel = widget.tab;
-    final url = webViewModel.url;
-    var tabName = webViewModel.title ?? url?.toString() ?? '';
+    final tab = widget.tab;
+    final url = tab.webViewModel.url;
+    var tabName = tab.webViewModel.title ?? url?.toString() ?? '';
     if (tabName.isEmpty) {
       tabName = 'New Tab';
     }
     final tooltipText =
         '$tabName\n${(url?.host ?? '').isEmpty ? url?.toString() : url?.host}'
             .trim();
-    final faviconUrl = webViewModel.favicon != null
-        ? webViewModel.favicon!.url
+    final faviconUrl = tab.webViewModel.favicon != null
+        ? tab.webViewModel.favicon!.url
         : (url != null && ["http", "https"].contains(url.scheme)
             ? Uri.parse("${url.origin}/favicon.ico")
             : null);
@@ -328,14 +331,17 @@ class _WebViewTabSelectorState extends State<WebViewTabSelector> {
                 ContextMenuButtonConfig(
                   "Reload",
                   onPressed: () {
-                    webViewModel.webViewController?.reload();
+                    tab.webViewModel.webViewController?.reload();
                   },
                 ),
                 ContextMenuButtonConfig(
                   "Duplicate",
                   onPressed: () {
-                    if (webViewModel.url != null) {
-                      windowModel.addTab(WebViewModel(url: webViewModel.url));
+                    if (tab.webViewModel.url != null) {
+                      windowModel.addTab(WebViewTab(
+                        key: GlobalKey(),
+                        webViewModel: WebViewModel(url: tab.webViewModel.url),
+                      ));
                     }
                   },
                 ),
@@ -424,7 +430,7 @@ class _WebViewTabSelectorState extends State<WebViewTabSelector> {
 }
 
 class OpenTabsViewer extends StatefulWidget {
-  final List<WebViewModel> webViewTabs;
+  final List<WebViewTab> webViewTabs;
 
   const OpenTabsViewer({super.key, required this.webViewTabs});
 
@@ -496,13 +502,13 @@ class _OpenTabsViewerState extends State<OpenTabsViewer> {
               ),
             ),
             ...(widget.webViewTabs.where(
-              (webViewModel) {
+              (element) {
                 final search = _controller.text.toLowerCase().trim();
-                final containsInTitle = webViewModel.title
+                final containsInTitle = element.webViewModel.title
                         ?.toLowerCase()
                         .contains(search) ??
                     false;
-                final containsInUrl = webViewModel.url
+                final containsInUrl = element.webViewModel.url
                         ?.toString()
                         .toLowerCase()
                         .contains(search) ??
@@ -510,14 +516,14 @@ class _OpenTabsViewerState extends State<OpenTabsViewer> {
                 return search.isEmpty || containsInTitle || containsInUrl;
               },
             ).map((w) {
-              final url = w.url;
-              final title = (w.title ?? '').isNotEmpty
-                  ? w.title!
+              final url = w.webViewModel.url;
+              final title = (w.webViewModel.title ?? '').isNotEmpty
+                  ? w.webViewModel.title!
                   : 'New Tab';
               var subtitle =
                   (url?.host ?? '').isEmpty ? url?.toString() : url?.host;
               final diffTime =
-                  DateTime.now().difference(w.lastOpenedTime);
+                  DateTime.now().difference(w.webViewModel.lastOpenedTime);
               var diffTimeSubtitle = 'now';
               if (diffTime.inDays > 0) {
                 diffTimeSubtitle =
@@ -528,8 +534,8 @@ class _OpenTabsViewerState extends State<OpenTabsViewer> {
                 diffTimeSubtitle = '${diffTime.inSeconds} sec ago';
               }
 
-              final faviconUrl = w.favicon != null
-                  ? w.favicon!.url
+              final faviconUrl = w.webViewModel.favicon != null
+                  ? w.webViewModel.favicon!.url
                   : (url != null && ["http", "https"].contains(url.scheme)
                       ? Uri.parse("${url.origin}/favicon.ico")
                       : null);

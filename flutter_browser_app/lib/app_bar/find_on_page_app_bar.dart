@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_browser/models/browser_model.dart';
 import 'package:provider/provider.dart';
 
 import '../models/window_model.dart';
@@ -31,7 +32,7 @@ class _FindOnPageAppBarState extends State<FindOnPageAppBar> {
   @override
   Widget build(BuildContext context) {
     final windowModel = Provider.of<WindowModel>(context, listen: false);
-    final webViewModel = windowModel.getCurrentTab();
+    final webViewModel = windowModel.getCurrentTab()?.webViewModel;
     final findInteractionController = webViewModel?.findInteractionController;
 
     return AppBar(

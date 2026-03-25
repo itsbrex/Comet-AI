@@ -6,7 +6,7 @@ import 'dart:async';
 import '../sync_service.dart';
 
 class ConnectDesktopPage extends StatefulWidget {
-  const ConnectDesktopPage({super.key});
+  const ConnectDesktopPage({Key? key}) : super(key: key);
 
   @override
   State<ConnectDesktopPage> createState() => _ConnectDesktopPageState();
@@ -17,6 +17,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
   QRViewController? controller;
   bool isConnecting = false;
   bool isConnected = false;
+  bool showScanner = false;
   String? desktopIp;
   String? errorMessage;
   final List<Map<String, dynamic>> _discoveredDevices = [];
@@ -25,6 +26,10 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
   @override
   void initState() {
     super.initState();
+    isConnected = SyncService().isConnectedToDesktop;
+    if (isConnected) {
+      desktopIp = SyncService().getConnectionInfo()['desktopIp'];
+    }
     _startDiscovery();
   }
 
@@ -57,21 +62,21 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF121212),
+        backgroundColor: Color(0xFF121212),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Enter Pairing Code',
+        title: Text('Enter Pairing Code',
             style: TextStyle(color: Colors.white, fontFamily: 'Outfit')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Enter the 6-digit code shown on your desktop screen.',
+            Text('Enter the 6-digit code shown on your desktop screen.',
                 style: TextStyle(color: Colors.white70, fontSize: 13)),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             TextField(
               autofocus: true,
               keyboardType: TextInputType.number,
               maxLength: 6,
-              style: const TextStyle(
+              style: TextStyle(
                   color: Colors.white,
                   letterSpacing: 10,
                   fontSize: 24,
@@ -92,18 +97,18 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white38)),
+            child: Text('Cancel', style: TextStyle(color: Colors.white38)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00E5FF),
+                backgroundColor: Color(0xFF00E5FF),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12))),
             onPressed: () async {
               Navigator.pop(context);
               await _connect(ip, port, deviceId, pairingCode);
             },
-            child: const Text('Connect', style: TextStyle(color: Colors.black)),
+            child: Text('Connect', style: TextStyle(color: Colors.black)),
           ),
         ],
       ),
@@ -131,7 +136,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Connected to desktop at $ip'),
-            backgroundColor: const Color(0xFF00E676),
+            backgroundColor: Color(0xFF00E676),
           ),
         );
       }
@@ -142,6 +147,38 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
           errorMessage = e.toString().contains('AUTH_FAILED')
               ? 'Invalid pairing code'
               : 'Connection failed: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _approveRiskAction(String id, String pin, String deviceId) async {
+    try {
+      final result = await SyncService().executeOnDesktop('approve-high-risk', args: {
+        'id': id,
+        'pin': pin,
+      });
+
+      if (mounted) {
+        if (result != null && result['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Action approved successfully!'),
+              backgroundColor: Color(0xFF00E676),
+            ),
+          );
+          setState(() {
+            if (isConnected) showScanner = false;
+            errorMessage = null;
+          });
+        } else {
+          throw Exception(result?['error'] ?? 'Approval failed');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          errorMessage = 'Approval failed: $e';
         });
       }
     }
@@ -159,15 +196,23 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
           if (ip != null && port != null && deviceId != null) {
             _showPairingCodeDialog(ip, int.parse(port), deviceId);
           } else {
-            throw Exception('Invalid QR code data');
+            throw Exception('Invalid connect QR code data');
           }
         } else if (uri.host == 'approve') {
-          // Navigate to approval screen
-          if (mounted) {
-            Navigator.pushNamed(context, '/approve', arguments: {'data': qrData});
+          final id = uri.queryParameters['id'];
+          final deviceId = uri.queryParameters['deviceId'];
+          final pin = uri.queryParameters['pin'];
+
+          if (id != null && deviceId != null && pin != null) {
+            if (!SyncService().isConnectedToDesktop) {
+              throw Exception('Must be connected and authenticated to desktop to approve actions.');
+            }
+            await _approveRiskAction(id, pin, deviceId);
+          } else {
+            throw Exception('Invalid approve QR code data');
           }
         } else {
-          throw Exception('Unknown Comet-AI action: ${uri.host}');
+          throw Exception('Unknown Comet-AI QR Action');
         }
       } else {
         throw Exception('Not a Comet-AI QR code');
@@ -186,19 +231,19 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Connect to Desktop',
           style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.bold),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Container(
         color: Colors.black,
         child: SafeArea(
-          child: isConnected ? _buildConnectedView() : _buildScannerView(),
+          child: (isConnected && !showScanner) ? _buildConnectedView() : _buildScannerView(),
         ),
       ),
     );
@@ -208,17 +253,26 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
     return SingleChildScrollView(
       child: Column(
         children: [
-          const Padding(
-            padding: EdgeInsets.all(20.0),
+          if (isConnected && showScanner)
+            Padding(
+              padding: const EdgeInsets.only(top: 10.0),
+              child: TextButton.icon(
+                 onPressed: () => setState(() => showScanner = false),
+                 icon: Icon(Icons.close, color: Colors.white70),
+                 label: Text('Cancel Scan', style: TextStyle(color: Colors.white70)),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.all(20.0),
             child: Column(
               children: [
-                Icon(
+                const Icon(
                   Icons.qr_code_scanner,
                   size: 60,
                   color: Color(0xFF00E5FF),
                 ),
-                SizedBox(height: 10),
-                Text(
+                const SizedBox(height: 10),
+                const Text(
                   'Scan QR Code',
                   style: TextStyle(
                     fontSize: 24,
@@ -263,8 +317,8 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
             ),
           ),
           if (_discoveredDevices.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 30, 20, 10),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 30, 20, 10),
               child: Row(
                 children: [
                   Icon(Icons.devices, color: Colors.white38, size: 16),
@@ -283,7 +337,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
             ),
             ListView.builder(
               shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+              physics: NeverScrollableScrollPhysics(),
               itemCount: _discoveredDevices.length,
               itemBuilder: (context, index) {
                 final device = _discoveredDevices[index];
@@ -298,22 +352,22 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                         onTap: () => _showPairingCodeDialog(
                             device['ip'], device['port'], device['deviceId']),
                         leading: Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF00E5FF).withOpacity(0.1),
+                            color: Color(0xFF00E5FF).withOpacity(0.1),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.desktop_windows,
+                          child: Icon(Icons.desktop_windows,
                               color: Color(0xFF00E5FF)),
                         ),
                         title: Text(device['deviceName'],
-                            style: const TextStyle(
+                            style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold)),
                         subtitle: Text(device['ip'],
-                            style: const TextStyle(color: Colors.white38)),
+                            style: TextStyle(color: Colors.white38)),
                         trailing:
-                            const Icon(Icons.chevron_right, color: Colors.white24),
+                            Icon(Icons.chevron_right, color: Colors.white24),
                       ),
                     ),
                   ),
@@ -321,8 +375,8 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
               },
             ),
           ] else
-            const Padding(
-              padding: EdgeInsets.all(40.0),
+            Padding(
+              padding: const EdgeInsets.all(40.0),
               child: Column(
                 children: [
                   SizedBox(
@@ -341,7 +395,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Container(
-                padding: const EdgeInsets.all(15),
+                padding: EdgeInsets.all(15),
                 decoration: BoxDecoration(
                   color: Colors.red.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(15),
@@ -349,11 +403,11 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline, color: Colors.red),
-                    const SizedBox(width: 10),
+                    Icon(Icons.error_outline, color: Colors.red),
+                    SizedBox(width: 10),
                     Expanded(
                       child: Text(errorMessage!,
-                          style: const TextStyle(color: Colors.white70)),
+                          style: TextStyle(color: Colors.white70)),
                     ),
                   ],
                 ),
@@ -380,21 +434,21 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
               height: 100,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   colors: [Color(0xFF00E676), Color(0xFF00C853)],
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF00E676).withOpacity(0.3),
+                    color: Color(0xFF00E676).withOpacity(0.3),
                     blurRadius: 20,
                     spreadRadius: 5,
                   ),
                 ],
               ),
-              child: const Icon(Icons.check, size: 50, color: Colors.white),
+              child: Icon(Icons.check, size: 50, color: Colors.white),
             ),
-            const SizedBox(height: 30),
-            const Text(
+            SizedBox(height: 30),
+            Text(
               'Connected!',
               style: TextStyle(
                 fontSize: 28,
@@ -403,28 +457,28 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                 fontFamily: 'Outfit',
               ),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Text(
               'Desktop: $desktopIp',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 color: Colors.white70,
                 fontFamily: 'Inter',
               ),
             ),
-            const SizedBox(height: 30),
+            SizedBox(height: 30),
             ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: Colors.white.withOpacity(0.1)),
                   ),
-                  child: const Column(
+                  child: Column(
                     children: [
                       Icon(Icons.touch_app, size: 30, color: Color(0xFF00E5FF)),
                       SizedBox(height: 15),
@@ -455,7 +509,24 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 40),
+            SizedBox(height: 30),
+            ElevatedButton.icon(
+              icon: Icon(Icons.qr_code_scanner),
+              label: Text('Scan Action QR'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF00E5FF),
+                foregroundColor: Colors.black,
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                setState(() {
+                  showScanner = true;
+                  errorMessage = null;
+                });
+              },
+            ),
+            SizedBox(height: 20),
             TextButton(
               onPressed: () {
                 SyncService().disconnectFromDesktop();
@@ -465,7 +536,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                 });
                 _startDiscovery(); // Restart discovery
               },
-              child: const Text(
+              child: Text(
                 'DISCONNECT SESSION',
                 style: TextStyle(
                   color: Colors.redAccent,
@@ -482,13 +553,13 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
 
   Widget _buildInstructionCard() {
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.03),
         borderRadius: BorderRadius.circular(15),
         border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
-      child: const Row(
+      child: Row(
         children: [
           Icon(Icons.security, color: Colors.white24, size: 20),
           SizedBox(width: 12),
@@ -514,7 +585,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
     }
     controller.resumeCamera();
     controller.scannedDataStream.listen((scanData) {
-      if (scanData.code != null && !isConnecting && !isConnected) {
+      if (scanData.code != null && !isConnecting && (!isConnected || showScanner)) {
         _scanQRCode(scanData.code!);
       }
     });
