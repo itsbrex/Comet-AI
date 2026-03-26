@@ -245,6 +245,12 @@ flutter run
 
 ---
 
+## 📝 v0.2.5 Highlights
+- **macOS-native polish** – Native menu entries (Comet AI, File, Edit, View, Window, Help) and extra spacing/feature descriptions in the top bar, plus a SwiftUI-only translucent AI chat sidebar for the mac build.
+- **Raycast & automation visibility** – Raycast-native hooks let the agent list/remove automations, and low/mid-risk AI commands that aren’t auto-approved now surface the existing QR verification modal instead of being blocked.
+- **Setup guide refresh** – Charm-inspired light theme, automatic timezone detection, and explicit theme selection are part of the welcome/setup flow so it only exits once API keys and steps are resolved.
+- **Panel & automation UX polish** – Download, clipboard, cart, and ecosystem panels close when clicking outside, scheduling modals stay scrollable, and the AI can inspect/remove automations on request without leaving the workflow.
+
 ## 🗺️ Roadmap
 
 - [ ] Native Chromium core (replace Electron BrowserView)
@@ -322,27 +328,23 @@ Comet AI Browser is built by a **16-year-old student** from India, preparing for
 
 ## 📋 Changelog
 
-### v0.2.5 (2026-03-26) - Automation & Panel Updates
+### v0.2.5 (2026-03-26) - Automation, mac polish & schedule UX
 #### New Features
-- **Automation Panel in Settings** - New "Automation" section in Settings with task management
-- **Create Task Button** - Add "+ Create Task" button in Automation panel
-- **Translate Panel Scrolling** - Fixed overflow with max-height and scrollable content
-- **Panel z-layer Fix** - All panels (Settings, Downloads, Cart, Clipboard, Translate) now use z-[9999]
-- **Browser Disable on Panel Open** - Automatically disables browser view when panels open
-- **OPEN_AUTOMATION_SETTINGS Command** - AI can now open automation settings via command
-- **OPEN_SCHEDULING_MODAL Command** - AI can prefill and open scheduling modal
-- **JSON Format for Scheduling** - AI uses JSON format for scheduling tasks
-- **PDF Template Markers** - Templates properly passed from AI to PDF generator
+- **Automation panel & Raycast hooks** – Settings now features an automation dashboard with a “+ Create Task” button, while Raycast-native hooks let the AI list or delete the same automations directly from the desktop client.
+- **macOS-native polish** – Added native top menus (Comet AI, File, Edit, View, Window, Help) with clearer spacing/descriptions and introduced a SwiftUI-only translucent AI chat sidebar that mirrors macOS aesthetics.
+- **Automation-aware AI approval** – Low/mid-risk commands that are not auto-approved now show the existing QR verifier modal so the agent can self-authorize instead of being blocked, and automation state is visible to the AI (inspect/remove flows).
+- **Charm-themed setup guide** – The welcome/setup screens now highlight the Charm light theme, offer theme selection, auto-detect the system timezone, and refuse to close until API keys and mandatory steps are completed.
+- **Panel focus & scheduling UX** – Download, clipboard, cart, and ecosystem panels close when clicking outside and the scheduling automation modal stays scrollable/height-limited so longer flows remain usable.
 
 #### Bug Fixes
-- Fixed duplicate SpotlightSearchOverlay import
-- Fixed automation:get-tasks error when service not initialized
-- Fixed ClientOnlyPage.tsx parsing errors
-- Fixed infinite loop in ClientOnlyPage useEffect
+- Fixed duplicate `SpotlightSearchOverlay` import.
+- Fixed `automation:get-tasks` errors when the automation service is uninitialized.
+- Eliminated previous JSX parsing errors in `ClientOnlyPage.tsx`.
+- Resolved the infinite loop in the `ClientOnlyPage` `useEffect`.
 
 #### Updates
-- Removed deprecated GENERATE_PDF format from AI guide
-- Updated all version references to v0.2.5
+- Removed the legacy `GENERATE_PDF` format from the AI guide and normalized AI scheduling commands to JSON.
+- Updated every textual reference to the current v0.2.5 release.
 
 ### v0.2.4 (2026-03-XX)
 - AI scheduling intent detection
