@@ -279,7 +279,9 @@ const PermissionSettings = () => {
             return (
               <div key={command.cmd} className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3">
                 <div>
-                  <div className="text-xs uppercase tracking-[0.4em] text-white/40">{command.category}</div>
+                  <div className="text-xs uppercase tracking-[0.4em] text-white/40">
+                    {'category' in command ? command.category : 'Medium Risk'}
+                  </div>
                   <p className="text-sm font-bold text-white">{command.cmd}</p>
                   <p className="text-[11px] text-white/60">{command.desc}</p>
                 </div>
