@@ -13,7 +13,9 @@ class PermissionStore {
     this.settings = {
       autoApproveLowRisk: false,
       autoApproveMidRisk: false,
+      autoApprovedCommands: [],
     };
+    this.autoApprovedCommands = new Set();
   }
 
   async load() {
@@ -34,6 +36,7 @@ class PermissionStore {
       if (fs.existsSync(this.settingsPath)) {
         const settings = JSON.parse(fs.readFileSync(this.settingsPath, 'utf-8'));
         this.settings = { ...this.settings, ...settings };
+        this._syncAutoApprovedCommands();
       }
     } catch (e) {
       console.warn('[PermissionStore] Failed to load:', e.message);
@@ -43,6 +46,15 @@ class PermissionStore {
 
   getSettings() {
     return { ...this.settings };
+  }
+
+  _syncAutoApprovedCommands() {
+    this.autoApprovedCommands = new Set(
+      Array.isArray(this.settings.autoApprovedCommands)
+        ? this.settings.autoApprovedCommands.map(cmd => (cmd || '').toLowerCase())
+        : []
+    );
+    this.settings.autoApprovedCommands = [...this.autoApprovedCommands];
   }
 
   updateSettings(newSettings) {
@@ -59,10 +71,37 @@ class PermissionStore {
     }
   }
 
+  setAutoCommand(command, enabled) {
+    const key = this._normalizeCommand(command);
+    if (!key) return;
+    if (enabled) {
+      this.autoApprovedCommands.add(key);
+    } else {
+      this.autoApprovedCommands.delete(key);
+    }
+    this.settings.autoApprovedCommands = [...this.autoApprovedCommands];
+    this._saveSettings();
+  }
+
+  getAutoApprovedCommands() {
+    return [...this.autoApprovedCommands];
+  }
+
   isAutoExecutable(riskLevel) {
     if (riskLevel === 'low' && this.settings.autoApproveLowRisk) return true;
     if (riskLevel === 'medium' && this.settings.autoApproveMidRisk) return true;
     return false;
+  }
+
+  canAutoExecute(command, riskLevel) {
+    const key = this._normalizeCommand(command);
+    if (this.autoApprovedCommands.has(key)) return true;
+    return this.isAutoExecutable(riskLevel);
+  }
+
+  _normalizeCommand(command) {
+    if (!command) return '';
+    return command.trim().split(/\s+/)[0].toLowerCase();
   }
 
   _save() {

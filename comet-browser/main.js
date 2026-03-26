@@ -3218,6 +3218,20 @@ function analyzeCommandRisk(command) {
   return { description: explainCommand(command), risks, harmLevel, isWhitelisted: isSafeCmd };
 }
 
+async function generateShellApprovalQR(command) {
+  const deviceId = os.hostname();
+  const token = Math.random().toString(36).substring(2, 10);
+  const pin = Math.floor(100000 + Math.random() * 900000).toString();
+  const deepLinkUrl = `comet-ai://shell-approve?id=${token}&deviceId=${encodeURIComponent(deviceId)}&pin=${pin}&cmd=${encodeURIComponent(command)}`;
+  try {
+    const qrImage = await QRCode.toDataURL(deepLinkUrl);
+    return { qrImage, pin, token };
+  } catch (err) {
+    console.error('[Main] Failed to generate Shell Approval QR:', err);
+    return { qrImage: null, pin, token };
+  }
+}
+
 async function requestShellApproval(command, riskLevel, reason) {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
   const requestId = `shell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -3270,7 +3284,7 @@ async function checkShellPermission(command) {
   const analysis = analyzeCommandRisk(command);
 
   // Use auto-approve settings from permission store
-  if (permissionStore.isAutoExecutable(analysis.harmLevel)) {
+  if (permissionStore.canAutoExecute(command, analysis.harmLevel)) {
     console.log(`[Shell] Auto-approved (${analysis.harmLevel}): ${command}`);
     return true;
   }
@@ -6338,6 +6352,15 @@ ipcMain.removeHandler('generate-pdf');
   ipcMain.handle('security-settings-update', async (event, settings) => {
     permissionStore.updateSettings(settings);
     return { success: true, settings: permissionStore.getSettings() };
+  });
+
+  ipcMain.handle('permission-auto-command', async (event, { command, enabled }) => {
+    permissionStore.setAutoCommand(command, enabled);
+    return { success: true, commands: permissionStore.getAutoApprovedCommands() };
+  });
+
+  ipcMain.handle('permission-auto-commands', async () => {
+    return { commands: permissionStore.getAutoApprovedCommands() };
   });
 
   ipcMain.on('automation-shell-approval-response', (_event, { requestId, allowed }) => {

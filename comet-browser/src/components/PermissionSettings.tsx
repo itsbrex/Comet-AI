@@ -63,6 +63,12 @@ const PermissionSettings = () => {
   const [showSafeCommands, setShowSafeCommands] = useState(false);
   const [showMediumCommands, setShowMediumCommands] = useState(false);
   const [showHighCommands, setShowHighCommands] = useState(false);
+  const [autoCommands, setAutoCommands] = useState<string[]>([]);
+
+  const normalizeCommandKey = (cmd: string) => {
+    if (!cmd) return '';
+    return cmd.trim().split(/\s+/)[0].toLowerCase();
+  };
 
   useEffect(() => {
     loadSettings();
@@ -76,6 +82,8 @@ const PermissionSettings = () => {
           autoApproveLowRisk: result.autoApproveLowRisk || false,
           autoApproveMidRisk: result.autoApproveMidRisk || false,
         });
+        const list = Array.isArray(result.autoApprovedCommands) ? result.autoApprovedCommands : [];
+        setAutoCommands(list.map((cmd: string) => normalizeCommandKey(cmd)));
       } catch (e) {
         console.error('Failed to load settings:', e);
       }
@@ -99,6 +107,22 @@ const PermissionSettings = () => {
     setSaving(false);
   };
 
+  const handleAutoCommandToggle = async (cmd: string) => {
+    const key = normalizeCommandKey(cmd);
+    if (!key) return;
+    const enabled = !autoCommands.includes(key);
+    setAutoCommands((prev) =>
+      enabled ? [...prev, key] : prev.filter((item) => item !== key)
+    );
+    if (window.electronAPI?.setAutoApprovalCommand) {
+      try {
+        await window.electronAPI.setAutoApprovalCommand({ command: key, enabled });
+      } catch (e) {
+        console.error('Failed to update auto command:', e);
+      }
+    }
+  };
+
   const openSystemSettings = (type: string) => {
     const urls: Record<string, string> = {
       screen: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
@@ -119,6 +143,8 @@ const PermissionSettings = () => {
 
   const platform = getPlatform();
   const isMac = platform === 'darwin';
+  const commandCandidates = [...SAFE_COMMANDS, ...MEDIUM_RISK_COMMANDS];
+  const isCommandAuto = (cmd: string) => autoCommands.includes(normalizeCommandKey(cmd));
 
   if (loading) {
     return (
@@ -214,6 +240,60 @@ const PermissionSettings = () => {
               <p className="text-white/50 text-xs">Always requires confirmation (sudo, rm, shutdown, etc.)</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white/5 rounded-3xl p-6 border border-white/10 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="text-lg font-bold text-white">Auto-approved commands</h4>
+            <p className="text-xs text-white/40">Commands the AI can execute without asking again.</p>
+          </div>
+          <span className="text-[11px] uppercase tracking-[0.4em] text-white/40">
+            {autoCommands.length} total
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {autoCommands.length === 0 && (
+            <span className="text-[10px] text-white/60">No commands yet — toggle one below.</span>
+          )}
+          {autoCommands.map((cmd) => (
+            <span key={cmd} className="px-3 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.35em] text-white/60">
+              {cmd}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white/5 rounded-3xl p-6 border border-white/10 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="text-lg font-bold text-white">Select commands to auto-run</h4>
+            <p className="text-xs text-white/40">Toggle individual commands for auto-approval.</p>
+          </div>
+          <span className="text-[11px] uppercase tracking-[0.4em] text-white/40">Safe + medium risks</span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {commandCandidates.map((command) => {
+            const enabled = isCommandAuto(command.cmd);
+            return (
+              <div key={command.cmd} className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.4em] text-white/40">{command.category}</div>
+                  <p className="text-sm font-bold text-white">{command.cmd}</p>
+                  <p className="text-[11px] text-white/60">{command.desc}</p>
+                </div>
+                <button
+                  onClick={() => handleAutoCommandToggle(command.cmd)}
+                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.4em] transition-all ${
+                    enabled ? 'bg-green-500/80 text-white' : 'bg-white/10 text-white/60'
+                  }`}
+                >
+                  {enabled ? 'Auto ON' : 'Auto OFF'}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
 

@@ -24,7 +24,8 @@ const RISK_CONFIG = {
 
 const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAllow, onDeny }: ClickPermissionModalProps) {
   const [alwaysAllow, setAlwaysAllow] = React.useState(false);
-  const risk = RISK_CONFIG[context.risk || 'medium'];
+  const riskKey = context.risk || 'medium';
+  const risk = RISK_CONFIG[riskKey] ?? RISK_CONFIG.medium;
 
   let qrData = null;
   if (context.highRiskQr) {

@@ -2543,17 +2543,21 @@ I've successfully executed the following real tasks:
       <AnimatePresence>
         {permissionPending && (
           <div className="absolute inset-0 z-[10001] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
-            <ClickPermissionModal
-              context={permissionPending.context}
-              onAllow={async (alwaysAllow) => { 
-                const ctx = permissionPending.context;
-                if (alwaysAllow && window.electronAPI?.permGrant) {
-                  const permKey = `${ctx.actionType}:${ctx.target || ctx.what}`;
-                  await window.electronAPI.permGrant(permKey, 'execute', ctx.action, false);
-                }
-                permissionPending.resolve(true); 
-                setPermissionPending(null); 
-              }}
+              <ClickPermissionModal
+                context={permissionPending.context}
+                onAllow={async (alwaysAllow) => { 
+                  const ctx = permissionPending.context;
+                  if (alwaysAllow && window.electronAPI?.permGrant) {
+                    const permKey = `${ctx.actionType}:${ctx.target || ctx.what}`;
+                    await window.electronAPI.permGrant(permKey, 'execute', ctx.action, false);
+                    if (ctx.risk !== 'high' && window.electronAPI?.setAutoApprovalCommand) {
+                      const autoCommand = ctx.target || ctx.what || ctx.action;
+                      await window.electronAPI.setAutoApprovalCommand({ command: autoCommand, enabled: true });
+                    }
+                  }
+                  permissionPending.resolve(true); 
+                  setPermissionPending(null); 
+                }}
               onDeny={() => { permissionPending.resolve(false); setPermissionPending(null); }}
             />
           </div>

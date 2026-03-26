@@ -451,6 +451,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Security Settings
   getSecuritySettings: () => ipcRenderer.invoke('security-settings-get'),
   updateSecuritySettings: (settings) => ipcRenderer.invoke('security-settings-update', settings),
+  setAutoApprovalCommand: (payload) => ipcRenderer.invoke('permission-auto-command', payload),
+  getAutoApprovedCommands: () => ipcRenderer.invoke('permission-auto-commands'),
 
   // Robot Service (gated desktop automation)
   robotExecute: (action) => ipcRenderer.invoke('robot-execute', action),
