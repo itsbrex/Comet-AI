@@ -2135,44 +2135,46 @@ export default function Home() {
             >
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-sm font-black uppercase tracking-widest text-sky-400">Downloads</h3>
-                <button onClick={() => setShowDownloads(false)} className="p-2 hover:bg-white/10 rounded-full transition-all text-white/40"><X size={16} /></button>
+                <button onClick={() => setShowDownloads(false)} className="p-2 hover:bg-white/10 rounded-full transition-all text-white/40">
+                  <X size={16} />
+                </button>
               </div>
-            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4">
-              {downloads.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center opacity-30 gap-4">
-                  <DownloadCloud size={40} />
-                  <p className="text-xs font-bold uppercase tracking-widest">No Active Downloads</p>
-                </div>
-              ) : (
-                downloads.map((d, i) => (
-                  <div
-                    key={i}
-                    className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-sky-400/30 transition-all cursor-pointer"
-                    onClick={async () => {
-                      if (d.status === 'completed' && window.electronAPI?.openFile) {
-                        // Use path if available, otherwise fall back to name
-                        const fileToOpen = d.path || d.name;
-                        await window.electronAPI.openFile(fileToOpen);
-                      }
-                    }}
-                  >
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-bold text-white truncate max-w-[200px]">{d.name}</span>
-                      <span className="text-[10px] uppercase font-black tracking-tighter text-sky-400/60">
-                        {d.status === 'completed' ? '✓ Click to Open' : d.status}
-                      </span>
-                    </div>
-                    <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: d.status === 'completed' ? '100%' : `${d.progress || 0}%` }}
-                        className="h-full bg-sky-400"
-                      />
-                    </div>
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4">
+                {downloads.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center opacity-30 gap-4">
+                    <DownloadCloud size={40} />
+                    <p className="text-xs font-bold uppercase tracking-widest">No Active Downloads</p>
                   </div>
-                ))
-
-              )}
+                ) : (
+                  downloads.map((d, i) => (
+                    <div
+                      key={i}
+                      className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-sky-400/30 transition-all cursor-pointer"
+                      onClick={async () => {
+                        if (d.status === 'completed' && window.electronAPI?.openFile) {
+                          // Use path if available, otherwise fall back to name
+                          const fileToOpen = d.path || d.name;
+                          await window.electronAPI.openFile(fileToOpen);
+                        }
+                      }}
+                    >
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs font-bold text-white truncate max-w-[200px]">{d.name}</span>
+                        <span className="text-[10px] uppercase font-black tracking-tighter text-sky-400/60">
+                          {d.status === 'completed' ? '✓ Click to Open' : d.status}
+                        </span>
+                      </div>
+                      <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: d.status === 'completed' ? '100%' : `${d.progress || 0}%` }}
+                          className="h-full bg-sky-400"
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         )}
