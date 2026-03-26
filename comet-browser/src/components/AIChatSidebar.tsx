@@ -242,6 +242,27 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
       }
     : setLocalShowSchedulingModal;
 
+  useEffect(() => {
+    if (!window.electronAPI?.onAutomationShellApproval || !window.electronAPI?.respondAutomationShellApproval) return;
+    const cleanup = window.electronAPI.onAutomationShellApproval((payload) => {
+      setPermissionPending({
+        resolve: (allowed: boolean) => {
+          window.electronAPI.respondAutomationShellApproval({ requestId: payload.requestId, allowed });
+        },
+        context: {
+          action: payload.command || 'Shell command',
+          what: payload.command,
+          reason: payload.reason || 'A pending automation needs your approval.',
+          risk: payload.risk || 'medium',
+          actionType: 'SHELL_COMMAND',
+          target: payload.command,
+          highRiskQr: payload.highRiskQr,
+        },
+      });
+    });
+    return cleanup;
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Helper Logic
   // ---------------------------------------------------------------------------
@@ -1128,6 +1149,49 @@ I couldn't schedule the task. The background service may not be running. Please 
             output = `Application ${command.value} launched.`;
           } else {
             output = 'App launch denied by user.';
+          }
+          break;
+        }
+
+        case 'LIST_AUTOMATIONS': {
+          const result = window.electronAPI?.getScheduledTasks ? await window.electronAPI.getScheduledTasks() : [];
+          const tasks = Array.isArray(result) ? result : (Array.isArray(result?.tasks) ? result.tasks : []);
+          if (!tasks.length) {
+            output = 'No automation tasks are currently scheduled.';
+          } else {
+            output = tasks.map((task, idx) => {
+              const label = task.name || `Task ${idx + 1}`;
+              const schedule = task.schedule || 'custom';
+              const status = task.enabled ? 'Active' : 'Paused';
+              return `${idx + 1}. ${label} — ${schedule} (${status})`;
+            }).join('\n');
+          }
+          break;
+        }
+
+        case 'DELETE_AUTOMATION': {
+          let taskId = command.value?.trim();
+          if (taskId?.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(taskId);
+              taskId = parsed.id || parsed.taskId || taskId;
+            } catch {
+              taskId = taskId.replace(/[{}]/g, '').split(':').pop()?.trim() || taskId;
+            }
+          }
+          if (!taskId) {
+            output = 'Provide the automation ID you want to delete.';
+            break;
+          }
+          if (!window.electronAPI?.deleteScheduledTask) {
+            output = 'Automation DELETE API is unavailable.';
+            break;
+          }
+          const res = await window.electronAPI.deleteScheduledTask(taskId);
+          if (res?.success) {
+            output = `Deleted automation ${taskId}.`;
+          } else {
+            output = `Failed to delete automation: ${res?.error || 'unknown error'}.`;
           }
           break;
         }

@@ -195,6 +195,28 @@ export default function Home() {
     setInputValue(store.currentUrl);
   }, [store.currentUrl]);
 
+  // Mirror tabs/history state for Raycast integration
+  useEffect(() => {
+    if (window.electronAPI?.updateRaycastState) {
+      const tabsSnapshot = store.tabs.map(tab => ({
+        id: tab.id,
+        title: tab.title,
+        url: tab.url,
+        isActive: tab.id === store.activeTabId,
+        isLoading: tab.isLoading || false,
+      }));
+      const historySnapshot = store.history.slice(-50).reverse().map(entry => ({
+        title: entry.title,
+        url: entry.url,
+        timestamp: entry.timestamp,
+      }));
+      window.electronAPI.updateRaycastState({
+        tabs: tabsSnapshot,
+        history: historySnapshot,
+      });
+    }
+  }, [store.tabs, store.activeTabId, store.history]);
+
   // Sidebar items configuration
   const sidebarItems = [
     { icon: <Globe size={20} />, label: 'Browser', view: 'browser' },
@@ -2096,16 +2118,25 @@ export default function Home() {
       <audio ref={ambientAudioRef} src={store.ambientMusicUrl} loop hidden />
       <AnimatePresence>
         {showSettings && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-10">
-            <SettingsPanel onClose={() => setShowSettings(false)} defaultSection={settingsSection} />
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-10"
+            onPointerDown={() => setShowSettings(false)}
+          >
+            <div className="w-full max-w-4xl" onPointerDown={(event) => event.stopPropagation()}>
+              <SettingsPanel onClose={() => setShowSettings(false)} defaultSection={settingsSection} />
+            </div>
           </div>
         )}
         {showDownloads && (
-          <div className="fixed top-24 right-10 z-[9999] w-[400px] h-[600px] glass-dark rounded-3xl border border-white/10 shadow-2xl p-6 overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-black uppercase tracking-widest text-sky-400">Downloads</h3>
-              <button onClick={() => setShowDownloads(false)} className="p-2 hover:bg-white/10 rounded-full transition-all text-white/40"><X size={16} /></button>
-            </div>
+          <div className="fixed inset-0 z-[9998]" onPointerDown={() => setShowDownloads(false)}>
+            <div
+              className="fixed top-24 right-10 z-[9999] w-[400px] h-[600px] glass-dark rounded-3xl border border-white/10 shadow-2xl p-6 overflow-hidden flex flex-col"
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-black uppercase tracking-widest text-sky-400">Downloads</h3>
+                <button onClick={() => setShowDownloads(false)} className="p-2 hover:bg-white/10 rounded-full transition-all text-white/40"><X size={16} /></button>
+              </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4">
               {downloads.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center opacity-30 gap-4">
@@ -2146,18 +2177,28 @@ export default function Home() {
           </div>
         )}
         {showClipboard && (
-          <div className="fixed top-24 right-10 z-[9999] w-[450px] h-[650px] overflow-hidden">
-            <ClipboardManager onClose={() => setShowClipboard(false)} />
+          <div className="fixed inset-0 z-[9998]" onPointerDown={() => setShowClipboard(false)}>
+            <div
+              className="fixed top-24 right-10 z-[9999] w-[450px] h-[650px] overflow-hidden"
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <ClipboardManager onClose={() => setShowClipboard(false)} />
+            </div>
           </div>
         )}
         {showCart && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md">
-            <UnifiedCartPanel onClose={() => setShowCart(false)} onScan={handleCartScan} />
+          <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-md" onPointerDown={() => setShowCart(false)}>
+            <div className="w-full max-w-[900px]" onPointerDown={(event) => event.stopPropagation()}>
+              <UnifiedCartPanel onClose={() => setShowCart(false)} onScan={handleCartScan} />
+            </div>
           </div>
         )}
         {showExtensionsPopup && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-10">
-            <div className="w-full max-w-4xl h-full max-h-[800px] glass-dark rounded-[40px] border border-white/10 shadow-2xl p-8 overflow-hidden flex flex-col">
+          <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-md p-10" onPointerDown={() => setShowExtensionsPopup(false)}>
+            <div
+              className="w-full max-w-4xl h-full max-h-[800px] glass-dark rounded-[40px] border border-white/10 shadow-2xl p-8 overflow-hidden flex flex-col"
+              onPointerDown={(event) => event.stopPropagation()}
+            >
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-sky-400/20 flex items-center justify-center text-sky-400 shadow-[0_0_20px_rgba(56,189,248,0.3)]">

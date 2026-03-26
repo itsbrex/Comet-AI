@@ -82,10 +82,11 @@ export default function SchedulingModal({
   onConfirm,
   taskDetails,
 }: SchedulingModalProps) {
+  const resolvedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const [config, setConfig] = useState<ScheduleConfig>({
     schedule: taskDetails.schedule || '0 8 * * *',
     scheduleType: 'cron',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    timezone: resolvedTimezone,
     outputPath: '~/Documents/Comet-AI',
     model: {
       provider: 'gemini',
@@ -110,6 +111,12 @@ export default function SchedulingModal({
       setConfig(prev => ({ ...prev, schedule: taskDetails.schedule }));
     }
   }, [taskDetails.schedule]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setConfig(prev => ({ ...prev, timezone: resolvedTimezone }));
+    }
+  }, [isOpen, resolvedTimezone]);
 
   if (!isOpen) return null;
 
@@ -191,7 +198,7 @@ export default function SchedulingModal({
         </div>
 
         {/* Content */}
-        <div className="p-5 space-y-5">
+        <div className="p-5 space-y-5 max-h-[70vh] overflow-y-auto pr-3 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/20">
           {/* Schedule Section */}
           <div>
             <label className="block text-sm font-medium text-white/70 mb-2">
@@ -250,7 +257,7 @@ export default function SchedulingModal({
               
               {showTimezonePicker && (
                 <div className="absolute z-10 mt-2 w-full bg-gray-800 border border-white/10 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                  {TIMEZONES.map(tz => (
+                  {[...new Set([resolvedTimezone, ...TIMEZONES])].map(tz => (
                     <button
                       key={tz}
                       onClick={() => {

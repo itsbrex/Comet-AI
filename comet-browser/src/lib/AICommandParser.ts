@@ -47,6 +47,8 @@ export const COMMAND_REGISTRY = {
     DOM_READ_FILTERED: { desc: 'Read DOM with filtering & injection check', example: '[DOM_READ_FILTERED: optional search term]' },
     OPEN_MCP_SETTINGS: { desc: 'Open MCP servers settings', example: '[OPEN_MCP_SETTINGS]' },
     OPEN_AUTOMATION_SETTINGS: { desc: 'Open automation settings', example: '[OPEN_AUTOMATION_SETTINGS]' },
+    LIST_AUTOMATIONS: { desc: 'List scheduled automation tasks', example: '[LIST_AUTOMATIONS]' },
+    DELETE_AUTOMATION: { desc: 'Delete an automation using its ID', example: '[DELETE_AUTOMATION: task-123]' },
     OPEN_SCHEDULING_MODAL: { desc: 'Open scheduling modal with optional data (JSON or pipe-separated)', example: '[OPEN_SCHEDULING_MODAL: 0 8 * * *|pdf-generate|Daily Report|Generate PDF]' },
     SCHEDULE_TASK: { desc: 'Schedule a recurring automation task (JSON format)', example: '[SCHEDULE_TASK: {"schedule": "0 8 * * *", "type": "pdf-generate", "name": "Daily Report"}]' },
 } as const;
@@ -70,7 +72,7 @@ function getCategoryForType(type: string): string {
         SHELL_COMMAND: 'system', OPEN_APP: 'system', SET_VOLUME: 'system', SET_BRIGHTNESS: 'system',
         GENERATE_PDF: 'pdf', CREATE_PDF_JSON: 'pdf', GENERATE_DIAGRAM: 'pdf', OPEN_PDF: 'pdf',
         SHOW_IMAGE: 'media', SHOW_VIDEO: 'media',
-        WAIT: 'utility', OPEN_VIEW: 'utility', OPEN_MCP_SETTINGS: 'utility', OPEN_AUTOMATION_SETTINGS: 'utility', OPEN_SCHEDULING_MODAL: 'utility', SCHEDULE_TASK: 'utility',
+        WAIT: 'utility', OPEN_VIEW: 'utility', OPEN_MCP_SETTINGS: 'utility', OPEN_AUTOMATION_SETTINGS: 'utility', LIST_AUTOMATIONS: 'automation', DELETE_AUTOMATION: 'automation', OPEN_SCHEDULING_MODAL: 'utility', SCHEDULE_TASK: 'utility',
         GMAIL_AUTHORIZE: 'gmail', GMAIL_LIST_MESSAGES: 'gmail', GMAIL_GET_MESSAGE: 'gmail',
         GMAIL_SEND_MESSAGE: 'gmail', GMAIL_ADD_LABEL: 'gmail',
         THINK: 'meta', PLAN: 'meta', EXPLAIN_CAPABILITIES: 'meta',

@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 /* Base configuration for Tailwind 4 */
@@ -24,6 +25,8 @@
   --color-accent: #1D4ED8;
   --color-accent-light: #3B82F6;
   --color-border-color: #E5E7EB;
+  --font-display: "Space Grotesk", "Manrope", "Syne", "Inter", system-ui, sans-serif;
+  --font-body: "Manrope", "Space Grotesk", system-ui, -apple-system, sans-serif;
 }
 
 .dark {
@@ -36,10 +39,23 @@
   --deep-space-glow: rgba(56, 189, 248, 0.4);
 }
 
+.light {
+  --color-primary-bg: #f5f7fb;
+  --color-primary-text: #0f172a;
+  --color-secondary-text: #475569;
+  --color-accent: #0ea5e9;
+  --color-accent-light: #67e8f9;
+  --color-border-color: #e0e7ff;
+  --color-dark-border: rgba(14, 165, 233, 0.2);
+  --deep-space-glow: rgba(14, 165, 233, 0.3);
+}
+
 body {
   background-color: var(--color-primary-bg);
   color: var(--color-primary-text);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: "Space Grotesk", "Manrope", "Syne", "Inter", system-ui, -apple-system, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.02em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

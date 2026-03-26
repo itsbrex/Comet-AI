@@ -125,6 +125,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('trigger-translation-dialog', subscription);
     return () => ipcRenderer.removeListener('trigger-translation-dialog', subscription);
   },
+  onAutomationShellApproval: (callback) => {
+    const subscription = (event, payload) => callback(payload);
+    ipcRenderer.on('automation-shell-approval', subscription);
+    return () => ipcRenderer.removeListener('automation-shell-approval', subscription);
+  },
+  respondAutomationShellApproval: (response) => ipcRenderer.send('automation-shell-approval-response', response),
 
   // Auth
   openAuthWindow: (url) => ipcRenderer.send('open-auth-window', url),
@@ -384,6 +390,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // System Settings
   openSystemSettings: (url) => ipcRenderer.invoke('open-system-settings', url),
+  closeAuthWindow: () => ipcRenderer.send('close-auth-window'),
+  updateRaycastState: (state) => ipcRenderer.send('raycast-update-state', state),
 
   // Cross-App Control APIs
   captureScreenRegion: (region) => ipcRenderer.invoke('capture-screen-region', region),

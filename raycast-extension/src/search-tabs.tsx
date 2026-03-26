@@ -1,113 +1,87 @@
 import { ActionPanel, Action, List, showToast, Toast } from "@raycast/api";
 import { useState, useEffect } from "react";
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
 
 interface Tab {
-    id: string;
-    title: string;
-    url: string;
-    isActive: boolean;
+  id: string;
+  title: string;
+  url: string;
+  isActive?: boolean;
+  isLoading?: boolean;
+}
+
+const RAYCAST_HOST = process.env.RAYCAST_HOST || "127.0.0.1";
+const RAYCAST_PORT = process.env.RAYCAST_PORT || "9877";
+const RAYCAST_BASE = `http://${RAYCAST_HOST}:${RAYCAST_PORT}/raycast`;
+
+async function fetchJSON<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(`${RAYCAST_BASE}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
+  return response.json();
 }
 
 export default function SearchTabs() {
-    const [tabs, setTabs] = useState<Tab[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-    useEffect(() => {
-        loadTabs();
-    }, []);
+  useEffect(() => {
+    loadTabs();
+  }, []);
 
-    async function loadTabs() {
-        try {
-            // Communicate with Comet Browser via AppleScript or IPC
-            // For now, using a simple approach
-            const { stdout } = await execAsync(
-                `osascript -e 'tell application "Comet" to get tabs'`
-            );
-
-            // Parse the response
-            const tabsData = JSON.parse(stdout);
-            setTabs(tabsData);
-        } catch (error) {
-            await showToast({
-                style: Toast.Style.Failure,
-                title: "Failed to load tabs",
-                message: "Make sure Comet Browser is running",
-            });
-        } finally {
-            setIsLoading(false);
-        }
+  async function loadTabs() {
+    setIsLoading(true);
+    try {
+      const result = await fetchJSON<{ tabs: Tab[] }>("/tabs");
+      setTabs(result.tabs || []);
+    } catch (error) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Failed to load tabs",
+        message: "Is Comet Browser running with Raycast support enabled?",
+      });
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    async function switchToTab(tabId: string) {
-        try {
-            await execAsync(
-                `osascript -e 'tell application "Comet" to activate tab "${tabId}"'`
-            );
-            await showToast({
-                style: Toast.Style.Success,
-                title: "Switched to tab",
-            });
-        } catch (error) {
-            await showToast({
-                style: Toast.Style.Failure,
-                title: "Failed to switch tab",
-            });
-        }
+  async function openTab(url: string) {
+    try {
+      await fetchJSON("/new-tab", {
+        method: "POST",
+        body: JSON.stringify({ url }),
+      });
+      await showToast({ style: Toast.Style.Success, title: "Opened in Comet" });
+    } catch (error) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Failed to open tab",
+      });
     }
+  }
 
-    async function closeTab(tabId: string) {
-        try {
-            await execAsync(
-                `osascript -e 'tell application "Comet" to close tab "${tabId}"'`
-            );
-            await loadTabs(); // Reload tabs
-            await showToast({
-                style: Toast.Style.Success,
-                title: "Tab closed",
-            });
-        } catch (error) {
-            await showToast({
-                style: Toast.Style.Failure,
-                title: "Failed to close tab",
-            });
-        }
-    }
-
-    return (
-        <List isLoading={isLoading} searchBarPlaceholder="Search tabs...">
-            {tabs.map((tab) => (
-                <List.Item
-                    key={tab.id}
-                    title={tab.title}
-                    subtitle={tab.url}
-                    icon={tab.isActive ? "✓" : ""}
-                    accessories={[
-                        { text: tab.isActive ? "Active" : "" },
-                    ]}
-                    actions={
-                        <ActionPanel>
-                            <Action
-                                title="Switch to Tab"
-                                onAction={() => switchToTab(tab.id)}
-                            />
-                            <Action
-                                title="Close Tab"
-                                onAction={() => closeTab(tab.id)}
-                                shortcut={{ modifiers: ["cmd"], key: "w" }}
-                            />
-                            <Action.CopyToClipboard
-                                title="Copy URL"
-                                content={tab.url}
-                                shortcut={{ modifiers: ["cmd"], key: "c" }}
-                            />
-                        </ActionPanel>
-                    }
-                />
-            ))}
-        </List>
-    );
+  return (
+    <List isLoading={isLoading} searchBarPlaceholder="Search tabs...">
+      {tabs.map((tab) => (
+        <List.Item
+          key={tab.id}
+          title={tab.title || "Untitled tab"}
+          subtitle={tab.url}
+          icon={tab.isActive ? "checkmark" : undefined}
+          accessories={[
+            { text: tab.isActive ? "Active" : "", tooltip: tab.isLoading ? "Loading" : undefined },
+          ]}
+          actions={
+            <ActionPanel>
+              <Action title="Open in Comet" onAction={() => openTab(tab.url)} />
+              <Action.CopyToClipboard title="Copy URL" content={tab.url} />
+            </ActionPanel>
+          }
+        />
+      ))}
+    </List>
+  );
 }

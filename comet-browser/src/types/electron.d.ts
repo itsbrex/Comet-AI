@@ -107,6 +107,8 @@ declare global {
 
             // Auth
             openAuthWindow: (url: string) => void;
+            closeAuthWindow: () => void;
+            updateRaycastState: (state: { tabs?: Array<{ id: string; title: string; url: string; isActive?: boolean; isLoading?: boolean }>; history?: Array<{ url: string; title: string; timestamp: number }> }) => void;
             saveGoogleConfig: (config: { clientId?: string; clientSecret?: string; redirectUri?: string }) => void;
     getGoogleConfig: () => Promise<{ clientId: string; clientSecret: string; redirectUri: string }>;
     onAuthCallback: (callback: (event: any, url: string) => void) => () => void;
@@ -239,6 +241,8 @@ declare global {
             onAiChatInputText: (callback: (text: string) => void) => () => void;
             translateWebsite: (args: { targetLanguage: string; method?: 'google' | 'chrome-ai' }) => Promise<{ success?: boolean; error?: string }>;
             onTriggerTranslationDialog: (callback: () => void) => () => void;
+            onAutomationShellApproval: (callback: (payload: { requestId: string; command: string; risk: string; reason?: string; highRiskQr?: string }) => void) => () => void;
+            respondAutomationShellApproval: (response: { requestId: string; allowed: boolean }) => void;
             toggleAdblocker: (enable: boolean) => void;
             translateText: (args: { text: string; to: string; from?: string }) => Promise<{ success: boolean; translated?: string; error?: string }>;
             openSettingsPopup: (section?: string) => void;

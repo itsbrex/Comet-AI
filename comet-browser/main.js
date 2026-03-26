@@ -15,6 +15,11 @@ const Jimp = require('jimp');
 const util = require('util');
 const execPromise = util.promisify(exec);
 
+// Register the custom `app://` scheme early so we can safely load static assets from the exported build.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+]);
+
 // Augment PATH for macOS/Linux to find common command-line tools like docker
 if (process.platform !== 'win32') {
   const extraPaths = [
@@ -89,7 +94,6 @@ let voiceService = null;
 let workflowRecorder = null;
 let popSearch = null;
 
-let mainWindow;
 let mcpServer;
 let networkCheckInterval;
 let clipboardCheckInterval;
@@ -104,6 +108,218 @@ const extensionsPath = path.join(app.getPath('userData'), 'extensions');
 const memoryPath = path.join(app.getPath('userData'), 'ai_memory.jsonl');
 
 const searchCache = new Map();
+const shellApprovalResolvers = new Map();
+
+const RAYCAST_PORT = parseInt(process.env.RAYCAST_PORT || '9877', 10);
+const RAYCAST_HOST = process.env.RAYCAST_HOST || '127.0.0.1';
+const raycastState = {
+  tabs: [],
+  history: [],
+};
+let raycastServer = null;
+
+const isMac = process.platform === 'darwin';
+const openWindows = new Set();
+let mainWindow = null;
+let macSidebarWindow = null;
+
+const getTopWindow = () => {
+  if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
+  for (const win of openWindows) {
+    if (!win.isDestroyed()) return win;
+  }
+  return null;
+};
+
+const sendToActiveWindow = (channel, ...args) => {
+  const target = getTopWindow();
+  if (target && !target.isDestroyed()) {
+    target.webContents.send(channel, ...args);
+    return target;
+  }
+  return null;
+};
+
+const registerWindow = (win) => {
+  openWindows.add(win);
+  mainWindow = win;
+  win.on('focus', () => {
+    if (!win.isDestroyed()) mainWindow = win;
+  });
+  win.on('closed', () => {
+    openWindows.delete(win);
+    if (mainWindow === win) {
+      mainWindow = openWindows.size ? Array.from(openWindows).pop() : null;
+    }
+  });
+};
+
+const toggleMacSidebarWindow = () => {
+  if (!isMac) return;
+
+  if (macSidebarWindow && !macSidebarWindow.isDestroyed()) {
+    if (macSidebarWindow.isVisible()) {
+      macSidebarWindow.hide();
+    } else {
+      macSidebarWindow.show();
+      macSidebarWindow.focus();
+    }
+    return;
+  }
+
+  macSidebarWindow = new BrowserWindow({
+    width: 360,
+    height: 820,
+    show: false,
+    frame: false,
+    transparent: true,
+    vibrancy: 'ultra-dark',
+    visualEffectState: 'active',
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: true,
+    resizable: false,
+    title: 'Comet AI Sidebar',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false
+    }
+  });
+
+  macSidebarWindow.setIgnoreMouseEvents(false);
+  macSidebarWindow.on('blur', () => {
+    if (macSidebarWindow && !macSidebarWindow.isDestroyed()) {
+      macSidebarWindow.hide();
+    }
+  });
+  macSidebarWindow.on('closed', () => {
+    macSidebarWindow = null;
+  });
+  macSidebarWindow.loadURL('app://./mac/ai-sidebar').catch(err => {
+    console.error('[Main] Failed to load mac sidebar:', err);
+  });
+  macSidebarWindow.once('ready-to-show', () => {
+    if (macSidebarWindow && !macSidebarWindow.isDestroyed()) {
+      macSidebarWindow.show();
+    }
+  });
+};
+
+const buildApplicationMenu = () => {
+  const template = [
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    }] : []),
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: () => createWindow() },
+        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => sendToActiveWindow('add-new-tab', 'https://www.comet.ai') },
+        { type: 'separator' },
+        { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: () => sendToActiveWindow('execute-shortcut', 'open-settings') },
+        { label: 'Close Window', role: 'close' },
+        ...(!isMac ? [{ type: 'separator' }, { role: 'quit' }] : [])
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+        {
+          label: 'Toggle AI Sidebar',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          visible: isMac,
+          click: () => toggleMacSidebarWindow()
+        }
+      ]
+    },
+    {
+      label: 'Window',
+      role: 'window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(isMac ? [{ type: 'separator' }, { role: 'front' }] : [{ role: 'close' }])
+      ]
+    },
+    {
+      label: 'Help',
+      role: 'help',
+      submenu: [
+        {
+          label: 'Documentation',
+          click: () => sendToActiveWindow('add-new-tab', 'https://docs.latestinssan.com')
+        },
+        {
+          label: 'Release Notes',
+          click: () => sendToActiveWindow('add-new-tab', 'https://www.comet.ai/release-notes')
+        }
+      ]
+    }
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+};
+
+const resolveAppAssetPath = (requestUrl) => {
+  try {
+    const parsedUrl = new URL(requestUrl);
+    let pathname = decodeURI(parsedUrl.pathname || '');
+    if (!pathname || pathname === '/') {
+      pathname = '/index.html';
+    }
+    const normalizedPath = path.normalize(path.join(__dirname, 'out', pathname));
+    const outDir = path.join(__dirname, 'out');
+    if (!normalizedPath.startsWith(outDir)) {
+      console.warn('[Main] App protocol blocked path escape attempt:', normalizedPath);
+      return path.join(outDir, 'index.html');
+    }
+    if (!fs.existsSync(normalizedPath)) {
+      console.warn('[Main] App protocol asset missing, falling back to index.html:', normalizedPath);
+      return path.join(outDir, 'index.html');
+    }
+    return normalizedPath;
+  } catch (error) {
+    console.error('[Main] Failed to resolve app:// request', error);
+    return path.join(__dirname, 'out', 'index.html');
+  }
+};
+
+const registerAppFileProtocol = () => {
+  protocol.registerFileProtocol('app', (request, callback) => {
+    const assetPath = resolveAppAssetPath(request.url);
+    callback({ path: assetPath });
+  });
+};
 
 // ============================================================================
 // PDF GENERATION ENGINE (Branded & Robust)
@@ -608,78 +824,50 @@ let mcpServerPort = MCP_SERVER_PORT;
 // Custom protocol for authentication
 const PROTOCOL = 'comet-browser';
 
-// Single Instance Lock
-const gotTheLock = app.requestSingleInstanceLock();
-
-if (!gotTheLock) {
-  app.quit();
-} else {
-  app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
-    // In development or for specific internal services, we might want to bypass or at least log detailed SSL issues
-    console.error(`[SSL] Handshake failed for: ${url} (Error: ${error})`);
-    if (isDev && (url.includes('localhost') || url.includes('127.0.0.1'))) {
-      event.preventDefault();
-      callback(true);
-    } else {
-      callback(false);
-    }
-  });
-
-  app.on('second-instance', (event, commandLine, workingDirectory) => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-
-      // Find URL in command line (for Windows/Linux deep links)
-      // Usually the URL is the last argument or starts with a known protocol
-      const url = commandLine.find(arg =>
-        arg.startsWith('http://') ||
-        arg.startsWith('https://') ||
-        arg.startsWith(`${PROTOCOL}://`)
-      );
-
-      if (url) {
-        if (url.startsWith(`${PROTOCOL}://`)) {
-          mainWindow.webContents.send('auth-callback', url);
-        } else {
-          // Open external web links in a new tab
-          mainWindow.webContents.send('add-new-tab', url);
-        }
-      }
-    }
-  });
-
-  if (process.defaultApp) {
-    if (process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
-    }
-  } else {
-    app.setAsDefaultProtocolClient(PROTOCOL);
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
   }
-
-  // MacOS: Handle deep links
-  app.on('open-url', (event, url) => {
-    event.preventDefault();
-    if (mainWindow) {
-      if (url.startsWith(`${PROTOCOL}://`)) {
-        mainWindow.webContents.send('auth-callback', url);
-      } else if (url.startsWith('http://') || url.startsWith('https://')) {
-        mainWindow.webContents.send('add-new-tab', url);
-      }
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
+} else {
+  app.setAsDefaultProtocolClient(PROTOCOL);
 }
+
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  console.error(`[SSL] Handshake failed for: ${url} (Error: ${error})`);
+  if (isDev && (url.includes('localhost') || url.includes('127.0.0.1'))) {
+    event.preventDefault();
+    callback(true);
+  } else {
+    callback(false);
+  }
+});
+
+app.on('open-url', async (event, url) => {
+  event.preventDefault();
+  let target = getTopWindow();
+  if (!target) {
+    await createWindow();
+    target = mainWindow;
+  }
+  if (!target || target.isDestroyed()) return;
+  if (url.startsWith(`${PROTOCOL}://`)) {
+    target.webContents.send('auth-callback', url);
+  } else if (url.startsWith('http://') || url.startsWith('https://')) {
+    target.webContents.send('add-new-tab', url);
+  }
+  if (target.isMinimized()) target.restore();
+  target.focus();
+});
 
 // Function to check network status
 const checkNetworkStatus = () => {
   require('dns').lookup('google.com', (err) => {
     const online = !err || err.code === 'ENOTFOUND';
-    if (online !== isOnline) {
-      isOnline = online;
-      if (mainWindow) mainWindow.webContents.send('network-status-changed', isOnline);
-    }
+  if (online !== isOnline) {
+    isOnline = online;
+    const target = getTopWindow();
+    if (target) target.webContents.send('network-status-changed', isOnline);
+  }
   });
 };
 
@@ -1279,6 +1467,8 @@ async function createWindow() {
     paintWhenInitiallyHidden: false
   });
 
+  registerWindow(mainWindow);
+
   // CRITICAL: Multiple safeguards to ensure window ALWAYS shows
   let windowShown = false;
 
@@ -1316,7 +1506,7 @@ async function createWindow() {
 
   const url = isDev
     ? 'http://localhost:3003'
-    : `file://${path.join(__dirname, 'out/index.html')}`;
+    : 'app://./index.html';
 
   console.log(`[Main] Loading URL: ${url}`);
   console.log(`[Main] __dirname: ${__dirname}`);
@@ -1634,18 +1824,23 @@ async function _scanDirectoryRecursive(currentPath, types) {
 
 // IPC Handlers
 ipcMain.on('open-menu', () => {
+  const target = getTopWindow();
   const menu = Menu.buildFromTemplate([
     { label: 'Reload', click: () => { const v = tabViews.get(activeTabId); if (v) v.webContents.reload(); } },
     { label: 'Back', click: () => { const v = tabViews.get(activeTabId); if (v && v.webContents.canGoBack()) v.webContents.goBack(); } },
     { label: 'Forward', click: () => { const v = tabViews.get(activeTabId); if (v && v.webContents.canGoForward()) v.webContents.goForward(); } },
     { type: 'separator' },
-    { label: 'Save Page As...', click: () => { if (mainWindow) mainWindow.webContents.send('execute-shortcut', 'save-page'); } },
+    { label: 'Save Page As...', click: () => { sendToActiveWindow('execute-shortcut', 'save-page'); } },
     { label: 'Print...', click: () => { const v = tabViews.get(activeTabId); if (v) v.webContents.print(); } },
     { type: 'separator' },
-    { label: 'Settings', click: () => { if (mainWindow) mainWindow.webContents.send('execute-shortcut', 'open-settings'); } },
+    { label: 'Settings', click: () => { sendToActiveWindow('execute-shortcut', 'open-settings'); } },
     { label: 'DevTools', click: () => { const v = tabViews.get(activeTabId); if (v) v.webContents.openDevTools({ mode: 'detach' }); } },
   ]);
-  menu.popup({ window: mainWindow });
+  if (target) {
+    menu.popup({ window: target });
+  } else {
+    menu.popup();
+  }
 });
 
 ipcMain.handle('get-is-online', () => isOnline);
@@ -1899,6 +2094,22 @@ ipcMain.on('open-auth-window', (event, authUrl) => {
   } else {
     // For non-OAuth URLs, open in external browser
     shell.openExternal(authUrl);
+  }
+});
+
+ipcMain.on('close-auth-window', () => {
+  if (authWindow && !authWindow.isDestroyed()) {
+    authWindow.close();
+  }
+  authWindow = null;
+});
+
+ipcMain.on('raycast-update-state', (event, state) => {
+  if (state?.tabs) {
+    raycastState.tabs = state.tabs.slice(-100);
+  }
+  if (state?.history) {
+    raycastState.history = state.history.slice(-200);
   }
 });
 
@@ -3007,6 +3218,39 @@ function analyzeCommandRisk(command) {
   return { description: explainCommand(command), risks, harmLevel, isWhitelisted: isSafeCmd };
 }
 
+async function requestShellApproval(command, riskLevel, reason) {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  const requestId = `shell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const qrPayload = await generateShellApprovalQR(command);
+  const payload = {
+    requestId,
+    command,
+    risk: riskLevel || 'medium',
+    reason: reason || 'A scheduled automation needs your approval.',
+    highRiskQr: JSON.stringify(qrPayload),
+  };
+  try {
+    mainWindow.webContents.send('automation-shell-approval', payload);
+  } catch (error) {
+    console.error('[Main] Failed to send shell approval request:', error);
+    return false;
+  }
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      if (shellApprovalResolvers.has(requestId)) {
+        shellApprovalResolvers.delete(requestId);
+        resolve(false);
+      }
+    }, 120000);
+
+    shellApprovalResolvers.set(requestId, (allowed) => {
+      clearTimeout(timeout);
+      resolve(allowed);
+    });
+  });
+}
+
 async function checkShellPermission(command) {
   if (!mainWindow) return false;
 
@@ -3031,15 +3275,8 @@ async function checkShellPermission(command) {
     return true;
   }
 
-  // High risk or critical - always require confirmation
-  if (analysis.harmLevel === 'high' || analysis.harmLevel === 'critical') {
-    console.log(`[Shell] Requires confirmation (${analysis.harmLevel}): ${command}`);
-    return false;
-  }
-
-  // Medium risk without auto-approve - require confirmation
-  console.log(`[Shell] Requires confirmation (${analysis.harmLevel}): ${command}`);
-  return false;
+  console.log(`[Shell] Requesting approval (${analysis.harmLevel}): ${command}`);
+  return await requestShellApproval(command, analysis.harmLevel, 'Automation requested this shell action.');
 }
 
 /**
@@ -3446,6 +3683,8 @@ function handleDeepLink(url) {
 }
 
 app.whenReady().then(async () => {
+  registerAppFileProtocol();
+  buildApplicationMenu();
   protocol.handle('comet', (request) => {
     const url = new URL(request.url);
     const resourcePath = url.hostname; // e.g., 'extensions', 'vault'
@@ -3937,6 +4176,15 @@ ipcMain.removeHandler('generate-pdf');
 
   createWindow();
 
+  app.on('activate', () => {
+    if (openWindows.size === 0) {
+      createWindow();
+    } else {
+      const win = getTopWindow();
+      if (win) win.show();
+    }
+  });
+
 
 
 
@@ -4043,6 +4291,72 @@ ipcMain.removeHandler('generate-pdf');
 
   mcpServer = mcpApp.listen(mcpServerPort, () => {
     console.log(`MCP Server running on port ${mcpServerPort}`);
+  });
+
+  const raycastApp = express();
+  raycastApp.use(bodyParser.json());
+
+  raycastApp.get('/raycast/tabs', (req, res) => {
+    res.json({ tabs: raycastState.tabs });
+  });
+
+  raycastApp.get('/raycast/history', (req, res) => {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const history = raycastState.history.slice(-limit).reverse();
+    res.json({ history, limit });
+  });
+
+  raycastApp.post('/raycast/new-tab', (req, res) => {
+    const url = req.body?.url;
+    if (url && mainWindow) {
+      mainWindow.webContents.send('add-new-tab', url);
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    res.json({ success: !!url, url });
+  });
+
+  raycastApp.post('/raycast/action', (req, res) => {
+    const { action, payload } = req.body || {};
+    if (action === 'open-url' && payload?.url && mainWindow) {
+      mainWindow.webContents.send('add-new-tab', payload.url);
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    res.json({ success: true, action, payload });
+  });
+
+  raycastApp.get('/raycast/automations', async (req, res) => {
+    if (!storageManager) {
+      await initializeAutomationService();
+    }
+    if (!storageManager || !storageManager.getAllTasks) {
+      return res.json({ tasks: [] });
+    }
+    const tasks = await storageManager.getAllTasks();
+    res.json({ tasks });
+  });
+
+  raycastApp.post('/raycast/automation/delete', async (req, res) => {
+    const { taskId } = req.body || {};
+    if (!taskId) {
+      return res.status(400).json({ success: false, error: 'Missing taskId' });
+    }
+    if (!taskScheduler) {
+      await initializeAutomationService();
+    }
+    try {
+      await taskScheduler.unscheduleTask(taskId);
+      await storageManager.deleteTask(taskId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('[Raycast] Failed to delete automation:', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  raycastServer = raycastApp.listen(RAYCAST_PORT, RAYCAST_HOST, () => {
+    console.log(`[Raycast] API listening at http://${RAYCAST_HOST}:${RAYCAST_PORT}`);
   });
 
   // Load or generate local device ID for P2P sync
@@ -6026,6 +6340,14 @@ ipcMain.removeHandler('generate-pdf');
     return { success: true, settings: permissionStore.getSettings() };
   });
 
+  ipcMain.on('automation-shell-approval-response', (_event, { requestId, allowed }) => {
+    const resolver = shellApprovalResolvers.get(requestId);
+    if (resolver) {
+      shellApprovalResolvers.delete(requestId);
+      resolver(!!allowed);
+    }
+  });
+
   // --- Robot Service ---
   ipcMain.handle('robot-execute', async (event, action) => {
     if (!robotService) return { success: false, error: 'RobotService not initialized' };
@@ -6828,7 +7150,19 @@ ipcMain.removeHandler('generate-pdf');
     globalShortcut.unregisterAll();
   });
 
+  app.on('before-quit', () => {
+    if (macSidebarWindow && !macSidebarWindow.isDestroyed()) {
+      macSidebarWindow.destroy();
+    }
+    if (raycastServer) {
+      raycastServer.close();
+    }
+  });
+
   app.on('window-all-closed', async () => {
+    if (macSidebarWindow && !macSidebarWindow.isDestroyed()) {
+      macSidebarWindow.destroy();
+    }
     // Terminate the Tesseract worker when the app quits
     if (tesseractWorker) {
       console.log('[Main] Terminating Tesseract.js worker...');
@@ -6845,4 +7179,3 @@ ipcMain.removeHandler('generate-pdf');
     process.exit(0);
   });
 });
-

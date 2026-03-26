@@ -7,7 +7,7 @@ import {
     Sparkles, Shield, Cpu, Zap, Globe, ChevronRight, Rocket,
     Terminal, Layers, ArrowRight, Activity, Brain, Lock,
     Search, FileText, Eye, Wifi, ScanLine, Command, Star,
-    LogIn, User, Download, Github, ExternalLink, Play
+    LogIn, User, Download, Github, ExternalLink, Play, X
 } from 'lucide-react';
 import { firebaseConfigStorage } from '@/lib/firebaseConfigStorage';
 
@@ -160,6 +160,12 @@ export default function WelcomeScreen() {
         }
     };
 
+    const handleCloseAuthPopup = () => {
+        if (window.electronAPI?.closeAuthWindow) {
+            window.electronAPI.closeAuthWindow();
+        }
+    };
+
     const handleGuestMode = () => {
         setGuestMode(true);
         setHasSeenWelcomePage(true);
@@ -187,10 +193,17 @@ export default function WelcomeScreen() {
         { icon: <ScanLine size={16} />, title: 'DOM + OCR Vision', desc: 'Secure DOM reading with PII scrubbing, injection detection, and Tesseract OCR for full visual awareness.', accent: 'text-teal-400', delay: 1.2 },
     ];
 
+    const featureDescriptions = [
+        { title: 'Autonomous AI Orchestration', body: 'Chained commands, reasoning transparency, and deliberate automation let the AI plan, pause for approvals, and execute safely across browsing, shell, and system actions.' },
+        { title: 'Triple-Lock Security', body: 'Visual sandboxing, PII scrubbing, and human-in-the-loop approvals ensure nothing executes without your consent, even for high-risk automation.' },
+        { title: 'Local + Cloud LLM Access', body: 'Switch between Ollama, Gemini, Claude, Groq, and OpenAI models with a single click while the browser remembers your preferred provider per task.' },
+        { title: 'Productivity + Reports', body: 'Branded PDF exports, action logs, clipboard sync, and AI scheduling put research, automation, and sharing in one workspace.' },
+    ];
+
     return (
         <div
             ref={containerRef}
-            className="fixed inset-0 z-[200] overflow-hidden bg-[#020208]"
+            className="fixed inset-0 z-[200] overflow-hidden bg-[#020208] pt-10"
             style={{ fontFamily: "'Syne', 'DM Sans', system-ui, sans-serif" }}
         >
             {/* ── Layered Background ── */}
@@ -397,11 +410,11 @@ export default function WelcomeScreen() {
                                             Sign in with Google
                                             <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                                         </span>
-                                    </motion.button>
+                                </motion.button>
 
-                                    {/* Secondary CTAs */}
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <motion.button
+                                {/* Secondary CTAs */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <motion.button
                                             onClick={handleContinue}
                                             whileHover={{ scale: 1.03, backgroundColor: 'rgba(99,102,241,0.12)' }}
                                             whileTap={{ scale: 0.97 }}
@@ -410,15 +423,41 @@ export default function WelcomeScreen() {
                                             <Rocket size={12} />
                                             Initialize
                                         </motion.button>
-                                        <motion.button
-                                            onClick={handleGuestMode}
-                                            whileHover={{ scale: 1.03, backgroundColor: 'rgba(255,255,255,0.06)' }}
+                                    <motion.button
+                                        onClick={handleGuestMode}
+                                        whileHover={{ scale: 1.03, backgroundColor: 'rgba(255,255,255,0.06)' }}
                                             whileTap={{ scale: 0.97 }}
                                             className="py-3.5 px-6 bg-white/[0.03] border border-white/10 text-white/50 rounded-xl text-[9px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-2"
                                         >
                                             <User size={12} />
-                                            Guest Mode
-                                        </motion.button>
+                                        Guest Mode
+                                    </motion.button>
+                                    <motion.button
+                                        onClick={handleCloseAuthPopup}
+                                        whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.08)' }}
+                                        whileTap={{ scale: 0.97 }}
+                                        className="col-span-2 py-3.5 px-6 bg-white/[0.06] border border-white/10 text-white/60 rounded-2xl text-[9px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <X size={12} />
+                                        Close Sign-in Popup
+                                    </motion.button>
+                                </div>
+                                </motion.div>
+
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.75, duration: 0.9 }}
+                                    className="mt-8 space-y-4"
+                                >
+                                    <h3 className="text-xs font-black uppercase tracking-[0.4em] text-white/40">Comet Feature Overview</h3>
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        {featureDescriptions.map(item => (
+                                            <div key={item.title} className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-[11px] text-white/70">
+                                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50 mb-1">{item.title}</p>
+                                                <p className="leading-relaxed">{item.body}</p>
+                                            </div>
+                                        ))}
                                     </div>
                                 </motion.div>
 

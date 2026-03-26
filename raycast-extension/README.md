@@ -91,10 +91,7 @@ You can customize these in Raycast settings:
 
 ## Communication Protocol
 
-The extension communicates with Comet Browser using:
-- **AppleScript** for basic commands
-- **IPC over Unix socket** for real-time data
-- **HTTP API** (optional) for advanced features
+The extension now talks to Comet Browser through the local HTTP API exposed at `http://127.0.0.1:9877/raycast`. The API mirrors your current tabs/history and accepts commands (open tab, quick actions) so the Raycast client feels native without relying on AppleScript.
 
 ## Development
 

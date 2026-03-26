@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Sparkles, Cloud, Cpu, Shield, Key, 
@@ -8,17 +8,133 @@ import {
   Check, Wifi, Info, Globe, AlertCircle, Download, X
 } from 'lucide-react';
 
+import { useAppStore } from '@/store/useAppStore';
+
 interface AISetupGuideProps {
   onClose: () => void;
   onComplete: () => void;
 }
 
-const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
-  const [step, setStep] = useState(1);
-  const totalSteps = 4;
+type TaskSummary = {
+  id: string;
+  name?: string;
+  schedule?: string;
+  description?: string;
+  enabled?: boolean;
+};
 
-  const nextStep = () => setStep(s => Math.min(s + 1, totalSteps));
-  const prevStep = () => setStep(s => Math.max(s - 1, 1));
+const featureHighlights = [
+  { title: 'Autonomous Agents', detail: 'Chain reasoning + exploration with action logs that keep you informed.', icon: <Sparkles size={16} className="text-deep-space-accent-neon" /> },
+  { title: 'Triple-lock Security', detail: 'Every automation asks for confirmation unless you remember the choice.', icon: <Shield size={16} className="text-white/70" /> },
+  { title: 'Unified Workspace', detail: 'PDF exports, action logs, clipboard sync and downloads all in one cockpit.', icon: <Download size={16} className="text-sky-400" /> },
+  { title: 'Local + Cloud', detail: 'Switch between Ollama, Gemini, OpenAI, Anthropic, or Groq instantly.', icon: <Cloud size={16} className="text-white/60" /> },
+];
+
+type ThemeOption = {
+  id: 'system' | 'light' | 'dark';
+  label: string;
+  description: string;
+  badge: string;
+};
+
+const themeOptions: ThemeOption[] = [
+  { id: 'system', label: 'System Default', description: 'Follow macOS or Windows appearance automatically.', badge: 'Auto' },
+  { id: 'light', label: 'Charm Light', description: 'Bright, glassy workspace inspired by the Charm palette.', badge: 'New' },
+  { id: 'dark', label: 'Neural Night', description: 'Neon-on-black that you already know and love.', badge: 'Classic' },
+];
+
+const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
+  const {
+    theme,
+    setTheme,
+    aiProvider,
+    openaiApiKey,
+    geminiApiKey,
+    anthropicApiKey,
+    groqApiKey,
+    ollamaBaseUrl,
+  } = useAppStore();
+
+  const [step, setStep] = useState(1);
+  const totalSteps = 5;
+  const [setupWarning, setSetupWarning] = useState<string | null>(null);
+  const [automationTasks, setAutomationTasks] = useState<TaskSummary[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+
+  const timezone = useMemo(() => {
+    if (typeof Intl === 'undefined') return 'UTC';
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  }, []);
+
+  const isAiConfigured = useMemo(() => {
+    if (aiProvider === 'ollama' && ollamaBaseUrl) return true;
+    if (openaiApiKey || geminiApiKey || anthropicApiKey || groqApiKey) return true;
+    return false;
+  }, [aiProvider, openaiApiKey, geminiApiKey, anthropicApiKey, groqApiKey, ollamaBaseUrl]);
+
+  const loadAutomationTasks = useCallback(async () => {
+    if (!window.electronAPI?.getScheduledTasks) return;
+    setTasksLoading(true);
+    try {
+      const result = await window.electronAPI.getScheduledTasks();
+      const tasks = Array.isArray(result)
+        ? result
+        : Array.isArray(result?.tasks)
+          ? result.tasks
+          : [];
+      setAutomationTasks(tasks);
+    } catch (error) {
+      console.error('[Setup Guide] Failed to load automation tasks:', error);
+    } finally {
+      setTasksLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAutomationTasks();
+  }, [loadAutomationTasks]);
+
+  const handleDeleteTask = useCallback(async (taskId: string) => {
+    if (!window.electronAPI?.deleteScheduledTask) return;
+    try {
+      await window.electronAPI.deleteScheduledTask(taskId);
+      await loadAutomationTasks();
+    } catch (error) {
+      console.error('[Setup Guide] Failed to delete task:', error);
+    }
+  }, [loadAutomationTasks]);
+
+  const goToStep = (target: number) => {
+    setSetupWarning(null);
+    setStep(target);
+  };
+
+  const nextStep = () => goToStep(Math.min(step + 1, totalSteps));
+  const prevStep = () => goToStep(Math.max(step - 1, 1));
+
+  const handleThemeChange = (value: 'light' | 'dark' | 'system') => {
+    setTheme(value);
+    setSetupWarning(null);
+  };
+
+  const handleComplete = () => {
+    if (!isAiConfigured) {
+      goToStep(3);
+      setSetupWarning('Complete at least one AI key or local Ollama node before waking the agent.');
+      return;
+    }
+    setSetupWarning(null);
+    onComplete();
+  };
+
+  const handleClose = () => {
+    if (!isAiConfigured) {
+      goToStep(3);
+      setSetupWarning('Finish the provider setup so the AI has a brain before closing this guide.');
+      return;
+    }
+    onClose();
+  };
 
   const providers = [
     { name: 'Google AI Studio', url: 'https://aistudio.google.com/app/apikey', icon: <Sparkles size={16} className="text-deep-space-accent-neon" />, desc: 'Get your free Gemini API key' },
@@ -40,7 +156,7 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
       <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-purple-500/5 blur-[120px] rounded-full pointer-events-none" />
 
       {/* Progress Header */}
-      <div className="flex items-center justify-between mb-10 relative z-10">
+        <div className="flex items-center justify-between mb-10 relative z-10">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-deep-space-accent-neon/20 to-transparent border border-deep-space-accent-neon/20 flex items-center justify-center shadow-[0_0_20px_rgba(0,255,242,0.1)]">
             <Key size={24} className="text-deep-space-accent-neon" />
@@ -50,7 +166,7 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
             <p className="text-[10px] text-white/30 uppercase tracking-[0.4em] font-black">NODE INITIALIZATION {step}/{totalSteps}</p>
           </div>
         </div>
-        <button onClick={onClose} className="w-10 h-10 rounded-full hover:bg-white/5 text-white/20 hover:text-white transition-all border border-white/5 flex items-center justify-center">
+        <button onClick={handleClose} className="w-10 h-10 rounded-full hover:bg-white/5 text-white/20 hover:text-white transition-all border border-white/5 flex items-center justify-center">
           <X size={20} />
         </button>
       </div>
@@ -59,7 +175,7 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
       <div className="flex-1 overflow-y-auto modern-scrollbar pr-2 relative z-10">
         <AnimatePresence mode="wait">
           {step === 1 && (
-            <motion.div 
+            <motion.div
               key="step1"
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
@@ -72,39 +188,63 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
                   <Info size={16} /> Galactic Intelligence
                 </h3>
                 <p className="text-xs text-white/50 leading-relaxed font-medium">
-                  Welcome to Comet AI. To begin your journey, you must bridge a cognitive engine. 
-                  We support high-latency <span className="text-white">Cloud Nodes</span> for maximum IQ and 
-                  low-latency <span className="text-white">Local Clusters</span> for total privacy.
+                  Welcome to Comet AI. Build a mind that thinks in chains, stays secure, and owns your workspace. 
+                  From action logs to PDF exports and automation, every outcome is traceable.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-4">
-                <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-deep-space-accent-neon/30 transition-all group flex items-start gap-4 cursor-default">
-                  <div className="w-10 h-10 rounded-xl bg-deep-space-accent-neon/10 flex items-center justify-center text-deep-space-accent-neon">
-                    <Cloud size={20} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {featureHighlights.map((feature) => (
+                  <div key={feature.title} className="p-5 rounded-3xl bg-black/40 border border-white/5 hover:border-sky-400/40 transition-all flex gap-4 items-start">
+                    <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center text-sky-300">
+                      {feature.icon}
+                    </div>
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-[0.3em] text-white/60 mb-1">{feature.title}</div>
+                      <p className="text-[10px] text-white/40 leading-relaxed">{feature.detail}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-xs font-black text-white uppercase tracking-widest mb-1">Cloud Intelligence</h4>
-                    <p className="text-[10px] text-white/30 leading-relaxed uppercase tracking-tighter">Fast, highly accurate, requires external API keys from verified providers.</p>
-                  </div>
-                </div>
-
-                <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-sky-400/30 transition-all group flex items-start gap-4 cursor-default">
-                  <div className="w-10 h-10 rounded-xl bg-sky-400/10 flex items-center justify-center text-sky-400">
-                    <Cpu size={20} />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-black text-white uppercase tracking-widest mb-1">Local Edge Engine</h4>
-                    <p className="text-[10px] text-white/30 leading-relaxed uppercase tracking-tighter">100% Private, zero cost. Uses your hardware with Ollama. No keys required.</p>
-                  </div>
-                </div>
+                ))}
               </div>
             </motion.div>
           )}
 
           {step === 2 && (
-            <motion.div 
+            <motion.div
               key="step2"
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -30 }}
+              className="space-y-6"
+            >
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30 mb-1">Design your Charm</div>
+                <p className="text-[10px] text-white/50 leading-relaxed">
+                  Pick the palette that matches your desk. Comet remembers your choice until you change it again.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {themeOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => handleThemeChange(option.id)}
+                    className={`flex flex-col gap-2 p-4 rounded-3xl border transition-all text-left ${theme === option.id ? 'border-sky-400 bg-white/10 shadow-[0_15px_40px_rgba(56,189,248,0.25)]' : 'border-white/10 bg-white/5 hover:border-white/30'} `}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase tracking-[0.3em]">{option.label}</span>
+                      <span className="text-[8px] font-black uppercase tracking-[0.4em] text-white/50">{option.badge}</span>
+                    </div>
+                    <p className="text-[10px] text-white/40 leading-relaxed">{option.description}</p>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {step === 3 && (
+            <motion.div
+              key="step3"
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -30 }}
@@ -148,15 +288,15 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
             </motion.div>
           )}
 
-          {step === 3 && (
-            <motion.div 
-              key="step3"
+          {step === 4 && (
+            <motion.div
+              key="step4"
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -30 }}
               className="space-y-6"
             >
-              <div className="flex items-center gap-3 p-4 bg-sky-500/5 border border-sky-500/10 rounded-2xl mb-2">
+              <div className="flex items-center gap-3 p-4 bg-sky-500/5 border border-sky-500/10 rounded-2xl">
                 <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center">
                   <Wifi size={20} className="text-sky-400" />
                 </div>
@@ -165,7 +305,7 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
                   <p className="text-[9px] text-sky-400/60 font-black uppercase tracking-widest">Configuration required</p>
                 </div>
               </div>
-              
+
               <div className="space-y-4">
                 <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3 group hover:border-sky-400/20 transition-all">
                   <div className="text-[10px] font-black text-white/40 uppercase tracking-widest flex items-center justify-between">
@@ -201,22 +341,67 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
                   </p>
                 </div>
               </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between pb-1">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-white/30">Active Automations</p>
+                    <p className="text-[9px] text-white/50">Timezone detected: {timezone}</p>
+                  </div>
+                  <button onClick={loadAutomationTasks} className="text-[10px] font-black uppercase tracking-[0.3em] text-deep-space-accent-neon hover:text-white transition-colors">
+                    Refresh
+                  </button>
+                </div>
+                {tasksLoading ? (
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-xs font-medium text-white/50 flex items-center justify-center">
+                    Loading tasks...
+                  </div>
+                ) : automationTasks.length === 0 ? (
+                  <div className="p-5 rounded-2xl bg-black/30 border border-white/5 text-[10px] uppercase tracking-widest text-white/40 flex flex-col gap-2 items-center">
+                    <Sparkles size={24} className="text-white/20" />
+                    <span>No automations yet</span>
+                    <span className="text-[8px] text-white/30">Ask the agent to schedule a task next.</span>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {automationTasks.map((task) => (
+                      <div key={task.id} className="p-4 rounded-2xl border border-white/10 bg-white/[0.02]">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-black text-white truncate">{task.name || 'Scheduled Task'}</div>
+                            <p className="text-[9px] text-white/40 uppercase tracking-[0.2em]">{task.schedule || 'Custom schedule'}</p>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteTask(task.id)}
+                            className="text-[9px] font-black uppercase tracking-[0.3em] text-red-400 hover:text-red-200 transition-colors"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        {task.description && (
+                          <p className="mt-2 text-[10px] text-white/50 leading-relaxed">{task.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </motion.div>
           )}
 
-          {step === 4 && (
-            <motion.div 
-              key="step4"
-              initial={{ opacity: 0, scale: 0.9 }}
+          {step === 5 && (
+            <motion.div
+              key="step5"
+              initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
+              exit={{ opacity: 0, scale: 0.95 }}
               className="flex flex-col items-center justify-center space-y-8 py-10"
             >
               <div className="relative">
-                <motion.div 
-                    animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.8, 0.5] }}
-                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                    className="absolute inset-0 bg-deep-space-accent-neon/20 blur-[40px] rounded-full"
+                <motion.div
+                  animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.8, 0.5] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                  className="absolute inset-0 bg-deep-space-accent-neon/20 blur-[40px] rounded-full"
                 />
                 <div className="w-24 h-24 rounded-full bg-deep-space-accent-neon/10 border-2 border-deep-space-accent-neon/30 flex items-center justify-center relative z-10 shadow-[0_0_50px_rgba(0,255,242,0.2)]">
                   <Sparkles size={48} className="text-deep-space-accent-neon" />
@@ -225,13 +410,13 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
 
               <div className="text-center space-y-3">
                 <h3 className="text-xl font-black text-white uppercase tracking-[0.3em]">Synapse Ready</h3>
-                <p className="text-xs text-white/30 max-w-[280px] leading-relaxed mx-auto font-medium uppercase tracking-tighter">
-                  Initialization complete. Enter your credentials in the cockpit to awaken the agent.
+                <p className="text-xs text-white/30 max-w-[320px] leading-relaxed mx-auto font-medium uppercase tracking-tighter">
+                  Your AI brain is connected. We detected your timezone ({timezone}) and synced automations above.
                 </p>
               </div>
 
-              <button 
-                onClick={onComplete}
+              <button
+                onClick={handleComplete}
                 className="group relative px-10 py-4 rounded-2xl bg-deep-space-accent-neon text-black text-[11px] font-black uppercase tracking-[0.3em] overflow-hidden transition-all shadow-[0_10px_40px_rgba(0,255,242,0.2)] hover:shadow-[0_15px_60px_rgba(0,255,242,0.4)] hover:scale-105 active:scale-95"
               >
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
@@ -240,6 +425,11 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
             </motion.div>
           )}
         </AnimatePresence>
+        {setupWarning && (
+          <div className="pt-6 text-[9px] uppercase tracking-[0.4em] text-amber-300 text-center">
+            {setupWarning}
+          </div>
+        )}
       </div>
 
       {/* Navigation Footer */}
@@ -253,7 +443,7 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
         </button>
         
         <div className="flex gap-2">
-          {[1, 2, 3, 4].map(i => (
+          {[1, 2, 3, 4, 5].map(i => (
             <div 
               key={i} 
               className={`h-1 rounded-full transition-all duration-500 ${step === i ? 'w-8 bg-deep-space-accent-neon shadow-[0_0_10px_rgba(0,255,242,0.5)]' : 'w-2 bg-white/10'}`} 
