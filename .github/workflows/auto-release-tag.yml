@@ -5,6 +5,12 @@ on:
     tags:
       - 'v*.*.*'
       - 'v*.*.*-*'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Set to "true" to bypass pre-flight checks (manual overrides are still gated via permissions)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: write
@@ -79,7 +85,7 @@ jobs:
         run: flutter pub get
 
       - name: Create google-services.json
-        if: secrets.GOOGLE_SERVICES_JSON != ''
+        if: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
