@@ -5070,17 +5070,17 @@ ipcMain.removeHandler('generate-pdf');
         return;
       }
 
-      const IPCService = require('./src/service/ipc-service.js');
-      const Scheduler = require('./src/service/scheduler.js');
-      const TaskQueue = require('./src/service/task-queue.js');
-      const Storage = require('./src/service/storage.js');
-      const MobileNotifier = require('./src/service/mobile-notifier.js');
+       const IPCService = require('./src/service/ipc-service.js');
+       const Scheduler = require('./src/service/scheduler.js');
+       const TaskQueue = require('./src/service/task-queue.js');
+       const Storage = require('./src/service/storage.js');
+       const MobileNotifier = require('./src/service/mobile-notifier.js');
 
-      storageManager = new Storage();
-      await storageManager.initialize();
+       storageManager = new Storage.StorageManager();
+       await storageManager.initialize();
 
-      taskQueue = new TaskQueue();
-      taskScheduler = new Scheduler(taskQueue);
+       taskQueue = new TaskQueue(storageManager);
+       taskScheduler = new Scheduler(taskQueue, storageManager);
 
       mobileNotifier = new MobileNotifier();
       await mobileNotifier.initialize();
