@@ -25,6 +25,7 @@ import { firebaseConfigStorage } from '@/lib/firebaseConfigStorage';
 import ExtensionSettings from './ExtensionSettings';
 import McpSettings from './McpSettings';
 import PermissionSettings from './PermissionSettings';
+import AutomationSettings from './AutomationSettings';
 
 const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () => void, defaultSection?: string }) => {
     const store = useAppStore();
@@ -125,6 +126,7 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
         { id: 'profile', icon: <UserIcon size={18} />, label: 'Neural Identity' },
         { id: 'appearance', icon: <Monitor size={18} />, label: 'Appearance' },
         { id: 'performance', icon: <Zap size={18} />, label: 'Performance' },
+        { id: 'automation', icon: <Zap size={18} />, label: 'Automation' },
         { id: 'search', icon: <Globe size={18} />, label: 'Search Engine' },
         { id: 'privacy', icon: <Shield size={18} />, label: 'Privacy & Security' },
         { id: 'permissions', icon: <Lock size={18} />, label: 'Permissions' },
@@ -330,6 +332,8 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                         )}
 
                         {activeSection === 'performance' && <PerformanceSettings />}
+
+                        {activeSection === 'automation' && <AutomationSettings />}
 
                         {activeSection === 'search' && <SearchEngineSettings selectedEngine={store.selectedEngine} setSelectedEngine={store.setSelectedEngine} />}
 

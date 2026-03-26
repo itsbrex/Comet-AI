@@ -54,7 +54,7 @@ export class LinuxIntegration {
         const desktopFileContent = `[Desktop Entry]
 Version=1.0
 Type=Application
-Name=Comet Browser
+Name=Comet-AI
 Comment=AI-Powered Chromium Browser
 Exec=${process.execPath} %U
 Icon=${path.join(app.getAppPath(), 'icon.png')}
@@ -147,7 +147,7 @@ Exec=${process.execPath} --history
             ]);
 
             tray.setContextMenu(contextMenu);
-            tray.setToolTip('Comet Browser');
+            tray.setToolTip('Comet-AI');
 
             tray.on('click', () => {
                 this.mainWindow?.isVisible() ? this.mainWindow?.hide() : this.mainWindow?.show();

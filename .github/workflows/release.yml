@@ -1,27 +1,74 @@
-name: Publish Draft Release
+name: 🚀 Publish Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
+      - 'v*.*.*-*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g. v0.1.17)'
+        description: 'Version tag (e.g. v0.2.4)'
         required: false
       release_name:
         description: 'Release Name'
         required: false
+      update_firebase:
+        description: 'Update Firebase with download links'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
 
+env:
+  NODE_VERSION: '22'
+  FLUTTER_VERSION: 'stable'
+
 jobs:
   # ============================================================================
-  # MOBILE JOBS (flutter_browser_app)
+  # PARSE VERSION
   # ============================================================================
-  build-flutter-android:
-    name: Build Flutter Browser Android
+  get-version:
+    name: Get Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      is_stable: ${{ steps.version.outputs.is_stable }}
+    steps:
+      - name: Parse version
+        id: version
+        run: |
+          # Handle tag push
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          elif [[ -n "${{ github.event.inputs.version }}" ]]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG="v$(node -p "require('./comet-browser/package.json').version")"
+          fi
+          
+          VERSION="${TAG#v}"
+          
+          # Check if stable release
+          if [[ "$TAG" == *"-"* ]]; then
+            IS_STABLE="false"
+          else
+            IS_STABLE="true"
+          fi
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_stable=$IS_STABLE" >> $GITHUB_OUTPUT
+
+  # ============================================================================
+  # ANDROID BUILD
+  # ============================================================================
+  build-android:
+    name: Build Android
+    needs: get-version
     runs-on: ubuntu-latest
     environment: Production
     steps:
@@ -37,24 +84,23 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      - name: Cache Flutter Pub dependencies
+      - name: Cache Flutter Pub
         uses: actions/cache@v4
         with:
           path: |
             ~/.pub-cache
             ~/.flutter
           key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
 
       - name: Install dependencies
         working-directory: flutter_browser_app
         run: flutter pub get
 
       - name: Create google-services.json
+        if: secrets.GOOGLE_SERVICES_JSON != ''
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
@@ -88,11 +134,15 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-browser-apk
+          name: comet-ai-android
           path: flutter_browser_app/build/app/outputs/flutter-apk/app-release.apk
 
-  build-flutter-ios:
-    name: Build Flutter Browser iOS
+  # ============================================================================
+  # IOS BUILD
+  # ============================================================================
+  build-ios:
+    name: Build iOS
+    needs: get-version
     runs-on: macos-latest
     environment: Production
     steps:
@@ -101,7 +151,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Install dependencies
@@ -122,29 +172,30 @@ jobs:
         with:
           path: flutter_browser_app/ios/Pods
           key: ${{ runner.os }}-pods-${{ hashFiles('flutter_browser_app/ios/Podfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pods-
 
       - name: Build iOS
         working-directory: flutter_browser_app
         run: flutter build ios --release --no-codesign
 
-      - name: Create Payload and Zip
+      - name: Create IPA
         working-directory: flutter_browser_app
         run: |
           mkdir Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
           zip -r Comet-AI.ipa Payload
-          
+
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-browser-ipa
+          name: comet-ai-ios
           path: flutter_browser_app/Comet-AI.ipa
 
+  # ============================================================================
+  # DESKTOP BUILD
+  # ============================================================================
   build-desktop:
     name: Build Desktop (${{ matrix.target }})
-    environment: Production
+    needs: get-version
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -153,15 +204,18 @@ jobs:
           - target: windows
             os: windows-latest
             build_cmd: npm run dist:win
-            artifact_path: comet-browser/release/*.exe
+            artifact_glob: "comet-browser/release/*.exe"
+            artifact_name: comet-ai-windows
           - target: macos
             os: macos-latest
             build_cmd: npm run dist:mac
-            artifact_path: comet-browser/release/*.dmg
+            artifact_glob: "comet-browser/release/*.dmg"
+            artifact_name: comet-ai-macos
           - target: linux
             os: ubuntu-latest
             build_cmd: npm run build && npx electron-builder --linux AppImage --x64
-            artifact_path: comet-browser/release/*.AppImage
+            artifact_glob: "comet-browser/release/*.AppImage"
+            artifact_name: comet-ai-linux
 
     steps:
       - uses: actions/checkout@v4
@@ -169,7 +223,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: comet-browser/package-lock.json
 
@@ -194,81 +248,122 @@ jobs:
         working-directory: comet-browser
         run: npm install --legacy-peer-deps
 
-      - name: Create Firebase Admin Key
-        if: runner.os != 'Windows'
-        continue-on-error: true
-        env:
-          FIREBASE_ADMIN_SDK_JSON: ${{ secrets.FIREBASE_ADMIN_SDK_JSON }}
-        run: |
-          mkdir -p comet-browser/config
-          if [ -n "$FIREBASE_ADMIN_SDK_JSON" ]; then
-            echo "$FIREBASE_ADMIN_SDK_JSON" > comet-browser/config/firebase-admin.json
-          fi
-
-      - name: Create Firebase Admin Key (Windows)
-        if: runner.os == 'Windows'
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path comet-browser/config
-          if ($env:FIREBASE_ADMIN_SDK_JSON) {
-            $env:FIREBASE_ADMIN_SDK_JSON | Out-File -FilePath comet-browser/config/firebase-admin.json -Encoding utf8
-          }
-        env:
-          FIREBASE_ADMIN_SDK_JSON: ${{ secrets.FIREBASE_ADMIN_SDK_JSON }}
-
       - name: Cache Next.js build
         uses: actions/cache@v4
         with:
           path: comet-browser/.next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('comet-browser/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-nextjs-
 
       - name: Build App
         working-directory: comet-browser
         env:
           NEXT_PUBLIC_APP_NAME: Comet
-          NEXT_PUBLIC_APP_VERSION: 0.1.7
+          NEXT_PUBLIC_APP_VERSION: ${{ needs.get-version.outputs.version }}
         run: ${{ matrix.build_cmd }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-${{ matrix.target }}
-          path: ${{ matrix.artifact_path }}
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_glob }}
 
+  # ============================================================================
+  # CREATE RELEASE
+  # ============================================================================
   create-release:
-    name: Create Draft Release
-    needs: [build-flutter-android, build-flutter-ios, build-desktop]
+    name: Create Release
+    needs: [get-version, build-android, build-ios, build-desktop]
     runs-on: ubuntu-latest
     steps:
-      - name: Download Android APK
-        uses: actions/download-artifact@v4
-        with:
-          name: flutter-browser-apk
-          path: release-artifacts
+      - uses: actions/checkout@v4
 
-      - name: Download iOS IPA
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: flutter-browser-ipa
-          path: release-artifacts
-
-      - name: Download Desktop Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: desktop-*
           path: release-artifacts
           merge-multiple: true
 
-      - name: Create Draft Release
-        uses: ncipollo/release-action@v1
+      - name: List Artifacts
+        run: ls -la release-artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          artifacts: "release-artifacts/*"
-          draft: true
+          body: |
+            # 🚀 Comet AI Browser v${{ needs.get-version.outputs.version }}
+            
+            Download the latest release for your platform below!
+            
+            ## Desktop
+            | Platform | File |
+            |----------|------|
+            | 🪟 Windows | `Comet.Browser.Setup.*.exe` |
+            | 🍎 macOS | `Comet.Browser-*.dmg` |
+            | 🐧 Linux | `Comet.Browser-*.AppImage` |
+            
+            ## Mobile
+            | Platform | File |
+            |----------|------|
+            | 📱 Android | `app-release.apk` |
+            | 🍎 iOS | `Comet-AI.ipa` |
+            
+            ## 📌 Notes
+            - Compatible with landing page auto-detection
+            - All builds are production-ready
+            
+            ---
+            Built with ❤️ by [Latestinssan](https://github.com/Preet3627)
+          draft: false
+          prerelease: ${{ needs.get-version.outputs.is_stable == 'false' }}
+          generate_release_notes: true
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.event.inputs.version || (github.ref_type == 'tag' && github.ref_name) || format('v0.1.{0}', github.run_number) }}
-          name: ${{ github.event.inputs.release_name || (github.ref_type == 'tag' && github.ref_name) || format('Release v0.1.{0}', github.run_number) }}
-          body: "Automatic build for version ${{ github.event.inputs.version || github.ref_name }} (Build #${{ github.run_number }})"
-          allowUpdates: true
+
+      - name: Upload Assets
+        run: |
+          for file in release-artifacts/*; do
+            if [ -f "$file" ]; then
+              echo "📤 Uploading: $file"
+              gh release upload "${{ needs.get-version.outputs.tag }}" "$file" --clobber
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================================
+  # UPDATE FIREBASE
+  # ============================================================================
+  update-firebase:
+    name: Update Firebase
+    needs: [get-version, create-release]
+    runs-on: ubuntu-latest
+    if: inputs.update_firebase == true || github.event.inputs.update_firebase == true
+    environment: Production
+    steps:
+      - name: Update Firebase Downloads
+        run: |
+          TAG="${{ needs.get-version.outputs.tag }}"
+          
+          curl -X PUT \
+            "https://${{ secrets.FIREBASE_PROJECT_ID }}-default-rtdb.firebaseio.com/config/downloads.json?auth=${{ secrets.FIREBASE_ADMIN_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "windows": "https://github.com/Preet3627/Comet-AI/releases/download/'"$TAG"'/Comet.Browser.Setup.exe",
+              "mac": "https://github.com/Preet3627/Comet-AI/releases/download/'"$TAG"'/Comet.Browser.dmg",
+              "linux": "https://github.com/Preet3627/Comet-AI/releases/download/'"$TAG"'/Comet.Browser.AppImage",
+              "android": "https://github.com/Preet3627/Comet-AI/releases/download/'"$TAG"'/app-release.apk",
+              "ios": "https://github.com/Preet3627/Comet-AI/releases/download/'"$TAG"'/Comet-AI.ipa"
+            }'
+        continue-on-error: true
+
+  # ============================================================================
+  # SUMMARY
+  # ============================================================================
+  summary:
+    name: Summary
+    needs: [get-version, create-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Summary
+        run: |
+          echo "🎉 Release v${{ needs.get-version.outputs.version }} created!"
+          echo "🔗 https://github.com/Preet3627/Comet-AI/releases/${{ needs.get-version.outputs.tag }}"

@@ -832,19 +832,77 @@ export function generateSmartPDF(
   actionLogs?: PDFActionLog[],
   ocrData?: PDFOCRData[]
 ): string {
+  let template = 'professional';
+  
+  // Extract template from [TEMPLATE:xxx] marker or JSON
+  const templateMatch = content.match(/\[TEMPLATE:([^\]]+)\]/i);
+  if (templateMatch) {
+    template = templateMatch[1].trim().toLowerCase();
+    content = content.replace(/\[TEMPLATE:[^\]]+\]/gi, '');
+  }
+  
+  // Try to extract from JSON and preserve it as marker
+  try {
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.template) {
+        template = parsed.template;
+      }
+    }
+  } catch {}
+  
+  // Always add template marker - let main.js handle the rendering
+  const templateMarker = `[TEMPLATE:${template}]`;
+  
+  // If no JSON content, just return content with template marker
+  if (!content.includes('{') || !content.includes('"pages"')) {
+    return templateMarker + '\n\n' + content;
+  }
+  
+  // If JSON pages exist, convert to markdown format with template marker
   try {
     const jsonMatch = content.match(/\{[\s\S]*"pages"[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]) as EnhancedPDFData;
       if (parsed.pages && Array.isArray(parsed.pages) && parsed.pages.length > 0) {
-        return buildEnhancedPDFFromJSON(parsed, iconBase64, images, actionLogs, ocrData);
+        let markdown = '';
+        
+        // Add metadata
+        if (parsed.title) markdown += `# ${parsed.title}\n\n`;
+        if (parsed.subtitle) markdown += `*${parsed.subtitle}*\n\n`;
+        if (parsed.author) markdown += `**Author:** ${parsed.author}\n\n---\n\n`;
+        
+        // Process pages
+        for (let i = 0; i < parsed.pages.length; i++) {
+          const page = parsed.pages[i];
+          markdown += `## ${page.icon || ''} ${page.title || `Section ${i + 1}`}\n\n`;
+          
+          if (page.sections && page.sections.length > 0) {
+            for (const section of page.sections) {
+              if (section.title) {
+                markdown += `### ${section.icon || ''} ${section.title}\n\n`;
+              }
+              markdown += `${section.content || ''}\n\n`;
+            }
+          } else if (page.content) {
+            markdown += `${page.content}\n\n`;
+          }
+          
+          if (i < parsed.pages.length - 1) {
+            markdown += '\n---\n\n';
+          }
+        }
+        
+        return templateMarker + '\n\n' + markdown;
       }
     }
   } catch (e) {
-    console.log('JSON parsing failed, using fallback:', e);
+    console.log('JSON parsing failed:', e);
   }
   
-  return buildCleanPDFContent(content, 'Comet AI Report', iconBase64, images);
+  // Fallback: just add template marker
+  return templateMarker + '\n\n' + content;
 }
 
 export function buildCapabilityReportPDF(

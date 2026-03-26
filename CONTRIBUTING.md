@@ -96,6 +96,26 @@ The mobile code is located in `CometBrowserMobile/comet_ai`.
 -   **Flutter**: We follow standard Dart linting rules.
 -   **Commits**: Use semantic commit messages if possible (e.g., `feat:`, `fix:`, `docs:`, `style:`, `refactor:`).
 
+## 🚀 Creating Releases
+
+### Quick Release (Tag Push)
+```bash
+git tag v0.2.4-stable
+git push origin v0.2.4-stable
+```
+The CI will automatically build all platforms and create a GitHub release.
+
+### Manual Release
+1. Go to **Actions** → **Release Build (Landing Page Optimized)**
+2. Click **Run workflow**
+3. Enter version number and options
+
+### Landing Page Auto-Detection
+The landing page automatically fetches downloads from GitHub releases using:
+```
+https://api.github.com/repos/Preet3627/Comet-AI/releases/latest
+```
+
 ## ❓ Need Help?
 
 If you have questions, feel free to contact us via the official website at [https://browser.ponsrischool.in](https://browser.ponsrischool.in).

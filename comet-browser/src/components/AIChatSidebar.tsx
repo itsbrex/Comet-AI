@@ -44,6 +44,8 @@ import { AICommandQueue, type AICommand } from './AICommandQueue';
 import CapabilitiesPanel from './CapabilitiesPanel';
 import DOMSearchDisplay, { DOMMetaDisplay } from './ai/DOMSearchDisplay';
 import { secureDOMReader, type DOMSearchResult, type FilteredDOMResult } from './ai/SecureDOMReader';
+import { detectSchedulingIntent, type SchedulingIntent } from './ai/SchedulingIntentDetector';
+import SchedulingModal from './ai/SchedulingModal';
 
 // Logic & Utils
 import {
@@ -126,6 +128,13 @@ interface AIChatSidebarProps {
   mysqlConfig: any;
   setMysqlConfig: (config: any) => void;
   side?: 'left' | 'right';
+  setShowSettings?: (show: boolean) => void;
+  setSettingsSection?: (section: string) => void;
+  setBrowserDisabled?: (disabled: boolean) => void;
+  showSchedulingModal?: boolean;
+  setShowSchedulingModal?: (show: boolean) => void;
+  schedulingIntent?: SchedulingIntent | null;
+  setSchedulingIntent?: (intent: SchedulingIntent | null) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -216,6 +225,23 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [ocrSearchQuery, setOCRSearchQuery] = useState<string>('');
   const [ocrSearchLoading, setOCRSearchLoading] = useState(false);
 
+  // Scheduling State - controlled by props or local
+  const [localSchedulingIntent, setLocalSchedulingIntent] = useState<SchedulingIntent | null>(null);
+  const schedulingIntent = props.schedulingIntent !== undefined ? props.schedulingIntent : localSchedulingIntent;
+  const setSchedulingIntent = props.setSchedulingIntent 
+    ? props.setSchedulingIntent 
+    : setLocalSchedulingIntent;
+  
+  // Use controlled modal state from props if provided
+  const [localShowSchedulingModal, setLocalShowSchedulingModal] = useState(false);
+  const showSchedulingModal = props.showSchedulingModal !== undefined ? props.showSchedulingModal : localShowSchedulingModal;
+  const setShowSchedulingModal = props.showSchedulingModal !== undefined 
+    ? (val: boolean) => {
+        if (props.setBrowserDisabled) props.setBrowserDisabled(val);
+        if (props.setShowSchedulingModal) props.setShowSchedulingModal(val);
+      }
+    : setLocalShowSchedulingModal;
+
   // ---------------------------------------------------------------------------
   // Helper Logic
   // ---------------------------------------------------------------------------
@@ -277,6 +303,50 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     if (aiProvider === 'groq' && groqApiKey) return true;
     return false;
   }, [aiProvider, ollamaBaseUrl, geminiApiKey, openaiApiKey, anthropicApiKey, groqApiKey]);
+
+  // Scheduling handler
+  const handleSchedulingConfirm = useCallback(async (config: any) => {
+    if (!schedulingIntent) return;
+
+    try {
+      if (window.electronAPI?.scheduleTask) {
+        await window.electronAPI.scheduleTask({
+          name: schedulingIntent.taskName,
+          type: schedulingIntent.taskType,
+          cronExpression: config.schedule,
+          outputPath: config.outputPath,
+          enabled: config.enabled,
+          prompt: inputMessage,
+        });
+        
+        setMessages(prev => [...prev, {
+          role: 'model',
+          content: `✅ **Task Scheduled Successfully!**
+
+I've set up "${schedulingIntent.taskName}" to run **${config.schedule}**.
+
+📅 **Schedule:** ${config.schedule}
+🤖 **Model:** ${config.model.provider}/${config.model.model}
+💾 **Save to:** ${config.outputPath}
+${config.notification?.onComplete ? '🔔 You will be notified when complete.' : ''}
+
+You can manage this task anytime from the Automation panel.`
+        } as ExtendedChatMessage]);
+        
+        setShowSchedulingModal(false);
+        setSchedulingIntent(null);
+        if (props.setBrowserDisabled) props.setBrowserDisabled(false);
+      }
+    } catch (error) {
+      console.error('[Scheduling] Failed to schedule task:', error);
+      setMessages(prev => [...prev, {
+        role: 'model',
+        content: `⚠️ **Scheduling Failed**
+
+I couldn't schedule the task. The background service may not be running. Please make sure Comet-AI's background service is installed and running.`
+      } as ExtendedChatMessage]);
+    }
+  }, [schedulingIntent, inputMessage]);
 
   // ---------------------------------------------------------------------------
   // ✅ NEW: fetchRealSearchContext
@@ -407,6 +477,14 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     if (threatCheck.blocked) {
       setMessages(prev => [...prev, { role: 'user', content: rawContent }, { role: 'model', content: threatCheck.response ?? '' }] as ExtendedChatMessage[]);
       setIsLoading(false); setIsThinking(false); return;
+    }
+
+    // Check for scheduling intent
+    const intent = detectSchedulingIntent(rawContent);
+    if (intent && intent.detected && intent.confidence === 'high') {
+      setSchedulingIntent(intent);
+      setShowSchedulingModal(true);
+      if (props.setBrowserDisabled) props.setBrowserDisabled(true);
     }
 
     const { content: protectedContent, wasProtected } = Security.fortress(rawContent);
@@ -550,19 +628,23 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           break; // No commands needed, LLM has finished its task.
         }
 
+        console.log('[AI] Commands parsed:', commands.map(c => c.type));
+
         // Save AI's response including the commands to history
         currentHistory = [...currentHistory, { role: 'assistant', content: response.text }];
 
         // Action Execution
+        console.log('[AI] Setting up command queue with', commands.length, 'commands');
         const cmdId = addThinkingStep(`Executing Actions (${commands.length})...`);
         const aiCommands: AICommand[] = commands.map((c, i) => ({
           id: `cmd-${Date.now()}-${iterations}-${i}`,
           type: c.type,
           value: c.value,
-          context: responseText, // 🚀 PASS the visible message content as context for the PDF generator
+          context: responseText,
           status: 'pending',
           timestamp: Date.now()
         }));
+        console.log('[AI] Command queue:', aiCommands.map(c => c.type));
         setCommandQueue(aiCommands);
         setCurrentCommandIndex(0);
 
@@ -620,7 +702,11 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   }, [inputMessage, attachments, messages, aiProvider, currentUrl, addThinkingStep, resolveThinkingStep, getStreamingResponse, isAiSetup, fetchRealSearchContext]);
 
   const processNextCommand = useCallback(async () => {
-    if (processingQueueRef.current || currentCommandIndex >= commandQueue.length) return;
+    console.log('[AI] processNextCommand called, current index:', currentCommandIndex, 'queue length:', commandQueue.length);
+    if (processingQueueRef.current || currentCommandIndex >= commandQueue.length) {
+      console.log('[AI] Skipping - processing:', processingQueueRef.current, 'index >= length:', currentCommandIndex >= commandQueue.length);
+      return;
+    }
 
     processingQueueRef.current = true;
     const command = commandQueue[currentCommandIndex];
@@ -1053,44 +1139,300 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           break;
         }
 
+        case 'SCHEDULE_TASK': {
+          let taskData: { schedule?: string; type?: string; name?: string; description?: string } = {};
+          let rawValue = (command.value || '').trim();
+          
+          // Try JSON format first
+          try {
+            // Handle JSON wrapped in code blocks or quotes
+            if (rawValue.includes('{')) {
+              const jsonMatch = rawValue.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                taskData = JSON.parse(jsonMatch[0]);
+              }
+            } else {
+              taskData = JSON.parse(rawValue);
+            }
+          } catch {
+            // Fall back to pipe-separated format
+            const parts = rawValue.split('|').map(p => p.trim());
+            const [cron, taskType, taskName, description] = parts;
+            taskData = { schedule: cron, type: taskType, name: taskName, description };
+          }
+          
+          const { schedule, type, name, description } = taskData;
+          
+          if (!schedule || !type || !name) {
+            output = 'SCHEDULE_TASK requires: {"schedule": "cron", "type": "pdf-generate", "name": "Task Name", "description": "..."}';
+            break;
+          }
+
+          try {
+            const intent = {
+              detected: true,
+              confidence: 'high' as const,
+              taskName: name,
+              taskType: type as any,
+              schedule: {
+                type: 'cron' as const,
+                expression: schedule,
+                description: `Scheduled: ${schedule}`,
+              },
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+              outputPath: '~/Documents/Comet-AI',
+            };
+            
+            setSchedulingIntent(intent);
+            setShowSchedulingModal(true);
+            if (props.setBrowserDisabled) props.setBrowserDisabled(true);
+            output = `Scheduling modal opened for task: ${name}`;
+          } catch (error) {
+            output = `Failed to schedule task: ${(error as Error).message}`;
+          }
+          break;
+        }
+
+        // ✅ NEW: CREATE_PDF_JSON - Primary JSON-based PDF generation
+        // Format: JSON object with structured pages and sections
+        case 'CREATE_PDF_JSON': {
+          let rawValue = (command.value || '').trim();
+          
+          let pdfData: any;
+          let parsedJson: any = null;
+          
+          // Clean up malformed input
+          rawValue = rawValue.replace(/^\s*\]+\s*:\s*/, '').trim();
+          
+          // Try to extract and parse JSON from the command value
+          try {
+            // First try parsing the whole value as JSON
+            try {
+              parsedJson = JSON.parse(rawValue);
+            } catch {
+              // Try to extract JSON from markdown code blocks
+              const jsonMatch = rawValue.match(/```(?:json)?\s*([\s\S]*?)```/);
+              if (jsonMatch && jsonMatch[1]) {
+                try {
+                  parsedJson = JSON.parse(jsonMatch[1].trim());
+                } catch {
+                  // Try to fix unescaped newlines in the JSON
+                  const fixedJson = jsonMatch[1].trim().replace(/\\n/g, '\\\\n').replace(/\\r/g, '');
+                  try {
+                    parsedJson = JSON.parse(fixedJson);
+                  } catch {
+                    parsedJson = null;
+                  }
+                }
+              }
+              
+              // Try to find JSON object anywhere in the text
+              if (!parsedJson) {
+                const objMatch = rawValue.match(/\{[\s\S]*?(?:title|pages)[\s\S]*?\}/);
+                if (objMatch) {
+                  try {
+                    parsedJson = JSON.parse(objMatch[0]);
+                  } catch {
+                    // Try fixing common JSON issues
+                    const fixed = objMatch[0].replace(/\n/g, '\\n').replace(/,\s*\]/g, ']').replace(/,\s*\}/g, '}');
+                    try {
+                      parsedJson = JSON.parse(fixed);
+                    } catch {
+                      parsedJson = null;
+                    }
+                  }
+                }
+              }
+            }
+            
+            if (!parsedJson || typeof parsedJson !== 'object') {
+              throw new Error('No valid JSON found in CREATE_PDF_JSON command');
+            }
+            
+            pdfData = parsedJson;
+          } catch (e) {
+            // JSON parsing failed - fall back to markdown generation
+            console.warn('[PDF] JSON parsing failed, falling back to GENERATE_PDF:', (e as Error).message);
+            output = `⚠️ JSON parsing failed. Please use proper JSON format.`;
+            output += `\n\n**Correct format:**\n\`\`\`json\n{\n  "title": "Document Title",\n  "template": "professional",\n  "content": "Your content here..."\n}\n\`\`\``;
+            output += `\n\nOr use markdown format: [GENERATE_PDF: Title | actual content here...]`;
+            break;
+          }
+          
+          // Validate required fields
+          if (!pdfData.title && !pdfData.pages) {
+            output = '❌ JSON must have at least "title" or "pages" field';
+            break;
+          }
+          
+          const pdfTitle = pdfData.title || 'Document';
+          const pdfSubtitle = pdfData.subtitle || '';
+          const pdfAuthor = pdfData.author || 'Comet AI';
+          const template = pdfData.template || 'professional';
+          const watermark = pdfData.watermark || '';
+          const bgColor = pdfData.bgColor || '#ffffff';
+          const priority = pdfData.priority || 'normal';
+          
+          // Build markdown content from JSON structure
+          let pdfContent = '';
+          
+          // Add metadata at the top
+          const metaParts: string[] = [];
+          if (pdfSubtitle) metaParts.push(`*${pdfSubtitle}*`);
+          if (pdfAuthor && pdfAuthor !== 'Comet AI') metaParts.push(`**Author:** ${pdfAuthor}`);
+          if (metaParts.length > 0) {
+            pdfContent += metaParts.join('\n') + '\n\n---\n\n';
+          }
+          
+          // Process pages
+          if (pdfData.pages && Array.isArray(pdfData.pages)) {
+            for (let i = 0; i < pdfData.pages.length; i++) {
+              const page = pdfData.pages[i];
+              
+              // Page title
+              pdfContent += `## ${page.icon || ''} ${page.title || `Section ${i + 1}`}\n\n`;
+              
+              // Process sections
+              if (page.sections && Array.isArray(page.sections)) {
+                for (const section of page.sections) {
+                  if (section.title) {
+                    pdfContent += `### ${section.icon || ''} ${section.title}\n\n`;
+                  }
+                  pdfContent += `${section.content || ''}\n\n`;
+                }
+              } else if (page.content) {
+                // Fallback: page has direct content
+                pdfContent += `${page.content}\n\n`;
+              }
+              
+              // Page break between pages (except last)
+              if (i < pdfData.pages.length - 1) {
+                pdfContent += '\n---\n\n';
+              }
+            }
+          } else if (pdfData.content) {
+            // Fallback: direct content
+            pdfContent += pdfData.content;
+          }
+          
+          // Add metadata markers for template processing
+          const metadataMarkers = [
+            `[TEMPLATE:${template}]`,
+            watermark ? `[WATERMARK:${watermark}]` : '',
+            bgColor !== '#ffffff' ? `[BG_COLOR:${bgColor}]` : '',
+            priority !== 'normal' ? `[PRIORITY:${priority}]` : '',
+          ].filter(Boolean).join('');
+          
+          pdfContent = metadataMarkers + '\n\n' + pdfContent;
+          
+          await preloadCometIconLocal();
+          const iconSource = (window as any).__cometIconBase64 || null;
+          
+          setIsGeneratingPDF(true);
+          setPdfProgress(0);
+          setShowTerminal(true);
+          setStreamingPDFContent(`Generating PDF: ${pdfTitle}...`);
+          
+          try {
+            const cleanHTML = generateSmartPDF(pdfContent, iconSource);
+            const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML) as any;
+            
+            setIsGeneratingPDF(false);
+            setPdfProgress(100);
+            setStreamingPDFContent('');
+            
+            if (res.success) {
+              output = `✅ **PDF Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**Template:** ${template}\n**File:** ${res.filePath}`;
+            } else {
+              output = `❌ PDF generation failed: ${res.error}`;
+            }
+          } catch (e: any) {
+            setIsGeneratingPDF(false);
+            setStreamingPDFContent('');
+            output = `❌ Error generating PDF: ${e.message}`;
+          }
+          break;
+        }
+
         // ✅ FIXED: GENERATE_PDF now supports screenshots, custom title/author/subtitle
         // Format: [GENERATE_PDF: title | screenshot:yes | author:Name | subtitle:Subtitle | content...]
+        // NOTE: This is now a FALLBACK - prefer CREATE_PDF_JSON for structured content
         case 'GENERATE_PDF': {
-          const rawValue = command.value;
+          let rawValue = command.value || '';
+
+          // ── Clean up malformed input ────────────────────────────────────────
+          // Fix cases like "[GENERATE_PDF: ]: content" or malformed brackets
+          rawValue = rawValue
+            .replace(/^\s*\]+\s*:\s*/, '') // Remove leading ]: or ]]: patterns
+            .replace(/^\s*:\s*/, '') // Remove leading : pattern
+            .trim();
 
           // ── Parse extended options from pipe-separated fields ───────────────
-          // Anything that is key:value is an option; the rest is content
-          const allParts = rawValue.split('|').map((p: string) => p.trim());
+          const allParts = rawValue.split('|').map((p: string) => p.trim()).filter(p => p.length > 0);
           const options: Record<string, string> = {};
           const contentParts: string[] = [];
 
           for (const part of allParts) {
-            const kvMatch = part.match(/^(title|author|subtitle|screenshot|filename)\s*:\s*(.+)$/i);
+            // Skip empty parts or just "]:"
+            if (!part || part === ']:' || part === ':') continue;
+            
+            // Parse key:value options
+            const kvMatch = part.match(/^(title|author|subtitle|screenshot|filename|template|tags|category|watermark)\s*:\s*(.+)$/i);
             if (kvMatch) {
-              options[kvMatch[1].toLowerCase()] = kvMatch[2].trim();
+              const key = kvMatch[1].toLowerCase();
+              const value = kvMatch[2].trim();
+              // Skip if value is empty or just placeholder
+              if (value && !/^\[?\s*\]?\s*$/.test(value) && value.toLowerCase() !== 'content' && value.toLowerCase() !== 'placeholder') {
+                options[key] = value;
+              }
             } else {
               contentParts.push(part);
             }
           }
 
+          // If no content parts but we have context, use context
+          if (contentParts.length === 0 && command.context) {
+            contentParts.push(command.context);
+          }
+
           // First non-option part is always the title if no explicit title: key
           let pdfTitle = options.title || contentParts[0]?.trim() || 'Document';
+          
+          // Clean up title if it's clearly malformed
+          if (!pdfTitle || pdfTitle.length < 2 || /^\[?\s*\]?\s*$/.test(pdfTitle)) {
+            pdfTitle = contentParts.length > 1 ? contentParts[1]?.trim() || 'Document' : 'Document';
+          }
           
           // Fix for "title | actual title" or "title: actual title"
           if (pdfTitle.toLowerCase() === 'title' && contentParts[1]) {
             pdfTitle = contentParts[1];
-            contentParts.splice(0, 1); // Remove 'title' part
+            contentParts.splice(0, 1);
           }
 
           const pdfSubtitle = options.subtitle || '';
           const pdfAuthor = options.author || 'Comet AI';
           const shouldScreenshot = options.screenshot?.toLowerCase() === 'yes' || options.screenshot?.toLowerCase() === 'true';
           const shouldIncludeAttachments = options.attachments?.toLowerCase() !== 'no';
-          let pdfContent = (options.title ? contentParts : contentParts.slice(1)).join('|').trim();
+          
+          // Build content from remaining parts (skip title)
+          let pdfContent = contentParts.slice(1).join(' | ').trim();
+          
+          // If content is still empty or placeholder, try the first content part
+          if (!pdfContent || pdfContent.length < 10 || /^\[?\s*\]?\s*$/.test(pdfContent)) {
+            pdfContent = contentParts[0]?.trim() || command.context || '';
+          }
 
           // ✅ NEW: If content is just a placeholder like "content", use the full message text passed in context
-          if (command.context && (pdfContent.length < 50 || /\[content\]|placeholder|lorem ipsum/i.test(pdfContent) || pdfContent.toLowerCase() === 'content')) {
-            pdfContent = command.context;
+          if (!pdfContent || pdfContent.length < 50 || /\[content\]|placeholder|lorem ipsum/i.test(pdfContent) || pdfContent.toLowerCase() === 'content' || /^\[?\s*\]?\s*$/.test(pdfContent)) {
+            if (command.context) {
+              pdfContent = command.context;
+            } else if (contentParts.length > 0) {
+              // Use the longest content part
+              const longestPart = contentParts.reduce((a, b) => a.length > b.length ? a : b, '');
+              if (longestPart.length > pdfContent.length) {
+                pdfContent = longestPart;
+              }
+            }
           }
 
           // Detect if this PDF needs live/current data
@@ -1390,7 +1732,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           const { buildCapabilityReportPDF } = await import('./ai/AIUtils');
           const capabilityPDF = buildCapabilityReportPDF({
             author: 'Preet Kumar Patel (16-year-old student, India)',
-            version: 'v0.2.1.2',
+            version: 'v0.2.5',
             features: capabilityFeatures,
             platform: 'Windows, macOS, Linux, Android'
           }, screenshotBase64, iconSource);
@@ -1419,7 +1761,7 @@ I've successfully executed the following real tasks:
 
 **Built by:** Preet Kumar Patel - A 16-year-old student from India 🇮🇳
 
-*Comet AI v0.2.1.2 - The AI-Native Browser*
+*Comet AI v0.2.5 - The AI-Native Browser*
           ` }]);
 
           output = 'Full capability demonstration executed successfully with real tasks: search, shell command, volume, app launch, screenshot, and PDF generation.';
@@ -1577,6 +1919,79 @@ I've successfully executed the following real tasks:
         case 'OPEN_MCP_SETTINGS': {
           store.openMcpSettings();
           output = 'Opening MCP Settings panel...';
+          break;
+        }
+
+        case 'OPEN_AUTOMATION_SETTINGS': {
+          console.log('[AI] OPEN_AUTOMATION_SETTINGS handler called');
+          if (props.setShowSettings && props.setSettingsSection) {
+            console.log('[AI] Using props.setShowSettings');
+            props.setShowSettings(true);
+            props.setSettingsSection('automation');
+            output = 'Opening Automation Settings...';
+          } else if (window.electronAPI?.openSettingsPopup) {
+            console.log('[AI] Using IPC openSettingsPopup');
+            window.electronAPI.openSettingsPopup('automation');
+            output = 'Opening Automation Settings...';
+          } else {
+            console.log('[AI] No method available - props exists:', !!props.setShowSettings, 'IPC exists:', !!window.electronAPI?.openSettingsPopup);
+            output = 'Automation settings not available in current context.';
+          }
+          break;
+        }
+
+        case 'OPEN_SCHEDULING_MODAL': {
+          // Parse scheduling data from command value (JSON format)
+          let scheduleData: any = {};
+          const rawValue = command.value.trim();
+          
+          try {
+            if (rawValue) {
+              if (rawValue.includes('{')) {
+                const jsonMatch = rawValue.match(/\{[\s\S]*\}/);
+                if (jsonMatch) scheduleData = JSON.parse(jsonMatch[0]);
+              } else {
+                // Pipe-separated: schedule|type|name|description
+                const parts = rawValue.split('|').map(p => p.trim());
+                scheduleData = {
+                  schedule: parts[0] || '0 8 * * *',
+                  type: parts[1] || 'ai-prompt',
+                  name: parts[2] || 'Scheduled Task',
+                  description: parts[3] || '',
+                };
+              }
+            }
+          } catch (e) {
+            console.error('Failed to parse scheduling data:', e);
+          }
+          
+          // Create scheduling intent
+          const intent: SchedulingIntent = {
+            detected: true,
+            confidence: 'high' as const,
+            taskName: scheduleData.name || 'Scheduled Task',
+            taskType: scheduleData.type as any || 'ai-prompt',
+            schedule: {
+              type: 'cron' as const,
+              expression: scheduleData.schedule || '0 8 * * *',
+              description: `Scheduled: ${scheduleData.schedule || '0 8 * * *'}`,
+            },
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+            outputPath: scheduleData.outputPath || '~/Documents/Comet-AI',
+          };
+          
+          // Use props to set up and show modal
+          if (props.setSchedulingIntent) {
+            props.setSchedulingIntent(intent);
+          }
+          if (props.setShowSchedulingModal) {
+            props.setShowSchedulingModal(true);
+          }
+          if (props.setBrowserDisabled) {
+            props.setBrowserDisabled(true);
+          }
+          
+          output = `Opening scheduling modal for: ${intent.taskName}`;
           break;
         }
 
@@ -1752,7 +2167,7 @@ I've successfully executed the following real tasks:
 
     if (window.electronAPI) {
       if (format === 'text') {
-        const exportContent = `${fullContent}\n\n${'='.repeat(60)}\nACTION LOGS (v0.2.4 JSON Format)\n${'='.repeat(60)}\n\n${actionLogsExport}`;
+        const exportContent = `${fullContent}\n\n${'='.repeat(60)}\nACTION LOGS (v0.2.5 JSON Format)\n${'='.repeat(60)}\n\n${actionLogsExport}`;
         const res = await (window.electronAPI as any).exportChatAsTxt(exportContent);
         if (res?.success) setFeedback('Chat & Action Logs Exported to Downloads');
       } else {
@@ -2476,7 +2891,7 @@ I've successfully executed the following real tasks:
             </button>
           </div>
         </div>
-        <p className="text-[8px] text-center text-white/5 mt-5 uppercase tracking-[0.5em] font-black">Neural Engine Active • v0.2.1.2 Patched</p>
+        <p className="text-[8px] text-center text-white/5 mt-5 uppercase tracking-[0.5em] font-black">Neural Engine Active • v0.2.5 Patched</p>
       </footer>
 
       <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => { }} />
@@ -2501,6 +2916,25 @@ I've successfully executed the following real tasks:
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Scheduling Modal - only render if not controlled by props */}
+      {props.showSchedulingModal === undefined && (
+        <SchedulingModal
+          isOpen={showSchedulingModal}
+          onClose={() => {
+            setShowSchedulingModal(false);
+            setSchedulingIntent(null);
+            if (props.setBrowserDisabled) props.setBrowserDisabled(false);
+          }}
+          onConfirm={handleSchedulingConfirm}
+          taskDetails={{
+            taskName: schedulingIntent?.taskName || 'Scheduled Task',
+            taskType: schedulingIntent?.taskType || 'ai-prompt',
+            schedule: schedulingIntent?.schedule.expression || '0 8 * * *',
+            description: `Detected: ${schedulingIntent?.schedule.description || 'Custom schedule'}`,
+          }}
+        />
+      )}
     </div>
   );
 };

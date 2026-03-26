@@ -13,6 +13,7 @@ interface SpotlightSearchOverlayProps {
 }
 
 const SpotlightSearchOverlay: React.FC<SpotlightSearchOverlayProps> = ({ show, onClose }) => {
+    const store = useAppStore(); // Get store at top level
     const [searchTerm, setSearchTerm] = useState('');
     const [calculationResult, setCalculationResult] = useState<string | null>(null); // New state for calculation result
     const [appSearchResults, setAppSearchResults] = useState<any[]>([]); // New state for app search results
@@ -49,7 +50,6 @@ const SpotlightSearchOverlay: React.FC<SpotlightSearchOverlayProps> = ({ show, o
         const timer = setTimeout(async () => {
             const trimmedSearchTerm = searchTerm.trim();
             if (trimmedSearchTerm.length > 2 && !calculationResult && appSearchResults.length === 0 && !alarmMessage) {
-                const store = useAppStore(); // Get store
                 const preds = await BrowserAI.predictUrl(trimmedSearchTerm, store.history.map(h => h.url));
                 setUrlPrediction(preds[0] || null);
             } else {
@@ -57,7 +57,7 @@ const SpotlightSearchOverlay: React.FC<SpotlightSearchOverlayProps> = ({ show, o
             }
         }, 150); // Debounce time
         return () => clearTimeout(timer);
-    }, [searchTerm, calculationResult, appSearchResults, alarmMessage]);
+    }, [searchTerm, calculationResult, appSearchResults, alarmMessage, store.history]);
 
     const handleSearch = async () => {
         setCalculationResult(null); // Clear previous calculation

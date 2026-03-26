@@ -16,8 +16,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('ai-query-detected', subscription);
   },
   createView: (args) => ipcRenderer.send('create-view', args),
+  addNewTab: (url) => ipcRenderer.send('create-view', { tabId: `tab-${Date.now()}`, url }),
   activateView: (args) => ipcRenderer.send('activate-view', args),
   hideAllViews: () => ipcRenderer.send('hide-all-views'),
+  showAllViews: () => ipcRenderer.send('show-all-views'),
   destroyView: (tabId) => ipcRenderer.send('destroy-view', tabId),
   onBrowserViewUrlChanged: (callback) => {
     const subscription = (event, { tabId, url }) => callback({ tabId, url });
@@ -69,7 +71,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Download Listeners
   onDownloadStarted: (callback) => {
-    const subscription = (event, filename) => callback(filename);
+    const subscription = (event, data) => callback(data);
     ipcRenderer.on('download-started', subscription);
     return () => ipcRenderer.removeListener('download-started', subscription);
   },
@@ -79,9 +81,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('download-progress', subscription);
   },
   onDownloadComplete: (callback) => {
-    const subscription = (event, filename) => callback(filename);
+    const subscription = (event, data) => callback(data);
     ipcRenderer.on('download-complete', subscription);
     return () => ipcRenderer.removeListener('download-complete', subscription);
+  },
+  onDownloadFailed: (callback) => {
+    const subscription = (event, data) => callback(data);
+    ipcRenderer.on('download-failed', subscription);
+    return () => ipcRenderer.removeListener('download-failed', subscription);
   },
   onTabLoaded: (callback) => {
     const subscription = (event, { tabId, url }) => callback({ tabId, url });
@@ -480,17 +487,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcpNativePowershell: (script) => ipcRenderer.invoke('mcp-native-powershell', script),
   mcpNativeActiveWindow: () => ipcRenderer.invoke('mcp-native-active-window'),
 
-  // Upgraded MCP Core (Smithery / SSE / Stdio)
+  // MCP Core (SSE / Stdio transports)
   mcpConnectServer: (config) => ipcRenderer.invoke('mcp-connect-server', config),
   mcpDisconnectServer: (id) => ipcRenderer.invoke('mcp-disconnect-server', id),
   mcpListServers: () => ipcRenderer.invoke('mcp-list-servers'),
   mcpGetTools: () => ipcRenderer.invoke('mcp-get-tools'),
-
-  // Web Search v2 (Brave / Tavily / SerpAPI)
-  webSearch: (query, provider, count) => ipcRenderer.invoke('web-search', { query, provider, count }),
-  webSearchContext: (query, provider) => ipcRenderer.invoke('web-search-context', { query, provider }),
-  webSearchProviders: () => ipcRenderer.invoke('web-search-providers'),
-  webSearchConfigure: (keys) => ipcRenderer.invoke('web-search-configure', keys),
 
   // RAG — Local Vector Store
   ragIngest: (text, source) => ipcRenderer.invoke('rag-ingest', { text, source }),
@@ -533,6 +534,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('mobile-approve-high-risk', subscription);
     return () => ipcRenderer.removeListener('mobile-approve-high-risk', subscription);
   },
+
+  // Scheduling & Automation
+  scheduleTask: (taskData) => ipcRenderer.invoke('automation:create-task', taskData),
+  getScheduledTasks: () => ipcRenderer.invoke('automation:get-tasks'),
+  getScheduledTask: (taskId) => ipcRenderer.invoke('automation:get-task', taskId),
+  updateScheduledTask: (taskId, updates) => ipcRenderer.invoke('automation:update-task', taskId, updates),
+  deleteScheduledTask: (taskId) => ipcRenderer.invoke('automation:delete-task', taskId),
+  toggleScheduledTask: (taskId) => ipcRenderer.invoke('automation:toggle-task', taskId),
+  runScheduledTask: (taskId) => ipcRenderer.invoke('automation:run-task', taskId),
+  getTaskLogs: (date) => ipcRenderer.invoke('automation:get-logs', date),
+  getTaskResults: (taskId) => ipcRenderer.invoke('automation:get-results', taskId),
 
   // Window utilities
   bringWindowToTop: () => ipcRenderer.invoke('bring-window-to-top'),

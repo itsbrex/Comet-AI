@@ -239,7 +239,7 @@ export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
 
         {/* Footer info */}
         <div className="px-10 py-6 bg-white/[0.01] border-t border-white/5 flex items-center justify-between">
-          <div className="text-[9px] font-black text-white/10 uppercase tracking-[0.4em]">COMET SYSTEM v0.2.1.2</div>
+          <div className="text-[9px] font-black text-white/10 uppercase tracking-[0.4em]">COMET SYSTEM v0.2.5</div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1">
               <span className="w-1 h-1 rounded-full bg-sky-500" />

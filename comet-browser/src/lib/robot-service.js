@@ -14,7 +14,10 @@ class RobotService {
     this.MIN_DELAY_MS = 300;
     this.killFlag = false;
     this.robot = null;
+    this._initRobot();
+  }
 
+  _initRobot() {
     try {
       this.robot = require('robotjs');
     } catch (e) {
@@ -23,6 +26,10 @@ class RobotService {
       } catch (e2) {
         console.warn('[RobotService] robotjs not available:', e.message);
       }
+    }
+    if (this.robot) {
+      this.robot.setMouseDelay(2);
+      this.robot.setKeyboardDelay(2);
     }
   }
 
@@ -132,6 +139,52 @@ class RobotService {
     return result.response === 0;
   }
 
+  async _robustClick(x, y, button = 'left', double = false, maxRetries = 3) {
+    if (!this.robot) {
+      throw new Error('robotjs not available');
+    }
+
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const currentPos = this.robot.getMousePos();
+        if (currentPos.x !== x || currentPos.y !== y) {
+          this.robot.moveMouse(x, y);
+          await sleep(50);
+        }
+        
+        await sleep(30);
+        
+        if (double) {
+          this.robot.doubleClick(button);
+        } else {
+          this.robot.mouseClick(button);
+        }
+        
+        await sleep(20);
+        
+        const posAfter = this.robot.getMousePos();
+        if (posAfter.x === x && posAfter.y === y) {
+          return { success: true, verified: true };
+        }
+        
+        if (attempt < maxRetries) {
+          await sleep(100 * attempt);
+        }
+      } catch (err) {
+        console.warn(`[RobotService] Click attempt ${attempt} failed:`, err.message);
+        if (attempt < maxRetries) {
+          await sleep(100 * attempt);
+        } else {
+          throw err;
+        }
+      }
+    }
+    
+    return { success: true, verified: false };
+  }
+
   async execute(raw, opts = {}) {
     if (!this.robot) {
       throw new Error('robotjs not available. Install with: npm install robotjs');
@@ -163,18 +216,25 @@ class RobotService {
 
     const now = Date.now();
     if (now - this.lastAction < this.MIN_DELAY_MS) {
-      await new Promise(r => setTimeout(r, this.MIN_DELAY_MS));
+      await sleep(this.MIN_DELAY_MS);
     }
 
     if (this.killFlag) {
       throw new Error('Robot actions aborted (kill switch activated during delay)');
     }
 
+    let result = { success: true, action: action.type, reason: action.reason };
+
     switch (action.type) {
       case 'click':
-        this.robot.moveMouse(action.x, action.y);
-        await sleep(80);
-        this.robot.mouseClick(action.button, action.double);
+        const clickResult = await this._robustClick(
+          action.x, 
+          action.y, 
+          action.button, 
+          action.double,
+          opts.maxRetries || 3
+        );
+        result.verified = clickResult.verified;
         break;
       case 'type':
         this.robot.typeString(action.text);
@@ -184,12 +244,13 @@ class RobotService {
         break;
       case 'scroll':
         this.robot.moveMouse(action.x, action.y);
+        await sleep(30);
         this.robot.scrollMouse(action.amount, action.direction);
         break;
     }
 
     this.lastAction = Date.now();
-    return { success: true, action: action.type, reason: action.reason };
+    return result;
   }
 
   async executeSequence(actions, opts = {}) {

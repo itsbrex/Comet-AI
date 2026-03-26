@@ -2,7 +2,7 @@ import * as tf from '@tensorflow/tfjs';
 import { buildFrontendReasoningOptions } from './aiReasoningOptions';
 
 /**
- * BrowserAI - Advanced intelligence services for Comet Browser
+ * BrowserAI - Advanced intelligence services for Comet-AI
  * Handles: URL Prediction, Cart Discovery, and Contextual Scanning
  */
 export class BrowserAI {
@@ -40,7 +40,7 @@ export class BrowserAI {
             model.add(tf.layers.dense({ units: 8, activation: 'relu' }));
             model.add(tf.layers.dense({ units: 4, activation: 'softmax' }));
             this.model = model;
-            console.log("Comet Browser Intelligence: URL Predictor Online [Antigravity Mode].");
+            console.log("Comet-AI Intelligence: URL Predictor Online [Antigravity Mode].");
         } catch (e) {
             console.warn("TF.js initialization failed, falling back to heuristics.");
         }

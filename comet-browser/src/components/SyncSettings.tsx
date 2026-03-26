@@ -258,7 +258,7 @@ const SyncSettings: React.FC<SyncSettingsProps> = () => {
                 </div>
                 <input
                     type="text"
-                    placeholder="Remote Device ID (e.g., another Comet Browser instance)"
+                    placeholder="Remote Device ID (e.g., another Comet-AI instance)"
                     className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 px-6 text-sm text-white focus:outline-none focus:ring-1 focus:ring-deep-space-accent-neon/50 transition-all placeholder:text-white/30"
                     value={remoteDeviceId}
                     onChange={(e) => setRemoteDeviceId(e.target.value)}

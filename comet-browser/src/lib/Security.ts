@@ -1,5 +1,5 @@
 /**
- * Security module for Comet Browser
+ * Security module for Comet-AI
  * Handles sensitive data encryption and verification (E2EE)
  */
 

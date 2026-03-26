@@ -1,5 +1,5 @@
 /**
- * Automatic SQL Table Generator for Comet Browser
+ * Automatic SQL Table Generator for Comet-AI
  * Creates database schema for bookmarks, history, passwords, and sync
  */
 

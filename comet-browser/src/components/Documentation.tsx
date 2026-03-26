@@ -11,7 +11,7 @@ import { motion } from 'framer-motion';
 import { FileText, Cpu, Zap, Shield, Bookmark, ChevronRight, Github, ExternalLink } from 'lucide-react';
 
 const README_CONTENT = `
-# ☄️ Comet Browser (v0.2.0)
+# ☄️ Comet-AI (v0.2.0)
 Made in India 🇮🇳
 ### The Intelligent Workspace for the Future
 
@@ -59,9 +59,9 @@ Unlock the full potential of Comet AI with these curated search & query examples
 
 ---
 
-## 🚀 AI Integration & Usage in Comet Browser
+## 🚀 AI Integration & Usage in Comet-AI
 
-Comet Browser deeply integrates AI into your browsing experience, acting as an intelligent co-pilot that understands your context and assists with various tasks. Our AI is designed to work seamlessly with native browser settings and web navigation, providing insights and capabilities directly where you need them.
+Comet-AI deeply integrates AI into your browsing experience, acting as an intelligent co-pilot that understands your context and assists with various tasks. Our AI is designed to work seamlessly with native browser settings and web navigation, providing insights and capabilities directly where you need them.
 
 ### How Our AI Works
 
@@ -104,7 +104,7 @@ npm run build-electron
 
 ## 📄 Licensing
 
-Comet Browser is built with open-source technologies. For a comprehensive list of all third-party libraries used and their respective licenses, please refer to the [Licence.md](Licence.md) file.
+Comet-AI is built with open-source technologies. For a comprehensive list of all third-party libraries used and their respective licenses, please refer to the [Licence.md](Licence.md) file.
 
 ---
 *Dedicated to the builders who code on potato PCs.* ❤️

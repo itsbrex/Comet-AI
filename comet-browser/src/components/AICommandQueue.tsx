@@ -251,7 +251,7 @@ export const AICommandQueue: React.FC<AICommandQueueProps> = ({
                         />
                     </div>
                     <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white">Action Chain</h3>
-                    <span className="text-[9px] text-white/30 font-mono">v0.2.4 JSON</span>
+                    <span className="text-[9px] text-white/30 font-mono">v0.2.5 JSON</span>
                 </div>
                 <div className="px-2 py-0.5 bg-white/5 rounded-full text-[9px] text-white/40 font-mono border border-white/5">
                     {currentCommandIndex + 1} OF {commands.length}

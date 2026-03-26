@@ -1,0 +1,352 @@
+name: 🏷️ Auto Release on Tag
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: '22'
+  FLUTTER_VERSION: 'stable'
+
+jobs:
+  # ============================================================================
+  # PARSE TAG
+  # ============================================================================
+  parse-tag:
+    name: Parse Tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      tag: ${{ steps.parse.outputs.tag }}
+      is_stable: ${{ steps.parse.outputs.is_stable }}
+    steps:
+      - name: Parse tag
+        id: parse
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          
+          # Check if stable (no suffix like -beta, -rc, etc.)
+          if [[ "$TAG" == *"-"* ]]; then
+            IS_STABLE="false"
+          else
+            IS_STABLE="true"
+          fi
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_stable=$IS_STABLE" >> $GITHUB_OUTPUT
+
+  # ============================================================================
+  # ANDROID BUILD
+  # ============================================================================
+  build-android:
+    name: Build Android
+    needs: parse-tag
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Cache Flutter Pub
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.flutter
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+
+      - name: Install dependencies
+        working-directory: flutter_browser_app
+        run: flutter pub get
+
+      - name: Create google-services.json
+        if: secrets.GOOGLE_SERVICES_JSON != ''
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > flutter_browser_app/android/app/google-services.json
+          fi
+
+      - name: Decode Keystore
+        continue-on-error: true
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | sed 's/-----BEGIN CERTIFICATE-----//g' | sed 's/-----END CERTIFICATE-----//g' | tr -d '\n\r' | base64 -d > flutter_browser_app/android/app/upload-keystore.jks
+          fi
+
+      - name: Create key.properties
+        continue-on-error: true
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" > flutter_browser_app/android/key.properties
+            echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> flutter_browser_app/android/key.properties
+            echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> flutter_browser_app/android/key.properties
+            echo "storeFile=upload-keystore.jks" >> flutter_browser_app/android/key.properties
+          fi
+
+      - name: Build APK
+        working-directory: flutter_browser_app
+        env:
+          JAVA_TOOL_OPTIONS: "-Xmx4096m"
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: comet-ai-android
+          path: flutter_browser_app/build/app/outputs/flutter-apk/app-release.apk
+
+  # ============================================================================
+  # IOS BUILD
+  # ============================================================================
+  build-ios:
+    name: Build iOS
+    needs: parse-tag
+    runs-on: macos-latest
+    environment: Production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        working-directory: flutter_browser_app
+        run: flutter pub get
+
+      - name: Create GoogleService-Info.plist
+        continue-on-error: true
+        env:
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+        run: |
+          if [ -n "$GOOGLE_SERVICE_INFO_PLIST" ]; then
+            echo "$GOOGLE_SERVICE_INFO_PLIST" > flutter_browser_app/ios/Runner/GoogleService-Info.plist
+          fi
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: flutter_browser_app/ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('flutter_browser_app/ios/Podfile.lock') }}
+
+      - name: Build iOS
+        working-directory: flutter_browser_app
+        run: flutter build ios --release --no-codesign
+
+      - name: Create IPA
+        working-directory: flutter_browser_app
+        run: |
+          mkdir Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r Comet-AI.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: comet-ai-ios
+          path: flutter_browser_app/Comet-AI.ipa
+
+  # ============================================================================
+  # DESKTOP BUILD
+  # ============================================================================
+  build-desktop:
+    name: Build Desktop (${{ matrix.target }})
+    needs: parse-tag
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        target: [windows, macos, linux]
+        include:
+          - target: windows
+            os: windows-latest
+            build_cmd: npm run dist:win
+            artifact_glob: "comet-browser/release/*.exe"
+            artifact_name: comet-ai-windows
+          - target: macos
+            os: macos-latest
+            build_cmd: npm run dist:mac
+            artifact_glob: "comet-browser/release/*.dmg"
+            artifact_name: comet-ai-macos
+          - target: linux
+            os: ubuntu-latest
+            build_cmd: npm run build && npx electron-builder --linux AppImage --x64
+            artifact_glob: "comet-browser/release/*.AppImage"
+            artifact_name: comet-ai-linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: comet-browser/package-lock.json
+
+      - name: Install Linux Dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libarchive-tools icnsutils libxtst-dev libpng-dev libx11-dev
+
+      - name: Install Dependencies
+        working-directory: comet-browser
+        run: npm install --legacy-peer-deps
+
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: comet-browser/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('comet-browser/package-lock.json') }}
+
+      - name: Build App
+        working-directory: comet-browser
+        env:
+          NEXT_PUBLIC_APP_NAME: Comet
+          NEXT_PUBLIC_APP_VERSION: ${{ needs.parse-tag.outputs.version }}
+        run: ${{ matrix.build_cmd }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_glob }}
+
+  # ============================================================================
+  # CREATE RELEASE
+  # ============================================================================
+  create-release:
+    name: Create Release
+    needs: [parse-tag, build-android, build-ios, build-desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: List Artifacts
+        run: ls -la release-artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            # 🚀 Comet AI Browser v${{ needs.parse-tag.outputs.version }}
+            
+            Download the latest release for your platform below!
+            
+            ## Desktop
+            | Platform | File |
+            |----------|------|
+            | 🪟 Windows | `Comet.Browser.Setup.*.exe` |
+            | 🍎 macOS | `Comet.Browser-*.dmg` |
+            | 🐧 Linux | `Comet.Browser-*.AppImage` |
+            
+            ## Mobile
+            | Platform | File |
+            |----------|------|
+            | 📱 Android | `app-release.apk` |
+            | 🍎 iOS | `Comet-AI.ipa` |
+            
+            ## 📌 Notes
+            - Download links are automatically generated
+            - All builds are production-ready
+            - Compatible with landing page auto-detection
+            
+            ---
+            Built with ❤️ by [Latestinssan](https://github.com/Preet3627)
+          draft: false
+          prerelease: ${{ needs.parse-tag.outputs.is_stable == 'false' }}
+          generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Assets
+        run: |
+          for file in release-artifacts/*; do
+            if [ -f "$file" ]; then
+              echo "📤 Uploading: $file"
+              gh release upload "${{ needs.parse-tag.outputs.tag }}" "$file" --clobber
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================================
+  # UPDATE FIREBASE
+  # ============================================================================
+  update-firebase:
+    name: Update Firebase Downloads
+    needs: [parse-tag, create-release]
+    runs-on: ubuntu-latest
+    if: needs.parse-tag.outputs.is_stable == 'true'
+    environment: Production
+    steps:
+      - name: Update Firebase Config
+        run: |
+          TAG="${{ needs.parse-tag.outputs.tag }}"
+          
+          # Update Firebase Realtime Database with download links
+          curl -X PUT \
+            "https://${{ secrets.FIREBASE_PROJECT_ID }}-default-rtdb.firebaseio.com/config/downloads.json?auth=${{ secrets.FIREBASE_ADMIN_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "windows": "https://github.com/Preet3627/Comet-AI/releases/download/'"$TAG"'/Comet.Browser.Setup.exe",
+              "mac": "https://github.com/Preet3627/Comet-AI/releases/download/'"$TAG"'/Comet.Browser.dmg",
+              "linux": "https://github.com/Preet3627/Comet-AI/releases/download/'"$TAG"'/Comet.Browser.AppImage",
+              "android": "https://github.com/Preet3627/Comet-AI/releases/download/'"$TAG"'/app-release.apk",
+              "ios": "https://github.com/Preet3627/Comet-AI/releases/download/'"$TAG"'/Comet-AI.ipa"
+            }'
+        continue-on-error: true
+        shell: bash
+
+  # ============================================================================
+  # SUMMARY
+  # ============================================================================
+  summary:
+    name: Release Summary
+    needs: [parse-tag, create-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Summary
+        run: |
+          echo ""
+          echo "╔══════════════════════════════════════════════════════════════╗"
+          echo "║                    🎉 RELEASE COMPLETE 🎉                    ║"
+          echo "╠══════════════════════════════════════════════════════════════╣"
+          echo "║  Version: ${{ needs.parse-tag.outputs.version }}"
+          echo "║  Tag:     ${{ needs.parse-tag.outputs.tag }}"
+          echo "║  Stable:  ${{ needs.parse-tag.outputs.is_stable }}"
+          echo "╠══════════════════════════════════════════════════════════════╣"
+          echo "║  🔗 https://github.com/Preet3627/Comet-AI/releases/${{ needs.parse-tag.outputs.tag }}"
+          echo "╚══════════════════════════════════════════════════════════════╝"
+          echo ""
+          echo "✅ All platforms built successfully!"
+          echo "✅ Assets uploaded to GitHub Release"
+          echo "🚀 Landing page will auto-detect via GitHub API"

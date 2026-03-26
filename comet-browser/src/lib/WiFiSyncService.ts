@@ -12,6 +12,7 @@ export class WiFiSyncService extends EventEmitter {
     private clients: Set<WebSocket> = new Set();
     private deviceId: string;
     private pairingCode: string;
+    private _lastReceivedClipboard: string = '';
 
     constructor(port: number = 3004) {
         super();
@@ -120,11 +121,24 @@ export class WiFiSyncService extends EventEmitter {
                     this._handleCommand(ws, msg);
                     break;
 
+                case 'desktop-control':
+                    this._handleDesktopControl(ws, msg);
+                    break;
+
                 case 'clipboard-sync':
-                    if (msg.text) {
+                    if (msg.text && msg.text !== this._lastReceivedClipboard) {
+                        this._lastReceivedClipboard = msg.text;
                         clipboard.writeText(msg.text);
                         this.emit('clipboard-received', msg.text);
                     }
+                    break;
+
+                case 'clipboard-sync-request':
+                    const currentClipboard = clipboard.readText();
+                    ws.send(JSON.stringify({
+                        type: 'clipboard-sync',
+                        text: currentClipboard
+                    }));
                     break;
 
                 case 'ping':
@@ -148,6 +162,52 @@ export class WiFiSyncService extends EventEmitter {
                 ws.send(JSON.stringify({
                     type: 'command-response',
                     commandId,
+                    ...responseBody
+                }));
+            }
+        });
+    }
+
+    public sendToMobile(message: any) {
+        this.broadcast({
+            type: 'desktop-to-mobile',
+            ...message,
+            timestamp: Date.now()
+        });
+    }
+
+    public sendAIResponse(promptId: string, response: string, isStreaming?: boolean) {
+        this.broadcast({
+            type: 'ai-stream-response',
+            promptId,
+            response,
+            isStreaming: isStreaming ?? false,
+            timestamp: Date.now()
+        });
+    }
+
+    public sendDesktopStatus(status: { screenOn?: boolean; activeApp?: string; tabs?: number }) {
+        this.broadcast({
+            type: 'desktop-status',
+            ...status,
+            timestamp: Date.now()
+        });
+    }
+
+    private async _handleDesktopControl(ws: WebSocket, msg: any) {
+        const { commandId, action, prompt, promptId, args } = msg;
+        console.log(`[WiFi-Sync] Desktop Control: action=${action}`);
+
+        // Forward to main process via event
+        this.emit('command', {
+            commandId,
+            command: 'desktop-control',
+            args: { action, prompt, promptId, ...args },
+            sendResponse: (responseBody: any) => {
+                ws.send(JSON.stringify({
+                    type: 'desktop-control-response',
+                    commandId,
+                    action,
                     ...responseBody
                 }));
             }

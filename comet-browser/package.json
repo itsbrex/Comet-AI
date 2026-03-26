@@ -1,6 +1,6 @@
 {
   "name": "Comet-AI",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "description": "Comet-AI Browser - A high-performance, intelligence-driven browsing workspace with local LLM support and advanced productivity features.",
   "author": "Latestinssan",
@@ -22,7 +22,9 @@
     "electron:build:linux": "npm run build && electron-builder --linux",
     "dist:win": "npm run build && electron-builder --win --x64",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
-    "check-dups": "node check_dups.js"
+    "check-dups": "node check_dups.js",
+    "service": "electron src/service/service-main.js",
+    "service:install": "node scripts/install-service.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.63",
@@ -32,8 +34,8 @@
     "@ai-sdk/openai": "^3.0.47",
     "@ai-sdk/xai": "^3.0.72",
     "@ghostery/adblocker-electron": "^2.14.1",
+    "@googleapis/gmail": "^21.0.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
-    "@smithery/api": "^0.56.0",
     "@tensorflow/tfjs": "^4.22.0",
     "ai": "^6.0.134",
     "ai-sdk-ollama": "^3.8.0",
@@ -51,6 +53,7 @@
     "jimp": "^1.6.0",
     "lucide-react": "^0.562.0",
     "mysql2": "^3.11.5",
+    "node-cron": "^3.0.3",
     "nanoid": "^3.3.11",
     "object-inspect": "^1.13.3",
     "pdf-lib": "^1.17.1",
@@ -101,7 +104,7 @@
   "packageManager": "npm@11.5.1",
   "build": {
     "appId": "com.latestinssan.cometbrowser",
-    "productName": "Comet Browser",
+    "productName": "Comet-AI",
     "copyright": "Copyright © 2026 Latestinssan",
     "asar": true,
     "asarUnpack": [
@@ -114,6 +117,7 @@
       "preload.js",
       "view_preload.js",
       "src/lib/**/*",
+      "src/service/**/*",
       "assets/**/*",
       "package.json"
     ],
@@ -124,7 +128,7 @@
       "license": "LICENSE.txt",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Comet Browser"
+      "shortcutName": "Comet-AI"
     },
     "win": {
       "icon": "assets/icon.ico",

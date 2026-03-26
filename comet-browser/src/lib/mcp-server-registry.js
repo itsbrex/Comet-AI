@@ -4,28 +4,19 @@ const { StdioClientTransport } = require("@modelcontextprotocol/sdk/client/stdio
 
 class McpManager {
   constructor() {
-    this.clients = new Map(); // id -> { client, url, type, status }
-    this.tools = {}; // combined tools across all clients
+    this.clients = new Map();
+    this.tools = {};
   }
 
   async connect(id, config) {
-    const { url, type = 'sse', command, args, name = 'Comet Browser' } = config;
+    const { url, type = 'sse', command, args, name = 'MCP Server' } = config;
     console.log(`[MCP-Manager] Connecting to ${id} (${url || command})`);
     
     try {
       const { createMCPClient } = await import('@ai-sdk/mcp');
       let transport;
       
-      if (url && (url.includes('smithery.ai') || url.includes('exa.run.tools'))) {
-        try {
-          const { createConnection } = await import('@smithery/api/mcp');
-          const conn = await createConnection({ mcpUrl: url });
-          transport = conn.transport;
-        } catch (e) {
-            console.error(`[MCP-Manager] Smithery Connection failed for ${url}:`, e);
-            throw e;
-        }
-      } else if (type === 'sse') {
+      if (type === 'sse') {
         transport = new SSEClientTransport(new URL(url));
       } else if (type === 'stdio') {
         transport = new StdioClientTransport({ command, args });
@@ -60,11 +51,8 @@ class McpManager {
       if (entry.status === 'online' && entry.client) {
         try {
           const clientTools = await entry.client.tools();
-          // Wrap tools to include serverId context and permission checks
           for (const [toolName, tool] of Object.entries(clientTools)) {
             const prefixedName = `${id}__${toolName}`;
-            
-            // Re-wrap the tool to include a permission check in its execute function
             const originalExecute = tool.execute;
             
             combinedTools[prefixedName] = {

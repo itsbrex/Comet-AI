@@ -208,6 +208,24 @@ class SyncService {
       StreamController<Map>.broadcast();
   Stream<Map> get onCommandResponse => _commandResponseController.stream;
 
+  final StreamController<Map> _aiStreamController =
+      StreamController<Map>.broadcast();
+  Stream<Map> get onAIStream => _aiStreamController.stream;
+
+  final StreamController<Map> _desktopStatusController =
+      StreamController<Map>.broadcast();
+  Stream<Map> get onDesktopStatus => _desktopStatusController.stream;
+
+  final StreamController<Map> _desktopToMobileController =
+      StreamController<Map>.broadcast();
+  Stream<Map> get onDesktopToMobile => _desktopToMobileController.stream;
+
+  // Desktop Control - Full AI Chat
+  final StreamController<Map<String, dynamic>> _desktopControlController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onDesktopControl =>
+      _desktopControlController.stream;
+
   Future<void> startDiscovery() async {
     _discoveredDeviceIds.clear();
     try {
@@ -333,6 +351,23 @@ class SyncService {
       } else if (msg['type'] == 'error' && msg['code'] == 'AUTH_FAILED') {
         isConnectedToDesktop = false;
         print('[Sync] Authentication failed: ${msg['message']}');
+      } else if (msg['type'] == 'ai-stream-response') {
+        _aiStreamController.add({
+          'promptId': msg['promptId'],
+          'response': msg['response'],
+          'isStreaming': msg['isStreaming'] ?? false,
+        });
+        print('[Sync] AI stream response received');
+      } else if (msg['type'] == 'desktop-status') {
+        _desktopStatusController.add(msg);
+        print(
+            '[Sync] Desktop status: screenOn=${msg['screenOn']}, activeApp=${msg['activeApp']}');
+      } else if (msg['type'] == 'desktop-to-mobile') {
+        _desktopToMobileController.add(msg);
+        print('[Sync] Desktop to mobile message: ${msg['action']}');
+      } else if (msg['type'] == 'desktop-control-response') {
+        _desktopControlController.add(msg);
+        print('[Sync] Desktop control response: ${msg['action']}');
       }
     } catch (e) {
       print('[Sync] Error handling desktop message: $e');
@@ -403,5 +438,128 @@ class SyncService {
       'desktopPort': _desktopPort,
       'remoteDeviceId': remoteDeviceId,
     };
+  }
+
+  /// Desktop Control - Full AI Chat Interface
+  Future<Map?> executeDesktopControl(
+    String action, {
+    String? prompt,
+    Map<String, dynamic>? args,
+    String? promptId,
+  }) async {
+    if (!isConnectedToDesktop || _desktopSocket == null) {
+      throw Exception('Not connected to desktop');
+    }
+
+    final commandId = const Uuid().v4();
+
+    _desktopSocket!.add(
+      jsonEncode({
+        'type': 'desktop-control',
+        'commandId': commandId,
+        'action': action,
+        'prompt': prompt,
+        'promptId': promptId ?? commandId,
+        'args': args ?? {},
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      }),
+    );
+
+    try {
+      if (action == 'send-prompt') {
+        // For prompts, wait for AI response stream
+        final responses = <String>[];
+        final sub = _aiStreamController.stream
+            .where((msg) => msg['promptId'] == commandId)
+            .listen((msg) {
+          responses.add(msg['response'] as String);
+        });
+
+        await Future.delayed(const Duration(seconds: 60));
+        sub.cancel();
+
+        return {
+          'success': true,
+          'response': responses.join(''),
+          'promptId': commandId,
+        };
+      } else {
+        // For other actions, wait for direct response
+        final response = await onCommandResponse
+            .firstWhere(
+              (msg) => msg['commandId'] == commandId,
+              orElse: () => {'error': 'Timeout'},
+            )
+            .timeout(const Duration(seconds: 30));
+
+        return response;
+      }
+    } catch (e) {
+      print('[Sync] Desktop control failed: $e');
+      return {'error': e.toString()};
+    }
+  }
+
+  /// Send prompt to desktop AI and stream response
+  Stream<Map> streamPromptToDesktop(String prompt, {String? model}) {
+    final promptId = const Uuid().v4();
+
+    _desktopSocket?.add(
+      jsonEncode({
+        'type': 'desktop-control',
+        'commandId': promptId,
+        'action': 'send-prompt',
+        'prompt': prompt,
+        'promptId': promptId,
+        'args': {'model': model},
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      }),
+    );
+
+    return _aiStreamController.stream
+        .where((msg) => msg['promptId'] == promptId);
+  }
+
+  /// Request desktop status
+  Future<Map?> getDesktopStatus() async {
+    return executeDesktopControl('get-status');
+  }
+
+  /// Take screenshot from desktop
+  Future<Map?> takeDesktopScreenshot() async {
+    return executeDesktopControl('screenshot');
+  }
+
+  /// Execute shell command via desktop (triggers QR scanner on Mac if needed)
+  Future<Map?> executeShellViaDesktop(String command,
+      {bool requireApproval = true}) async {
+    return executeDesktopControl('shell-command', args: {
+      'command': command,
+      'requireApproval': requireApproval,
+    });
+  }
+
+  /// Get clipboard from desktop
+  Future<String?> getDesktopClipboard() async {
+    final result = await executeDesktopControl('get-clipboard');
+    return result?['clipboard'];
+  }
+
+  /// Open URL on desktop browser
+  Future<Map?> openUrlOnDesktop(String url) async {
+    return executeDesktopControl('open-url', args: {'url': url});
+  }
+
+  /// Click at coordinates on desktop
+  Future<Map?> clickOnDesktop(int x, int y) async {
+    return executeDesktopControl('click', args: {'x': x, 'y': y});
+  }
+
+  /// Request desktop to show QR for shell approval
+  Future<Map?> requestShellApprovalQR(String commandId, String command) async {
+    return executeDesktopControl('show-shell-qr', args: {
+      'commandId': commandId,
+      'command': command,
+    });
   }
 }

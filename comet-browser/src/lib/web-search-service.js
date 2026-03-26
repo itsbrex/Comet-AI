@@ -18,26 +18,52 @@ class WebSearchProvider {
     count = count || 8;
 
     switch (provider) {
+      case 'google': return this._searchGoogle(query, count);
       case 'brave': return this._searchBrave(query, count);
       case 'tavily': return this._searchTavily(query, count);
       case 'serp': return this._searchSerp(query, count);
-      default: return this._searchBrave(query, count);
+      case 'duckduckgo': return this._searchDuckDuckGo(query, count);
+      default: return this._searchGoogle(query, count);
     }
   }
 
   _detectBestProvider() {
+    if (this._getKey('GOOGLE_API_KEY') && this._getKey('GOOGLE_SEARCH_ENGINE_ID')) return 'google';
     if (this._getKey('BRAVE_API_KEY')) return 'brave';
     if (this._getKey('TAVILY_API_KEY')) return 'tavily';
     if (this._getKey('SERP_API_KEY')) return 'serp';
-    return 'brave';
+    return 'duckduckgo';
   }
 
   getAvailableProviders() {
-    const providers = [];
+    const providers = ['duckduckgo'];
+    if (this._getKey('GOOGLE_API_KEY') && this._getKey('GOOGLE_SEARCH_ENGINE_ID')) providers.push('google');
     if (this._getKey('BRAVE_API_KEY')) providers.push('brave');
     if (this._getKey('TAVILY_API_KEY')) providers.push('tavily');
     if (this._getKey('SERP_API_KEY')) providers.push('serp');
     return providers;
+  }
+
+  async _searchGoogle(query, count) {
+    const apiKey = this._getKey('GOOGLE_API_KEY');
+    const searchEngineId = this._getKey('GOOGLE_SEARCH_ENGINE_ID');
+    if (!apiKey || !searchEngineId) throw new Error('Google API Key and Search Engine ID not configured');
+
+    const res = await fetch(
+      `https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(query)}&key=${apiKey}&cx=${searchEngineId}&num=${Math.min(count, 10)}`
+    );
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Google Search error ${res.status}: ${err}`);
+    }
+
+    const data = await res.json();
+    return (data.items || []).map(r => ({
+      title: r.title || '',
+      url: r.link || '',
+      snippet: r.snippet || '',
+    }));
   }
 
   async _searchBrave(query, count) {
@@ -109,6 +135,46 @@ class WebSearchProvider {
       url: r.link || '',
       snippet: r.snippet || '',
     }));
+  }
+
+  async _searchDuckDuckGo(query, count) {
+    try {
+      const res = await fetch(
+        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1&t=comet-ai`
+      );
+
+      if (!res.ok) {
+        throw new Error(`DuckDuckGo error ${res.status}`);
+      }
+
+      const data = await res.json();
+      const results = [];
+      
+      if (data.RelatedTopics) {
+        for (const topic of data.RelatedTopics.slice(0, count)) {
+          if (topic.Text && topic.FirstURL) {
+            results.push({
+              title: topic.Text.split(' - ')[0] || 'Related Topic',
+              url: topic.FirstURL,
+              snippet: topic.Text,
+            });
+          }
+        }
+      }
+
+      if (data.Answer) {
+        results.unshift({
+          title: 'Direct Answer',
+          url: data.AbstractURL || '',
+          snippet: data.Answer,
+        });
+      }
+
+      return results;
+    } catch (e) {
+      console.warn(`[WebSearch] DuckDuckGo search failed: ${e.message}`);
+      return [];
+    }
   }
 
   async searchForContext(query, provider) {

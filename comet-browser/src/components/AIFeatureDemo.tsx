@@ -32,7 +32,7 @@ const AIFeatureDemo: React.FC<AIDemoProps> = ({ isActive, onClose }) => {
     const demoSteps: DemoStep[] = [
         {
             id: 'intro',
-            title: 'Welcome to Comet Browser',
+            title: 'Welcome to Comet-AI',
             description: 'I\'m your AI assistant. Let me show you what I can do!',
             action: async () => {
                 setStatusMessage('👋 Hello! I\'m ready to demonstrate features...');

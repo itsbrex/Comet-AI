@@ -12,6 +12,7 @@ declare global {
             activateView: (args: { tabId: string; bounds: { x: number; y: number; width: number; height: number } }) => void;
             destroyView: (tabId: string) => void;
             hideAllViews: () => void;
+            showAllViews: () => void;
             onBrowserViewUrlChanged: (callback: (data: { tabId: string; url: string }) => void) => () => void;
             onBrowserViewTitleChanged: (callback: (data: { tabId: string; title: string }) => void) => () => void;
             navigateBrowserView: (args: { tabId: string; url: string }) => void;
@@ -381,6 +382,22 @@ declare global {
             onMobileApproveHighRisk: (callback: (data: { pin: string; id: string }) => void) => () => void;
             getAppIcon: () => Promise<string | null>;
             organizeFolder: (path: string) => Promise<{ success: boolean; count?: number; summary?: string; path?: string; error?: string }>;
+
+            // Automation & Scheduling
+            scheduleTask: (taskData: {
+                name: string;
+                type: 'ai-prompt' | 'web-scrape' | 'pdf-generate' | 'workflow' | 'daily-brief' | 'shell';
+                cronExpression?: string;
+                prompt?: string;
+                url?: string;
+                action?: string;
+                outputPath?: string;
+                enabled?: boolean;
+            }) => Promise<{ success: boolean; taskId?: string; error?: string }>;
+            getScheduledTasks: () => Promise<{ success: boolean; tasks?: any[]; error?: string }>;
+            toggleScheduledTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
+            runScheduledTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
+            deleteScheduledTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
 
         };
 

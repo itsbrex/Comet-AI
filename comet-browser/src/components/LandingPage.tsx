@@ -27,7 +27,7 @@ import {
 import { firebaseConfigStorage, FirebaseConfig } from "@/lib/firebaseConfigStorage";
 
 const COMET_README = `
-# ☄️ Comet Browser (v0.2.0)
+# ☄️ Comet-AI (v0.2.0)
 Made in India 🇮🇳
 ### The Future of Autonomous Web Intelligence
 

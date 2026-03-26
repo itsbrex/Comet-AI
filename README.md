@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.4--stable-blue)]()
+[![Version](https://img.shields.io/badge/Version-0.2.5--stable-blue)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
 [![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
@@ -18,8 +18,7 @@
 </div>
 
 ---
-🆕 **Agentic Power**
-
+🆕 **Agentic Power** | **Background Scheduling** | **Cross-Device Sync**
 
 ## Why Comet?
 
@@ -32,10 +31,11 @@ Most browsers are built for monetization. Comet is built for **control**.
 - 📸 **Screenshot embedding in PDFs** — AI can capture and include screen images in reports
 - 🔍 **Secure DOM Reading** — Filtered page extraction with injection detection
 - 🌐 **In-page DOM Search** — AI can search within current page content
+- ⏰ **Background Scheduling** — Schedule tasks like "generate PDF at 8am daily"
 
 ---
 
-## ✨ Features (v0.2.4-stable)
+## ✨ Features (v0.2.5-stable)
 
 ### 🤖 AI Agent
 - Multi-step autonomous task execution via chained commands
@@ -49,6 +49,19 @@ Most browsers are built for monetization. Comet is built for **control**.
 - **Accelerated Action Chains** — Optimized search-to-navigation loop with minimal latency
 - **No Duplicate Commands** — Fixed command parsing to prevent duplicate executions
 - **Multi-format Support** — Parses commands from JSON, brackets `[CMD]:`, and HTML comments
+
+### ⏰ Background Scheduling & Automation
+- **Natural Language Scheduling** — "Schedule PDF generation at 8am daily"
+- **Smart Intent Detection** — Automatically detects scheduling keywords
+- **Multiple Task Types:**
+  - PDF Generation (daily reports, newsletters, weekly summaries)
+  - Web Scraping (price monitoring, news aggregation)
+  - AI Prompts (morning briefings, daily updates)
+  - Workflow Automation (custom chained actions)
+- **Cron Expression Support** — Daily, hourly, weekdays, custom intervals
+- **Background Service** — Tasks run even when browser is closed
+- **Mobile Notifications** — Get notified on desktop or mobile when tasks complete
+- **Model Selection** — Choose AI model per task (Gemini, Claude, local Ollama)
 
 ### 🌐 Browser Capabilities
 - Full Chromium-based browsing via Electron BrowserView
@@ -74,6 +87,13 @@ Most browsers are built for monetization. Comet is built for **control**.
 - **Unified search & cart manager** — Search apps, settings, and web in one shortcut
 - **One-Click Tab Group Closure** — Instantly close all AI-opened tabs
 - **Download Panel** — Click to open completed downloads directly
+
+### 📱 Mobile App (Flutter)
+- **WiFi Sync** — Connect mobile to desktop instantly
+- **Remote Desktop Control** — Control desktop from phone
+- **Push Notifications** — Get task completion alerts on mobile
+- **PDF Viewer** — View generated PDFs on mobile
+- **Automation Dashboard** — Manage scheduled tasks from mobile
 
 ### 🛡️ Security Model
 - **Triple-Lock Architecture** (see [Security](#-security) section)
@@ -102,6 +122,7 @@ When you use `[EXPLAIN_CAPABILITIES]`, Comet AI demonstrates:
 4. **App Launching** — Opens Calculator (macOS/Windows/Linux)
 5. **Screenshot Capture** — Takes and embeds screen images
 6. **PDF Generation** — Creates branded reports with screenshots
+7. **Scheduling** — Set up recurring tasks like "daily news at 8am"
 
 ---
 
@@ -116,7 +137,7 @@ The agent perceives pages via **screenshots + OCR only**. It never parses or exe
 Before any content reaches the LLM, dangerous patterns are filtered:
 - Shell execution primitives (`rm -rf`, `powershell`, `sudo`)
 - Encoded payloads and obfuscated commands
-- Prompt injection attempts (jailbreak patterns, role-override attempts)
+- Prompt injection attempts (jailbreak patterns, role-Override attempts)
 
 ### 3. Human-in-the-Loop (HITL)
 Every native OS action — clicking outside the browser, running shell commands, opening apps — requires **explicit user approval** via a permission modal. 
@@ -124,6 +145,33 @@ Every native OS action — clicking outside the browser, running shell commands,
 - **High Risk:** Shows a QR code for secure **Cross-Device Authorization**. Scan it with Comet Mobile app to view and match a 6-digit PIN before the action is unblocked.
 
 The AI generates **intent**, not execution. Even if socially engineered, it cannot act without your approval.
+
+---
+
+## ⏰ Background Scheduling
+
+Comet AI can schedule tasks to run automatically, even when the browser is closed.
+
+### Supported Schedule Types
+- **Daily** — Run at a specific time every day
+- **Hourly** — Run every hour
+- **Weekdays** — Run Monday through Friday
+- **Weekly** — Run on specific days
+- **Custom Cron** — Advanced scheduling with cron expressions
+
+### Example Commands
+```
+"Generate a daily news summary at 8am"
+"Check my emails every morning at 7:30"
+"Create a weekly report every Monday"
+"Remind me to take breaks every hour"
+```
+
+### Background Service
+The Comet Background Service runs tasks even when the browser is closed:
+- Windows: Uses Task Scheduler (runs as SYSTEM user)
+- macOS: Uses LaunchDaemon
+- ~30-50MB RAM footprint
 
 ---
 
@@ -167,9 +215,21 @@ flutter pub get
 flutter run
 ```
 
-Production APK builds are available on the [Releases](https://github.com/Preet3627/Comet-AI/releases) page.
-
 📖 Full documentation: **https://browser.ponsrischool.in**
+
+---
+
+## ⬇️ Downloads
+
+**Latest Release: v0.2.5-stable** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
+
+| Platform | Download | Status |
+|----------|----------|--------|
+| 🪟 Windows (.exe) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser.Setup.0.2.5.exe) | ✅ Stable |
+| 🍎 macOS (.dmg) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.5-arm64.dmg) | ✅ Stable |
+| 🐧 Linux (.AppImage) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.5.AppImage) | ✅ Stable |
+| 📱 Android (.apk) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/app-release.apk) | ✅ Stable |
+| 🍎 iOS (.ipa) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet-AI.ipa) | 🧪 Beta |
 
 ---
 
@@ -195,6 +255,49 @@ Production APK builds are available on the [Releases](https://github.com/Preet36
 
 ---
 
+## 🔄 Release Workflow
+
+### Auto Release (Recommended)
+
+**Option 1: Push a Tag**
+```bash
+# Create and push a version tag
+git tag v0.2.5-stable
+git push origin v0.2.5-stable
+```
+This automatically triggers the `auto-release-tag.yml` workflow which:
+- Builds all platforms (Windows, macOS, Linux, Android, iOS)
+- Creates a GitHub release with all assets
+- Updates Firebase config with download links
+
+**Option 2: Manual Workflow Dispatch**
+1. Go to **Actions** tab on GitHub
+2. Select **Release Build (Landing Page Optimized)** or **Publish Release**
+3. Click **Run workflow**
+4. Fill in version and options
+
+### Landing Page Integration
+
+The landing page automatically detects the latest release via GitHub API:
+```
+https://api.github.com/repos/Preet3627/Comet-AI/releases/latest
+```
+
+Downloads are parsed from release assets by filename patterns:
+- Windows: `.exe`, `setup`
+- macOS: `.dmg`, `mac`
+- Linux: `.appimage`, `linux`
+- Android: `.apk`, `android`
+- iOS: `.ipa`, `ios`
+
+### Required Secrets
+
+For Firebase updates, set these in GitHub Secrets:
+- `FIREBASE_PROJECT_ID` - Your Firebase project ID
+- `FIREBASE_ADMIN_TOKEN` - Admin auth token for Realtime Database
+
+---
+
 ## 👥 Contributing
 
 PRs are welcome. Please open an issue first to discuss significant changes.
@@ -214,3 +317,35 @@ Comet AI Browser is built by a **16-year-old student** from India, preparing for
 ## 📝 License
 
 [MIT](LICENSE) © 2026 Comet-AI
+
+---
+
+## 📋 Changelog
+
+### v0.2.5 (2026-03-26) - Automation & Panel Updates
+#### New Features
+- **Automation Panel in Settings** - New "Automation" section in Settings with task management
+- **Create Task Button** - Add "+ Create Task" button in Automation panel
+- **Translate Panel Scrolling** - Fixed overflow with max-height and scrollable content
+- **Panel z-layer Fix** - All panels (Settings, Downloads, Cart, Clipboard, Translate) now use z-[9999]
+- **Browser Disable on Panel Open** - Automatically disables browser view when panels open
+- **OPEN_AUTOMATION_SETTINGS Command** - AI can now open automation settings via command
+- **OPEN_SCHEDULING_MODAL Command** - AI can prefill and open scheduling modal
+- **JSON Format for Scheduling** - AI uses JSON format for scheduling tasks
+- **PDF Template Markers** - Templates properly passed from AI to PDF generator
+
+#### Bug Fixes
+- Fixed duplicate SpotlightSearchOverlay import
+- Fixed automation:get-tasks error when service not initialized
+- Fixed ClientOnlyPage.tsx parsing errors
+- Fixed infinite loop in ClientOnlyPage useEffect
+
+#### Updates
+- Removed deprecated GENERATE_PDF format from AI guide
+- Updated all version references to v0.2.5
+
+### v0.2.4 (2026-03-XX)
+- AI scheduling intent detection
+- Scheduling modal with cron presets
+- Mobile push notifications
+- PDF sync for mobile

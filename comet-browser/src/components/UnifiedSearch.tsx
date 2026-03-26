@@ -63,7 +63,7 @@ const UnifiedSearch: React.FC<UnifiedSearchProps> = ({ isOpen, onClose, onNaviga
                 id: 'demo-features',
                 type: 'demo',
                 title: 'AI Feature Demonstration',
-                subtitle: 'Let AI show you how to use Comet Browser',
+                subtitle: 'Let AI show you how to use Comet-AI',
                 icon: <Sparkles size={20} className="text-purple-400" />,
                 action: () => {
                     onClose();

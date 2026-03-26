@@ -996,6 +996,33 @@ export const useAppStore = create<BrowserState>()(
         }),
         {
             name: 'comet-browser-storage',
+            partialize: (state) => ({
+                hasSeenWelcomePage: state.hasSeenWelcomePage,
+                hasCompletedStartupSetup: state.hasCompletedStartupSetup,
+                user: state.user,
+                isGuestMode: state.isGuestMode,
+                theme: state.theme,
+                sidebarOpen: state.sidebarOpen,
+                sidebarWidth: state.sidebarWidth,
+                sidebarSide: state.sidebarSide,
+                selectedEngine: state.selectedEngine,
+                aiProvider: state.aiProvider,
+                bookmarks: state.bookmarks,
+                history: state.history,
+                tabs: state.tabs,
+                activeTabId: state.activeTabId,
+                currentUrl: state.currentUrl,
+            }),
+            onRehydrateStorage: () => (state) => {
+                if (state) {
+                    console.log('[Store] Rehydrated state:', {
+                        hasSeenWelcomePage: state.hasSeenWelcomePage,
+                        hasCompletedStartupSetup: state.hasCompletedStartupSetup,
+                        user: state.user ? 'present' : 'null',
+                        isGuestMode: state.isGuestMode,
+                    });
+                }
+            },
         }
     )
 );

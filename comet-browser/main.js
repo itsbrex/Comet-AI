@@ -68,7 +68,6 @@ const { CometAiEngine } = require('./src/lib/ai-engine.js');
 const { ScreenVisionService } = require('./src/lib/screen-vision-service.js');
 const { FlutterBridgeServer } = require('./src/lib/bridge-server.js');
 const { FileSystemMcpServer, NativeAppMcpServer } = require('./src/lib/mcp-desktop-server.js');
-const { WebSearchProvider } = require('./src/lib/web-search-service.js');
 const { RagService } = require('./src/lib/rag-service.js');
 const { VoiceService } = require('./src/lib/voice-service.js');
 const { WorkflowRecorder } = require('./src/lib/workflow-recorder.js');
@@ -85,7 +84,6 @@ let screenVisionService = null;
 let flutterBridge = null;
 let fileSystemMcp = null;
 let nativeAppMcp = null;
-let webSearchProvider = null;
 let ragService = null;
 let voiceService = null;
 let workflowRecorder = null;
@@ -110,209 +108,431 @@ const searchCache = new Map();
 // ============================================================================
 // PDF GENERATION ENGINE (Branded & Robust)
 // ============================================================================
-function generateCometPDFTemplate(title, content, iconBase64) {
+const PDF_TEMPLATES = {
+  professional: (title, content, iconBase64, metadata = {}) => {
+    const { author = '', category = '', tags = [], watermark = '', bgColor = '#ffffff' } = metadata;
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; line-height: 1.8; color: #1e293b; background: ${bgColor}; padding: 50px 60px; min-height: 100vh; overflow-x: hidden; }
+    .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 100px; color: rgba(0,0,0,0.03); font-weight: 900; white-space: nowrap; z-index: -1; font-family: 'Outfit', sans-serif; pointer-events: none; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0ea5e9; padding-bottom: 25px; margin-bottom: 40px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 15px; }
+    .brand-name { font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 1.6rem; color: #0ea5e9; }
+    .brand-name span { color: #0f172a; }
+    .doc-tag { background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%); color: white; padding: 8px 20px; border-radius: 30px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; }
+    h1 { font-family: 'Outfit', sans-serif; color: #0f172a; font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; margin: 30px 0 15px; word-wrap: break-word; }
+    .meta-grid { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 40px; padding: 20px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; }
+    .meta-item { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+    .meta-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.15em; color: #64748b; font-weight: 700; }
+    .meta-value { font-size: 0.9rem; color: #0f172a; font-weight: 600; word-break: break-word; }
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 30px; }
+    .tag { background: rgba(14, 165, 233, 0.1); color: #0ea5e9; padding: 4px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+    .content { font-size: 1rem; line-height: 1.8; width: 100%; }
+    .content h2 { margin: 40px 0 20px; color: #0f172a; font-family: 'Outfit', sans-serif; font-size: 1.6rem; font-weight: 800; border-left: 6px solid #0ea5e9; padding-left: 15px; word-wrap: break-word; }
+    .content h3 { margin: 30px 0 15px; color: #334155; font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 700; }
+    .content p { margin-bottom: 20px; text-align: left; word-wrap: break-word; }
+    .content ul, .content ol { margin: 15px 0 20px 25px; }
+    .content li { margin-bottom: 10px; }
+    .table-wrapper { width: 100%; overflow-x: auto; margin: 30px 0; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    table { width: 100%; min-width: 500px; border-collapse: collapse; background: white; }
+    thead { display: table-header-group; }
+    tbody { display: table-row-group; }
+    tr { display: table-row; }
+    th { background: linear-gradient(135deg, #0f172a 0%, #334155 100%); color: white; padding: 16px 18px; text-align: left; font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; display: table-cell; }
+    td { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; display: table-cell; word-break: break-word; }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    hr { border: none; height: 3px; background: linear-gradient(to right, #0ea5e9, transparent); margin: 40px 0; border-radius: 3px; }
+    pre { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #e2e8f0; padding: 25px; border-radius: 15px; font-family: 'JetBrains Mono', monospace; overflow-x: auto; margin: 25px 0; font-size: 0.85rem; line-height: 1.6; border: 1px solid #334155; word-wrap: break-word; white-space: pre-wrap; }
+    code { background: #f1f5f9; padding: 2px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.85em; color: #0ea5e9; word-break: break-all; }
+    pre code { background: none; padding: 0; color: inherit; }
+    blockquote { border-left: 6px solid #0ea5e9; padding: 20px 25px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 0 15px 15px 0; color: #0369a1; margin: 25px 0; font-style: italic; font-size: 1rem; }
+    .footer { margin-top: 60px; padding-top: 25px; border-top: 2px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+    .footer-left { font-size: 0.75rem; color: #64748b; }
+    .footer-center { text-align: center; }
+    .footer-right { text-align: right; font-size: 0.8rem; color: #0ea5e9; font-weight: 700; }
+    img { max-width: 100%; border-radius: 16px; margin: 25px 0; box-shadow: 0 10px 40px rgba(0,0,0,0.15); }
+    @page { margin: 0; size: A4; }
+  </style>
+</head>
+<body>
+  ${watermark ? `<div class="watermark">${watermark}</div>` : ''}
+  <div class="header">
+    <div class="brand">
+      ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="Comet" style="width:40px;height:40px;object-fit:contain;"/>` : '<span style="font-size:1.8rem">🌠</span>'}
+      <span class="brand-name">Comet<span>AI</span></span>
+    </div>
+    <div class="doc-tag">${category || 'Intelligence Report'}</div>
+  </div>
+  
+  <h1>${title || 'Research Document'}</h1>
+  
+  <div class="meta-grid">
+    ${author ? `<div class="meta-item"><span class="meta-label">Author</span><span class="meta-value">${author}</span></div>` : ''}
+    <div class="meta-item"><span class="meta-label">Document ID</span><span class="meta-value">CMT-${Math.random().toString(36).slice(2, 8).toUpperCase()}</span></div>
+    <div class="meta-item"><span class="meta-label">Generated</span><span class="meta-value">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>
+    <div class="meta-item"><span class="meta-label">Engine</span><span class="meta-value">COMET V2.5</span></div>
+  </div>
+  
+  ${tags && tags.length ? `<div class="tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` : ''}
+  
+  <div class="content">${content}</div>
+  
+  <div class="footer">
+    <div class="footer-left">&copy; ${new Date().getFullYear()} Comet AI Browser • Neural Intelligence Export</div>
+    <div class="footer-center">${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="" style="width:28px;height:28px;object-fit:contain;"/>` : '🌠'}</div>
+    <div class="footer-right">CONFIDENTIAL • AI GENERATED</div>
+  </div>
+</body>
+</html>`;
+  },
+
+  executive: (title, content, iconBase64, metadata = {}) => {
+    const { author = '', department = '', priority = 'normal', watermark = '' } = metadata;
+    const priorityColors = { high: '#ef4444', medium: '#f59e0b', normal: '#22c55e' };
+    const priorityColor = priorityColors[priority] || priorityColors.normal;
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; line-height: 1.7; color: #1a1a2e; background: #ffffff; padding: 50px 60px; }
+    .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 100px; color: rgba(0,0,0,0.015); font-weight: 900; z-index: -1; pointer-events: none; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 60px; padding-bottom: 30px; border-bottom: 1px solid #e5e7eb; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-text { font-family: 'Playfair Display', serif; font-weight: 900; font-size: 1.6rem; color: #1a1a2e; }
+    .brand-text span { color: #4f46e5; }
+    .priority-badge { padding: 8px 20px; border-radius: 25px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; background: ${priorityColor}15; color: ${priorityColor}; border: 2px solid ${priorityColor}; }
+    h1 { font-family: 'Playfair Display', serif; font-size: 2.8rem; font-weight: 900; color: #1a1a2e; line-height: 1.1; margin-bottom: 30px; letter-spacing: -0.02em; word-wrap: break-word; }
+    .meta-bar { display: flex; flex-wrap: wrap; gap: 30px; padding: 20px 0; margin-bottom: 40px; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; }
+    .meta-item { display: flex; flex-direction: column; gap: 4px; min-width: 100px; }
+    .meta-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.2em; color: #9ca3af; font-weight: 600; }
+    .meta-value { font-size: 0.95rem; color: #1a1a2e; font-weight: 600; word-break: break-word; }
+    .content { font-size: 1.05rem; line-height: 1.9; width: 100%; }
+    .content h2 { margin: 40px 0 20px; font-family: 'Playfair Display', serif; font-size: 1.4rem; font-weight: 700; color: #4f46e5; }
+    .content h3 { margin: 30px 0 15px; font-size: 1.2rem; font-weight: 700; color: #1a1a2e; }
+    .content p { margin-bottom: 20px; word-wrap: break-word; }
+    .table-wrapper { width: 100%; overflow-x: auto; margin: 30px 0; }
+    table { width: 100%; min-width: 400px; border-collapse: collapse; }
+    th { background: #4f46e5; color: white; padding: 14px 18px; text-align: left; font-weight: 600; font-size: 0.85rem; }
+    td { padding: 12px 18px; border-bottom: 1px solid #e5e7eb; font-size: 0.9rem; word-break: break-word; }
+    tr:nth-child(even) td { background: #f9fafb; }
+    blockquote { border-left: 4px solid #4f46e5; padding: 20px 25px; background: #f9fafb; margin: 25px 0; font-style: italic; }
+    .footer { margin-top: 60px; padding-top: 25px; border-top: 2px solid #1a1a2e; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+    .footer-text { font-size: 0.75rem; color: #6b7280; }
+    .confidential { font-size: 0.8rem; font-weight: 700; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.1em; }
+    @page { margin: 0; }
+  </style>
+</head>
+<body>
+  ${watermark ? `<div class="watermark">${watermark}</div>` : ''}
+  <div class="header">
+    <div class="brand">
+      ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="" style="width:40px;height:40px;"/>` : '<span style="font-size:1.8rem">🌠</span>'}
+      <span class="brand-text">Comet<span>AI</span></span>
+    </div>
+    ${priority !== 'normal' ? `<span class="priority-badge">${priority} Priority</span>` : ''}
+  </div>
+  
+  <h1>${title || 'Executive Summary'}</h1>
+  
+  <div class="meta-bar">
+    ${author ? `<div class="meta-item"><span class="meta-label">Prepared By</span><span class="meta-value">${author}</span></div>` : ''}
+    ${department ? `<div class="meta-item"><span class="meta-label">Department</span><span class="meta-value">${department}</span></div>` : ''}
+    <div class="meta-item"><span class="meta-label">Date</span><span class="meta-value">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>
+    <div class="meta-item"><span class="meta-label">Reference</span><span class="meta-value">EX-${Date.now().toString(36).toUpperCase()}</span></div>
+  </div>
+  
+  <div class="content">${content}</div>
+  
+  <div class="footer">
+    <div class="footer-text">&copy; ${new Date().getFullYear()} Comet AI Browser • Executive Intelligence</div>
+    <div class="confidential">Confidential Document</div>
+  </div>
+</body>
+</html>`;
+  },
+
+  academic: (title, content, iconBase64, metadata = {}) => {
+    const { author = '', institution = '', subject = '', doi = '', watermark = '' } = metadata;
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Source+Sans+3:wght@400;600;700&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Source Sans 3', sans-serif; line-height: 1.8; color: #333333; background: #ffffff; padding: 50px 60px; min-height: 100vh; overflow-x: hidden; }
+    .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 80px; color: rgba(0,0,0,0.02); font-weight: 900; z-index: -1; pointer-events: none; }
+    .header { text-align: center; margin-bottom: 40px; padding-bottom: 30px; border-bottom: 3px double #333; }
+    .institution { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.3em; color: #666; margin-bottom: 25px; font-weight: 600; }
+    h1 { font-family: 'Merriweather', serif; font-size: 2.2rem; font-weight: 900; color: #1a1a1a; line-height: 1.2; margin-bottom: 20px; word-wrap: break-word; }
+    .authors { font-size: 1rem; color: #333; margin-bottom: 12px; }
+    .affiliation { font-size: 0.85rem; color: #666; font-style: italic; margin-bottom: 15px; }
+    .meta-row { display: flex; justify-content: center; gap: 25px; font-size: 0.8rem; color: #666; flex-wrap: wrap; }
+    .meta-item { display: flex; gap: 8px; }
+    .meta-label { font-weight: 600; }
+    .abstract { background: #f8f9fa; padding: 25px 35px; margin: 35px 0; border-left: 5px solid #1a1a1a; font-style: italic; }
+    .abstract-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; display: block; }
+    .content { font-size: 1rem; text-align: left; width: 100%; }
+    .content h2 { margin: 40px 0 20px; font-family: 'Merriweather', serif; font-size: 1.4rem; font-weight: 700; color: #1a1a1a; border-bottom: 2px solid #333; padding-bottom: 8px; }
+    .content h3 { margin: 30px 0 12px; font-size: 1.1rem; font-weight: 700; color: #333; }
+    .content p { margin-bottom: 18px; word-wrap: break-word; }
+    .content ol, .content ul { margin: 15px 0 20px 30px; }
+    .content li { margin-bottom: 8px; }
+    .table-wrapper { width: 100%; overflow-x: auto; margin: 25px 0; }
+    table { width: 100%; min-width: 400px; border-collapse: collapse; }
+    th { background: #333; color: white; padding: 12px 16px; text-align: left; font-weight: 600; font-size: 0.85rem; }
+    td { padding: 10px 16px; border: 1px solid #ddd; font-size: 0.9rem; word-break: break-word; }
+    tr:nth-child(even) td { background: #f9f9f9; }
+    .references { margin-top: 50px; padding-top: 25px; border-top: 2px solid #333; }
+    .references h2 { border: none; margin-bottom: 25px; }
+    .ref-item { margin-bottom: 12px; font-size: 0.9rem; text-indent: -30px; padding-left: 30px; }
+    .footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; font-size: 0.8rem; color: #666; }
+    @page { margin: 0; }
+  </style>
+</head>
+<body>
+  ${watermark ? `<div class="watermark">${watermark}</div>` : ''}
+  <div class="header">
+    <div class="institution">${institution || 'Comet AI Research Institute'}</div>
+    <h1>${title || 'Research Paper'}</h1>
+    ${author ? `<div class="authors">${author}</div>` : ''}
+    ${subject ? `<div class="affiliation">${subject}</div>` : ''}
+    <div class="meta-row">
+      <div class="meta-item"><span class="meta-label">Date:</span><span>${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>
+      ${doi ? `<div class="meta-item"><span class="meta-label">DOI:</span><span>${doi}</span></div>` : ''}
+    </div>
+  </div>
+  
+  <div class="abstract">
+    <span class="abstract-label">Abstract</span>
+    ${content.substring(0, 500)}${content.length > 500 ? '...' : ''}
+  </div>
+  
+  <div class="content">${content}</div>
+  
+  <div class="footer">
+    <p>Generated by Comet AI Browser &bull; ${new Date().getFullYear()}</p>
+    <p>This is an AI-generated research document. Verify all citations and data independently.</p>
+  </div>
+</body>
+</html>`;
+  },
+
+  minimalist: (title, content, iconBase64, metadata = {}) => {
+    const { author = '', date = '', watermark = '', bgColor = '#fefefe' } = metadata;
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Space Grotesk', sans-serif; line-height: 1.8; color: #111; background: ${bgColor}; padding: 60px 60px; min-height: 100vh; overflow-x: hidden; max-width: 800px; margin: 0 auto; }
+    .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 100px; color: rgba(0,0,0,0.015); font-weight: 700; z-index: -1; pointer-events: none; }
+    .header { margin-bottom: 50px; }
+    .brand { margin-bottom: 30px; opacity: 0.3; }
+    h1 { font-size: 2.5rem; font-weight: 700; line-height: 1.1; margin-bottom: 15px; letter-spacing: -0.03em; word-wrap: break-word; }
+    .meta { font-size: 0.85rem; opacity: 0.6; }
+    .content { font-size: 1rem; width: 100%; }
+    .content h2 { font-size: 1.4rem; font-weight: 700; margin: 40px 0 20px; }
+    .content h3 { font-size: 1.2rem; font-weight: 700; margin: 30px 0 15px; }
+    .content p { margin-bottom: 20px; word-wrap: break-word; }
+    .content ul, .content ol { margin: 15px 0 20px 25px; }
+    .content li { margin-bottom: 10px; }
+    .table-wrapper { width: 100%; overflow-x: auto; margin: 25px 0; }
+    table { width: 100%; min-width: 300px; border-collapse: collapse; }
+    th { background: #111; color: white; padding: 12px 15px; text-align: left; font-weight: 600; font-size: 0.85rem; }
+    td { padding: 10px 15px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+    blockquote { border-left: 3px solid #111; padding-left: 20px; margin: 25px 0; font-style: italic; opacity: 0.8; }
+    .footer { margin-top: 60px; padding-top: 25px; border-top: 1px solid #eee; font-size: 0.75rem; opacity: 0.5; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    @page { margin: 0; }
+  </style>
+</head>
+<body>
+  ${watermark ? `<div class="watermark">${watermark}</div>` : ''}
+  <div class="header">
+    <div class="brand">Comet AI</div>
+    <h1>${title || 'Document'}</h1>
+    <div class="meta">${author ? author + ' • ' : ''}${date || new Date().toLocaleDateString()}</div>
+  </div>
+  <div class="content">${content}</div>
+  <div class="footer">
+    <span>Generated by Comet AI</span>
+    <span>${new Date().toISOString().split('T')[0]}</span>
+  </div>
+</body>
+</html>`;
+  },
+
+  dark: (title, content, iconBase64, metadata = {}) => {
+    const { author = '', category = '', watermark = '', bgColor = '#0f0f0f' } = metadata;
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=Share+Tech+Mono&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Oxanium', sans-serif; line-height: 1.8; color: #e0e0e0; background: ${bgColor}; padding: 50px 60px; min-height: 100vh; overflow-x: hidden; }
+    .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 100px; color: rgba(255,255,255,0.02); font-weight: 700; z-index: -1; pointer-events: none; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #22d3ee; flex-wrap: wrap; gap: 15px; }
+    .brand { display: flex; align-items: center; gap: 15px; }
+    .brand-name { font-weight: 700; font-size: 1.4rem; color: #22d3ee; }
+    .brand-name span { color: #e0e0e0; }
+    .category { background: #22d3ee20; color: #22d3ee; padding: 6px 14px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; border: 1px solid #22d3ee40; }
+    h1 { font-size: 2.2rem; font-weight: 700; color: #ffffff; line-height: 1.1; margin-bottom: 25px; text-shadow: 0 0 30px rgba(34,211,238,0.3); word-wrap: break-word; }
+    .meta-grid { display: flex; flex-wrap: wrap; gap: 25px; margin-bottom: 35px; padding: 18px; background: #1a1a1a; border-radius: 12px; border: 1px solid #333; }
+    .meta-item { display: flex; flex-direction: column; gap: 4px; min-width: 100px; }
+    .meta-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.15em; color: #666; font-weight: 600; }
+    .meta-value { font-size: 0.9rem; color: #22d3ee; word-break: break-word; }
+    .content { font-size: 1rem; width: 100%; }
+    .content h2 { margin: 40px 0 20px; color: #22d3ee; font-size: 1.4rem; font-weight: 700; border-left: 4px solid #22d3ee; padding-left: 15px; }
+    .content h3 { margin: 30px 0 15px; color: #22d3ee; font-size: 1.1rem; font-weight: 700; }
+    .content p { margin-bottom: 20px; word-wrap: break-word; }
+    .content ul, .content ol { margin: 15px 0 20px 25px; }
+    .content li { margin-bottom: 10px; }
+    .table-wrapper { width: 100%; overflow-x: auto; margin: 25px 0; }
+    table { width: 100%; min-width: 400px; border-collapse: collapse; }
+    th { background: linear-gradient(135deg, #22d3ee 0%, #6366f1 100%); color: #000; padding: 14px 18px; text-align: left; font-weight: 700; font-size: 0.85rem; }
+    td { padding: 12px 18px; border-bottom: 1px solid #333; font-size: 0.9rem; word-break: break-word; }
+    tr:nth-child(even) td { background: #1a1a1a; }
+    blockquote { border-left: 4px solid #22d3ee; padding: 18px 25px; background: #1a1a1a; margin: 25px 0; color: #22d3ee; }
+    .accent { background: linear-gradient(135deg, #22d3ee20 0%, #6366f120 100%); padding: 20px; border-radius: 12px; border: 1px solid #22d3ee30; margin: 25px 0; }
+    .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #333; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #666; flex-wrap: wrap; gap: 15px; }
+    .cyber-badge { color: #22d3ee; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+    @page { margin: 0; background: #0f0f0f; }
+  </style>
+</head>
+<body>
+  ${watermark ? `<div class="watermark">${watermark}</div>` : ''}
+  <div class="header">
+    <div class="brand">
+      ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="" style="width:40px;height:40px;filter:brightness(0) invert(1);"/>` : '<span style="font-size:1.5rem;filter:brightness(0) invert(1);">🌠</span>'}
+      <span class="brand-name">Comet<span>AI</span></span>
+    </div>
+    ${category ? `<span class="category">${category}</span>` : ''}
+  </div>
+  
+  <h1>${title || 'Cyber Intelligence'}</h1>
+  
+  <div class="meta-grid">
+    ${author ? `<div class="meta-item"><span class="meta-label">Agent</span><span class="meta-value">${author}</span></div>` : ''}
+    <div class="meta-item"><span class="meta-label">Timestamp</span><span class="meta-value">${new Date().toISOString()}</span></div>
+    <div class="meta-item"><span class="meta-label">ID</span><span class="meta-value">NX-${Math.random().toString(36).slice(2, 8).toUpperCase()}</span></div>
+  </div>
+  
+  <div class="content">${content}</div>
+  
+  <div class="footer">
+    <span>© ${new Date().getFullYear()} Comet AI Browser • Neural Export</span>
+    <span class="cyber-badge">Classified • Neural Intelligence</span>
+  </div>
+</body>
+</html>`;
+  }
+};
+
+const TEMPLATE_NAMES = Object.keys(PDF_TEMPLATES);
+
+function generateCometPDFTemplate(title, content, iconBase64, templateName = 'professional', metadata = {}) {
   const isFullHTML = /<html/i.test(content);
   if (isFullHTML) return content;
 
-  // Extract meta-options if present (passed via pipes in the content or title)
-  const watermarkMatch = content.match(/\[WATERMARK:\s*([^\]]+)\]/i);
-  const watermarkText = watermarkMatch ? watermarkMatch[1] : '';
-  const cleanContent = content.replace(/\[WATERMARK:\s*[^\]]+\]/gi, '');
+  let cleanContent = content
+    .replace(/\[WATERMARK:\s*([^\]]+)\]/gi, (_, w) => { metadata.watermark = w; return ''; })
+    .replace(/\[BG_COLOR:\s*([^\]]+)\]/gi, (_, c) => { metadata.bgColor = c; return ''; })
+    .replace(/\[TEMPLATE:\s*([^\]]+)\]/gi, (_, t) => { templateName = t.toLowerCase(); return ''; })
+    .replace(/\[AUTHOR:\s*([^\]]+)\]/gi, (_, a) => { metadata.author = a; return ''; })
+    .replace(/\[CATEGORY:\s*([^\]]+)\]/gi, (_, c) => { metadata.category = c; return ''; })
+    .replace(/\[TAGS:\s*([^\]]+)\]/gi, (_, t) => { metadata.tags = t.split(',').map(s => s.trim()); return ''; })
+    .replace(/\[PRIORITY:\s*([^\]]+)\]/gi, (_, p) => { metadata.priority = p.toLowerCase(); return ''; })
+    .replace(/\[SUBJECT:\s*([^\]]+)\]/gi, (_, s) => { metadata.subject = s; return ''; })
+    .replace(/\[INSTITUTION:\s*([^\]]+)\]/gi, (_, i) => { metadata.institution = i; return ''; });
 
-  const bgColorMatch = cleanContent.match(/\[BG_COLOR:\s*([^\]]+)\]/i);
-  const bgColor = bgColorMatch ? bgColorMatch[1] : '#ffffff';
-  const finalContent = cleanContent.replace(/\[BG_COLOR:\s*[^\]]+\]/gi, '');
+  // Parse markdown tables to HTML
+  cleanContent = parseMarkdownTables(cleanContent);
 
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Inter:wght@400;500;700&family=JetBrains+Mono&display=swap');
-        
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { 
-          font-family: 'Inter', -apple-system, sans-serif; 
-          line-height: 1.7; 
-          color: #1e293b; 
-          background: ${bgColor}; 
-          padding: 80px 60px;
-          position: relative;
-        }
+  // Parse markdown content to HTML
+  cleanContent = parseMarkdownToHTML(cleanContent);
 
-        ${watermarkText ? `
-        body::before {
-          content: '${watermarkText}';
-          position: fixed;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%) rotate(-45deg);
-          font-size: 100px;
-          color: rgba(0,0,0,0.03);
-          font-weight: 900;
-          white-space: nowrap;
-          z-index: -1;
-          pointer-events: none;
-          font-family: 'Outfit', sans-serif;
-        }
-        ` : ''}
-        
-        .header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          border-bottom: 2px solid rgba(0,0,0,0.05);
-          padding-bottom: 30px;
-          margin-bottom: 50px;
-        }
-        
-        .brand {
-          display: flex;
-          align-items: center;
-          gap: 15px;
-          color: #0ea5e9;
-          font-family: 'Outfit', sans-serif;
-          font-weight: 900;
-          font-size: 1.5rem;
-          letter-spacing: -0.02em;
-        }
-        
-        .brand span { color: #0f172a; }
-        
-        .document-tag {
-          background: #f0fdf4;
-          color: #16a34a;
-          padding: 6px 16px;
-          border-radius: 999px;
-          font-size: 0.7rem;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          border: 1px solid #dcfce7;
-        }
-        
-        h1 { 
-          font-family: 'Outfit', sans-serif;
-          color: #0f172a; 
-          font-size: 2.8rem; 
-          font-weight: 900; 
-          letter-spacing: -0.04em; 
-          line-height: 1.1;
-          margin-bottom: 10px;
-        }
-        
-        .metadata {
-          font-size: 0.85rem;
-          color: #64748b;
-          margin-bottom: 40px;
-          display: flex;
-          gap: 20px;
-          font-weight: 500;
-        }
-        
-        .content {
-          font-size: 1rem;
-          color: #334155;
-        }
-        
-        .content h2 { margin: 40px 0 20px; color: #0f172a; font-family: 'Outfit', sans-serif; font-size: 1.8rem; border-left: 5px solid #0ea5e9; padding-left: 15px; }
-        .content p { margin-bottom: 20px; }
-        
-        /* Table Styling */
-        table { 
-          width: 100%; 
-          border-collapse: collapse; 
-          margin: 30px 0; 
-          background: white;
-          border-radius: 12px;
-          overflow: hidden;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-        }
-        th { background: #0f172a; color: white; padding: 15px; text-align: left; font-weight: 700; font-size: 0.9rem; }
-        td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
-        tr:last-child td { border-bottom: none; }
-        tr:nth-child(even) { background: #f8fafc; }
+  const template = PDF_TEMPLATES[templateName] || PDF_TEMPLATES.professional;
+  return template(title, cleanContent, iconBase64, metadata);
+}
 
-        hr { border: none; height: 2px; background: linear-gradient(to right, #0ea5e9, transparent); margin: 40px 0; }
+function parseMarkdownTables(content) {
+  const tableRegex = /\|(.+)\|\n\|[-:\s|]+\|\n((?:\|.+\|\n?)+)/g;
+  return content.replace(tableRegex, (match, headerRow, bodyRows) => {
+    const headers = headerRow.split('|').map(h => h.trim()).filter(h => h);
+    const rows = bodyRows.trim().split('\n').map(row => 
+      row.split('|').map(cell => cell.trim()).filter(c => c)
+    );
+    
+    let html = '<div class="table-wrapper"><table><thead><tr>';
+    headers.forEach(h => { html += `<th>${h}</th>`; });
+    html += '</tr></thead><tbody>';
+    rows.forEach(row => {
+      html += '<tr>';
+      row.forEach(cell => { html += `<td>${cell}</td>`; });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+  });
+}
 
-        pre { 
-          background: #0f172a; 
-          color: #e2e8f0; 
-          padding: 30px; 
-          border-radius: 20px; 
-          font-family: 'JetBrains Mono', monospace; 
-          overflow-x: auto; 
-          margin: 30px 0;
-          font-size: 0.9rem;
-          border: 1px solid #1e293b;
-        }
-        
-        blockquote {
-          border-left: 6px solid #0ea5e9;
-          padding: 20px 30px;
-          background: #f0f9ff;
-          border-radius: 0 20px 20px 0;
-          color: #1e40af;
-          margin: 30px 0;
-          font-style: italic;
-        }
-
-        .highlight { color: #0ea5e9; font-weight: 700; }
-        .accent-box { background: #f1f5f9; padding: 25px; border-radius: 15px; border: 1px solid #e2e8f0; margin: 20px 0; }
-        
-        .footer { 
-          margin-top: 80px; 
-          padding-top: 30px;
-          border-top: 1px solid rgba(0,0,0,0.05); 
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          font-size: 0.75rem; 
-          color: #94a3b8; 
-          font-weight: 600;
-        }
-        
-        img { max-width: 100%; border-radius: 16px; margin: 20px 0; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        
-        @page {
-          margin: 0;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <div class="brand">
-          ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="Comet" style="width:36px;height:36px;margin:0;object-fit:contain;"/>` : '<span style="font-size:1.5rem">🌠</span>'}
-          Comet<span>AI</span>
-        </div>
-        <div class="document-tag">Verified Intelligence</div>
-      </div>
-      
-      <h1>${title || 'Research Document'}</h1>
-      
-      <div class="metadata">
-        <span>ID: CMT-${Math.random().toString(36).slice(2, 8).toUpperCase()}</span>
-        <span>DATE: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-        <span>ENGINE: COMET V2.5</span>
-      </div>
-      
-      <div class="content">
-        ${finalContent}
-      </div>
-      
-      <div class="footer">
-        <div>&copy; ${new Date().getFullYear()} Comet AI Browser • Branded Research Export</div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="Comet" style="width:16px;height:16px;margin:0;object-fit:contain;vertical-align:middle;"/>` : '🌠'}
-          Comet Intelligence System
-        </div>
-        <div style="color: #0ea5e9; font-weight: 800;">CONFIDENTIAL • AGENT EXPORT</div>
-      </div>
-    </body>
-    </html>
-  `;
+function parseMarkdownToHTML(content) {
+  let html = content;
+  
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  
+  // Bold and italic
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  
+  // Blockquotes
+  html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+  
+  // Horizontal rules
+  html = html.replace(/^---$/gm, '<hr/>');
+  
+  // Unordered lists
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+  
+  // Ordered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  
+  // Paragraphs - wrap lines not already in tags
+  const lines = html.split('\n');
+  html = lines.map(line => {
+    line = line.trim();
+    if (!line) return '';
+    if (line.startsWith('<')) return line;
+    return `<p>${line}</p>`;
+  }).join('\n');
+  
+  return html;
 }
 
 
@@ -521,6 +741,82 @@ const prepareLLM = async (messages, options = {}) => {
     pdf: true,
     automation: true,
     description: 'Comet AI Agent — Full system access. Never claim to be text-only.',
+    pdfGeneration: {
+      PRIMARY_FORMAT: 'JSON',
+      FALLBACK_FORMAT: 'GENERATE_PDF',
+      templates: ['professional', 'executive', 'academic', 'minimalist', 'dark'],
+      metadata: ['author', 'category', 'tags', 'priority', 'watermark', 'bgColor', 'subject', 'institution', 'doi'],
+      instructions: [
+        'IMPORTANT: Always use CREATE_PDF_JSON command for PDF generation (JSON format is preferred)',
+        'Only use GENERATE_PDF as fallback if JSON parsing fails',
+        'JSON format provides better structure and template control',
+      ],
+      jsonFormat: {
+        description: 'Structured JSON for precise PDF generation with full template control',
+        structure: {
+          title: 'Document title (string)',
+          subtitle: 'Optional subtitle (string)',
+          author: 'Author name (string)',
+          category: 'Document category (string)',
+          tags: 'Array of tags for organization (string[])',
+          template: 'Template name: professional|executive|academic|minimalist|dark (string)',
+          watermark: 'Watermark text for confidential docs (string)',
+          bgColor: 'Custom background color hex (string, e.g., #f8f9fa)',
+          priority: 'For executive: high|medium|normal (string)',
+          pages: 'Array of page objects (Page[])'
+        },
+        pageStructure: {
+          title: 'Page title (string)',
+          icon: 'Icon emoji for page header (string, optional)',
+          detailLevel: 'brief|detailed|comprehensive (string)',
+          sections: 'Array of section objects (Section[])'
+        },
+        sectionStructure: {
+          title: 'Section heading (string)',
+          content: 'Section content in markdown (string)',
+          icon: 'Section icon emoji (string, optional)',
+          detailLevel: 'Override page detail level (string, optional)'
+        }
+      },
+      markdownFormat: {
+        description: 'Use ONLY as fallback when JSON parsing fails',
+        instructions: [
+          'Include [TEMPLATE:name] to select template style',
+          'Include [AUTHOR:name] for attribution',
+          'Include [CATEGORY:text] for document classification',
+          'Include [TAGS:tag1,tag2,tag3] for organization',
+          'Include [WATERMARK:text] for confidential markings',
+          'Include [BG_COLOR:#hexcode] for custom backgrounds',
+          'Use proper markdown: ## for h2, ### for h3, --- for dividers',
+        ]
+      },
+      examples: {
+        json: [
+          `\`\`\`json
+{
+  "title": "Q4 Sales Report 2026",
+  "subtitle": "Quarterly Performance Analysis",
+  "author": "John Smith",
+  "template": "executive",
+  "priority": "high",
+  "pages": [
+    {
+      "title": "Executive Summary",
+      "sections": [
+        { "title": "Key Highlights", "content": "## Revenue Growth\\n\\nRevenue increased by **24%** YoY..." },
+        { "title": "Market Position", "content": "### Competitive Analysis\\n\\n| Metric | Value | Change |\\n|-------|-------|--------|\\n| Market Share | 32% | +5%" }
+      ]
+    }
+  ]
+}
+\`\`\``,
+        ],
+        markdown: [
+          '[TEMPLATE:executive][AUTHOR:John Smith][PRIORITY:high]## Q4 Sales Report',
+          '[TEMPLATE:academic][SUBJECT:AI Research][INSTITUTION:MIT]## Neural Networks Paper',
+        ]
+      }
+    },
   };
 
   // Determine active provider
@@ -1945,25 +2241,52 @@ ipcMain.handle('capture-browser-view-screenshot', async () => {
   }
   
   // ERROR-PROOFING: Retry logic for screenshot capture
-  const maxRetries = 2;
+  const maxRetries = 3;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Wait for page to be ready
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for page to be ready and rendering to complete
+      await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+      
       const image = await view.webContents.capturePage();
-      if (image && image.isEmpty()) {
+      if (!image || image.isEmpty()) {
         console.warn(`[Screenshot] Attempt ${attempt}: Image is empty, retrying...`);
-        if (attempt < maxRetries) await new Promise(r => setTimeout(r, 200));
+        if (attempt < maxRetries) await new Promise(r => setTimeout(r, 300));
         continue;
       }
-      return image.toDataURL(); // Returns a Data URL (base64 encoded PNG)
+      
+      // Convert NativeImage to PNG buffer then to base64 data URL
+      const pngBuffer = image.toPNG();
+      if (!pngBuffer || pngBuffer.length === 0) {
+        console.warn(`[Screenshot] Attempt ${attempt}: PNG conversion failed, retrying...`);
+        if (attempt < maxRetries) await new Promise(r => setTimeout(r, 300));
+        continue;
+      }
+      
+      const base64 = pngBuffer.toString('base64');
+      const dataUrl = `data:image/png;base64,${base64}`;
+      console.log(`[Screenshot] Success on attempt ${attempt}, size: ${pngBuffer.length} bytes`);
+      return dataUrl;
     } catch (e) {
       console.error(`[Screenshot] Attempt ${attempt} failed:`, e.message);
-      if (attempt < maxRetries) await new Promise(r => setTimeout(r, 200));
+      if (attempt < maxRetries) await new Promise(r => setTimeout(r, 300));
     }
   }
   
   console.error('[Screenshot] All capture attempts failed');
+  
+  // Fallback: Try to get screenshot via JPEG which is sometimes more reliable
+  try {
+    const image = await view.webContents.capturePage();
+    if (image && !image.isEmpty()) {
+      const jpegBuffer = image.toJPEG(90);
+      if (jpegBuffer && jpegBuffer.length > 0) {
+        return `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`;
+      }
+    }
+  } catch (e2) {
+    console.error('[Screenshot] JPEG fallback also failed:', e2.message);
+  }
+  
   return null;
 });
 
@@ -2702,10 +3025,21 @@ async function checkShellPermission(command) {
 
   const analysis = analyzeCommandRisk(command);
 
-  // Auto-approve ALL commands - no permission dialogs at all
-  // User can configure auto-approve settings in Permissions section
-  console.log(`[Shell] Auto-approving command: ${command} (${analysis.harmLevel})`);
-  return true;
+  // Use auto-approve settings from permission store
+  if (permissionStore.isAutoExecutable(analysis.harmLevel)) {
+    console.log(`[Shell] Auto-approved (${analysis.harmLevel}): ${command}`);
+    return true;
+  }
+
+  // High risk or critical - always require confirmation
+  if (analysis.harmLevel === 'high' || analysis.harmLevel === 'critical') {
+    console.log(`[Shell] Requires confirmation (${analysis.harmLevel}): ${command}`);
+    return false;
+  }
+
+  // Medium risk without auto-approve - require confirmation
+  console.log(`[Shell] Requires confirmation (${analysis.harmLevel}): ${command}`);
+  return false;
 }
 
 /**
@@ -2764,7 +3098,7 @@ ipcMain.handle('execute-shell-command', async (event, { rawCommand, preApproved 
       
       if (error) {
         if (error.message.includes('Operation not permitted')) {
-          resolve({ success: false, error: 'Permission denied! Please go to Settings > Permissions in Comet Browser to configure macOS system permissions.', output: stderr });
+          resolve({ success: false, error: 'Permission denied! Please go to Settings > Permissions in Comet-AI to configure macOS system permissions.', output: stderr });
         } else {
           resolve({ success: false, error: error.message, output: stderr });
         }
@@ -3393,7 +3727,7 @@ ipcMain.removeHandler('generate-pdf');
             if (p >= 100) {
                 clearInterval(interval);
                 if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.webContents.send('download-complete', filename);
+                    mainWindow.webContents.send('download-complete', { name: filename, path: fullPath });
                     logMain('Download lifecycle complete.');
                 }
             }
@@ -3514,14 +3848,6 @@ ipcMain.removeHandler('generate-pdf');
       fileSystemMcp = new FileSystemMcpServer(permissionStore);
       nativeAppMcp = new NativeAppMcpServer(permissionStore);
       console.log('[Main] MCP Desktop servers (FileSystem + NativeApp) initialized.');
-
-      webSearchProvider = new WebSearchProvider();
-      webSearchProvider.configure({
-        BRAVE_API_KEY: store.get('brave_api_key') || process.env.BRAVE_API_KEY || '',
-        TAVILY_API_KEY: store.get('tavily_api_key') || process.env.TAVILY_API_KEY || '',
-        SERP_API_KEY: store.get('serp_api_key') || process.env.SERP_API_KEY || '',
-      });
-      console.log('[Main] WebSearchProvider initialized.');
 
       ragService = new RagService();
       await ragService.init();
@@ -3792,6 +4118,125 @@ ipcMain.removeHandler('generate-pdf');
         } else {
           sendResponse({ success: false, error: 'Desktop window not available' });
         }
+      } else if (command === 'desktop-control') {
+        // Handle desktop-control commands from mobile
+        const action = args.action || msg.action;
+        const prompt = args.prompt || msg.prompt;
+        const promptId = args.promptId || msg.promptId;
+        
+        console.log(`[WiFi-Sync] Desktop Control: action=${action}, promptId=${promptId}`);
+        
+        if (action === 'send-prompt') {
+          // Send to AI chat and stream response back to mobile
+          if (mainWindow) {
+            mainWindow.webContents.send('remote-ai-prompt', { 
+              prompt, 
+              commandId: promptId,
+              streamToMobile: true 
+            });
+          }
+          
+          // Also process locally
+          try {
+            const targetModel = args.model || store.get('ollama_model') || 'deepseek-r1:8b';
+            const provider = (targetModel.includes('gemini') || targetModel.includes('google')) ? 'google-flash' : 'ollama';
+            
+            const result = await llmGenerateHandler([{ role: 'user', content: prompt }], {
+              model: targetModel,
+              provider: provider
+            });
+            
+            if (result.error) {
+              wifiSyncService.sendAIResponse(promptId, `Error: ${result.error}`, false);
+            } else {
+              wifiSyncService.sendAIResponse(promptId, result.text || '', false);
+            }
+          } catch (err) {
+            wifiSyncService.sendAIResponse(promptId, `Error: ${err.message}`, false);
+          }
+        } else if (action === 'get-status') {
+          const { screen } = require('electron');
+          sendResponse({ 
+            success: true, 
+            screenOn: !screen.isScreenCaptured?.() ?? true,
+            activeApp: 'Comet-AI',
+            desktopName: os.hostname(),
+            platform: os.platform(),
+          });
+        } else if (action === 'screenshot') {
+          if (mainWindow) {
+            mainWindow.webContents.send('request-screenshot', { promptId });
+            sendResponse({ success: true, output: 'Screenshot requested' });
+          } else {
+            sendResponse({ success: false, error: 'Desktop window not available' });
+          }
+        } else if (action === 'shell-command') {
+          const shellCmd = args.command;
+          const requireApproval = args.requireApproval ?? true;
+          
+          // Check if this is a high-risk command that needs QR approval on Mac
+          if (os.platform() === 'darwin' && requireApproval) {
+            const dangerous = /sudo|rm\s+-rf|shutdown|reboot|kill\s+-9|diskutil|dd\s+if/i.test(shellCmd);
+            if (dangerous) {
+              // Generate QR code for mobile approval
+              const { qrImage, pin, token } = await generateShellApprovalQR(shellCmd);
+              wifiSyncService.sendToMobile({
+                action: 'shell-approval-qr',
+                commandId: token,
+                pin: pin,
+                command: shellCmd,
+                qrData: qrImage,
+              });
+              sendResponse({ 
+                success: true, 
+                requiresApproval: true,
+                approvalQRShown: true,
+              });
+              return;
+            }
+          }
+          
+          // Execute shell command
+          const { exec } = require('child_process');
+          exec(shellCmd, { timeout: 30000 }, (err, stdout, stderr) => {
+            if (err) {
+              sendResponse({ success: false, error: err.message });
+            } else {
+              sendResponse({ success: true, output: stdout || stderr });
+            }
+          });
+        } else if (action === 'show-shell-qr') {
+          const shellCmd = args.command;
+          const { qrImage, pin, token } = await generateShellApprovalQR(shellCmd);
+          wifiSyncService.sendToMobile({
+            action: 'shell-approval-qr',
+            commandId: args.commandId,
+            pin: pin,
+            command: shellCmd,
+            qrData: qrImage,
+          });
+          sendResponse({ success: true, qrShown: true });
+        } else if (action === 'get-clipboard') {
+          const { clipboard } = require('electron');
+          sendResponse({ success: true, clipboard: clipboard.readText() });
+        } else if (action === 'open-url') {
+          if (mainWindow) {
+            mainWindow.webContents.send('navigate-to-url', args.url);
+            sendResponse({ success: true, output: `Opening: ${args.url}` });
+          } else {
+            sendResponse({ success: false, error: 'Desktop window not available' });
+          }
+        } else if (action === 'click') {
+          if (robot) {
+            robot.moveMouse(args.x, args.y);
+            robot.mouseClick();
+            sendResponse({ success: true, output: `Clicked at (${args.x}, ${args.y})` });
+          } else {
+            sendResponse({ success: false, error: 'robotjs not available' });
+          }
+        } else {
+          sendResponse({ success: false, error: `Unknown action: ${action}` });
+        }
       } else {
         sendResponse({ success: false, error: `Command ${command} not implemented` });
       }
@@ -3846,6 +4291,21 @@ ipcMain.removeHandler('generate-pdf');
     }
   });
 
+  async function generateShellApprovalQR(command) {
+    const deviceId = os.hostname();
+    const token = Math.random().toString(36).substring(2, 10);
+    const pin = Math.floor(100000 + Math.random() * 900000).toString();
+    const deepLinkUrl = `comet-ai://shell-approve?id=${token}&deviceId=${encodeURIComponent(deviceId)}&pin=${pin}&cmd=${encodeURIComponent(command)}`;
+    
+    try {
+      const qrImage = await QRCode.toDataURL(deepLinkUrl);
+      return { qrImage, pin, token };
+    } catch (err) {
+      console.error('[Main] Failed to generate Shell Approval QR:', err);
+      return { qrImage: null, pin, token };
+    }
+  }
+
   ipcMain.handle('get-wifi-sync-info', () => {
     if (!wifiSyncService) return null;
     return {
@@ -3896,7 +4356,7 @@ ipcMain.removeHandler('generate-pdf');
       } else {
         console.log(`Download failed: ${state}`);
         if (mainWindow) {
-          mainWindow.webContents.send('download-failed', item.getFilename());
+          mainWindow.webContents.send('download-failed', { name: item.getFilename(), path: item.getSavePath() });
         }
       }
     });
@@ -3928,6 +4388,15 @@ ipcMain.removeHandler('generate-pdf');
       const view = tabViews.get(activeTabId);
       if (view && mainWindow) {
         mainWindow.removeBrowserView(view);
+      }
+    }
+  });
+
+  ipcMain.on('show-all-views', () => {
+    if (activeTabId && tabViews.has(activeTabId)) {
+      const view = tabViews.get(activeTabId);
+      if (view && mainWindow) {
+        mainWindow.addBrowserView(view);
       }
     }
   });
@@ -4190,28 +4659,12 @@ ipcMain.removeHandler('generate-pdf');
 
       console.log(`[RAG] Performing web search for: ${query}`);
 
-      let searchResults = [];
-
-      // 1. Try configured API providers first (Tavily, Brave, SerpAPI)
-      if (webSearchProvider) {
-        const availableProviders = webSearchProvider.getAvailableProviders();
-        if (availableProviders.length > 0) {
-          try {
-            console.log(`[RAG] Using API provider [${availableProviders[0]}] for enhanced results`);
-            searchResults = await webSearchProvider.search(query, availableProviders[0], 5);
-          } catch (apiErr) {
-            console.warn('[RAG] API search failed, falling back to scrapper:', apiErr.message);
-          }
-        }
-      }
-
-      if (searchResults.length === 0) {
-        // 2. Fallback to Robust Scrapper
-        const searchEngines = [
-          {
-            name: 'Google',
-            url: `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en`,
-            selectors: [
+      // Use web scraper for search results
+      const searchEngines = [
+        {
+          name: 'Google',
+          url: `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en`,
+          selectors: [
               /<div[^>]+class="VwiC3b[^>]*>([\s\S]*?)<\/div>/g,
               /<div[^>]+class="BNeawe s3v9rd AP7Wnd"[^>]*>([\s\S]*?)<\/div>/g,
               /<span[^>]+class="hgKElc"[^>]*>([\s\S]*?)<\/span>/g,
@@ -4228,6 +4681,8 @@ ipcMain.removeHandler('generate-pdf');
             ]
           }
         ];
+
+        let searchResults = [];
 
         for (const engine of searchEngines) {
           try {
@@ -4273,10 +4728,6 @@ ipcMain.removeHandler('generate-pdf');
             console.warn(`[RAG] ${engine.name} search failed:`, e.message);
           }
         }
-      } else {
-        // If we got results from API provider, format them
-        searchResults = searchResults.map(r => `${r.title}: ${r.snippet}`);
-      }
 
       if (searchResults.length > 0) {
         searchCache.set(normalizedQuery, {
@@ -4596,6 +5047,191 @@ ipcMain.removeHandler('generate-pdf');
       });
     });
   });
+
+  // ============================================================================
+  // AUTOMATION & TASK SCHEDULING
+  // ============================================================================
+  let ipcService = null;
+  let taskScheduler = null;
+  let taskQueue = null;
+  let storageManager = null;
+  let mobileNotifier = null;
+
+  async function initializeAutomationService() {
+    try {
+      // Check if modules exist
+      const path = require('path');
+      const fs = require('fs');
+      
+      // Only initialize if service files exist
+      const servicePath = path.join(__dirname, 'src', 'service');
+      if (!fs.existsSync(servicePath)) {
+        console.log('[Main] Service path does not exist, skipping automation init');
+        return;
+      }
+
+      const IPCService = require('./src/service/ipc-service.js');
+      const Scheduler = require('./src/service/scheduler.js');
+      const TaskQueue = require('./src/service/task-queue.js');
+      const Storage = require('./src/service/storage.js');
+      const MobileNotifier = require('./src/service/mobile-notifier.js');
+
+      storageManager = new Storage();
+      await storageManager.initialize();
+
+      taskQueue = new TaskQueue();
+      taskScheduler = new Scheduler(taskQueue);
+
+      mobileNotifier = new MobileNotifier();
+      await mobileNotifier.initialize();
+
+      ipcService = new IPCService(taskScheduler, taskQueue, storageManager, mobileNotifier);
+      ipcService.initialize();
+
+      console.log('[Main] Automation service initialized');
+    } catch (error) {
+      console.error('[Main] Failed to initialize automation service:', error);
+    }
+  }
+
+  ipcMain.handle('automation:create-task', async (event, taskData) => {
+    if (!ipcService) {
+      await initializeAutomationService();
+    }
+    const task = {
+      id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      ...taskData,
+      enabled: true,
+      runCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await storageManager.saveTask(task);
+      await taskScheduler.scheduleTask(task);
+      console.log('[Main] Task scheduled:', task.name);
+      return { success: true, task };
+    } catch (error) {
+      console.error('[Main] Failed to create task:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('automation:get-tasks', async () => {
+    try {
+      if (!storageManager) {
+        console.log('[Main] Storage not initialized, initializing now...');
+        await initializeAutomationService();
+      }
+      if (!storageManager || !storageManager.getAllTasks) {
+        console.log('[Main] Storage not available, returning empty array');
+        return [];
+      }
+      return await storageManager.getAllTasks();
+    } catch (error) {
+      console.error('[Main] Error getting tasks:', error);
+      return [];
+    }
+  });
+
+  ipcMain.handle('automation:get-task', async (event, taskId) => {
+    if (!storageManager) {
+      await initializeAutomationService();
+    }
+    return await storageManager.getTask(taskId);
+  });
+
+  ipcMain.handle('automation:update-task', async (event, taskId, updates) => {
+    if (!storageManager) {
+      await initializeAutomationService();
+    }
+    const task = await storageManager.getTask(taskId);
+    if (!task) {
+      return { success: false, error: 'Task not found' };
+    }
+
+    const updatedTask = { ...task, ...updates, updatedAt: new Date().toISOString() };
+    await storageManager.saveTask(updatedTask);
+
+    if (updates.trigger || updates.enabled !== undefined) {
+      if (updatedTask.enabled) {
+        await taskScheduler.scheduleTask(updatedTask);
+      } else {
+        await taskScheduler.unscheduleTask(taskId);
+      }
+    }
+
+    return { success: true, task: updatedTask };
+  });
+
+  ipcMain.handle('automation:delete-task', async (event, taskId) => {
+    if (!taskScheduler) {
+      await initializeAutomationService();
+    }
+    try {
+      await taskScheduler.unscheduleTask(taskId);
+      await storageManager.deleteTask(taskId);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('automation:toggle-task', async (event, taskId) => {
+    if (!taskScheduler || !storageManager) {
+      await initializeAutomationService();
+    }
+    const task = await storageManager.getTask(taskId);
+    if (!task) {
+      return { success: false, error: 'Task not found' };
+    }
+
+    task.enabled = !task.enabled;
+    task.updatedAt = new Date().toISOString();
+    await storageManager.saveTask(task);
+
+    if (task.enabled) {
+      await taskScheduler.scheduleTask(task);
+    } else {
+      await taskScheduler.unscheduleTask(taskId);
+    }
+
+    return { success: true, task };
+  });
+
+  ipcMain.handle('automation:run-task', async (event, taskId) => {
+    if (!taskScheduler || !storageManager) {
+      await initializeAutomationService();
+    }
+    const task = await storageManager.getTask(taskId);
+    if (!task) {
+      return { success: false, error: 'Task not found' };
+    }
+
+    try {
+      await taskScheduler.executeTask(task, { force: true });
+      return { success: true, taskId };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('automation:get-logs', async (event, date) => {
+    if (!storageManager) {
+      await initializeAutomationService();
+    }
+    return await storageManager.getLogs(date);
+  });
+
+  ipcMain.handle('automation:get-results', async (event, taskId) => {
+    if (!storageManager) {
+      await initializeAutomationService();
+    }
+    return await storageManager.getResults(taskId);
+  });
+
+  initializeAutomationService();
 
   // ============================================================================
   // POPUP WINDOW SYSTEM - Fix for panels appearing behind browser view
@@ -5308,6 +5944,208 @@ ipcMain.removeHandler('generate-pdf');
     } catch (e) { return { success: false, error: e.message }; }
   });
 
+  // --- DOM Click Handler (for in-app element clicks) ---
+  ipcMain.handle('dom-click-element', async (event, { tabId, selector, text, index, waitFor }) => {
+    const targetTabId = tabId || activeTabId;
+    const view = tabViews.get(targetTabId);
+    
+    if (!view || !view.webContents) {
+      return { success: false, error: 'Browser view not found' };
+    }
+
+    try {
+      const clickCode = `
+        (async () => {
+          const MAX_RETRIES = 3;
+          const RETRY_DELAY = 100;
+          
+          async function waitForElement(selector, timeout = 5000) {
+            const startTime = Date.now();
+            while (Date.now() - startTime < timeout) {
+              const el = document.querySelector(selector);
+              if (el) return el;
+              await new Promise(r => setTimeout(r, 50));
+            }
+            return null;
+          }
+          
+          async function clickElement(selector, waitForSelector, retryCount = 0) {
+            if (waitForSelector) {
+              const el = await waitForElement(waitForSelector);
+              if (!el) {
+                return { success: false, error: 'Element not found after waiting: ' + waitForSelector };
+              }
+            }
+            
+            let element;
+            ${selector ? 'element = document.querySelector(selector);' : ''}
+            
+            if (!element && ${text ? 'true' : 'false'}) {
+              const searchText = ${JSON.stringify(text || '')}.toLowerCase();
+              const elements = document.querySelectorAll('*');
+              for (const el of elements) {
+                if (el.children.length === 0) {
+                  const elText = (el.textContent || '').toLowerCase().trim();
+                  if (elText.includes(searchText) || searchText.includes(elText)) {
+                    element = el;
+                    break;
+                  }
+                }
+              }
+              if (!element && ${index !== undefined ? 'true' : 'false'}) {
+                const matches = [];
+                for (const el of elements) {
+                  if (el.children.length === 0) {
+                    const elText = (el.textContent || '').toLowerCase().trim();
+                    if (elText.includes(searchText)) {
+                      matches.push(el);
+                    }
+                  }
+                }
+                element = matches[${index || 0}];
+              }
+            }
+            
+            if (!element) {
+              return { success: false, error: 'Element not found: ' + (${JSON.stringify(selector || text || '')}) };
+            }
+            
+            const rect = element.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) {
+              const parent = element.closest('button, a, [role="button"], input, select, textarea');
+              if (parent) {
+                element = parent;
+              } else {
+                return { success: false, error: 'Element has zero dimensions' };
+              }
+            }
+            
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            await new Promise(r => setTimeout(r, 100));
+            
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            element.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true, view: window }));
+            element.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, view: window, clientX: centerX, clientY: centerY }));
+            element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+            element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+            element.click();
+            
+            return { 
+              success: true, 
+              element: selector || 'text:' + ${JSON.stringify(text || '')},
+              rect: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }
+            };
+          }
+          
+          return await clickElement(${JSON.stringify(selector)}, ${JSON.stringify(waitFor)}, 0);
+        })()
+      `;
+      
+      const result = await view.webContents.executeJavaScript(clickCode);
+      return result;
+    } catch (e) {
+      console.error('[Main] DOM click failed:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('dom-find-element', async (event, { tabId, selector, text }) => {
+    const targetTabId = tabId || activeTabId;
+    const view = tabViews.get(targetTabId);
+    
+    if (!view || !view.webContents) {
+      return { success: false, error: 'Browser view not found' };
+    }
+
+    try {
+      const findCode = `
+        (() => {
+          let elements = [];
+          
+          if (${JSON.stringify(selector)}) {
+            elements = Array.from(document.querySelectorAll(${JSON.stringify(selector)}));
+          } else if (${JSON.stringify(text)}) {
+            const searchText = ${JSON.stringify(text)}.toLowerCase();
+            const allElements = document.querySelectorAll('*');
+            for (const el of allElements) {
+              if (el.children.length === 0) {
+                const elText = (el.textContent || '').toLowerCase().trim();
+                if (elText.includes(searchText)) {
+                  elements.push(el);
+                }
+              }
+            }
+          }
+          
+          return elements.slice(0, 20).map((el, i) => {
+            const rect = el.getBoundingClientRect();
+            return {
+              index: i,
+              tagName: el.tagName.toLowerCase(),
+              className: el.className,
+              id: el.id,
+              text: (el.textContent || '').substring(0, 100),
+              rect: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+              href: el.href || null,
+              type: el.type || null,
+              visible: rect.width > 0 && rect.height > 0
+            };
+          });
+        })()
+      `;
+      
+      const elements = await view.webContents.executeJavaScript(findCode);
+      return { success: true, elements };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('dom-get-page-info', async (event, { tabId }) => {
+    const targetTabId = tabId || activeTabId;
+    const view = tabViews.get(targetTabId);
+    
+    if (!view || !view.webContents) {
+      return { success: false, error: 'Browser view not found' };
+    }
+
+    try {
+      const pageInfo = await view.webContents.executeJavaScript(`
+        (() => {
+          return {
+            url: window.location.href,
+            title: document.title,
+            bodyText: document.body.innerText.substring(0, 5000),
+            links: Array.from(document.querySelectorAll('a')).slice(0, 50).map(a => ({
+              href: a.href,
+              text: a.textContent.trim().substring(0, 50)
+            })),
+            forms: Array.from(document.querySelectorAll('form')).map(f => ({
+              action: f.action,
+              method: f.method,
+              inputs: Array.from(f.querySelectorAll('input')).slice(0, 10).map(i => ({
+                name: i.name,
+                type: i.type,
+                placeholder: i.placeholder
+              }))
+            })),
+            clickableElements: Array.from(document.querySelectorAll('button, a, [role="button"]')).slice(0, 30).map((el, i) => ({
+              index: i,
+              tagName: el.tagName.toLowerCase(),
+              text: (el.textContent || '').trim().substring(0, 100),
+              rect: el.getBoundingClientRect()
+            }))
+          };
+        })()
+      `);
+      return { success: true, ...pageInfo };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
   ipcMain.handle('ocr-screen-text', async (event, displayId) => {
     if (!tesseractOcrService) return { success: false, error: 'OCR service not initialized' };
     try {
@@ -5453,7 +6291,7 @@ ipcMain.removeHandler('generate-pdf');
   });
 
   // ============================================================================
-  // UPGRADED MCP CORE — Smithery + Tool Aggregation
+  // MCP CORE — Official MCP Server Connections
   // ============================================================================
 
   ipcMain.handle('mcp-connect-server', async (event, config) => {
@@ -5500,36 +6338,6 @@ ipcMain.removeHandler('generate-pdf');
   // ============================================================================
   // WEB SEARCH v2 — Multi-provider (Brave / Tavily / SerpAPI)
   // ============================================================================
-
-  ipcMain.handle('web-search', async (event, { query, provider, count }) => {
-    if (!webSearchProvider) return { success: false, error: 'WebSearch not initialized' };
-    try {
-      const results = await webSearchProvider.search(query, provider, count);
-      return { success: true, results };
-    } catch (e) { return { success: false, error: e.message }; }
-  });
-
-  ipcMain.handle('web-search-context', async (event, { query, provider }) => {
-    if (!webSearchProvider) return { success: false, error: 'WebSearch not initialized' };
-    try {
-      const context = await webSearchProvider.searchForContext(query, provider);
-      return { success: true, context };
-    } catch (e) { return { success: false, error: e.message }; }
-  });
-
-  ipcMain.handle('web-search-providers', async () => {
-    if (!webSearchProvider) return { success: false, error: 'WebSearch not initialized' };
-    return { success: true, providers: webSearchProvider.getAvailableProviders() };
-  });
-
-  ipcMain.handle('web-search-configure', async (event, keys) => {
-    if (!webSearchProvider) return { success: false, error: 'WebSearch not initialized' };
-    webSearchProvider.configure(keys);
-    if (keys.BRAVE_API_KEY) store.set('brave_api_key', keys.BRAVE_API_KEY);
-    if (keys.TAVILY_API_KEY) store.set('tavily_api_key', keys.TAVILY_API_KEY);
-    if (keys.SERP_API_KEY) store.set('serp_api_key', keys.SERP_API_KEY);
-    return { success: true };
-  });
 
   // ============================================================================
   // RAG — Vector Store (Local Embeddings + Gemini)
@@ -5817,24 +6625,28 @@ ipcMain.removeHandler('generate-pdf');
   // Reconnect MCP Servers
   const mcpServers = store.get('mcp_servers');
   if (mcpServers && mcpServers.length > 0) {
-    console.log(`[Main] Reconnecting ${mcpServers.length} MCP servers...`);
-    mcpServers.forEach(server => {
-      mcpManager.connect(server.id, server).catch(err => {
-        console.error(`[Main] Failed to reconnect MCP server ${server.name}:`, err);
+    // Filter out servers with known issues
+    const validServers = mcpServers.filter(s => 
+      !s.url?.includes('google') && !s.name?.toLowerCase().includes('google')
+    );
+    if (validServers.length > 0) {
+      console.log(`[Main] Reconnecting ${validServers.length} MCP servers...`);
+      validServers.forEach(server => {
+        mcpManager.connect(server.id, server).catch(err => {
+          // Suppress connection errors - they'll show in UI
+          console.log(`[MCP] ${server.name} unavailable: ${err.message || 'connection failed'}`);
+        });
       });
-    });
+    }
   } else {
-    // Add a few high-value default MCP servers for first-time use
+    // Default MCP servers - users can add their own via settings
+    // Note: Google MCP removed due to rate limiting issues (429)
     const defaultServers = [
-      { id: 'google-search', name: 'Google Search (Smithery)', url: 'https://smithery.ai/server/google-search', status: 'offline' },
-      { id: 'brave-search', name: 'Brave Search', url: 'https://smithery.ai/server/brave-search', status: 'offline' },
-      { id: 'github-mcp', name: 'GitHub Tools', url: 'https://smithery.ai/server/github', status: 'offline' }
+      { id: 'github-mcp', name: 'GitHub MCP', url: 'https://api.github.com/mcp', type: 'sse', status: 'offline' },
+      { id: 'filesystem-mcp', name: 'Filesystem MCP (Local)', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '.'], type: 'stdio', status: 'offline' }
     ];
     console.log('[Main] No MCP servers found, loading defaults.');
-    // Actually connect them if desired, or just list them in UI.
-    // For now we'll just store them so UI shows them.
     store.set('mcp_servers', defaultServers);
-    defaultServers.forEach(s => mcpManager.connect(s.id, s).catch(() => { }));
   }
 
 

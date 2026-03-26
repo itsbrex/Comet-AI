@@ -24,7 +24,8 @@ export const COMMAND_REGISTRY = {
     WEB_SEARCH: { desc: 'Real-time web search with RAG', example: '[WEB_SEARCH: today stock prices]' },
     READ_PAGE_CONTENT: { desc: 'Read text from active tab', example: '[READ_PAGE_CONTENT]' },
     LIST_OPEN_TABS: { desc: 'List all open browser tabs', example: '[LIST_OPEN_TABS]' },
-    GENERATE_PDF: { desc: 'Create a branded PDF document', example: '[GENERATE_PDF: Report | Content...]' },
+    CREATE_PDF_JSON: { desc: 'Create PDF using structured JSON (PREFERRED)', example: '[CREATE_PDF_JSON: {"title":"Report", "pages":[...]}]' },
+    GENERATE_PDF: { desc: 'Create PDF from markdown (FALLBACK)', example: '[GENERATE_PDF: Report | Content...]' },
     SHELL_COMMAND: { desc: 'Execute terminal commands (Safe)', example: '[SHELL_COMMAND: ls -la]' },
     SET_THEME: { desc: 'Switch between dark/light mode', example: '[SET_THEME: dark]' },
     SET_VOLUME: { desc: 'Set system audio volume', example: '[SET_VOLUME: 50]' },
@@ -44,6 +45,10 @@ export const COMMAND_REGISTRY = {
     EXPLAIN_CAPABILITIES: { desc: 'List all available AI features', example: '[EXPLAIN_CAPABILITIES]' },
     DOM_SEARCH: { desc: 'Search within current page DOM', example: '[DOM_SEARCH: search term]' },
     DOM_READ_FILTERED: { desc: 'Read DOM with filtering & injection check', example: '[DOM_READ_FILTERED: optional search term]' },
+    OPEN_MCP_SETTINGS: { desc: 'Open MCP servers settings', example: '[OPEN_MCP_SETTINGS]' },
+    OPEN_AUTOMATION_SETTINGS: { desc: 'Open automation settings', example: '[OPEN_AUTOMATION_SETTINGS]' },
+    OPEN_SCHEDULING_MODAL: { desc: 'Open scheduling modal with optional data (JSON or pipe-separated)', example: '[OPEN_SCHEDULING_MODAL: 0 8 * * *|pdf-generate|Daily Report|Generate PDF]' },
+    SCHEDULE_TASK: { desc: 'Schedule a recurring automation task (JSON format)', example: '[SCHEDULE_TASK: {"schedule": "0 8 * * *", "type": "pdf-generate", "name": "Daily Report"}]' },
 } as const;
 
 export const SUPPORTED_COMMANDS = Object.keys(COMMAND_REGISTRY) as Array<keyof typeof COMMAND_REGISTRY>;
@@ -63,9 +68,9 @@ function getCategoryForType(type: string): string {
         READ_PAGE_CONTENT: 'browser', SCREENSHOT_ANALYZE: 'browser', EXTRACT_DATA: 'browser',
         CLICK_ELEMENT: 'automation', FIND_AND_CLICK: 'automation', FILL_FORM: 'automation',
         SHELL_COMMAND: 'system', OPEN_APP: 'system', SET_VOLUME: 'system', SET_BRIGHTNESS: 'system',
-        GENERATE_PDF: 'pdf', GENERATE_DIAGRAM: 'pdf', OPEN_PDF: 'pdf',
+        GENERATE_PDF: 'pdf', CREATE_PDF_JSON: 'pdf', GENERATE_DIAGRAM: 'pdf', OPEN_PDF: 'pdf',
         SHOW_IMAGE: 'media', SHOW_VIDEO: 'media',
-        WAIT: 'utility', OPEN_VIEW: 'utility', OPEN_MCP_SETTINGS: 'utility',
+        WAIT: 'utility', OPEN_VIEW: 'utility', OPEN_MCP_SETTINGS: 'utility', OPEN_AUTOMATION_SETTINGS: 'utility', OPEN_SCHEDULING_MODAL: 'utility', SCHEDULE_TASK: 'utility',
         GMAIL_AUTHORIZE: 'gmail', GMAIL_LIST_MESSAGES: 'gmail', GMAIL_GET_MESSAGE: 'gmail',
         GMAIL_SEND_MESSAGE: 'gmail', GMAIL_ADD_LABEL: 'gmail',
         THINK: 'meta', PLAN: 'meta', EXPLAIN_CAPABILITIES: 'meta',
@@ -372,6 +377,11 @@ export function validateCommand(command: ParsedCommand): { valid: boolean; error
             }
             break;
 
+        case 'CREATE_PDF_JSON':
+            // JSON commands should have valid JSON structure
+            // Validation is done at execution time
+            break;
+
         // Commands that don't require values
         case 'RELOAD':
         case 'GO_BACK':
@@ -381,6 +391,9 @@ export function validateCommand(command: ParsedCommand): { valid: boolean; error
         case 'LIST_OPEN_TABS':
         case 'GMAIL_AUTHORIZE':
         case 'EXPLAIN_CAPABILITIES':
+        case 'OPEN_MCP_SETTINGS':
+        case 'OPEN_AUTOMATION_SETTINGS':
+        case 'OPEN_SCHEDULING_MODAL':
             // These are valid without values
             break;
 
@@ -440,7 +453,8 @@ export function getCommandDescription(command: ParsedCommand): string {
         WEB_SEARCH: (v) => `Search web for "${v}"`,
         READ_PAGE_CONTENT: () => 'Read current page content',
         LIST_OPEN_TABS: () => 'List all open tabs',
-        GENERATE_PDF: (v) => `Generate PDF: ${v.split('|')[0]}`,
+        GENERATE_PDF: (v) => `Generate PDF (markdown): ${v.split('|')[0]}`,
+        CREATE_PDF_JSON: (v) => 'Generate PDF (JSON structured)',
         GENERATE_DIAGRAM: (v) => 'Generate diagram',
         SHELL_COMMAND: (v) => `Execute: ${v.substring(0, 40)}...`,
         SET_BRIGHTNESS: (v) => `Set brightness to ${v}%`,

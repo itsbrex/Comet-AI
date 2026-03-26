@@ -111,6 +111,7 @@ var WiFiSyncService = /** @class */ (function (_super) {
         _this.discoverySocket = null;
         _this.discoveryInterval = null;
         _this.clients = new Set();
+        _this._lastReceivedClipboard = '';
         _this.port = port;
         _this.deviceId = "desktop-".concat(os.hostname().substring(0, 8));
         _this.pairingCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -208,11 +209,22 @@ var WiFiSyncService = /** @class */ (function (_super) {
                 case 'execute-command':
                     this._handleCommand(ws, msg);
                     break;
+                case 'desktop-control':
+                    this._handleDesktopControl(ws, msg);
+                    break;
                 case 'clipboard-sync':
-                    if (msg.text) {
+                    if (msg.text && msg.text !== this._lastReceivedClipboard) {
+                        this._lastReceivedClipboard = msg.text;
                         electron_1.clipboard.writeText(msg.text);
                         this.emit('clipboard-received', msg.text);
                     }
+                    break;
+                case 'clipboard-sync-request':
+                    var currentClipboard = electron_1.clipboard.readText();
+                    ws.send(JSON.stringify({
+                        type: 'clipboard-sync',
+                        text: currentClipboard
+                    }));
                     break;
                 case 'ping':
                     ws.send(JSON.stringify({ type: 'pong' }));
@@ -235,6 +247,40 @@ var WiFiSyncService = /** @class */ (function (_super) {
                     args: args,
                     sendResponse: function (responseBody) {
                         ws.send(JSON.stringify(__assign({ type: 'command-response', commandId: commandId }, responseBody)));
+                    }
+                });
+                return [2 /*return*/];
+            });
+        });
+    };
+    WiFiSyncService.prototype.sendToMobile = function (message) {
+        this.broadcast(__assign(__assign({ type: 'desktop-to-mobile' }, message), { timestamp: Date.now() }));
+    };
+    WiFiSyncService.prototype.sendAIResponse = function (promptId, response, isStreaming) {
+        this.broadcast({
+            type: 'ai-stream-response',
+            promptId: promptId,
+            response: response,
+            isStreaming: isStreaming !== null && isStreaming !== void 0 ? isStreaming : false,
+            timestamp: Date.now()
+        });
+    };
+    WiFiSyncService.prototype.sendDesktopStatus = function (status) {
+        this.broadcast(__assign(__assign({ type: 'desktop-status' }, status), { timestamp: Date.now() }));
+    };
+    WiFiSyncService.prototype._handleDesktopControl = function (ws, msg) {
+        return __awaiter(this, void 0, void 0, function () {
+            var commandId, action, prompt, promptId, args;
+            return __generator(this, function (_a) {
+                commandId = msg.commandId, action = msg.action, prompt = msg.prompt, promptId = msg.promptId, args = msg.args;
+                console.log("[WiFi-Sync] Desktop Control: action=".concat(action));
+                // Forward to main process via event
+                this.emit('command', {
+                    commandId: commandId,
+                    command: 'desktop-control',
+                    args: __assign({ action: action, prompt: prompt, promptId: promptId }, args),
+                    sendResponse: function (responseBody) {
+                        ws.send(JSON.stringify(__assign({ type: 'desktop-control-response', commandId: commandId, action: action }, responseBody)));
                     }
                 });
                 return [2 /*return*/];

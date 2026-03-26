@@ -31,6 +31,10 @@ import 'pages/settings/main.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'pages/ai_chat_page.dart';
 import 'pages/agent_chat_page.dart';
+import 'pages/desktop_control_page.dart';
+import 'pages/automation_page.dart';
+import 'pages/remote_settings_page.dart';
+import 'pages/pdf_viewer_page.dart';
 
 // ignore: non_constant_identifier_names
 late final String WEB_ARCHIVE_DIR;
@@ -242,7 +246,7 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
 
   Future<void> _initDeepLinks() async {
     _appLinks = AppLinks();
-    
+
     // Check initial link if app was in cold state (terminated)
     try {
       final initialUri = await _appLinks.getInitialLink();
@@ -266,7 +270,8 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
       if (uri.host == 'connect' || uri.host == 'approve') {
         // Delay to allow navigator to initialize
         Future.delayed(const Duration(milliseconds: 500), () {
-          navigatorKey.currentState?.pushNamed('/connect-desktop', arguments: {'qrData': uri.toString()});
+          navigatorKey.currentState?.pushNamed('/connect-desktop',
+              arguments: {'qrData': uri.toString()});
         });
       }
     }
@@ -336,6 +341,18 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
               as Map<String, dynamic>?;
           final task = args?['task'] ?? "";
           return AgentChatPage(initialTask: task);
+        },
+        '/desktop-control': (context) => const DesktopControlPage(),
+        '/automation': (context) => const AutomationPage(),
+        '/remote-settings': (context) => const RemoteSettingsPage(),
+        '/pdf-viewer': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments
+              as Map<String, dynamic>?;
+          return PDFViewerPage(
+            filePath: args?['filePath'],
+            fileUrl: args?['fileUrl'],
+            fileName: args?['fileName'],
+          );
         },
       },
     );

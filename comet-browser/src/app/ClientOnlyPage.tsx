@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { BrowserAI } from '@/lib/BrowserAI';
 import { AnimatePresence, motion } from 'framer-motion';
+import { detectSchedulingIntent, type SchedulingIntent } from '@/components/ai/SchedulingIntentDetector';
 import {
   ShoppingBag, FileText, Globe, Plus, Bookmark, ChevronLeft, ChevronRight,
   RotateCw, AlertTriangle, ShieldCheck, DownloadCloud, ShoppingCart, Copy as CopyIcon,
@@ -33,6 +34,8 @@ import PasswordManager from '@/components/PasswordManager';
 import ProxyFirewallManager from '@/components/ProxyFirewallManager';
 import P2PSyncManager from '@/components/P2PSyncManager';
 import WelcomeScreen from '@/components/WelcomeScreen';
+import SpotlightSearchOverlay from '@/components/SpotlightSearchOverlay';
+import SchedulingModal from '@/components/ai/SchedulingModal';
 
 import CloudSyncConsent from "@/components/CloudSyncConsent";
 import NoNetworkGame from "@/components/DinoGame";
@@ -46,7 +49,6 @@ import TitleBar from '@/components/TitleBar';
 import { useOptimizedTabs } from '@/hooks/useOptimizedTabs';
 import { VirtualizedTabBar } from '@/components/VirtualizedTabBar';
 import { TabSwitcherOverlay } from '@/components/TabSwitcherOverlay';
-import SpotlightSearchOverlay from '@/components/SpotlightSearchOverlay';
 
 type AiOverviewSource = { text: string; metadata: any };
 interface AiOverviewState {
@@ -126,6 +128,14 @@ export default function Home() {
   const [showCamera, setShowCamera] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsSection, setSettingsSection] = useState('profile');
+
+  // Helper to open settings and disable browser
+  const openSettingsPanel = (section: string = 'profile') => {
+    setSettingsSection(section);
+    setShowSettings(true);
+    setIsBrowserDisabled(true);
+  };
+
   const [showCart, setShowCart] = useState(false);
   const [urlPrediction, setUrlPrediction] = useState<string | null>(null); // Changed to string | null
   const [isTyping, setIsTyping] = useState(false);
@@ -148,6 +158,21 @@ export default function Home() {
   const [isReadingAloud, setIsReadingAloud] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const [showTranslateDialog, setShowTranslateDialog] = useState(false);
+
+  // Helper to close translate dialog and re-enable browser
+  const closeTranslateDialog = () => {
+    setShowTranslateDialog(false);
+    setIsBrowserDisabled(false);
+    window.electronAPI?.showAllViews();
+  };
+
+  // Helper to open translate dialog
+  const openTranslateDialog = () => {
+    setShowTranslateDialog(true);
+    setIsBrowserDisabled(true);
+    window.electronAPI?.hideAllViews();
+  };
+
   const [translateMethod, setTranslateMethod] = useState<'google' | 'chrome-ai'>('google');
   const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
   const [isAmbientPlaying, setIsAmbientPlaying] = useState(false);
@@ -155,10 +180,14 @@ export default function Home() {
   const [showSpotlightSearch, setShowSpotlightSearch] = useState(false); // New state for global spotlight search
   const [isPopupWindow, setIsPopupWindow] = useState(false);
   const [activeExtensions, setActiveExtensions] = useState<any[]>([]);
+  const [isBrowserDisabled, setIsBrowserDisabled] = useState(false);
+  const [showSchedulingModal, setShowSchedulingModal] = useState(false);
+  const [schedulingIntent, setSchedulingIntent] = useState<SchedulingIntent | null>(null);
 
   const handleSettingsClose = useCallback(() => {
     setShowSettings(false);
     setSettingsSection('profile');
+    setIsBrowserDisabled(false);
   }, []);
 
   // Synchronize inputValue with store.currentUrl
@@ -195,13 +224,13 @@ export default function Home() {
       setShowSettings(false);
     } else if (item.popup) {
       switch (item.popup) {
-        case 'plugins': setShowExtensionsPopup(true); break;
-        case 'settings': setShowSettings(true); break;
-        case 'clipboard': setShowClipboard(true); break;
-        case 'translate': setShowTranslateDialog(true); break;
-        case 'search': setShowSpotlightSearch(true); break;
-        case 'downloads': setShowDownloads(true); break;
-        case 'cart': setShowCart(true); break;
+        case 'plugins': setShowExtensionsPopup(true); setIsBrowserDisabled(true); break;
+        case 'settings': openSettingsPanel(); break;
+        case 'clipboard': setShowClipboard(true); setIsBrowserDisabled(true); break;
+        case 'translate': openTranslateDialog(); break;
+        case 'search': setShowSpotlightSearch(true); setIsBrowserDisabled(true); break;
+        case 'downloads': setShowDownloads(true); setIsBrowserDisabled(true); break;
+        case 'cart': setShowCart(true); setIsBrowserDisabled(true); break;
       }
     }
   };
@@ -217,56 +246,58 @@ export default function Home() {
         setIsPopupWindow(true);
         const settingsPanels = ['settings', 'profile', 'extensions', 'downloads', 'clipboard', 'history', 'performance', 'sync', 'account'];
         if (settingsPanels.includes(panel)) {
-          setSettingsSection(panel === 'settings' ? 'profile' : panel);
-          setShowSettings(true);
+          openSettingsPanel(panel === 'settings' ? 'profile' : panel);
         } else if (panel === 'cart') {
           setShowCart(true);
+          setIsBrowserDisabled(true);
         } else if (panel === 'translate') {
-          setShowTranslateDialog(true);
+          openTranslateDialog();
           window.electronAPI?.bringWindowToTop();
         } else if (panel === 'search' || panel === 'apps') {
           setShowSpotlightSearch(true);
+          setIsBrowserDisabled(true);
         }
       }
     }
-  });
+  }, []);
 
   useEffect(() => {
     if (!window.electronAPI) return;
-      
-      const cleanStart = window.electronAPI.on('download-started', ({ name, path }: { name: string, path?: string }) => {
-        setDownloads(prev => {
-          if (prev.some(d => d.name === name)) return prev;
-          return [{ name, status: 'downloading', progress: 0, path }, ...prev].slice(0, 5);
-        });
-        setIsDownloading(true);
-        setDownloadStatus('in_progress');
-        setShowDownloads(true);
-      });
-      
-      const cleanProgress = window.electronAPI.on('download-progress', ({ name, progress }: { name: string, progress: number }) => {
-        setDownloads(prev => prev.map(d => d.name === name ? { ...d, progress } : d));
-      });
-      
-      const cleanDone = window.electronAPI.on('download-complete', ({ name, path }: { name: string, path?: string }) => {
-        setDownloads(prev => prev.map(d => d.name === name ? { ...d, status: 'completed', progress: 100, path } : d));
-        setIsDownloading(false);
-        setDownloadStatus('completed');
-      });
-      
-      const cleanFail = window.electronAPI.on('download-failed', (name: string) => {
-        setDownloads(prev => prev.map(d => d.name === name ? { ...d, status: 'failed' } : d));
-        setIsDownloading(false);
-        setDownloadStatus('failed');
-      });
 
-      return () => {
-        cleanStart();
-        cleanProgress();
-        cleanDone();
-        cleanFail();
-      };
-    }, []);
+    const cleanStart = window.electronAPI.on('download-started', ({ name, path }: { name: string, path?: string }) => {
+      setDownloads(prev => {
+        if (prev.some(d => d.name === name)) return prev;
+        return [{ name, status: 'downloading', progress: 0, path }, ...prev].slice(0, 5);
+      });
+      setIsDownloading(true);
+      setDownloadStatus('in_progress');
+      setShowDownloads(true);
+      setIsBrowserDisabled(true);
+    });
+
+    const cleanProgress = window.electronAPI.on('download-progress', ({ name, progress }: { name: string, progress: number }) => {
+      setDownloads(prev => prev.map(d => d.name === name ? { ...d, progress } : d));
+    });
+
+    const cleanDone = window.electronAPI.on('download-complete', ({ name, path }: { name: string, path?: string }) => {
+      setDownloads(prev => prev.map(d => d.name === name ? { ...d, status: 'completed', progress: 100, path } : d));
+      setIsDownloading(false);
+      setDownloadStatus('completed');
+    });
+
+    const cleanFail = window.electronAPI.on('download-failed', (name: string) => {
+      setDownloads(prev => prev.map(d => d.name === name ? { ...d, status: 'failed' } : d));
+      setIsDownloading(false);
+      setDownloadStatus('failed');
+    });
+
+    return () => {
+      cleanStart();
+      cleanProgress();
+      cleanDone();
+      cleanFail();
+    };
+  }, []);
 
   useEffect(() => {
     if (window.electronAPI) {
@@ -1014,6 +1045,7 @@ export default function Home() {
   const handleCartScan = async () => {
     if (!window.electronAPI) return;
     setShowCart(true);
+    setIsBrowserDisabled(true);
     try {
       const result = await window.electronAPI.executeJavaScript(`
         (function() {
@@ -1098,9 +1130,7 @@ export default function Home() {
     if (window.electronAPI) {
       // Only hide BrowserView for full-screen overlays that completely cover the page
       // Small overlays (context menu, AI overview, etc.) will use z-[9999] to appear on top
-      // Only hide BrowserView for full-screen overlays that completely cover the page
-      // Small overlays (context menu, AI overview, etc.) will use z-[9999] to appear on top
-      const hasFullScreenOverlay = !store.hasSeenWelcomePage || !store.hasCompletedStartupSetup || showSettings || activeManager !== null || showCamera || showDownloads || showCart || showExtensionsPopup || showClipboard || showSpotlightSearch || aiOverview || (isTyping && suggestions.length > 0);
+      const hasFullScreenOverlay = !store.hasSeenWelcomePage || !store.hasCompletedStartupSetup || showSettings || activeManager !== null || showCamera || showDownloads || showCart || showExtensionsPopup || showClipboard || showSpotlightSearch || aiOverview || (isTyping && suggestions.length > 0) || showTranslateDialog || showSchedulingModal;
 
       if (hasFullScreenOverlay) {
         window.electronAPI.hideAllViews();
@@ -1131,7 +1161,9 @@ export default function Home() {
     isTyping,
     suggestions.length,
     store.hasSeenWelcomePage,
-    store.hasCompletedStartupSetup
+    store.hasCompletedStartupSetup,
+    showTranslateDialog,
+    showSchedulingModal
   ]);
 
   useEffect(() => {
@@ -1426,7 +1458,7 @@ export default function Home() {
         onToggleSpotlightSearch={() => setShowSpotlightSearch(prev => !prev)}
         onOpenSettings={() => setShowSettings(true)}
       />
-      
+
       {!store.hasSeenWelcomePage ? (
         <WelcomeScreen />
       ) : (
@@ -1490,20 +1522,20 @@ export default function Home() {
                   onMouseDown={(e) => {
                     const startX = e.clientX;
                     const startWidth = store.sidebarWidth;
-                    
+
                     const onMouseMove = (moveEvent: MouseEvent) => {
-                      const delta = store.sidebarSide === 'left' 
-                        ? moveEvent.clientX - startX 
+                      const delta = store.sidebarSide === 'left'
+                        ? moveEvent.clientX - startX
                         : startX - moveEvent.clientX;
                       const newWidth = Math.max(280, Math.min(600, startWidth + delta));
                       store.setSidebarWidth(newWidth);
                     };
-                    
+
                     const onMouseUp = () => {
                       document.removeEventListener('mousemove', onMouseMove);
                       document.removeEventListener('mouseup', onMouseUp);
                     };
-                    
+
                     document.addEventListener('mousemove', onMouseMove);
                     document.addEventListener('mouseup', onMouseUp);
                   }}
@@ -1528,6 +1560,13 @@ export default function Home() {
                 mysqlConfig={store.customMysqlConfig}
                 setMysqlConfig={store.setCustomMysqlConfig}
                 side={store.sidebarSide}
+                setShowSettings={setShowSettings}
+                setSettingsSection={setSettingsSection}
+                setBrowserDisabled={setIsBrowserDisabled}
+                showSchedulingModal={showSchedulingModal}
+                setShowSchedulingModal={setShowSchedulingModal}
+                schedulingIntent={schedulingIntent}
+                setSchedulingIntent={setSchedulingIntent}
               />
             </motion.div>
           )}
@@ -1613,11 +1652,11 @@ export default function Home() {
                   )}
                   {store.tabs.find(t => t.id === store.activeTabId)?.isLoading && (
                     <div className="absolute top-0 left-0 right-0 h-[2px] overflow-hidden pointer-events-none rounded-t-2xl">
-                      <motion.div 
+                      <motion.div
                         initial={{ x: '-100%' }}
-                        animate={{ x: '100%' }} 
-                        transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }} 
-                        className="w-1/2 h-full gradient-progressbar" 
+                        animate={{ x: '100%' }}
+                        transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                        className="w-1/2 h-full gradient-progressbar"
                       />
                     </div>
                   )}
@@ -1736,6 +1775,15 @@ export default function Home() {
                       {!store.isOnline && (
                         <div className="absolute inset-0 z-[100] bg-[#0a0a0f]">
                           <NoNetworkGame />
+                        </div>
+                      )}
+                      {isBrowserDisabled && (
+                        <div className="absolute inset-0 z-[90] bg-black/80 backdrop-blur-sm flex items-center justify-center">
+                          <div className="text-center">
+                            <Sparkles size={48} className="mx-auto mb-4 text-deep-space-accent-neon animate-pulse" />
+                            <p className="text-white text-lg font-bold">Automation in Progress</p>
+                            <p className="text-white/50 text-sm mt-2">Browser is paused while task is being configured</p>
+                          </div>
                         </div>
                       )}
                       {/* This area is now intentionally blank. The BrowserView is managed by the main process. */}
@@ -1883,7 +1931,7 @@ export default function Home() {
 
             {/* Neural Context Overlay */}
             <AnimatePresence>
-            {aiOverview && (
+              {aiOverview && (
                 <AIAssistOverlay
                   query={aiOverview.query}
                   result={aiOverview.result}
@@ -1982,61 +2030,64 @@ export default function Home() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
           >
-            <div className="w-full max-w-sm bg-[#0a0a0f] border border-white/10 rounded-2xl shadow-3xl overflow-hidden p-6">
-              <h3 className="text-sm font-black uppercase tracking-widest text-white mb-4 text-center">TRANSLATE SITE</h3>
+            <div className="w-full max-w-sm max-h-[80vh] bg-[#0a0a0f] border border-white/10 rounded-2xl shadow-3xl overflow-hidden flex flex-col">
+              <div className="flex-shrink-0 p-6 pb-4">
+                <h3 className="text-sm font-black uppercase tracking-widest text-white mb-4 text-center">TRANSLATE SITE</h3>
 
-              {/* Method Selection */}
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={() => setTranslateMethod('google')}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold border transition-all ${translateMethod === 'google' ? 'bg-accent/20 border-accent/40 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:text-white'}`}
-                >
-                  Google
-                </button>
-                <button
-                  onClick={() => setTranslateMethod('chrome-ai')}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold border transition-all ${translateMethod === 'chrome-ai' ? 'bg-accent/20 border-accent/40 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:text-white'}`}
-                >
-                  Chrome AI
-                </button>
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={() => setTranslateMethod('google')}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold border transition-all ${translateMethod === 'google' ? 'bg-accent/20 border-accent/40 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:text-white'}`}
+                  >
+                    Google
+                  </button>
+                  <button
+                    onClick={() => setTranslateMethod('chrome-ai')}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold border transition-all ${translateMethod === 'chrome-ai' ? 'bg-accent/20 border-accent/40 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:text-white'}`}
+                  >
+                    Chrome AI
+                  </button>
+                </div>
+                <p className="text-[10px] text-white/30 text-center">
+                  {translateMethod === 'google'
+                    ? 'Google: Fast, relies on Google servers'
+                    : 'Chrome AI: On-device, private, requires Chrome 144+'}
+                </p>
               </div>
-              <p className="text-[10px] text-white/30 text-center mb-4">
-                {translateMethod === 'google'
-                  ? 'Google: Fast, relies on Google servers'
-                  : 'Chrome AI: On-device, private, requires Chrome 144+'}
-              </p>
 
-              <div className="grid grid-cols-2 gap-2">
-                {store.availableLanguages.map(langCode => {
-                  const names: Record<string, string> = {
-                    en: 'English', hi: 'Hindi', bn: 'Bengali', te: 'Telugu',
-                    mr: 'Marathi', ta: 'Tamil', gu: 'Gujarati', ur: 'Urdu',
-                    kn: 'Kannada', or: 'Odia', ml: 'Malayalam', pa: 'Punjabi',
-                    as: 'Assamese', mai: 'Maithili', sat: 'Santali', ks: 'Kashmiri',
-                    ne: 'Nepali', kok: 'Konkani', sd: 'Sindhi', doi: 'Dogri',
-                    mni: 'Manipuri', sa: 'Sanskrit', brx: 'Bodo',
-                    es: 'Spanish', fr: 'French', de: 'German',
-                    ja: 'Japanese', zh: 'Chinese', ru: 'Russian',
-                    pt: 'Portuguese', it: 'Italian', ko: 'Korean'
-                  };
-                  return (
-                    <button
-                      key={langCode}
-                      onClick={async () => {
-                        if (window.electronAPI) {
-                          await window.electronAPI.translateWebsite({ targetLanguage: langCode, method: translateMethod });
-                        }
-                        setShowTranslateDialog(false);
-                      }}
-                      className="flex flex-col items-center justify-center p-4 bg-white/5 hover:bg-accent/10 border border-white/5 hover:border-accent/40 rounded-xl transition-all group"
-                    >
-                      <span className="text-sm font-black text-white group-hover:text-accent transition-colors">{names[langCode] || langCode}</span>
-                      <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">{langCode}</span>
-                    </button>
-                  );
-                })}
+              <div className="flex-1 overflow-y-auto px-6 pb-4 custom-scrollbar">
+                <div className="grid grid-cols-2 gap-2">
+                  {store.availableLanguages.map((langCode) => {
+                    const names: Record<string, string> = {
+                      en: 'English', hi: 'Hindi', bn: 'Bengali', te: 'Telugu',
+                      mr: 'Marathi', ta: 'Tamil', gu: 'Gujarati', ur: 'Urdu',
+                      kn: 'Kannada', or: 'Odia', ml: 'Malayalam', pa: 'Punjabi',
+                      as: 'Assamese', mai: 'Maithili', sat: 'Santali', ks: 'Kashmiri',
+                      ne: 'Nepali', kok: 'Konkani', sd: 'Sindhi', doi: 'Dogri',
+                      mni: 'Manipuri', sa: 'Sanskrit', brx: 'Bodo',
+                      es: 'Spanish', fr: 'French', de: 'German',
+                      ja: 'Japanese', zh: 'Chinese', ru: 'Russian',
+                      pt: 'Portuguese', it: 'Italian', ko: 'Korean'
+                    };
+                    return (
+                      <button
+                        key={langCode}
+                        onClick={async () => {
+                          if (window.electronAPI) {
+                            await window.electronAPI.translateWebsite({ targetLanguage: langCode, method: translateMethod });
+                          }
+                          setShowTranslateDialog(false);
+                        }}
+                        className="flex flex-col items-center justify-center p-4 bg-white/5 hover:bg-accent/10 border border-white/5 hover:border-accent/40 rounded-xl transition-all group"
+                      >
+                        <span className="text-sm font-black text-white group-hover:text-accent transition-colors">{names[langCode] || langCode}</span>
+                        <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-1">{langCode}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button onClick={() => setShowTranslateDialog(false)} className="w-full mt-6 py-2 text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-white">Close</button>
               </div>
-              <button onClick={() => setShowTranslateDialog(false)} className="w-full mt-6 py-2 text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-white">Close</button>
             </div>
           </motion.div>
         )}
@@ -2045,12 +2096,12 @@ export default function Home() {
       <audio ref={ambientAudioRef} src={store.ambientMusicUrl} loop hidden />
       <AnimatePresence>
         {showSettings && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-10">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-10">
             <SettingsPanel onClose={() => setShowSettings(false)} defaultSection={settingsSection} />
           </div>
         )}
         {showDownloads && (
-          <div className="fixed top-24 right-10 z-[100] w-[400px] h-[600px] glass-dark rounded-3xl border border-white/10 shadow-2xl p-6 overflow-hidden flex flex-col">
+          <div className="fixed top-24 right-10 z-[9999] w-[400px] h-[600px] glass-dark rounded-3xl border border-white/10 shadow-2xl p-6 overflow-hidden flex flex-col">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-sm font-black uppercase tracking-widest text-sky-400">Downloads</h3>
               <button onClick={() => setShowDownloads(false)} className="p-2 hover:bg-white/10 rounded-full transition-all text-white/40"><X size={16} /></button>
@@ -2063,8 +2114,8 @@ export default function Home() {
                 </div>
               ) : (
                 downloads.map((d, i) => (
-                  <div 
-                    key={i} 
+                  <div
+                    key={i}
                     className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-sky-400/30 transition-all cursor-pointer"
                     onClick={async () => {
                       if (d.status === 'completed' && window.electronAPI?.openFile) {
@@ -2081,10 +2132,10 @@ export default function Home() {
                       </span>
                     </div>
                     <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden">
-                      <motion.div 
-                        initial={{ width: 0 }} 
-                        animate={{ width: d.status === 'completed' ? '100%' : `${d.progress || 0}%` }} 
-                        className="h-full bg-sky-400" 
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: d.status === 'completed' ? '100%' : `${d.progress || 0}%` }}
+                        className="h-full bg-sky-400"
                       />
                     </div>
                   </div>
@@ -2095,17 +2146,17 @@ export default function Home() {
           </div>
         )}
         {showClipboard && (
-          <div className="fixed top-24 right-10 z-[100] w-[450px] h-[650px] overflow-hidden">
+          <div className="fixed top-24 right-10 z-[9999] w-[450px] h-[650px] overflow-hidden">
             <ClipboardManager onClose={() => setShowClipboard(false)} />
           </div>
         )}
         {showCart && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md">
             <UnifiedCartPanel onClose={() => setShowCart(false)} onScan={handleCartScan} />
           </div>
         )}
         {showExtensionsPopup && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-10">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-10">
             <div className="w-full max-w-4xl h-full max-h-[800px] glass-dark rounded-[40px] border border-white/10 shadow-2xl p-8 overflow-hidden flex flex-col">
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
@@ -2160,6 +2211,38 @@ export default function Home() {
         )}
       </AnimatePresence>
       <SpotlightSearchOverlay show={showSpotlightSearch} onClose={() => setShowSpotlightSearch(false)} />
+      {showSchedulingModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <SchedulingModal 
+            isOpen={showSchedulingModal} 
+            onClose={() => {
+              setShowSchedulingModal(false);
+              setIsBrowserDisabled(false);
+            }}
+            onConfirm={async (config) => {
+              // Get scheduling intent from store or default
+              if (window.electronAPI?.scheduleTask) {
+                await window.electronAPI.scheduleTask({
+                  name: 'Scheduled Task',
+                  type: 'ai-prompt',
+                  cronExpression: config.schedule,
+                  prompt: schedulingIntent?.taskName || 'Run AI task',
+                  outputPath: config.outputPath,
+                  enabled: config.enabled,
+                });
+              }
+              setShowSchedulingModal(false);
+              setIsBrowserDisabled(false);
+            }}
+            taskDetails={{
+              taskName: schedulingIntent?.taskName || 'Scheduled Task',
+              taskType: schedulingIntent?.taskType || 'ai-prompt',
+              schedule: schedulingIntent?.schedule.expression || '0 8 * * *',
+              description: schedulingIntent?.schedule.description || 'Configure your scheduled task',
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
