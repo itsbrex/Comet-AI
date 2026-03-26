@@ -3504,6 +3504,139 @@ app.whenReady().then(async () => {
     return { success: false, error: 'Canceled' };
   });
 
+  // Export Chat as Branded PDF Handler
+  ipcMain.removeHandler('export-chat-pdf');
+  ipcMain.handle('export-chat-pdf', async (event, messages) => {
+    console.log('[Export-PDF] PDF export requested. Messages:', messages?.length || 0);
+    
+    const logMain = (msg) => console.log(`[Export-PDF] ${msg}`);
+    const logErr = (msg, err) => console.error(`[Export-PDF] ❌ ${msg}`, err);
+
+    try {
+      // Build chat content from messages
+      let chatContent = '';
+      let chatTitle = 'Chat Session Export';
+      
+      if (Array.isArray(messages)) {
+        for (const msg of messages) {
+          const role = msg.role === 'user' ? 'You' : (msg.role === 'assistant' ? 'Comet AI' : msg.role);
+          const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+          chatContent += `**${role}:** ${content}\n\n`;
+        }
+        if (messages.length > 0) {
+          chatTitle = `Chat Export - ${new Date().toLocaleDateString()}`;
+        }
+      } else if (typeof messages === 'string') {
+        chatContent = messages;
+      }
+
+      // Add metadata
+      const metadata = {
+        author: 'Comet AI',
+        category: 'Chat Session',
+        tags: ['chat', 'export', 'comet-ai'],
+        watermark: 'CONFIDENTIAL'
+      };
+
+      // Generate branded PDF HTML
+      const pdfHtml = generateCometPDFTemplate(chatTitle, chatContent, '', 'professional', metadata);
+
+      // Save dialog
+      const downloadsPath = app.getPath('downloads');
+      const filename = `comet-chat-${Date.now()}.pdf`;
+      const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+        title: 'Export Chat as PDF',
+        defaultPath: path.join(downloadsPath, filename),
+        filters: [{ name: 'PDF Files', extensions: ['pdf'] }]
+      });
+
+      if (!canceled && filePath) {
+        // Use PDF generation logic
+        let workerWindow = null;
+        let tempHtmlPath = '';
+        
+        try {
+          const tempDir = os.tmpdir();
+          tempHtmlPath = path.join(tempDir, `comet_export_${Date.now()}.html`);
+          
+          // Write HTML file
+          fs.writeFileSync(tempHtmlPath, pdfHtml, 'utf8');
+          logMain(`Temp HTML written: ${tempHtmlPath}`);
+
+          // Create hidden window for PDF printing
+          workerWindow = new BrowserWindow({
+            width: 900,
+            height: 1200,
+            show: false,
+            webPreferences: {
+              offscreen: true,
+              partition: 'persist:pdf'
+            }
+          });
+
+          // Wait for content to load
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('PDF load timeout')), 30000);
+            workerWindow.webContents.once('did-finish-load', () => {
+              clearTimeout(timeout);
+              resolve();
+            });
+            workerWindow.webContents.once('did-fail-load', (e, err) => {
+              clearTimeout(timeout);
+              reject(new Error(`Failed to load: ${err}`));
+            });
+            workerWindow.loadFile(tempHtmlPath).catch(reject);
+          });
+
+          logMain('Generating PDF...');
+
+          // Generate PDF
+          const pdfData = await workerWindow.webContents.printToPDF({
+            printBackground: true,
+            pageSize: 'A4',
+            margins: {
+              marginType: 'custom',
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0
+            }
+          });
+
+          // Save PDF
+          fs.writeFileSync(filePath, pdfData);
+          logMain(`PDF saved: ${filePath}`);
+
+          // Notify frontend
+          const finalName = path.basename(filePath);
+          mainWindow.webContents.send('download-started', { name: finalName, path: filePath });
+          setTimeout(() => {
+            mainWindow.webContents.send('download-progress', { name: finalName, progress: 100 });
+            mainWindow.webContents.send('download-complete', { name: finalName, path: filePath });
+          }, 500);
+
+          return { success: true, path: filePath };
+        } catch (pdfErr) {
+          logErr('PDF generation failed', pdfErr);
+          return { success: false, error: pdfErr.message };
+        } finally {
+          if (workerWindow && !workerWindow.isDestroyed()) {
+            workerWindow.destroy();
+          }
+          if (tempHtmlPath && fs.existsSync(tempHtmlPath)) {
+            try { fs.unlinkSync(tempHtmlPath); } catch (e) {}
+          }
+        }
+      }
+
+      logMain('PDF export canceled.');
+      return { success: false, error: 'Canceled' };
+    } catch (err) {
+      logErr('PDF export failed', err);
+      return { success: false, error: err.message };
+    }
+  });
+
 // Recreated PDF Generation Protocol (Branded & Robust)
 ipcMain.removeHandler('generate-pdf');
 
@@ -5076,7 +5209,8 @@ ipcMain.removeHandler('generate-pdf');
        const Storage = require('./src/service/storage.js');
        const MobileNotifier = require('./src/service/mobile-notifier.js');
 
-       storageManager = new Storage.StorageManager();
+       const StorageManagerClass = Storage.StorageManager;
+       storageManager = new StorageManagerClass();
        await storageManager.initialize();
 
        taskQueue = new TaskQueue(storageManager);
