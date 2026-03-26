@@ -298,8 +298,10 @@ declare global {
             permCheck: (key: string) => Promise<{ granted: boolean }>;
             permList: () => Promise<Array<{ key: string; level: string; granted_at: number; expires_at: number | null; description: string }>>;
             permAuditLog: (limit?: number) => Promise<Array<{ entry: string; timestamp: number }>>;
-            getSecuritySettings: () => Promise<{ autoApproveLowRisk: boolean; autoApproveMidRisk: boolean }>;
-            updateSecuritySettings: (settings: { autoApproveLowRisk?: boolean; autoApproveMidRisk?: boolean }) => Promise<{ success: boolean; settings: { autoApproveLowRisk: boolean; autoApproveMidRisk: boolean } }>;
+            getSecuritySettings: () => Promise<{ autoApproveLowRisk: boolean; autoApproveMidRisk: boolean; autoApprovedCommands: string[] }>;
+            updateSecuritySettings: (settings: { autoApproveLowRisk?: boolean; autoApproveMidRisk?: boolean }) => Promise<{ success: boolean; settings: { autoApproveLowRisk: boolean; autoApproveMidRisk: boolean; autoApprovedCommands: string[] } }>;
+            setAutoApprovalCommand: (payload: { command: string; enabled: boolean }) => Promise<{ success: boolean; commands: string[] }>;
+            getAutoApprovedCommands: () => Promise<{ commands: string[] }>;
 
             // Desktop Automation v2 — Robot Service
             robotExecute: (action: {
