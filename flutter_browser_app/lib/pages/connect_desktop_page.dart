@@ -36,7 +36,8 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     if (args != null && args.containsKey('qrData')) {
       final qrData = args['qrData'] as String?;
       if (qrData != null && qrData.isNotEmpty) {
@@ -45,7 +46,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
         args.remove('qrData');
         Future.delayed(Duration.zero, () {
           if (mounted) {
-             _scanQRCode(qrData);
+            _scanQRCode(qrData);
           }
         });
       }
@@ -171,9 +172,11 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
     }
   }
 
-  Future<void> _approveRiskAction(String id, String pin, String deviceId) async {
+  Future<void> _approveRiskAction(
+      String id, String pin, String deviceId) async {
     try {
-      final result = await SyncService().executeOnDesktop('approve-high-risk', args: {
+      final result =
+          await SyncService().executeOnDesktop('approve-high-risk', args: {
         'id': id,
         'pin': pin,
       });
@@ -217,14 +220,15 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
           } else {
             throw Exception('Invalid connect QR code data');
           }
-        } else if (uri.host == 'approve') {
+        } else if (uri.host == 'approve' || uri.host == 'shell-approve') {
           final id = uri.queryParameters['id'];
           final deviceId = uri.queryParameters['deviceId'];
           final pin = uri.queryParameters['pin'];
 
           if (id != null && deviceId != null && pin != null) {
             if (!SyncService().isConnectedToDesktop) {
-              throw Exception('Must be connected and authenticated to desktop to approve actions.');
+              throw Exception(
+                  'Must be connected and authenticated to desktop to approve actions.');
             }
             await _approveRiskAction(id, pin, deviceId);
           } else {
@@ -262,7 +266,9 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
       body: Container(
         color: Colors.black,
         child: SafeArea(
-          child: (isConnected && !showScanner) ? _buildConnectedView() : _buildScannerView(),
+          child: (isConnected && !showScanner)
+              ? _buildConnectedView()
+              : _buildScannerView(),
         ),
       ),
     );
@@ -276,9 +282,10 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
             Padding(
               padding: const EdgeInsets.only(top: 10.0),
               child: TextButton.icon(
-                 onPressed: () => setState(() => showScanner = false),
-                 icon: Icon(Icons.close, color: Colors.white70),
-                 label: Text('Cancel Scan', style: TextStyle(color: Colors.white70)),
+                onPressed: () => setState(() => showScanner = false),
+                icon: Icon(Icons.close, color: Colors.white70),
+                label: Text('Cancel Scan',
+                    style: TextStyle(color: Colors.white70)),
               ),
             ),
           Padding(
@@ -536,7 +543,8 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                 backgroundColor: Color(0xFF00E5FF),
                 foregroundColor: Colors.black,
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () {
                 setState(() {
@@ -604,7 +612,9 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
     }
     controller.resumeCamera();
     controller.scannedDataStream.listen((scanData) {
-      if (scanData.code != null && !isConnecting && (!isConnected || showScanner)) {
+      if (scanData.code != null &&
+          !isConnecting &&
+          (!isConnected || showScanner)) {
         _scanQRCode(scanData.code!);
       }
     });

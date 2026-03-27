@@ -6,13 +6,13 @@ import { useRouter } from 'next/navigation';
 import {
   Maximize2, Minimize2, FileText, Download, Wifi, WifiOff, X,
   ChevronLeft, ChevronRight, ChevronDown, Zap, Send, Paperclip,
-  ScanLine,
+  FolderOpen, ScanLine,
   MoreVertical,
   Sparkles,
   Image as ImageIcon,
   Eye, EyeOff, Brain, Search, Loader2, MousePointerClick,
   CheckCircle2, AlertCircle, Layers,
-  Share2, CopyIcon, Trash2, Printer, Cpu, Rocket, Camera, Terminal, MoreHorizontal, Play, History
+  Share2, CopyIcon, Trash2, Printer, Cpu, Rocket, Camera, Terminal, MoreHorizontal, Play
 } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 import ReactMarkdown from 'react-markdown';
@@ -37,13 +37,14 @@ import {
   cleanTagsFromText,
   extractActionCommands
 } from './ai/RobustParsers';
+import JSON5 from 'json5';
 import AISetupGuide from './ai/AISetupGuide';
 import ThinkingIndicator from './ThinkingIndicator';
 import LLMProviderSettings from './LLMProviderSettings';
 import { AICommandQueue, type AICommand } from './AICommandQueue';
 import CapabilitiesPanel from './CapabilitiesPanel';
 import DOMSearchDisplay, { DOMMetaDisplay } from './ai/DOMSearchDisplay';
-import { secureDOMReader, type DOMSearchResult, type FilteredDOMResult, type DOMElement } from './ai/SecureDOMReader';
+import { secureDOMReader, type DOMSearchResult, type FilteredDOMResult } from './ai/SecureDOMReader';
 import { detectSchedulingIntent, type SchedulingIntent } from './ai/SchedulingIntentDetector';
 import SchedulingModal from './ai/SchedulingModal';
 
@@ -51,7 +52,7 @@ import SchedulingModal from './ai/SchedulingModal';
 import {
   getThreatRecord, setThreatRecord, checkThreat, scrubbedContent,
   isFailedPageContent, extractSiteFromContext, buildCleanPDFContent, buildPDFFromJSON,
-  lsGet, lsSet, preloadCometIcon, tryGetIconBase64,
+  lsGet, lsSet, lsRemove, preloadCometIcon, tryGetIconBase64,
   type PDFImage, type PDFActionLog, type PDFOCRData, generateSmartPDF, PDF_ICONS, getIcon
 } from './ai/AIUtils';
 import {
@@ -96,20 +97,6 @@ type ExtendedChatMessage = ChatMessage & {
   thinkText?: string;
   actionLogs?: { type: string, output: string, success: boolean }[];
   mediaItems?: MediaItem[];
-};
-
-type VisualStage = 'idle' | 'fetching' | 'capturing';
-
-const buildConversationTitle = (messages: ExtendedChatMessage[]): string => {
-  const snippet = messages.find((m) => m.role === 'user')?.content
-    ?? messages.find((m) => m.role === 'model')?.content
-    ?? '';
-  const cleaned = snippet
-    .replace(/\\s+/g, ' ')
-    .trim()
-    .slice(0, 80);
-  if (cleaned.length > 0) return cleaned;
-  return `Conversation • ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 };
 
 interface Attachment {
@@ -170,6 +157,12 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     setTheme: storeSetTheme,
     ollamaModelsList, setOllamaModelsList, setOllamaModel, geminiModel: storeGeminiModel,
     hasSeenNeuralSetup, setHasSeenNeuralSetup,
+    conversations, activeConversationId, 
+    addConversation: storeAddConversation, 
+    updateConversation: storeUpdateConversation, 
+    deleteConversation: storeDeleteConversation, 
+    archiveOldConversations,
+    setActiveConversationId: storeSetActiveConversationId,
   } = store;
 
   // Core state
@@ -213,71 +206,12 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [isMermaidLoaded, setIsMermaidLoaded] = useState(false);
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  // Local state for conversations removed, now using store
   const [ollamaModels, setOllamaModels] = useState<{ name: string; modified_at: string }[]>([]);
   const [groqSpeed, setGroqSpeed] = useState<string | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [streamingPDFContent, setStreamingPDFContent] = useState('');
   const [pdfProgress, setPdfProgress] = useState(0);
-  const [pdfVisualStage, setPdfVisualStage] = useState<VisualStage>('idle');
-  const aiTabsAutoCloseRef = useRef(false);
-
-  const findYouTubeLinkElement = (elements: DOMElement[]): DOMElement | null => {
-    for (const element of elements) {
-      if (element.tag === 'a') {
-        const href = element.attributes?.href?.trim();
-        if (href && /youtube\.com\/watch/.test(href)) {
-          return element;
-        }
-      }
-      if (element.children && element.children.length > 0) {
-        const childResult = findYouTubeLinkElement(element.children);
-        if (childResult) return childResult;
-      }
-    }
-    return null;
-  };
-
-  const handleAutoNavigateToYouTubeVideo = useCallback(async (prompt: string): Promise<boolean> => {
-    if (!/(youtube\.com|youtube video)/i.test(prompt) || !/(click|open|play|navigate|watch)/i.test(prompt)) {
-      return false;
-    }
-    if (!window.electronAPI?.extractSecureDOM) return false;
-
-    try {
-      const domResult = await window.electronAPI.extractSecureDOM();
-      if (!domResult?.elements?.length) return false;
-      const match = findYouTubeLinkElement(domResult.elements);
-      const href = match?.attributes?.href;
-      if (!href) return false;
-
-      const baseUrl = domResult.metadata?.url || currentUrl || window.location.origin;
-      let finalUrl = href;
-      try {
-        if (finalUrl.startsWith('//')) {
-          finalUrl = `${window.location.protocol}${finalUrl}`;
-        } else if (!/^https?:\/\//i.test(finalUrl)) {
-          finalUrl = new URL(finalUrl, baseUrl).toString();
-        }
-      } catch {
-        // Keep original href if resolution fails
-      }
-
-      store.addTab(finalUrl, 'ai-session');
-      setActiveView('browser');
-      const successMessage: ExtendedChatMessage = {
-        role: 'model',
-        content: `✅ Navigated to YouTube video: ${finalUrl}`
-      };
-      setMessages(prev => [...prev, successMessage]);
-      return true;
-    } catch (e) {
-      console.error('[AI] YouTube auto-navigation failed', e);
-      return false;
-    }
-  }, [currentUrl, setActiveView, setMessages, store]);
-  const persistTimeoutRef = useRef<number | null>(null);
 
   const [permissionPending, setPermissionPending] = useState<any | null>(null);
   const [showModelPicker, setShowModelPicker] = useState(false);
@@ -287,25 +221,6 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [showTerminal, setShowTerminal] = useState(false);
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const terminalLogIdCounter = useRef(0);
-  const isDevMode = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
-
-  const appendTerminalLog = useCallback((commandName: string, output: string, success = true) => {
-    if (!isDevMode) return;
-    const logId = `pdf-${Date.now()}-${terminalLogIdCounter.current++}`;
-    setShowTerminal(true);
-    setTerminalLogs((prev) => [...prev, {
-      id: logId,
-      command: commandName,
-      output,
-      success,
-      timestamp: Date.now(),
-    }]);
-  }, [isDevMode]);
-
-  const updateVisualStage = useCallback((stage: VisualStage, message?: string) => {
-    setPdfVisualStage(stage);
-    if (message) setStreamingPDFContent(message);
-  }, []);
 
   // DOM Search State
   const [domSearchResults, setDOMSearchResults] = useState<DOMSearchResult[]>([]);
@@ -333,30 +248,35 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
       }
     : setLocalShowSchedulingModal;
 
-  useEffect(() => {
-    if (!window.electronAPI?.onAutomationShellApproval || !window.electronAPI?.respondAutomationShellApproval) return;
-    const cleanup = window.electronAPI.onAutomationShellApproval((payload) => {
-      setPermissionPending({
-        resolve: (allowed: boolean) => {
-          window.electronAPI.respondAutomationShellApproval({ requestId: payload.requestId, allowed });
-        },
-        context: {
-          action: payload.command || 'Shell command',
-          what: payload.command,
-          reason: payload.reason || 'A pending automation needs your approval.',
-          risk: payload.risk || 'medium',
-          actionType: 'SHELL_COMMAND',
-          target: payload.command,
-          highRiskQr: payload.highRiskQr,
-        },
-      });
-    });
-    return cleanup;
-  }, []);
-
   // ---------------------------------------------------------------------------
   // Helper Logic
   // ---------------------------------------------------------------------------
+
+  const handleNewConversation = useCallback(() => {
+    setMessages([]);
+    storeSetActiveConversationId(null);
+    setShowConversationHistory(false);
+  }, [storeSetActiveConversationId]);
+
+  const handleLoadConversation = useCallback((id: string) => {
+    const conv = conversations.find(c => c.id === id);
+    if (conv) {
+      setMessages(conv.messages as ExtendedChatMessage[]);
+      storeSetActiveConversationId(id);
+      setShowConversationHistory(false);
+    }
+  }, [conversations, storeSetActiveConversationId]);
+
+  const handleDeleteConversation = useCallback((id: string) => {
+    storeDeleteConversation(id);
+    if (activeConversationId === id) {
+      setMessages([]);
+    }
+  }, [activeConversationId, storeDeleteConversation]);
+
+  useEffect(() => {
+    archiveOldConversations();
+  }, [archiveOldConversations]);
 
   const addThinkingStep = useCallback((label: string, detail?: string): string => {
     const id = `think-${Date.now()}-${thinkingIdCounter.current++}`;
@@ -487,11 +407,16 @@ I couldn't schedule the task. The background service may not be running. Please 
       try {
         const res = await window.electronAPI.webSearchRag(q);
         if (res && res.length > 0) {
-          const snippets = (res as string[])
-            .map((r) => r.trim())
+          const resultsList = res as any[];
+          const formatted = resultsList
+            .map((r) => {
+              if (typeof r === 'string') return r.trim();
+              const { title, url, snippet } = r;
+              return `[${title || 'Result'}](${url || '#'}) - ${snippet || ''}`;
+            })
             .filter(Boolean)
             .slice(0, 5);
-          results.push(`[Search: "${q}"]\n${snippets.join('\n')}`);
+          results.push(`[Search: "${q}"]\n${formatted.join('\n')}`);
         }
       } catch (e) {
         console.warn('[CometAI] Pre-flight search failed for:', q, e);
@@ -526,14 +451,25 @@ I couldn't schedule the task. The background service may not be running. Please 
     }
   ), [localLlmMode, normalizedProvider, ollamaModel, ollamaBaseUrl, geminiModel]);
 
-  const getStreamingResponse = useCallback(async (history: ChatMessage[]): Promise<any> => {
+  const getStreamingResponse = useCallback(async (history: ChatMessage[], remoteCommandId?: string): Promise<any> => {
     return new Promise((resolve) => {
       let fullText = '';
       let fullThought = '';
 
       const cleanup = window.electronAPI.onChatStreamPart((part: any) => {
         if (part.type === 'text-delta') {
-          fullText += (part.textDelta || '');
+          const delta = part.textDelta || '';
+          fullText += delta;
+
+          // NEW: Stream back to mobile if this is a remote request
+          if (remoteCommandId && window.electronAPI?.sendAiStreamResponse) {
+            window.electronAPI.sendAiStreamResponse({
+              promptId: remoteCommandId,
+              response: delta,
+              isStreaming: true
+            });
+          }
+
           setMessages((prev) => {
             const lastMessage = prev[prev.length - 1];
             if (lastMessage && lastMessage.role === 'model') {
@@ -547,22 +483,40 @@ I couldn't schedule the task. The background service may not be running. Please 
           fullThought += (part.reasoningDelta || '');
           setThinkingText(fullThought.trim());
         } else if (part.type === 'error') {
+          if (remoteCommandId && window.electronAPI?.sendAiStreamResponse) {
+            window.electronAPI.sendAiStreamResponse({
+              promptId: remoteCommandId,
+              response: `Error: ${part.error}`,
+              isStreaming: false
+            });
+          }
           cleanup();
-          resolve({ error: part.error });
-        } else if (part.type === 'finish') {
+          resolve({ error: part.error, text: fullText, thought: fullThought });
+        } else if (part.type === 'done') {
+          if (remoteCommandId && window.electronAPI?.sendAiStreamResponse) {
+            window.electronAPI.sendAiStreamResponse({
+              promptId: remoteCommandId,
+              response: '',
+              isStreaming: false
+            });
+          }
           cleanup();
           resolve({ text: fullText, thought: fullThought });
         }
       });
-      window.electronAPI.streamChatContent(history, reasoningOptions);
+
+      window.electronAPI.streamChatContent(history, {
+        ...reasoningOptions,
+        provider: normalizedProvider,
+      });
     });
-  }, [reasoningOptions]);
+  }, [reasoningOptions, normalizedProvider]);
 
   // ---------------------------------------------------------------------------
   // Message Sending & Task Centralization
   // ---------------------------------------------------------------------------
 
-  const handleSendMessage = useCallback(async (customContent?: string) => {
+  const handleSendMessage = useCallback(async (customContent?: string, remoteCommandId?: string) => {
     const rawContent = (customContent ?? inputMessage).trim();
     if (!rawContent && attachments.length === 0) return;
 
@@ -708,7 +662,7 @@ I couldn't schedule the task. The background service may not be running. Please 
         const aiId = addThinkingStep(iterations === 1 ? 'LLM Processing...' : `Action Chain Synthesis & Evaluation (Step ${iterations})...`);
 
         setMessages(prev => [...prev, { role: 'model', content: '' }] as ExtendedChatMessage[]);
-        const response = await getStreamingResponse(currentHistory);
+        const response = await getStreamingResponse(currentHistory, remoteCommandId);
         resolveThinkingStep(aiId, response.error ? 'error' : 'done');
 
         if (response.error) throw new Error(response.error);
@@ -812,6 +766,70 @@ I couldn't schedule the task. The background service may not be running. Please 
       setIsThinking(false);
     }
   }, [inputMessage, attachments, messages, aiProvider, currentUrl, addThinkingStep, resolveThinkingStep, getStreamingResponse, isAiSetup, fetchRealSearchContext]);
+
+  useEffect(() => {
+    // 1. Shell Approval Listening
+    if (window.electronAPI?.onAutomationShellApproval && window.electronAPI?.respondAutomationShellApproval) {
+      const cleanup = window.electronAPI.onAutomationShellApproval((payload) => {
+        setPermissionPending({
+          resolve: (allowed: boolean) => {
+            window.electronAPI.respondAutomationShellApproval({ requestId: payload.requestId, allowed });
+          },
+          context: {
+            action: payload.command || 'Shell command',
+            what: payload.command,
+            reason: payload.reason || 'A pending automation needs your approval.',
+            risk: payload.risk || 'medium',
+            actionType: 'SHELL_COMMAND',
+            target: payload.command,
+            highRiskQr: payload.highRiskQr,
+          },
+        });
+      });
+      return cleanup;
+    }
+
+    // 2. Remote Prompt Listening (from mobile)
+    let remoteCleanup: (() => void) | undefined;
+    if (window.electronAPI?.onRemoteAiPrompt) {
+      remoteCleanup = window.electronAPI.onRemoteAiPrompt((data: { prompt: string; commandId: string; streamToMobile?: boolean }) => {
+        console.log('[Remote-Prompt] Received from mobile:', data.prompt);
+        handleSendMessage(data.prompt, data.commandId);
+      });
+    }
+
+    // 3. Remote Approval Listener (from mobile)
+    let approveCleanup: (() => void) | undefined;
+    if (window.electronAPI?.onMobileApproveHighRisk) {
+      approveCleanup = window.electronAPI.onMobileApproveHighRisk((data: { pin: string; id: string }) => {
+        console.log('[Remote-Approval] Received for', data.id);
+        if (permissionPending) {
+          permissionPending.resolve(true);
+          setPermissionPending(null);
+        }
+      });
+    }
+
+    return () => {
+      if (remoteCleanup) remoteCleanup();
+      if (approveCleanup) approveCleanup();
+    };
+  }, [handleSendMessage, permissionPending]);
+
+  // Effect to save messages to store after changes
+  useEffect(() => {
+    if (messages.length === 0) return;
+    
+    if (activeConversationId) {
+      storeUpdateConversation(activeConversationId, { messages });
+    } else if (messages.length >= 2) { // Save new conversation once we have at least user + assistant message
+      const id = `conv-${Date.now()}`;
+      const firstUserMessage = messages.find(m => m.role === 'user')?.content || 'New Stream';
+      const title = firstUserMessage.substring(0, 40) + (firstUserMessage.length > 40 ? '...' : '');
+      storeAddConversation({ id, title, messages });
+      storeSetActiveConversationId(id);
+    }
+  }, [messages, activeConversationId, storeUpdateConversation, storeAddConversation, storeSetActiveConversationId]);
 
   const processNextCommand = useCallback(async () => {
     console.log('[AI] processNextCommand called, current index:', currentCommandIndex, 'queue length:', commandQueue.length);
@@ -1076,20 +1094,25 @@ I couldn't schedule the task. The background service may not be running. Please 
           // Fetch real results and store in vector memory for LLM context
           const results = await window.electronAPI.webSearchRag(query);
           if (results && results.length > 0) {
-            const snippets = (results as string[])
-              .map((r) => r.trim())
+            const resultsList = results as any[];
+            const formatted = resultsList
+              .map((r) => {
+                if (typeof r === 'string') return r.trim();
+                const { title, url, snippet } = r;
+                return `• [${title || 'Result'}](${url || '#'}): ${snippet || ''}`;
+              })
               .filter(Boolean)
-              .slice(0, 6); // More snippets = richer context for LLM
+              .slice(0, 8); // Richer context
 
             // ✅ Store in BrowserAI so the synthesis step gets REAL data
-            const fullSnippet = `[WEB_SEARCH RESULTS for "${query}"]\n${snippets.join('\n---\n')}`;
+            const fullSnippet = `[WEB_SEARCH RESULTS for "${query}"]\n${formatted.join('\n---\n')}`;
             await BrowserAI.addToVectorMemory(fullSnippet, {
               type: 'web_search',
               query,
               timestamp: Date.now()
             });
 
-            output = `Search results for "${query}":\n${snippets.join('\n')}`;
+            output = `Search results for "${query}":\n${formatted.join('\n')}`;
           } else {
             // Fallback: wait for the search page to load slightly and try DOM / OCR extraction
             await new Promise(resolve => setTimeout(resolve, 1500));
@@ -1352,69 +1375,83 @@ I couldn't schedule the task. The background service may not be running. Please 
         // Format: JSON object with structured pages and sections
         case 'CREATE_PDF_JSON': {
           let rawValue = (command.value || '').trim();
-          
-          let pdfData: any;
-          let parsedJson: any = null;
-          
-          // Clean up malformed input
           rawValue = rawValue.replace(/^\s*\]+\s*:\s*/, '').trim();
-          
-          // Try to extract and parse JSON from the command value
-          try {
-            // First try parsing the whole value as JSON
-            try {
-              parsedJson = JSON.parse(rawValue);
-            } catch {
-              // Try to extract JSON from markdown code blocks
-              const jsonMatch = rawValue.match(/```(?:json)?\s*([\s\S]*?)```/);
-              if (jsonMatch && jsonMatch[1]) {
+
+          const tryParseJson = (candidate?: string): any | null => {
+            if (!candidate) return null;
+            const trimmed = candidate.trim();
+            if (!trimmed) return null;
+
+            const normalizeNewlines = (text: string) => text.replace(/\r\n/g, '\n');
+            const attemptParse = (text: string) => {
+              try {
+                return JSON.parse(text);
+              } catch {
                 try {
-                  parsedJson = JSON.parse(jsonMatch[1].trim());
+                  return JSON5.parse(text);
                 } catch {
-                  // Try to fix unescaped newlines in the JSON
-                  const fixedJson = jsonMatch[1].trim().replace(/\\n/g, '\\\\n').replace(/\\r/g, '');
-                  try {
-                    parsedJson = JSON.parse(fixedJson);
-                  } catch {
-                    parsedJson = null;
-                  }
+                  return null;
                 }
               }
-              
-              // Try to find JSON object anywhere in the text
-              if (!parsedJson) {
-                const objMatch = rawValue.match(/\{[\s\S]*?(?:title|pages)[\s\S]*?\}/);
-                if (objMatch) {
-                  try {
-                    parsedJson = JSON.parse(objMatch[0]);
-                  } catch {
-                    // Try fixing common JSON issues
-                    const fixed = objMatch[0].replace(/\n/g, '\\n').replace(/,\s*\]/g, ']').replace(/,\s*\}/g, '}');
-                    try {
-                      parsedJson = JSON.parse(fixed);
-                    } catch {
-                      parsedJson = null;
-                    }
-                  }
+            };
+
+            const finalize = (result: any) => {
+              if (typeof result === 'string') {
+                const inner = result.trim();
+                if (inner.startsWith('{') || inner.startsWith('[')) {
+                  return attemptParse(inner);
                 }
               }
+              return result;
+            };
+
+            for (const attempt of [trimmed, normalizeNewlines(trimmed)]) {
+              const parsed = finalize(attemptParse(attempt));
+              if (parsed && typeof parsed === 'object') {
+                return parsed;
+              }
             }
-            
-            if (!parsedJson || typeof parsedJson !== 'object') {
-              throw new Error('No valid JSON found in CREATE_PDF_JSON command');
+
+            return null;
+          };
+
+          const extractJsonObject = (text: string) => {
+            const objMatch = text.match(/\{[\s\S]*?(?:title|pages|content)[\s\S]*?\}/);
+            if (!objMatch) return null;
+            return objMatch[0]
+              .replace(/,\s*\]/g, ']')
+              .replace(/,\s*\}/g, '}')
+              .replace(/\t/g, '  ');
+          };
+
+          const tryParseFromSources = (): any | null => {
+            let parsed = tryParseJson(rawValue);
+            if (parsed) return parsed;
+
+            const codeBlockMatch = rawValue.match(/```(?:json)?\s*([\s\S]*?)```/i);
+            if (codeBlockMatch?.[1]) {
+              parsed = tryParseJson(codeBlockMatch[1]);
+              if (parsed) return parsed;
             }
-            
-            pdfData = parsedJson;
-          } catch (e) {
-            // JSON parsing failed - fall back to markdown generation
-            console.warn('[PDF] JSON parsing failed, falling back to GENERATE_PDF:', (e as Error).message);
+
+            const objCandidate = extractJsonObject(rawValue);
+            if (objCandidate) {
+              parsed = tryParseJson(objCandidate);
+              if (parsed) return parsed;
+            }
+
+            return null;
+          };
+
+          const pdfData = tryParseFromSources();
+          if (!pdfData || typeof pdfData !== 'object') {
+            console.warn('[PDF] JSON parsing failed, falling back to GENERATE_PDF');
             output = `⚠️ JSON parsing failed. Please use proper JSON format.`;
             output += `\n\n**Correct format:**\n\`\`\`json\n{\n  "title": "Document Title",\n  "template": "professional",\n  "content": "Your content here..."\n}\n\`\`\``;
             output += `\n\nOr use markdown format: [GENERATE_PDF: Title | actual content here...]`;
             break;
           }
-          
-          // Validate required fields
+
           if (!pdfData.title && !pdfData.pages) {
             output = '❌ JSON must have at least "title" or "pages" field';
             break;
@@ -1473,6 +1510,7 @@ I couldn't schedule the task. The background service may not be running. Please 
           // Add metadata markers for template processing
           const metadataMarkers = [
             `[TEMPLATE:${template}]`,
+            pdfData.logo ? `[LOGO:${pdfData.logo}]` : '',
             watermark ? `[WATERMARK:${watermark}]` : '',
             bgColor !== '#ffffff' ? `[BG_COLOR:${bgColor}]` : '',
             priority !== 'normal' ? `[PRIORITY:${priority}]` : '',
@@ -1480,13 +1518,13 @@ I couldn't schedule the task. The background service may not be running. Please 
           
           pdfContent = metadataMarkers + '\n\n' + pdfContent;
           
+          await preloadCometIconLocal();
+          const iconSource = (window as any).__cometIconBase64 || null;
+          
           setIsGeneratingPDF(true);
           setPdfProgress(0);
           setShowTerminal(true);
-          setStreamingPDFContent(`Preparing PDF: ${pdfTitle}...`);
-
-          await preloadCometIconLocal();
-          const iconSource = (window as any).__cometIconBase64 || null;
+          setStreamingPDFContent(`Generating PDF: ${pdfTitle}...`);
           
           try {
             const cleanHTML = generateSmartPDF(pdfContent, iconSource);
@@ -1566,12 +1604,7 @@ I couldn't schedule the task. The background service may not be running. Please 
 
           const pdfSubtitle = options.subtitle || '';
           const pdfAuthor = options.author || 'Comet AI';
-          const mentionScreenshot = /screenshot|capture (?:the )?page|include this page/i.test(
-            `${command.context || ''} ${contentParts.join(' ')}`
-          );
-          const shouldScreenshot = options.screenshot?.toLowerCase() === 'yes'
-            || options.screenshot?.toLowerCase() === 'true'
-            || mentionScreenshot;
+          const shouldScreenshot = options.screenshot?.toLowerCase() === 'yes' || options.screenshot?.toLowerCase() === 'true';
           const shouldIncludeAttachments = options.attachments?.toLowerCase() !== 'no';
           
           // Build content from remaining parts (skip title)
@@ -1627,91 +1660,6 @@ I couldn't schedule the task. The background service may not be running. Please 
           // ── Capture browser page screenshot (active tab only) ──────────────
           // Uses Electron's webContents.capturePage() via captureBrowserViewScreenshot
           const pdfImages: import('./ai/AIUtils').PDFImage[] = [];
-          const inlineImageTags: { raw: string; url: string; caption?: string; alt?: string }[] = [];
-          const inlineImageRegex = /\[IMAGE_URL:([\s\S]+?)\]/gi;
-          let imageTagMatch;
-          while ((imageTagMatch = inlineImageRegex.exec(pdfContent)) !== null) {
-            const raw = imageTagMatch[0];
-            const payload = (imageTagMatch[1] || '').trim();
-            if (!payload) continue;
-            const segments = payload.split('|').map(segment => segment.trim()).filter(Boolean);
-            if (segments.length === 0) continue;
-            const rawUrl = segments.shift() || '';
-            const url = rawUrl.replace(/\s+/g, '');
-            if (!url) continue;
-            let alt: string | undefined;
-            let caption: string | undefined;
-            segments.forEach(segment => {
-              const [key, ...valueParts] = segment.split(':');
-              if (!key || valueParts.length === 0) return;
-              const normalizedKey = key.toLowerCase().trim();
-              const value = valueParts.join(':').trim().replace(/\s+/g, ' ');
-              if (!value) return;
-              if (normalizedKey === 'alt') {
-                alt = value;
-              } else if (normalizedKey === 'caption') {
-                caption = value;
-              }
-            });
-            inlineImageTags.push({
-              raw,
-              url,
-              alt,
-              caption,
-            });
-          }
-
-          if (inlineImageTags.length > 0) {
-            updateVisualStage('fetching', 'Fetching inline visuals...');
-          }
-          const inlineImagePromises = inlineImageTags.map(async (tag) => {
-            const normalized = tag.url.startsWith('http') ? tag.url : `https://${tag.url}`;
-            if (isDevMode) appendTerminalLog('Image Fetch', `Requesting ${normalized}`);
-            console.log(`[PDF-LOG] Fetching inline image for PDF: ${normalized}`);
-            try {
-              const response = await fetch(normalized);
-              if (!response.ok) {
-                if (isDevMode) appendTerminalLog('Image Fetch', `Failed to fetch ${normalized} (${response.status})`, false);
-                return null;
-              }
-              const blob = await response.blob();
-              const dataUrl = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.onerror = () => reject(new Error('Failed to read image'));
-                reader.readAsDataURL(blob);
-              });
-              if (isDevMode) appendTerminalLog('Image Fetch', `Fetched inline image ${normalized}`, true);
-              console.log(`[PDF-LOG] Loaded inline image (${normalized}) for PDF`);
-              return { ...tag, src: dataUrl };
-            } catch (err: any) {
-              if (isDevMode) appendTerminalLog('Image Fetch', `Failed to fetch ${normalized}: ${err?.message || 'unknown'}`, false);
-              console.log(`[PDF-LOG] Inline image fetch failed: ${normalized} (${err?.message || 'unknown'})`);
-              return null;
-            }
-          });
-
-          const inlineImages = (await Promise.all(inlineImagePromises)).filter(Boolean) as Array<{
-            raw: string;
-            src: string;
-            caption?: string;
-            alt?: string;
-          }>;
-          inlineImages.forEach((img) => {
-            pdfContent = pdfContent.replace(img.raw, '');
-            pdfImages.push({
-              src: img.src,
-              alt: img.alt || 'Embedded image',
-              caption: img.caption || 'Embedded image from URL',
-              width: '100%',
-            });
-          });
-          if (inlineImageTags.length > 0) {
-            updateVisualStage('idle');
-          }
-          if (inlineImages.length > 0 && isDevMode) {
-            appendTerminalLog('Image Fetch', `Loaded ${inlineImages.length} inline images`);
-          }
 
           // ── Include user-uploaded attachments ──────────────────────────────
           if (shouldIncludeAttachments) {
@@ -1730,11 +1678,9 @@ I couldn't schedule the task. The background service may not be running. Please 
           }
 
           if (shouldScreenshot) {
-            updateVisualStage('capturing', 'Capturing browser screenshot...');
             const ssId = addThinkingStep('📸 Capturing browser page for PDF...');
-            if (isDevMode) appendTerminalLog('Screenshot', 'Starting browser view capture for PDF...');
-            console.log('[PDF-LOG] Capturing browser view screenshot for PDF...');
             try {
+              // captureBrowserViewScreenshot returns a dataURL string directly
               const dataUrl: string | null = await window.electronAPI.captureBrowserViewScreenshot();
               if (dataUrl) {
                 pdfImages.push({
@@ -1743,24 +1689,12 @@ I couldn't schedule the task. The background service may not be running. Please 
                   caption: `Page screenshot at ${new Date().toLocaleTimeString()} — ${currentUrl || 'active tab'}`,
                   width: '100%'
                 });
-                const screenshotMarkdown = `\n\n![Browser Screenshot | Captured at ${new Date().toLocaleTimeString().replace(/:/g, '-')}](${dataUrl})`;
-                if (!pdfContent.includes(screenshotMarkdown)) {
-                  pdfContent += screenshotMarkdown;
-                }
                 resolveThinkingStep(ssId, 'done', 'Browser page screenshot captured');
-                if (isDevMode) appendTerminalLog('Screenshot', 'Browser screenshot captured and added to PDF');
-                console.log('[PDF-LOG] Browser screenshot captured and queued for PDF');
               } else {
                 resolveThinkingStep(ssId, 'error', 'No browser view active to screenshot');
-                if (isDevMode) appendTerminalLog('Screenshot', 'No browser view available for screenshot', false);
-                console.log('[PDF-LOG] Browser screenshot unavailable (hidden tab or no active view)');
               }
             } catch (e: any) {
               resolveThinkingStep(ssId, 'error', `Screenshot failed: ${e.message}`);
-              if (isDevMode) appendTerminalLog('Screenshot', `Screenshot failed: ${e.message}`, false);
-              console.log(`[PDF-LOG] Screenshot capture error: ${e.message}`);
-            } finally {
-              updateVisualStage('idle');
             }
           }
 
@@ -1784,14 +1718,12 @@ I couldn't schedule the task. The background service may not be running. Please 
           const slides = pdfContent.split(/---\n?/).filter(s => s.trim().length > 10);
           const isSlideShow = slides.length > 2;
           
-          setStreamingPDFContent(`Generating PDF: ${pdfTitle}...`);
           const cleanHTML = generateSmartPDF(pdfContent, iconSource, pdfImages.length > 0 ? pdfImages : undefined);
           const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML) as any;
           
           setIsGeneratingPDF(false);
           setPdfProgress(100);
           setStreamingPDFContent('');
-          updateVisualStage('idle');
           
           if (res.success) {
             output = `✅ **PDF GENERATION SUCCESSFUL**\n\n### 📄 Document Overview\n- **Title:** ${pdfTitle}\n- **Pages:** ${isSlideShow ? slides.length : '1'}\n- **Format:** ${isSlideShow ? 'Slide Deck (Presenton Style)' : 'Standard Report'}\n- **📁 File Path:** \`${res.filePath}\`\n- **Status:** ✅ Downloaded Successfully\n\nYou can find the PDF at: **${res.filePath}**\n\nWould you like me to open the document for you?`;
@@ -1803,7 +1735,6 @@ I couldn't schedule the task. The background service may not be running. Please 
               actionLogs: [{ type: 'PDF_READY', output: res.filePath, success: true }]
             } as ExtendedChatMessage]);
           } else {
-            updateVisualStage('idle');
             output = `❌ PDF GENERATION FAILED\n- Error: ${res.error}\n- Context: Please verify title and content format.`;
           }
           break;
@@ -2031,10 +1962,22 @@ I've successfully executed the following real tasks:
         }
 
         case 'RELOAD':
-
           await window.electronAPI.reload();
           output = 'Active page reloaded.';
           break;
+
+        case 'CLOSE_POPUPS': {
+          const closeStepId = addThinkingStep('Force-closing all popups/modals...');
+          try {
+            await (window.electronAPI as any).closePagePopups();
+            output = 'Attempted to force-close all popups and modals on the page.';
+            resolveThinkingStep(closeStepId, 'done', 'Popups Cleared');
+          } catch (e) {
+            output = `Error closing popups: ${e}`;
+            resolveThinkingStep(closeStepId, 'error', 'Failed to clear popups');
+          }
+          break;
+        }
 
         case 'GO_BACK':
           await window.electronAPI.goBack();
@@ -2412,89 +2355,7 @@ I've successfully executed the following real tasks:
     setThinkingSteps([]);
     setThinkingText('');
     setShowActionsMenu(false);
-    setAttachments([]);
-    setInputMessage('');
-    setActiveConversationId(null);
-    setShowConversationHistory(false);
   }, []);
-
-  const saveConversation = useCallback(() => {
-    if (messages.length === 0) return;
-    const now = Date.now();
-    const storedMessages = messages.map((msg) => ({ ...msg }));
-    const generatedId = typeof window !== 'undefined' && window.crypto?.randomUUID
-      ? window.crypto.randomUUID()
-      : `conv-${now}`;
-    const conversationId = activeConversationId ?? generatedId;
-    const conversationRecord: Conversation = {
-      id: conversationId,
-      title: buildConversationTitle(storedMessages),
-      messages: storedMessages,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    setConversations((prev) => {
-      const existing = prev.find((c) => c.id === conversationId);
-      const merged = {
-        ...conversationRecord,
-        createdAt: existing?.createdAt ?? conversationRecord.createdAt,
-      };
-      const next = [merged, ...prev.filter((c) => c.id !== conversationId)];
-      const truncated = next.slice(0, 20);
-      lsSet('conversations_list', truncated);
-      return truncated;
-    });
-
-    if (conversationId !== activeConversationId) {
-      setActiveConversationId(conversationId);
-    }
-  }, [activeConversationId, messages]);
-
-  useEffect(() => {
-    if (messages.length === 0) return;
-    if (persistTimeoutRef.current) {
-      window.clearTimeout(persistTimeoutRef.current);
-    }
-    persistTimeoutRef.current = window.setTimeout(() => {
-      saveConversation();
-      persistTimeoutRef.current = null;
-    }, 600);
-
-    return () => {
-      if (persistTimeoutRef.current) {
-        window.clearTimeout(persistTimeoutRef.current);
-        persistTimeoutRef.current = null;
-      }
-    };
-  }, [messages, saveConversation]);
-
-  const handleLoadConversation = useCallback((id: string) => {
-    const conv = conversations.find((c) => c.id === id);
-    if (!conv) return;
-    setMessages(conv.messages as ExtendedChatMessage[]);
-    setActiveConversationId(conv.id);
-    setShowConversationHistory(false);
-  }, [conversations]);
-
-  const handleDeleteConversation = useCallback((id: string) => {
-    const nextList = conversations.filter((conv) => conv.id !== id);
-    lsSet('conversations_list', nextList);
-    setConversations(nextList);
-    if (activeConversationId === id) {
-      if (nextList.length > 0) {
-        setMessages(nextList[0].messages as ExtendedChatMessage[]);
-        setActiveConversationId(nextList[0].id);
-      } else {
-        clearChat();
-      }
-    }
-  }, [activeConversationId, conversations, clearChat]);
-
-  const handleNewConversation = useCallback(() => {
-    clearChat();
-    setShowConversationHistory(false);
-  }, [clearChat]);
 
   const exportChat = useCallback(async (format: 'text' | 'pdf') => {
     if (messages.length === 0) return;
@@ -2603,13 +2464,8 @@ I've successfully executed the following real tasks:
     window.addEventListener('online', hOnline);
     window.addEventListener('offline', hOffline);
 
-    const savedConversations = lsGet<Conversation[]>('conversations_list', []);
-    setConversations(savedConversations);
-    if (savedConversations.length > 0) {
-      const latest = savedConversations[0];
-      setActiveConversationId(latest.id);
-      setMessages(latest.messages as ExtendedChatMessage[]);
-    }
+    // Removed old local storage sync, now using store
+    console.log('[AI] Sidebar mounted');
 
     return () => {
       window.removeEventListener('online', hOnline);
@@ -2785,33 +2641,6 @@ I've successfully executed the following real tasks:
                   transition={{ duration: 0.5 }}
                 />
               </div>
-              {pdfVisualStage !== 'idle' && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  transition={{ duration: 0.35 }}
-                  className="mt-4 flex items-center gap-3 px-4 py-3 bg-black/60 border border-white/10 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.4)]"
-                >
-                  <motion.div
-                    className="w-10 h-10 rounded-2xl bg-sky-500/20 flex items-center justify-center border border-sky-500/30 text-sky-300"
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 1, repeat: Infinity }}
-                  >
-                    <Camera size={20} className="text-white" />
-                  </motion.div>
-                  <div className="text-left">
-                    <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white/70">
-                      {pdfVisualStage === 'capturing' ? 'Capturing screenshot' : 'Scanning visuals'}
-                    </p>
-                    <p className="text-[10px] text-white/40 leading-tight">
-                      {pdfVisualStage === 'capturing'
-                        ? 'Recording the current browser view into your report.'
-                        : 'Downloading referenced images before rendering the document.'}
-                    </p>
-                  </div>
-                </motion.div>
-              )}
             </div>
           </motion.div>
         )}
@@ -3265,13 +3094,7 @@ I've successfully executed the following real tasks:
           <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/5">
             <div className="flex items-center gap-2">
               <button onClick={() => fileInputRef.current?.click()} className="p-3 rounded-2xl hover:bg-white/5 text-white/20 hover:text-white transition-all"><Paperclip size={20} /></button>
-              <button
-                onClick={() => setShowConversationHistory(true)}
-                title="Conversation history"
-                className="p-3 rounded-2xl hover:bg-white/5 text-white/20 hover:text-white transition-all"
-              >
-                <History size={20} />
-              </button>
+              <button onClick={() => setShowConversationHistory(true)} className="p-3 rounded-2xl hover:bg-white/5 text-white/20 hover:text-white transition-all"><FolderOpen size={20} /></button>
               <button onClick={() => setShowActionsMenu(!showActionsMenu)} className={`p-3 rounded-2xl transition-all ${showActionsMenu ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-white/20 hover:text-white'}`}><MoreHorizontal size={20} /></button>
             </div>
             <button

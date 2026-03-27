@@ -84,6 +84,32 @@ const { mcpManager } = require('./src/lib/mcp-server-registry.js');
 const permissionStore = new PermissionStore();
 let cometAiEngine = null;
 let robotService = null;
+const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const performRobotClick = async ({ x, y, button = 'left', doubleClick = false }) => {
+  if (robotService) {
+    try {
+      await robotService.execute({ type: 'click', x, y, button, double: doubleClick });
+      return { success: true, source: 'robotService' };
+    } catch (err) {
+      console.warn('[Main] RobotService click failed, falling back to robotjs:', err.message);
+    }
+  }
+
+  if (!robot) {
+    throw new Error('robotjs not available');
+  }
+
+  robot.moveMouseSmooth(x, y);
+  await sleepMs(30);
+  if (doubleClick) {
+    robot.mouseClick(button, true);
+  } else {
+    robot.mouseClick(button);
+  }
+  await sleepMs(20);
+  return { success: true, source: 'robotjs' };
+};
 let tesseractOcrService = null;
 let screenVisionService = null;
 let flutterBridge = null;
@@ -2032,17 +2058,25 @@ ipcMain.on('open-auth-window', (event, authUrl) => {
       authWindow = null;
     }
 
+    const authPreloadPath = path.join(__dirname, 'auth-preload.js');
     authWindow = new BrowserWindow({
-      width: 500,
-      height: 700,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-      },
+      width: 540,
+      height: 780,
+      frame: false,
+      transparent: true,
+      backgroundColor: '#02030a',
+      hasShadow: true,
+      resizable: true,
       parent: mainWindow,
       modal: true,
       show: false,
+      webPreferences: {
+        preload: authPreloadPath,
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
     });
+    authWindow.setMenuBarVisibility(false);
 
     // Fix "Unsecure Browser" error by setting a modern User-Agent
     authWindow.webContents.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
@@ -2631,15 +2665,14 @@ ipcMain.handle('find-and-click-text', async (event, targetText) => {
       return { success: false, error: 'Find & Click requires robotjs. Run: npm install robotjs, then electron-rebuild.' };
     }
 
-    try {
-      robot.moveMouse(centerX, centerY);
-      robot.mouseClick();
-      console.log(`[Main] Find-and-click: clicked at (${centerX}, ${centerY}) for "${targetText}"`);
-      return { success: true, x: centerX, y: centerY };
-    } catch (robotErr) {
-      console.error('[Main] robotjs error (may need Accessibility permission on macOS):', robotErr);
-      return { success: false, error: `Could not simulate click. ${process.platform === 'darwin' ? 'Ensure Accessibility permission is granted.' : robotErr.message}` };
-    }
+      try {
+        await performRobotClick({ x: centerX, y: centerY });
+        console.log(`[Main] Find-and-click: clicked at (${centerX}, ${centerY}) for "${targetText}" with robust helper`);
+        return { success: true, x: centerX, y: centerY };
+      } catch (robotErr) {
+        console.error('[Main] robotjs error (may need Accessibility permission on macOS):', robotErr);
+        return { success: false, error: `Could not simulate click. ${process.platform === 'darwin' ? 'Ensure Accessibility permission is granted.' : robotErr.message}` };
+      }
   } catch (error) {
     console.error('[Main] find-and-click-text failed:', error);
     return { success: false, error: error.message };
@@ -2873,13 +2906,27 @@ ipcMain.handle('extract-secure-dom', async () => {
           const sanitized = sanitizeText(text);
           if (!sanitized.trim() && children.length === 0) return [];
           
-          return [{
-            tag,
-            text: sanitized,
-            xpath,
-            children: children.map(c => ({ tag: c.tag, text: c.text, xpath: c.xpath, children: [] }))
-          }];
+        const attributes = {};
+        if (el.attributes) {
+          for (const attr of el.attributes) {
+            attributes[attr.name] = attr.value;
+          }
         }
+
+        return [{
+          tag,
+          text: sanitized,
+          xpath,
+          attributes,
+          children: children.map(c => ({
+            tag: c.tag,
+            text: c.text,
+            xpath: c.xpath,
+            attributes: c.attributes,
+            children: c.children
+          }))
+        }];
+      }
         
         const main = document.querySelector('main, article, [role="main"], #content, #main, .content') || document.body;
         const elements = [];
@@ -4493,13 +4540,12 @@ ipcMain.removeHandler('generate-pdf');
           sendResponse({ success: false, error: 'robotjs not available' });
         }
       } else if (command === 'click') {
-        if (robot) {
-          const { x, y } = args;
-          robot.moveMouse(x, y);
-          robot.mouseClick();
+        const { x, y } = args;
+        try {
+          await performRobotClick({ x, y });
           sendResponse({ success: true, output: `Clicked at (${x}, ${y})` });
-        } else {
-          sendResponse({ success: false, error: 'robotjs not available' });
+        } catch (err) {
+          sendResponse({ success: false, error: err.message });
         }
       } else if (command === 'find-and-click') {
         const targetText = args.text;
@@ -4583,12 +4629,11 @@ ipcMain.removeHandler('generate-pdf');
         // Handle desktop-control commands from mobile
         const action = args.action || msg.action;
         const prompt = args.prompt || msg.prompt;
-        const promptId = args.promptId || msg.promptId;
+        const promptId = args.promptId || msg.promptId || commandId;
         
         console.log(`[WiFi-Sync] Desktop Control: action=${action}, promptId=${promptId}`);
         
         if (action === 'send-prompt') {
-          // Send to AI chat and stream response back to mobile
           if (mainWindow) {
             mainWindow.webContents.send('remote-ai-prompt', { 
               prompt, 
@@ -4596,24 +4641,17 @@ ipcMain.removeHandler('generate-pdf');
               streamToMobile: true 
             });
           }
-          
-          // Also process locally
+
+          const targetModel = args.model || store.get('ollama_model') || 'deepseek-r1:8b';
+          const provider = (targetModel.includes('gemini') || targetModel.includes('google')) ? 'google-flash' : 'ollama';
+
           try {
-            const targetModel = args.model || store.get('ollama_model') || 'deepseek-r1:8b';
-            const provider = (targetModel.includes('gemini') || targetModel.includes('google')) ? 'google-flash' : 'ollama';
-            
-            const result = await llmGenerateHandler([{ role: 'user', content: prompt }], {
-              model: targetModel,
-              provider: provider
-            });
-            
-            if (result.error) {
-              wifiSyncService.sendAIResponse(promptId, `Error: ${result.error}`, false);
-            } else {
-              wifiSyncService.sendAIResponse(promptId, result.text || '', false);
-            }
+            await streamPromptToMobile(promptId, prompt, targetModel, provider);
+            sendResponse({ success: true, promptId });
           } catch (err) {
-            wifiSyncService.sendAIResponse(promptId, `Error: ${err.message}`, false);
+            const errMsg = err?.message || String(err);
+            wifiSyncService.sendAIResponse(promptId, `Error: ${errMsg}`, false);
+            sendResponse({ success: false, error: errMsg });
           }
         } else if (action === 'get-status') {
           const { screen } = require('electron');
@@ -4688,13 +4726,12 @@ ipcMain.removeHandler('generate-pdf');
             sendResponse({ success: false, error: 'Desktop window not available' });
           }
         } else if (action === 'click') {
-          if (robot) {
-            robot.moveMouse(args.x, args.y);
-            robot.mouseClick();
-            sendResponse({ success: true, output: `Clicked at (${args.x}, ${args.y})` });
-          } else {
-            sendResponse({ success: false, error: 'robotjs not available' });
-          }
+        try {
+          await performRobotClick({ x: args.x, y: args.y });
+          sendResponse({ success: true, output: `Clicked at (${args.x}, ${args.y})` });
+        } catch (err) {
+          sendResponse({ success: false, error: err.message });
+        }
         } else {
           sendResponse({ success: false, error: `Unknown action: ${action}` });
         }
@@ -4765,6 +4802,30 @@ ipcMain.removeHandler('generate-pdf');
       console.error('[Main] Failed to generate Shell Approval QR:', err);
       return { qrImage: null, pin, token };
     }
+  }
+
+  async function streamPromptToMobile(promptId, prompt, model, provider) {
+    const messages = [{ role: 'user', content: prompt }];
+    const streamEvent = {
+      sender: {
+        isDestroyed: () => false,
+        send: (_channel, data) => {
+          if (data?.type === 'text-delta') {
+            wifiSyncService.sendAIResponse(promptId, data.textDelta || '', true);
+          } else if (data?.type === 'finish') {
+            wifiSyncService.sendAIResponse(promptId, '', false);
+          } else if (data?.type === 'error') {
+            wifiSyncService.sendAIResponse(promptId, `Error: ${data.error || 'Stream failed'}`, false);
+          }
+        }
+      }
+    };
+
+    await llmStreamHandler(streamEvent, messages, {
+      model,
+      provider,
+      baseUrl: store.get('ollama_base_url') || undefined,
+    });
   }
 
   ipcMain.handle('get-wifi-sync-info', () => {
@@ -6247,15 +6308,8 @@ ipcMain.removeHandler('generate-pdf');
   const performClickHandler = async (event, args) => {
     const { x, y, button = 'left', doubleClick = false } = args;
 
-    if (!robot) return { success: false, error: 'robotjs not available' };
-
     try {
-      robot.moveMouseSmooth(x, y);
-      if (doubleClick) {
-        robot.mouseClick(button, true);
-      } else {
-        robot.mouseClick(button);
-      }
+      await performRobotClick({ x, y, button, doubleClick });
       return { success: true };
     } catch (error) {
       console.error('Click Error:', error);

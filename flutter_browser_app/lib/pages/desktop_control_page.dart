@@ -24,6 +24,9 @@ class _DesktopControlPageState extends State<DesktopControlPage>
   StreamSubscription? _aiSubscription;
   StreamSubscription? _statusSubscription;
   StreamSubscription? _desktopToMobileSubscription;
+  StreamSubscription? _desktopControlActionSubscription;
+  String? _currentPromptId;
+  final List<String> _actionLogs = [];
 
   late TabController _tabController;
 
@@ -38,15 +41,22 @@ class _DesktopControlPageState extends State<DesktopControlPage>
 
   void _listenToStreams() {
     _aiSubscription = SyncService().onAIStream.listen((data) {
-      if (mounted) {
-        setState(() {
-          if (_messages.isNotEmpty && _messages.last['isStreaming'] == true) {
-            _messages[_messages.length - 1]['content'] +=
-                data['response'] as String;
-          }
-        });
-        _scrollToBottom();
-      }
+      if (!mounted) return;
+      if (data['promptId'] != _currentPromptId) return;
+
+      final chunk = data['response'] as String? ?? '';
+      final isStreaming = data['isStreaming'] ?? false;
+      setState(() {
+        if (_messages.isNotEmpty) {
+          _messages[_messages.length - 1]['content'] += chunk;
+          _messages[_messages.length - 1]['isStreaming'] = isStreaming;
+        }
+        if (!isStreaming) {
+          _isLoading = false;
+          _currentPromptId = null;
+        }
+      });
+      _scrollToBottom();
     });
 
     _statusSubscription = SyncService().onDesktopStatus.listen((status) {
@@ -66,6 +76,15 @@ class _DesktopControlPageState extends State<DesktopControlPage>
           msg['qrData'] as String?,
         );
       }
+    });
+
+    _desktopControlActionSubscription =
+        SyncService().onDesktopControl.listen((msg) {
+      if (!mounted) return;
+      final action = msg['action'] ?? 'desktop-control';
+      final detail = msg['output'] ?? msg['error'] ?? 'Done';
+      final verb = msg['success'] == true ? '✓' : '⚠️';
+      _appendActionLog('$verb $action • $detail');
     });
   }
 
@@ -114,11 +133,16 @@ class _DesktopControlPageState extends State<DesktopControlPage>
 
       if (mounted) {
         setState(() {
-          _isLoading = false;
-          if (_messages.isNotEmpty && _messages.last['isStreaming'] == true) {
-            _messages[_messages.length - 1]['content'] =
-                response?['response'] ?? 'No response';
-            _messages[_messages.length - 1]['isStreaming'] = false;
+          if (response == null || response['success'] != true) {
+            final error = response?['error'] ?? 'Failed to send prompt';
+            if (_messages.isNotEmpty) {
+              _messages[_messages.length - 1]['content'] = 'Error: $error';
+              _messages[_messages.length - 1]['isStreaming'] = false;
+            }
+            _isLoading = false;
+            _currentPromptId = null;
+          } else {
+            _currentPromptId = response['promptId'];
           }
         });
       }
@@ -143,6 +167,15 @@ class _DesktopControlPageState extends State<DesktopControlPage>
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
+      }
+    });
+  }
+
+  void _appendActionLog(String text) {
+    setState(() {
+      _actionLogs.insert(0, text);
+      if (_actionLogs.length > 5) {
+        _actionLogs.removeLast();
       }
     });
   }
@@ -211,6 +244,7 @@ class _DesktopControlPageState extends State<DesktopControlPage>
     _aiSubscription?.cancel();
     _statusSubscription?.cancel();
     _desktopToMobileSubscription?.cancel();
+    _desktopControlActionSubscription?.cancel();
     _promptController.dispose();
     _scrollController.dispose();
     _tabController.dispose();
@@ -343,8 +377,36 @@ class _DesktopControlPageState extends State<DesktopControlPage>
                       _buildMessageBubble(_messages[index]),
                 ),
         ),
+        if (_actionLogs.isNotEmpty) _buildActionLogPanel(),
         _buildPromptInput(),
       ],
+    );
+  }
+
+  Widget _buildActionLogPanel() {
+    final visibleLogs = _actionLogs.take(3).toList();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('AI Actions',
+              style: TextStyle(color: Colors.white54, fontSize: 11)),
+          const SizedBox(height: 6),
+          ...visibleLogs.map((log) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(log,
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 12)),
+              )),
+        ],
+      ),
     );
   }
 

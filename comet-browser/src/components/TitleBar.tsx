@@ -114,7 +114,7 @@ const TitleBar = ({ onToggleSpotlightSearch, onOpenSettings }: TitleBarProps) =>
                 <span className="text-xs font-black uppercase tracking-widest text-white/80">Comet-AI</span>
             </div>
             {showTabBar && (
-                <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 drag-region">
                     <VirtualizedTabBar
                         tabs={store.tabs}
                         activeTabId={store.activeTabId}

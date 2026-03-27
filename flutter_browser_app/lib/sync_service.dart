@@ -467,57 +467,25 @@ class SyncService {
 
     try {
       if (action == 'send-prompt') {
-        // For prompts, wait for AI response stream
-        final responses = <String>[];
-        final sub = _aiStreamController.stream
-            .where((msg) => msg['promptId'] == commandId)
-            .listen((msg) {
-          responses.add(msg['response'] as String);
-        });
-
-        await Future.delayed(const Duration(seconds: 60));
-        sub.cancel();
-
         return {
           'success': true,
-          'response': responses.join(''),
           'promptId': commandId,
+          'commandId': commandId,
         };
-      } else {
-        // For other actions, wait for direct response
-        final response = await onCommandResponse
-            .firstWhere(
-              (msg) => msg['commandId'] == commandId,
-              orElse: () => {'error': 'Timeout'},
-            )
-            .timeout(const Duration(seconds: 30));
-
-        return response;
       }
+
+      final response = await onCommandResponse
+          .firstWhere(
+            (msg) => msg['commandId'] == commandId,
+            orElse: () => {'error': 'Timeout'},
+          )
+          .timeout(const Duration(seconds: 30));
+
+      return response;
     } catch (e) {
       print('[Sync] Desktop control failed: $e');
       return {'error': e.toString()};
     }
-  }
-
-  /// Send prompt to desktop AI and stream response
-  Stream<Map> streamPromptToDesktop(String prompt, {String? model}) {
-    final promptId = const Uuid().v4();
-
-    _desktopSocket?.add(
-      jsonEncode({
-        'type': 'desktop-control',
-        'commandId': promptId,
-        'action': 'send-prompt',
-        'prompt': prompt,
-        'promptId': promptId,
-        'args': {'model': model},
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      }),
-    );
-
-    return _aiStreamController.stream
-        .where((msg) => msg['promptId'] == promptId);
   }
 
   /// Request desktop status

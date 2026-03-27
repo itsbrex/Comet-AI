@@ -833,76 +833,43 @@ export function generateSmartPDF(
   ocrData?: PDFOCRData[]
 ): string {
   let template = 'professional';
-  
-  // Extract template from [TEMPLATE:xxx] marker or JSON
-  const templateMatch = content.match(/\[TEMPLATE:([^\]]+)\]/i);
+  let title = 'Document';
+  let sanitizedContent = content;
+
+  const templateMatch = sanitizedContent.match(/\[TEMPLATE:([^\]]+)\]/i);
   if (templateMatch) {
     template = templateMatch[1].trim().toLowerCase();
-    content = content.replace(/\[TEMPLATE:[^\]]+\]/gi, '');
+    sanitizedContent = sanitizedContent.replace(/\[TEMPLATE:[^\]]+\]/gi, '');
   }
-  
-  // Try to extract from JSON and preserve it as marker
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
+
+  const jsonMatch = sanitizedContent.match(/\{[\s\S]*?\}/);
+  if (jsonMatch) {
+    try {
       const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed.template) {
-        template = parsed.template;
+      if (parsed.template) template = parsed.template.toLowerCase();
+      if (parsed.title) title = parsed.title;
+      if (parsed.content && typeof parsed.content === 'string' && parsed.content.length > 0) {
+        sanitizedContent = parsed.content;
       }
+    } catch {
+      // ignore invalid JSON, keep raw text
     }
-  } catch {}
-  
-  // Always add template marker - let main.js handle the rendering
-  const templateMarker = `[TEMPLATE:${template}]`;
-  
-  // If no JSON content, just return content with template marker
-  if (!content.includes('{') || !content.includes('"pages"')) {
-    return templateMarker + '\n\n' + content;
   }
-  
-  // If JSON pages exist, convert to markdown format with template marker
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*"pages"[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]) as EnhancedPDFData;
-      if (parsed.pages && Array.isArray(parsed.pages) && parsed.pages.length > 0) {
-        let markdown = '';
-        
-        // Add metadata
-        if (parsed.title) markdown += `# ${parsed.title}\n\n`;
-        if (parsed.subtitle) markdown += `*${parsed.subtitle}*\n\n`;
-        if (parsed.author) markdown += `**Author:** ${parsed.author}\n\n---\n\n`;
-        
-        // Process pages
-        for (let i = 0; i < parsed.pages.length; i++) {
-          const page = parsed.pages[i];
-          markdown += `## ${page.icon || ''} ${page.title || `Section ${i + 1}`}\n\n`;
-          
-          if (page.sections && page.sections.length > 0) {
-            for (const section of page.sections) {
-              if (section.title) {
-                markdown += `### ${section.icon || ''} ${section.title}\n\n`;
-              }
-              markdown += `${section.content || ''}\n\n`;
-            }
-          } else if (page.content) {
-            markdown += `${page.content}\n\n`;
-          }
-          
-          if (i < parsed.pages.length - 1) {
-            markdown += '\n---\n\n';
-          }
-        }
-        
-        return templateMarker + '\n\n' + markdown;
-      }
-    }
-  } catch (e) {
-    console.log('JSON parsing failed:', e);
+
+  if (sanitizedContent.length < 20 && title) {
+    sanitizedContent = title;
   }
-  
-  // Fallback: just add template marker
-  return templateMarker + '\n\n' + content;
+
+  const templateStyles: Record<string, PDFStyles> = {
+    professional: { accentColor: '#0ea5e9', outlineColor: '#cbd5f5', background: '#ffffff' },
+    executive: { accentColor: '#8b5cf6', outlineColor: '#e0d7ff', background: '#f8f5ff' },
+    minimalist: { accentColor: '#475569', outlineColor: '#e2e8f0', background: '#ffffff' },
+    academic: { accentColor: '#0f172a', outlineColor: '#cbd5f5', background: '#f8fafc' },
+    dark: { accentColor: '#facc15', outlineColor: '#374151', background: '#030712' },
+  };
+
+  const styles = templateStyles[template] || templateStyles.professional;
+  return buildCleanPDFContent(sanitizedContent, title, iconBase64, images, styles);
 }
 
 export function buildCapabilityReportPDF(

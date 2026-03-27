@@ -288,6 +288,7 @@ FOR AUTOMATION MANAGEMENT:
 - [LIST_OPEN_TABS]
 - [CREATE_PDF_JSON: <JSON>] ← ONLY USE THIS FORMAT. JSON must include: title, and either pages array or content
   Templates: professional, executive, academic, minimalist, dark
+  Tip: Embed remote visuals by inserting the [IMAGE_URL: https://example.com/asset.png | alt:Caption | caption:Detailed caption] tag (without extra backticks) anywhere in your JSON content; the browser fetches the URL, converts it to Base64, and places the image straight into the PDF.
   ⚠️ ALWAYS include "template" field to specify the template style!
   Example: [CREATE_PDF_JSON: {"title":"Report","template":"professional","pages":[{"title":"Summary","sections":[{"title":"Key Points","content":"## Points\n\n- Point 1\n- Point 2"}]}]}]
   
