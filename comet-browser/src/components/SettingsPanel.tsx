@@ -26,6 +26,7 @@ import ExtensionSettings from './ExtensionSettings';
 import McpSettings from './McpSettings';
 import PermissionSettings from './PermissionSettings';
 import AutomationSettings from './AutomationSettings';
+import UpdatesSettings from './UpdatesSettings';
 
 const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () => void, defaultSection?: string }) => {
     const store = useAppStore();
@@ -48,9 +49,12 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
         // Listen for auth state changes to update the UI
         const unsubscribe = firebaseService.onAuthStateChanged((user) => {
             setCurrentUser(user);
-            setUser(user ? { uid: user.uid, email: user.email || '', displayName: user.displayName || '', photoURL: user.photoURL || '' } : null);
             if (user) {
+                setUser({ uid: user.uid, email: user.email || '', displayName: user.displayName || '', photoURL: user.photoURL || '' });
                 fetchHistory();
+            } else {
+                // Avoid force-logging-out sessions established via custom auth flows when Firebase isn't signed in
+                console.warn('[Auth] Firebase auth is null; retaining existing local session.');
             }
         });
 
@@ -143,6 +147,7 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
         { id: 'system', icon: <Globe size={18} />, label: 'System' },
         { id: 'ambient-music', icon: <Music2 size={18} />, label: 'Ambient Music' },
         ...(store.isAdmin ? [{ id: 'admin', icon: <ShieldAlert size={18} />, label: 'Admin Console' }] : []),
+        { id: 'updates', icon: <Download size={18} />, label: 'Updates' },
         { id: 'about', icon: <Info size={18} />, label: 'About Comet' },
     ];
 
@@ -348,6 +353,56 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                                         </div>
                                     </div>
                                     <p className="text-white/60 text-sm">Configure macOS permissions in the Permissions section to enable shell commands and automation features.</p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col gap-4">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-bold text-white">Ad blocker</p>
+                                                <p className="text-xs text-white/40">Strip ads & trackers across all tabs.</p>
+                                            </div>
+                                            <button
+                                                onClick={() => store.setEnableAdblocker(!store.enableAdblocker)}
+                                                className={`relative w-14 h-8 rounded-full border transition-all ${store.enableAdblocker ? 'bg-deep-space-accent-neon/20 border-deep-space-accent-neon shadow-[0_0_12px_rgba(56,189,248,0.35)]' : 'bg-white/5 border-white/10'}`}
+                                                aria-label="Toggle ad blocker"
+                                            >
+                                                <span
+                                                    className={`absolute top-1 left-1 w-6 h-6 rounded-full bg-white transition-transform duration-200 ${store.enableAdblocker ? 'translate-x-6 bg-deep-space-accent-neon text-black' : 'translate-x-0'}`}
+                                                />
+                                            </button>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                                            <ShieldCheck size={14} className={store.enableAdblocker ? 'text-deep-space-accent-neon' : 'text-white/30'} />
+                                            <span className={store.enableAdblocker ? 'text-deep-space-accent-neon' : 'text-white/40'}>
+                                                {store.enableAdblocker ? 'Enabled - quietly blocking clutter' : 'Disabled - allow all site assets'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col gap-4">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-bold text-white">AI Overview</p>
+                                                <p className="text-xs text-white/40">One-glance summaries on page load.</p>
+                                            </div>
+                                            <button
+                                                onClick={() => store.setEnableAiOverview(!store.enableAiOverview)}
+                                                className={`relative w-14 h-8 rounded-full border transition-all ${store.enableAiOverview ? 'bg-deep-space-accent-neon/20 border-deep-space-accent-neon shadow-[0_0_12px_rgba(56,189,248,0.35)]' : 'bg-white/5 border-white/10'}`}
+                                                aria-label="Toggle AI overview"
+                                            >
+                                                <span
+                                                    className={`absolute top-1 left-1 w-6 h-6 rounded-full bg-white transition-transform duration-200 ${store.enableAiOverview ? 'translate-x-6 bg-deep-space-accent-neon text-black' : 'translate-x-0'}`}
+                                                />
+                                            </button>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                                            <Sparkles size={14} className={store.enableAiOverview ? 'text-deep-space-accent-neon' : 'text-white/30'} />
+                                            <span className={store.enableAiOverview ? 'text-deep-space-accent-neon' : 'text-white/40'}>
+                                                {store.enableAiOverview ? 'Enabled - show instant AI cards' : 'Disabled - keep pages untouched'}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -668,6 +723,8 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
 
                         {activeSection === 'api-keys' && <ApiKeysSettings />}
 
+                        {activeSection === 'updates' && <UpdatesSettings />}
+                        
                         {activeSection === 'about' && (
                             <div className="text-center py-16 space-y-8">
                                 <img src="icon.png" alt="Comet Icon" className="w-24 h-24 mx-auto mb-2 shadow-2xl drop-shadow-[0_0_20px_rgba(56,189,248,0.4)] animate-pulse" />

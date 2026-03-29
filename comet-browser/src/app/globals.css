@@ -1,7 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
-/* Base configuration for Tailwind 4 */
+/* ─────────────────────────────────────────────────────────────
+   TAILWIND 4 THEME TOKENS
+   ───────────────────────────────────────────────────────────── */
 @theme {
   --color-primary-bg: #FFFFFF;
   --color-primary-text: #1F2937;
@@ -18,60 +20,326 @@
   --color-dark-border: rgba(56, 189, 248, 0.15);
 }
 
+/* ─────────────────────────────────────────────────────────────
+   CSS VARIABLES — SHARED ALIASES (always present on :root)
+   All theme classes override these same variable names so that
+   every component can reference e.g. var(--accent) without
+   knowing which theme is active.
+   ───────────────────────────────────────────────────────────── */
 :root {
+  /* structural */
+  --primary-bg: #FFFFFF;
+  --navbar-bg: #FFFFFF;
+  --card-bg: #F9FAFB;
+  --primary-text: #1F2937;
+  --secondary-text: #4B5563;
+  --accent: #1D4ED8;
+  --accent-light: #3B82F6;
+  --border-color: #E5E7EB;
+
+  /* legacy color tokens kept for Tailwind compatibility */
   --color-primary-bg: #FFFFFF;
   --color-primary-text: #1F2937;
   --color-secondary-text: #4B5563;
   --color-accent: #1D4ED8;
   --color-accent-light: #3B82F6;
   --color-border-color: #E5E7EB;
+
+  /* glow / neon (neutral in light) */
+  --deep-space-glow: rgba(14, 165, 233, 0.25);
+  --deep-space-accent-neon: #0EA5E9;
+
+  /* fonts */
   --font-display: "Space Grotesk", "Manrope", "Syne", "Inter", system-ui, sans-serif;
   --font-body: "Manrope", "Space Grotesk", system-ui, -apple-system, sans-serif;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   DARK THEME  (deep space, sky-blue accent)
+   ───────────────────────────────────────────────────────────── */
 .dark {
+  --primary-bg: #020205;
+  --navbar-bg: #0a0a10;
+  --card-bg: #0a0a10;
+  --primary-text: #F8FAFC;
+  --secondary-text: #94A3B8;
+  --accent: #38BDF8;
+  --accent-light: #7DD3FC;
+  --border-color: rgba(56, 189, 248, 0.15);
+
   --color-primary-bg: #020205;
   --color-primary-text: #F8FAFC;
   --color-secondary-text: #94A3B8;
   --color-accent: #38BDF8;
   --color-accent-light: #7DD3FC;
   --color-border-color: rgba(56, 189, 248, 0.15);
-  --deep-space-glow: rgba(56, 189, 248, 0.4);
+  --color-dark-border: rgba(56, 189, 248, 0.15);
+
+  --deep-space-glow: rgba(56, 189, 248, 0.40);
+  --deep-space-accent-neon: #38BDF8;
+
+  color-scheme: dark;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   LIGHT THEME  (rich slate-white, cobalt-blue accent)
+   ───────────────────────────────────────────────────────────── */
 .light {
-  --color-primary-bg: #f5f7fb;
-  --color-primary-text: #0f172a;
-  --color-secondary-text: #475569;
-  --color-accent: #0ea5e9;
-  --color-accent-light: #67e8f9;
-  --color-border-color: #e0e7ff;
-  --color-dark-border: rgba(14, 165, 233, 0.2);
-  --deep-space-glow: rgba(14, 165, 233, 0.3);
+  --primary-bg: #f7f9ff;
+  --navbar-bg: rgba(255, 255, 255, 0.92);
+  --card-bg: #ffffff;
+  --primary-text: #0B152F;
+  --secondary-text: #334155;
+  --accent: #1E3A8A;
+  --accent-light: #3B82F6;
+  --border-color: #CBD5E1;
+
+  --color-primary-bg: #f7f9ff;
+  --color-primary-text: #0B152F;
+  --color-secondary-text: #334155;
+  --color-accent: #1E3A8A;
+  --color-accent-light: #3B82F6;
+  --color-border-color: #CBD5E1;
+  --color-dark-border: rgba(30, 58, 138, 0.22);
+
+  --deep-space-glow: rgba(30, 58, 138, 0.26);
+  --deep-space-accent-neon: #1E3A8A;
+
+  color-scheme: light;
 }
 
+/* Light body: cool lavender-white gradient */
+.light body {
+  background:
+    radial-gradient(700px at 15% 20%, rgba(59, 130, 246, 0.12), transparent 55%),
+    radial-gradient(900px at 80% 0%, rgba(30, 58, 138, 0.08), transparent 50%),
+    linear-gradient(145deg, #FBFDFF 0%, #EEF2FF 45%, #E0E7FF 100%);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   VIBRANT THEME  (deep purple cosmos, neon fuchsia + aurora)
+   ───────────────────────────────────────────────────────────── */
+.vibrant {
+  --primary-bg: #050111;
+  --navbar-bg: rgba(10, 4, 28, 0.92);
+  --card-bg: rgba(22, 10, 48, 0.82);
+  --primary-text: #F8EDFF;
+  --secondary-text: #DDD6FE;
+  --accent: #FF66C4;
+  --accent-light: #22D3EE;
+  --border-color: rgba(255, 102, 196, 0.26);
+
+  --color-primary-bg: #050111;
+  --color-primary-text: #F8EDFF;
+  --color-secondary-text: #DDD6FE;
+  --color-accent: #FF66C4;
+  --color-accent-light: #22D3EE;
+  --color-border-color: rgba(255, 102, 196, 0.26);
+  --color-dark-border: rgba(255, 102, 196, 0.26);
+
+  --deep-space-glow: rgba(255, 102, 196, 0.65);
+  --deep-space-accent-neon: #FF66C4;
+
+  color-scheme: dark;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   BASE BODY
+   ───────────────────────────────────────────────────────────── */
 body {
-  background-color: var(--color-primary-bg);
-  color: var(--color-primary-text);
-  font-family: "Space Grotesk", "Manrope", "Syne", "Inter", system-ui, -apple-system, sans-serif;
+  background-color: var(--primary-bg);
+  color: var(--primary-text);
+  font-family: var(--font-display);
   font-weight: 400;
   letter-spacing: 0.02em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom CSS instead of @apply to avoid build crashes */
+/* ─────────────────────────────────────────────────────────────
+   BACKGROUND UTILITIES
+   ───────────────────────────────────────────────────────────── */
+.bg-deep-space {
+  background: var(--primary-bg);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Dark: classic deep-space radial */
+.dark .bg-deep-space {
+  background: radial-gradient(circle at center, #0B0E14 0%, #020205 100%);
+}
+
+/* Vibrant: rich purple nebula with silk textures */
+.vibrant .bg-deep-space {
+  background:
+    radial-gradient(1200px at 20% 25%, rgba(139, 92, 246, 0.20) 0%, transparent 50%),
+    radial-gradient(1000px at 85% 15%, rgba(236, 72, 153, 0.20) 0%, transparent 45%),
+    radial-gradient(700px at 50% 80%, rgba(34, 211, 238, 0.18) 0%, transparent 55%),
+    #050111;
+}
+
+/* Vibrant body: neon ribbons + ink backdrop */
+.vibrant body {
+  background:
+    radial-gradient(1200px at 12% 18%, rgba(139, 92, 246, 0.18) 0%, transparent 52%),
+    radial-gradient(1000px at 88% 12%, rgba(236, 72, 153, 0.18) 0%, transparent 50%),
+    linear-gradient(135deg, rgba(5, 1, 17, 0.96) 0%, rgba(10, 3, 28, 0.96) 60%, rgba(7, 2, 22, 0.98) 100%),
+    #050111;
+}
+
+/* Glassmorphism for Vibrant Panels */
+.vibrant .glass-panel {
+  background: rgba(15, 8, 32, 0.4);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
+  border: 1px solid rgba(232, 121, 249, 0.15);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+}
+
+.vibrant .glass-sidebar {
+  background: rgba(5, 2, 15, 0.65);
+  backdrop-filter: blur(35px) saturate(160%);
+  -webkit-backdrop-filter: blur(35px) saturate(160%);
+  border-right: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+/* Light: soft gradient */
+.light .bg-deep-space {
+  background: linear-gradient(160deg, #EEF2FF 0%, #F0F4FA 100%);
+}
+
+/* Starfield — dark & vibrant only */
+.dark .bg-deep-space::before,
+.vibrant .bg-deep-space::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 25px 35px, white, transparent),
+    radial-gradient(1px 1px at 50px 100px, white, transparent),
+    radial-gradient(1.5px 1.5px at 125px 150px, white, transparent),
+    radial-gradient(1px 1px at 175px 250px, white, transparent),
+    radial-gradient(1.5px 1.5px at 250px 350px, white, transparent),
+    radial-gradient(1px 1px at 320px 80px, white, transparent),
+    radial-gradient(1.5px 1.5px at 400px 200px, white, transparent);
+  background-size: 550px 550px;
+  opacity: 0.22;
+  animation: stars-move 120s linear infinite;
+  pointer-events: none;
+}
+
+/* Vibrant: animated aurora overlay */
+.vibrant .bg-deep-space::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 10% 20%, rgba(255, 102, 196, 0.20) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 65%, rgba(34, 211, 238, 0.18) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 90%, rgba(79, 70, 229, 0.12) 0%, transparent 42%);
+  pointer-events: none;
+  animation: aurora-drift 18s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  0%   { opacity: 0.8; transform: scale(1); }
+  50%  { opacity: 1.0; transform: scale(1.05) translateY(-8px); }
+  100% { opacity: 0.8; transform: scale(1); }
+}
+
+@keyframes stars-move {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(-550px);
+  }
+}
+
+.bg-nebula {
+  background:
+    radial-gradient(circle at 20% 30%, rgba(56, 189, 248, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.05) 0%, transparent 40%);
+}
+
+.vibrant .bg-nebula {
+  background:
+    radial-gradient(circle at 20% 30%, rgba(240, 171, 252, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(129, 140, 248, 0.08) 0%, transparent 40%);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   GLASS / CARD SURFACES
+   ───────────────────────────────────────────────────────────── */
 .glass-vibrant {
   backdrop-filter: blur(50px);
   background-color: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.50);
 }
 
+.vibrant .glass-vibrant {
+  background: linear-gradient(135deg, rgba(255, 102, 196, 0.08), rgba(34, 211, 238, 0.05));
+  border-color: rgba(255, 102, 196, 0.25);
+  box-shadow: 0 20px 60px rgba(5, 1, 17, 0.78), 0 0 46px rgba(34, 211, 238, 0.12);
+}
+
+.light .glass-vibrant {
+  background-color: rgba(255, 255, 255, 0.84);
+  border-color: rgba(37, 99, 235, 0.14);
+  box-shadow: 0 8px 32px rgba(37, 99, 235, 0.08);
+  backdrop-filter: blur(24px);
+}
+
+.glass-dark {
+  background-color: rgba(0, 0, 0, 0.40);
+  backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.light .glass-dark {
+  background-color: rgba(255, 255, 255, 0.80);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.glass {
+  background-color: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.light .glass {
+  background-color: rgba(255, 255, 255, 0.70);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.card-premium {
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 2.5rem;
+  backdrop-filter: blur(50px);
+}
+
+.light .card-premium {
+  background-color: #FFFFFF;
+  border-color: #E0E7EF;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+.vibrant .card-premium {
+  background-color: rgba(20, 8, 40, 0.60);
+  border-color: rgba(240, 171, 252, 0.12);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   BUTTONS
+   ───────────────────────────────────────────────────────────── */
 .btn-vibrant-primary {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(to right, #38BDF8, #6366F1);
+  background: linear-gradient(to right, var(--accent), var(--accent-light));
   color: white;
   font-weight: 900;
   text-transform: uppercase;
@@ -79,12 +347,17 @@ body {
   padding: 0.75rem 1.5rem;
   border-radius: 1rem;
   transition: all 0.3s;
-  box-shadow: 0 10px 30px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 10px 30px rgba(56, 189, 248, 0.30);
 }
 
 .btn-vibrant-primary:hover {
   transform: scale(1.05);
-  box-shadow: 0 15px 40px rgba(56, 189, 248, 0.5);
+  box-shadow: 0 15px 40px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.light .btn-vibrant-primary {
+  color: #0F172A;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.25);
 }
 
 .btn-vibrant-cyan {
@@ -99,19 +372,15 @@ body {
 }
 
 .btn-vibrant-cyan:hover {
-  box-shadow: 0 0 20px rgba(34, 211, 238, 0.4);
-}
-
-.text-neon {
-  text-shadow: 0 0 10px var(--deep-space-glow), 0 0 20px var(--deep-space-glow);
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.40);
 }
 
 .btn-vibrant-secondary {
   position: relative;
   overflow: hidden;
   background-color: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: var(--primary-text);
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -121,33 +390,61 @@ body {
 }
 
 .btn-vibrant-secondary:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.20);
 }
 
-.card-premium {
-  background-color: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 2.5rem;
-  backdrop-filter: blur(50px);
+.light .btn-vibrant-secondary {
+  background-color: #F1F5F9;
+  border-color: #CBD5E1;
+  color: #0F172A;
 }
 
-.glass-dark {
-  background-color: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(40px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+.light .btn-vibrant-secondary:hover {
+  background-color: #E2E8F0;
 }
 
-.glass {
-  background-color: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+.vibrant .btn-vibrant-secondary {
+  border-color: rgba(232, 121, 249, 0.22);
+}
+
+.vibrant .btn-vibrant-secondary:hover {
+  border-color: rgba(232, 121, 249, 0.40);
+  background-color: rgba(232, 121, 249, 0.08);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   NEON / GLOW EFFECTS
+   ───────────────────────────────────────────────────────────── */
+.text-neon {
+  text-shadow: 0 0 10px var(--deep-space-glow), 0 0 20px var(--deep-space-glow);
 }
 
 .neon-glow {
   box-shadow: 0 0 20px var(--deep-space-glow);
 }
 
+/* Light: soften glow */
+.light .text-neon {
+  text-shadow: none;
+}
+
+.light .neon-glow {
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.18);
+}
+
+/* Vibrant: intense purple neon */
+.vibrant .text-neon {
+  text-shadow: 0 0 12px rgba(232, 121, 249, 0.70), 0 0 28px rgba(232, 121, 249, 0.30);
+}
+
+.vibrant .neon-glow {
+  box-shadow: 0 0 24px rgba(232, 121, 249, 0.45);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PROGRESS / GRADIENT ANIMATIONS
+   ───────────────────────────────────────────────────────────── */
 .animate-gradient-x {
   animation: gradient-x 15s ease infinite;
   background-size: 200% 200%;
@@ -167,44 +464,87 @@ body {
   }
 }
 
-.bg-deep-space {
-  background: radial-gradient(circle at center, #0B0E14 0%, #020205 100%);
-  position: relative;
-  overflow: hidden;
+.gradient-progressbar {
+  background: linear-gradient(90deg, var(--accent), #818CF8, #C084FC, #f472b6);
+  background-size: 200% auto;
+  animation: progress-gradient 2s linear infinite;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
-.bg-deep-space::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(1px 1px at 25px 35px, white, transparent),
-    radial-gradient(1px 1px at 50px 100px, white, transparent),
-    radial-gradient(1.5px 1.5px at 125px 150px, white, transparent),
-    radial-gradient(1px 1px at 175px 250px, white, transparent),
-    radial-gradient(1.5px 1.5px at 250px 350px, white, transparent);
-  background-size: 550px 550px;
-  opacity: 0.3;
-  animation: stars-move 100s linear infinite;
-  pointer-events: none;
-}
-
-@keyframes stars-move {
+@keyframes progress-gradient {
   from {
-    transform: translateY(0);
+    background-position: 0% 50%;
   }
 
   to {
-    transform: translateY(-550px);
+    background-position: 200% 50%;
   }
 }
 
-.bg-nebula {
-  background:
-    radial-gradient(circle at 20% 30%, rgba(56, 189, 248, 0.05) 0%, transparent 40%),
-    radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.05) 0%, transparent 40%);
+/* ─────────────────────────────────────────────────────────────
+   SCROLLBAR — adapts per theme
+   ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
 
+::-webkit-scrollbar-track {
+  background: var(--primary-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: 5px;
+  border: 2px solid var(--primary-bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 25%, transparent) var(--primary-bg);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   NEURAL PROMPT INPUT
+   ───────────────────────────────────────────────────────────── */
+.neural-prompt {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(0, 0, 0, 0.40);
+  transition: all 0.3s ease;
+}
+
+.neural-prompt:focus {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--accent) 12%, transparent);
+  background: rgba(0, 0, 0, 0.60);
+}
+
+.light .neural-prompt {
+  border-color: #E0E7EF;
+  background: #FFFFFF;
+}
+
+.light .neural-prompt:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+  background: #FFFFFF;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ELECTRON DRAG REGIONS
+   ───────────────────────────────────────────────────────────── */
 .drag-region {
   -webkit-app-region: drag;
 }
@@ -213,45 +553,9 @@ body {
   -webkit-app-region: no-drag;
 }
 
-.neural-prompt {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.4);
-  transition: all 0.3s ease;
-}
-
-.neural-prompt:focus {
-  border-color: rgba(56, 189, 248, 0.4);
-  box-shadow: 0 0 15px rgba(56, 189, 248, 0.1);
-  background: rgba(0, 0, 0, 0.6);
-}
-
-/* Dark Scrollbar */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: #020205;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(56, 189, 248, 0.2);
-  border-radius: 5px;
-  border: 2px solid #020205;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(56, 189, 248, 0.4);
-}
-
-/* Firefox */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(56, 189, 248, 0.2) #020205;
-}
-
-/* Patriot Gradient */
+/* ─────────────────────────────────────────────────────────────
+   MADE IN INDIA GRADIENT
+   ───────────────────────────────────────────────────────────── */
 .made-in-india-gradient-text {
   background: linear-gradient(90deg, #FF9933 0%, #FFFFFF 50%, #138808 100%);
   background-size: 300% 100%;
@@ -269,22 +573,5 @@ body {
 
   100% {
     background-position: 0% 0%;
-  }
-}
-
-.gradient-progressbar {
-  background: linear-gradient(90deg, #38BDF8, #818CF8, #C084FC, #f472b6);
-  background-size: 200% auto;
-  animation: progress-gradient 2s linear infinite;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
-}
-
-@keyframes progress-gradient {
-  from {
-    background-position: 0% 50%;
-  }
-
-  to {
-    background-position: 200% 50%;
   }
 }

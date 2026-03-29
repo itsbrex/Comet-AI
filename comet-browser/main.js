@@ -166,6 +166,41 @@ const sendToActiveWindow = (channel, ...args) => {
   return null;
 };
 
+// Quick helpers for native menu items
+const openSettingsSection = (section) => {
+  const target = getTopWindow();
+  if (target && !target.isDestroyed()) {
+    target.webContents.send('set-settings-section', section);
+  } else {
+    // If no window open, create one and then send
+    createWindow().then(win => {
+      win.webContents.once('did-finish-load', () => {
+        win.webContents.send('set-settings-section', section);
+      });
+    });
+  }
+};
+
+const triggerShortcut = (action) => {
+  sendToActiveWindow('execute-shortcut', action);
+};
+
+const openGuide = () => {
+  const candidates = [
+    path.join(process.resourcesPath || __dirname, 'Guide.html'),
+    path.join(app.getAppPath(), 'Guide.html'),
+    path.join(__dirname, 'Guide.html'),
+    path.join(__dirname, '..', 'Guide.html'),
+  ];
+
+  const localGuide = candidates.find((p) => fs.existsSync(p));
+  if (localGuide) {
+    sendToActiveWindow('add-new-tab', `file://${localGuide}`);
+  } else {
+    sendToActiveWindow('add-new-tab', 'https://www.comet.ai/guide');
+  }
+};
+
 const registerWindow = (win) => {
   openWindows.add(win);
   mainWindow = win;
@@ -197,7 +232,7 @@ const toggleMacSidebarWindow = () => {
     width: 360,
     height: 820,
     show: false,
-    frame: false,
+    frame: true,
     transparent: true,
     vibrancy: 'ultra-dark',
     visualEffectState: 'active',
@@ -206,6 +241,7 @@ const toggleMacSidebarWindow = () => {
     focusable: true,
     resizable: false,
     title: 'Comet AI Sidebar',
+    titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -240,6 +276,8 @@ const buildApplicationMenu = () => {
       submenu: [
         { role: 'about' },
         { type: 'separator' },
+        { label: 'Check for Updates...', click: () => openSettingsSection('updates') },
+        { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
         { role: 'hide' },
@@ -253,9 +291,13 @@ const buildApplicationMenu = () => {
       label: 'File',
       submenu: [
         { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: () => createWindow() },
-        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => sendToActiveWindow('add-new-tab', 'https://www.comet.ai') },
+        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => triggerShortcut('new-tab') },
+        { label: 'New Incognito Tab', accelerator: 'CmdOrCtrl+Shift+N', click: () => triggerShortcut('new-incognito-tab') },
         { type: 'separator' },
-        { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: () => sendToActiveWindow('execute-shortcut', 'open-settings') },
+        { label: 'Save Page As...', accelerator: 'CmdOrCtrl+S', click: () => sendToActiveWindow('save-page-offline') },
+        { label: 'Print...', accelerator: 'CmdOrCtrl+P', click: () => sendToActiveWindow('print-page') },
+        { type: 'separator' },
+        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => triggerShortcut('close-tab') },
         { label: 'Close Window', role: 'close' },
         ...(!isMac ? [{ type: 'separator' }, { role: 'quit' }] : [])
       ]
@@ -269,23 +311,107 @@ const buildApplicationMenu = () => {
         { role: 'cut' },
         { role: 'copy' },
         { role: 'paste' },
-        { role: 'selectAll' }
+        { role: 'pasteAndMatchStyle' },
+        { role: 'delete' },
+        { role: 'selectAll' },
+        { type: 'separator' },
+        {
+          label: 'Speech',
+          submenu: [
+            { role: 'startSpeaking' },
+            { role: 'stopSpeaking' }
+          ]
+        }
       ]
     },
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
+        { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => triggerShortcut('reload-tab') },
+        { label: 'Force Reload', accelerator: 'CmdOrCtrl+Shift+R', role: 'forceReload' },
         { role: 'toggleDevTools' },
         { type: 'separator' },
+        { label: 'Actual Size', role: 'resetZoom' },
+        { label: 'Zoom In', role: 'zoomIn' },
+        { label: 'Zoom Out', role: 'zoomOut' },
+        { type: 'separator' },
         { role: 'togglefullscreen' },
+        { type: 'separator' },
+        { label: 'Toggle Comet Sidebar', accelerator: 'CmdOrCtrl+Shift+S', click: () => triggerShortcut('toggle-sidebar') },
         {
-          label: 'Toggle AI Sidebar',
-          accelerator: 'CmdOrCtrl+Shift+S',
-          visible: isMac,
-          click: () => toggleMacSidebarWindow()
+          label: 'Cycle theme',
+          accelerator: 'CmdOrCtrl+Shift+T',
+          click: () => triggerShortcut('cycle-theme')
         }
+      ]
+    },
+    {
+      label: 'History',
+      submenu: [
+        { label: 'Show Full History', accelerator: 'CmdOrCtrl+Y', click: () => triggerShortcut('open-history') },
+        { type: 'separator' },
+        { label: 'Recently Closed', role: 'recentDocuments' },
+        { type: 'separator' },
+        { label: 'Clear Browsing Data...', click: () => openSettingsSection('privacy') }
+      ]
+    },
+    {
+      label: 'AI Hub',
+      submenu: [
+        { label: 'AI Chat Sidebar', accelerator: 'CmdOrCtrl+Option+C', click: () => triggerShortcut('open-ai-chat') },
+        { label: 'Toggle AI Assistant', accelerator: 'CmdOrCtrl+Option+A', click: () => triggerShortcut('toggle-ai-assist') },
+        { label: 'Show AI Overview', accelerator: 'CmdOrCtrl+Option+O', click: () => triggerShortcut('toggle-ai-overview') },
+        { type: 'separator' },
+        { label: 'Spotlight Search', accelerator: 'CmdOrCtrl+Space', click: () => triggerShortcut('toggle-spotlight') },
+        { label: 'Agent Task Input', accelerator: 'CmdOrCtrl+Option+Space', click: () => sendToActiveWindow('focus-ai-input') },
+        { type: 'separator' },
+        { label: 'Scheduling Center', click: () => openSettingsSection('automation') },
+        { label: 'Model Intelligence', click: () => openSettingsSection('performance') }
+      ]
+    },
+    {
+      label: 'Workspace',
+      submenu: [
+        { label: 'Workspace Dashboard', accelerator: 'CmdOrCtrl+Option+W', click: () => triggerShortcut('open-workspace') },
+        { label: 'Media Studio', accelerator: 'CmdOrCtrl+Option+M', click: () => triggerShortcut('open-media-studio') },
+        { label: 'PDF Workspace', accelerator: 'CmdOrCtrl+Option+P', click: () => triggerShortcut('open-pdf-workspace') },
+        { label: 'Presenton', accelerator: 'CmdOrCtrl+Option+L', click: () => triggerShortcut('open-presenton') },
+        { type: 'separator' },
+        { label: 'Web Store', click: () => triggerShortcut('open-webstore') },
+        { label: 'Extensions manager', click: () => triggerShortcut('open-extensions') },
+        { type: 'separator' },
+        { label: 'Unified Cart', accelerator: 'CmdOrCtrl+Option+U', click: () => triggerShortcut('open-cart') }
+      ]
+    },
+    {
+      label: 'Tools',
+      submenu: [
+        { label: 'Password Manager', accelerator: 'CmdOrCtrl+Option+K', click: () => triggerShortcut('open-password-manager') },
+        { label: 'Clipboard Manager', accelerator: 'CmdOrCtrl+Option+V', click: () => triggerShortcut('open-clipboard') },
+        { label: 'Vault & Autofill', click: () => triggerShortcut('open-bookmarks') },
+        { type: 'separator' },
+        { label: 'P2P File Sync', click: () => triggerShortcut('open-p2p-sync') },
+        { label: 'Proxy Firewall', click: () => triggerShortcut('open-proxy-firewall') },
+        { label: 'Coding Dashboard', click: () => triggerShortcut('open-coding-dashboard') },
+        { type: 'separator' },
+        { label: 'Downloads', accelerator: 'CmdOrCtrl+Shift+J', click: () => triggerShortcut('open-downloads') },
+        { label: 'Camera Studio', click: () => triggerShortcut('open-camera') }
+      ]
+    },
+    {
+      label: 'Settings',
+      submenu: [
+        { label: 'General Preferences', accelerator: 'CmdOrCtrl+,', click: () => openSettingsSection('profile') },
+        { label: 'Appearance & Themes', click: () => openSettingsSection('appearance') },
+        { label: 'Search Engine', click: () => openSettingsSection('search') },
+        { type: 'separator' },
+        { label: 'Privacy & Security', click: () => openSettingsSection('privacy') },
+        { label: 'macOS Permissions', click: () => openSettingsSection('permissions') },
+        { label: 'Keyboard Shortcuts', click: () => openSettingsSection('shortcuts') },
+        { type: 'separator' },
+        { label: 'System Configuration', click: () => openSettingsSection('system') },
+        { label: 'Sync & Cloud', click: () => openSettingsSection('sync') },
+        { label: 'Advanced Logs', click: () => openSettingsSection('admin') }
       ]
     },
     {
@@ -294,21 +420,22 @@ const buildApplicationMenu = () => {
       submenu: [
         { role: 'minimize' },
         { role: 'zoom' },
-        ...(isMac ? [{ type: 'separator' }, { role: 'front' }] : [{ role: 'close' }])
+        { type: 'separator' },
+        { label: 'Cycle Next Tab', accelerator: 'Ctrl+Tab', click: () => triggerShortcut('next-tab') },
+        { label: 'Cycle Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: () => triggerShortcut('prev-tab') },
+        { type: 'separator' },
+        { role: 'front' }
       ]
     },
     {
       label: 'Help',
       role: 'help',
       submenu: [
-        {
-          label: 'Documentation',
-          click: () => sendToActiveWindow('add-new-tab', 'https://docs.latestinssan.com')
-        },
-        {
-          label: 'Release Notes',
-          click: () => sendToActiveWindow('add-new-tab', 'https://www.comet.ai/release-notes')
-        }
+        { label: 'Documentation', click: () => triggerShortcut('open-documentation') },
+        { label: 'Interactive Guide', accelerator: 'CmdOrCtrl+Shift+/', click: () => openGuide() },
+        { type: 'separator' },
+        { label: 'Report Issue...', click: () => sendToActiveWindow('add-new-tab', 'https://github.com/Preet3627/Comet-AI/issues') },
+        { label: 'Check for Updates', click: () => openSettingsSection('updates') }
       ]
     }
   ];
@@ -1466,29 +1593,29 @@ async function createWindow() {
     });
   }
 
+  const isMacPlatform = process.platform === 'darwin';
+  
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    frame: false,
-    transparent: false, // Keep opaque to avoid compositing issues with overlays
+    frame: isMacPlatform,
+    transparent: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
-      // Enable GPU acceleration for web content
       offscreen: false,
-      webSecurity: false, // Disable web security to allow file:// protocol
+      webSecurity: false,
       allowRunningInsecureContent: true,
       experimentalFeatures: true,
       enableRemoteModule: false,
       contextIsolation: true,
       additionalArguments: ['--enable-features=VizDisplayCompositor']
     },
-    titleBarStyle: 'hidden',
+    titleBarStyle: isMacPlatform ? 'hiddenInset' : 'hidden',
     backgroundColor: '#0D0E1C',
     icon: path.join(__dirname, 'out', 'icon.ico'),
-    // Optimize for GPU compositing
     show: false,
     paintWhenInitiallyHidden: false
   });
@@ -2059,24 +2186,30 @@ ipcMain.on('open-auth-window', (event, authUrl) => {
     }
 
     const authPreloadPath = path.join(__dirname, 'auth-preload.js');
+    const isMacPlatform = process.platform === 'darwin';
+    
     authWindow = new BrowserWindow({
       width: 540,
       height: 780,
-      frame: false,
-      transparent: true,
+      frame: isMacPlatform,
+      transparent: !isMacPlatform && !isMacPlatform,
       backgroundColor: '#02030a',
       hasShadow: true,
       resizable: true,
       parent: mainWindow,
       modal: true,
       show: false,
+      titleBarStyle: isMacPlatform ? 'hiddenInset' : 'hidden',
       webPreferences: {
-        preload: authPreloadPath,
+        preload: isMacPlatform ? path.join(__dirname, 'preload.js') : authPreloadPath,
         nodeIntegration: false,
         contextIsolation: true,
       },
     });
-    authWindow.setMenuBarVisibility(false);
+    
+    if (!isMacPlatform) {
+      authWindow.setMenuBarVisibility(false);
+    }
 
     // Fix "Unsecure Browser" error by setting a modern User-Agent
     authWindow.webContents.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
@@ -2095,12 +2228,12 @@ ipcMain.on('open-auth-window', (event, authUrl) => {
           mainWindow.webContents.send('auth-callback', url);
         }
         authWindow.close();
-      } else if (url.startsWith('http://localhost') && url.includes('code=')) { // Gmail OAuth redirect
+      } else if (url.startsWith('http://localhost') && url.includes('code=')) {
         event.preventDefault();
         const urlParams = new URLSearchParams(new URL(url).search);
         const code = urlParams.get('code');
         if (code) {
-          ipcMain.emit('gmail-oauth-code', null, code); // Send code to main process, which relays to gmailService
+          ipcMain.emit('gmail-oauth-code', null, code);
           authWindow.close();
         }
       }
@@ -2112,14 +2245,27 @@ ipcMain.on('open-auth-window', (event, authUrl) => {
           mainWindow.webContents.send('auth-callback', url);
         }
         authWindow.close();
-      } else if (url.startsWith('http://localhost') && url.includes('code=')) { // Gmail OAuth redirect
+      } else if (url.startsWith('http://localhost') && url.includes('code=')) {
         const urlParams = new URLSearchParams(new URL(url).search);
         const code = urlParams.get('code');
         if (code) {
-          ipcMain.emit('gmail-oauth-code', null, code); // Send code to main process, which relays to gmailService
+          ipcMain.emit('gmail-oauth-code', null, code);
           authWindow.close();
         }
       }
+    });
+
+    // Listen for postMessage from Ponsri Ponsri auth page for auth success
+    authWindow.webContents.on('console-message', (event, level, message) => {
+      try {
+        const data = JSON.parse(message);
+        if (data.type === 'comet-auth-success' && data.data) {
+          if (mainWindow) {
+            mainWindow.webContents.send('auth-callback', `comet-browser://auth?auth_status=success&uid=${data.data.uid}&email=${encodeURIComponent(data.data.email || '')}`);
+          }
+          authWindow.close();
+        }
+      } catch (e) {}
     });
 
     authWindow.on('closed', () => {
@@ -3746,6 +3892,62 @@ function handleDeepLink(url) {
 app.whenReady().then(async () => {
   registerAppFileProtocol();
   buildApplicationMenu();
+  
+  // Auto-update setup (only in production)
+  if (!require('electron-is-dev')) {
+    const { autoUpdater } = require('electron-updater');
+    
+    // Check for updates at startup
+    autoUpdater.checkForUpdatesAndNotify();
+    
+    // Auto check for updates every hour
+    setInterval(() => {
+      autoUpdater.checkForUpdates();
+    }, 1000 * 60 * 60); // 1 hour
+    
+    // Handle auto updater events
+    autoUpdater.on('checking-for-update', () => {
+      logMain('Checking for update...');
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-status', { checking: true });
+      }
+    });
+    
+    autoUpdater.on('update-available', (info) => {
+      logMain('Update available:', info);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-available', info);
+      }
+    });
+    
+    autoUpdater.on('update-not-available', (info) => {
+      logMain('Update not available:', info);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-not-available', info);
+      }
+    });
+    
+    autoUpdater.on('error', (err) => {
+      logErr('Error in auto-updater:', err);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-error', err.toString());
+      }
+    });
+    
+    autoUpdater.on('download-progress', (progressObj) => {
+      logMain(`Download progress: ${progressObj.percent}%`);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('download-progress', progressObj);
+      }
+    });
+    
+    autoUpdater.on('update-downloaded', (info) => {
+      logMain('Update downloaded:', info);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-downloaded', info);
+      }
+    });
+  }
   protocol.handle('comet', (request) => {
     const url = new URL(request.url);
     const resourcePath = url.hostname; // e.g., 'extensions', 'vault'
@@ -3967,23 +4169,31 @@ ipcMain.removeHandler('generate-pdf');
     notifyAI(`🔄 Initializing branded worker for PDF: ${title}...`);
     updateProgress(5, 'parsing');
 
-    // 0. Load Branding Icon — try multiple paths
+    // 0. Load Branding Icon — try multiple paths (dev and packaged .dmg)
     let iconBase64 = '';
     let iconMimeType = 'image/png';
     try {
-      const iconCandidates = [
+      const appPath = app.getAppPath();
+      const isPackaged = app.isPackaged;
+      const iconCandidates = isPackaged ? [
+        { p: path.join(appPath, 'assets', 'icon.png'), mime: 'image/png' },
+        { p: path.join(appPath, 'icon.png'),           mime: 'image/png' },
+        { p: path.join(process.resourcesPath, 'app', 'assets', 'icon.png'), mime: 'image/png' },
+        { p: path.join(process.resourcesPath, 'icon.png'), mime: 'image/png' },
+      ] : [
         { p: path.join(__dirname, 'assets', 'icon.png'), mime: 'image/png' },
         { p: path.join(__dirname, 'icon.png'),           mime: 'image/png' },
-        { p: path.join(__dirname, 'assets', 'icon.ico'), mime: 'image/x-icon' },
-        { p: path.join(__dirname, 'icon.ico'),           mime: 'image/x-icon' },
+        { p: path.join(appPath, 'assets', 'icon.png'),  mime: 'image/png' },
       ];
       for (const candidate of iconCandidates) {
-        if (fs.existsSync(candidate.p)) {
-          iconBase64 = fs.readFileSync(candidate.p).toString('base64');
-          iconMimeType = candidate.mime;
-          logMain(`Loaded branding icon from: ${candidate.p}`);
-          break;
-        }
+        try {
+          if (fs.existsSync(candidate.p)) {
+            iconBase64 = fs.readFileSync(candidate.p).toString('base64');
+            iconMimeType = candidate.mime;
+            logMain(`Loaded branding icon from: ${candidate.p}`);
+            break;
+          }
+        } catch (e) { /* skip inaccessible paths in packaged app */ }
       }
       if (!iconBase64) logMain('No branding icon found — using text fallback.');
     } catch (e) {
@@ -5027,14 +5237,24 @@ ipcMain.removeHandler('generate-pdf');
 
   ipcMain.handle('get-app-icon-base64', async () => {
     try {
-      const iconPath = path.join(__dirname, 'assets', 'icon.png'); // PNG is better for PDF embedding
-      const fallbackPath = path.join(__dirname, 'assets', 'icon.ico');
-      const targetPath = fs.existsSync(iconPath) ? iconPath : (fs.existsSync(fallbackPath) ? fallbackPath : null);
-
-      if (targetPath) {
-        const mime = targetPath.endsWith('.png') ? 'image/png' : 'image/x-icon';
-        const base64 = fs.readFileSync(targetPath).toString('base64');
-        return `data:${mime};base64,${base64}`;
+      const appPath = app.getAppPath();
+      const isPackaged = app.isPackaged;
+      const candidates = isPackaged ? [
+        path.join(appPath, 'assets', 'icon.png'),
+        path.join(process.resourcesPath, 'app', 'assets', 'icon.png'),
+      ] : [
+        path.join(__dirname, 'assets', 'icon.png'),
+        path.join(appPath, 'assets', 'icon.png'),
+      ];
+      
+      for (const iconPath of candidates) {
+        try {
+          if (fs.existsSync(iconPath)) {
+            const mime = iconPath.endsWith('.png') ? 'image/png' : 'image/x-icon';
+            const base64 = fs.readFileSync(iconPath).toString('base64');
+            return `data:${mime};base64,${base64}`;
+          }
+        } catch (e) { /* skip */ }
       }
       return null;
     } catch (e) {
@@ -5775,12 +5995,14 @@ ipcMain.removeHandler('generate-pdf');
       popupWindows.delete(type);
     }
 
+    const isMacPlatform = process.platform === 'darwin';
+    
     const defaultOptions = {
       width: 1000,
       height: 700,
-      frame: false,
-      transparent: true,
-      backgroundColor: '#00000000',
+      frame: isMacPlatform,
+      transparent: !isMacPlatform,
+      backgroundColor: isMacPlatform ? '#00000000' : '#00000000',
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
         nodeIntegration: false,
@@ -5789,12 +6011,13 @@ ipcMain.removeHandler('generate-pdf');
       },
       parent: mainWindow,
       modal: false,
-      alwaysOnTop: true, // Critical: ensures popup appears above browser view
+      alwaysOnTop: true,
       skipTaskbar: true,
       resizable: true,
       minimizable: false,
       maximizable: false,
       show: false,
+      titleBarStyle: isMacPlatform ? 'hiddenInset' : 'hidden',
     };
 
     const popup = new BrowserWindow({ ...defaultOptions, ...options });
@@ -7183,13 +7406,121 @@ ipcMain.removeHandler('generate-pdf');
   }
 
 
-  ipcMain.on('update-shortcuts', (event, shortcuts) => {
-    console.log('[Main] Updating global shortcuts');
-    store.set('shortcuts', shortcuts);
-    registerGlobalShortcuts(shortcuts);
-  });
+   ipcMain.on('update-shortcuts', (event, shortcuts) => {
+     console.log('[Main] Updating global shortcuts');
+     store.set('shortcuts', shortcuts);
+     registerGlobalShortcuts(shortcuts);
+   });
 
-  app.on('will-quit', () => {
+   // Auto-update IPC handlers
+   ipcMain.handle('check-for-updates', () => {
+     if (!require('electron-is-dev')) {
+       const { autoUpdater } = require('electron-updater');
+       return autoUpdater.checkForUpdatesAndNotify();
+     }
+     return Promise.resolve({ updateAvailable: false });
+   });
+
+   ipcMain.handle('quit-and-install', () => {
+     if (!require('electron-is-dev')) {
+       const { autoUpdater } = require('electron-updater');
+       autoUpdater.quitAndInstall();
+     }
+   });
+
+   ipcMain.handle('get-app-version', () => {
+     return app.getVersion();
+   });
+
+   ipcMain.handle('get-platform', () => {
+     return process.platform;
+   });
+
+   ipcMain.handle('open-external-url', async (event, url) => {
+     try {
+       await shell.openExternal(url);
+       return { success: true };
+     } catch (error) {
+       console.error('[Main] Failed to open external URL:', error);
+       return { success: false, error: error.message };
+     }
+   });
+
+   ipcMain.handle('open-external-app', async (event, app_name_or_path) => {
+     if (!app_name_or_path || typeof app_name_or_path !== 'string') {
+       return { success: false, error: 'Invalid app path' };
+     }
+
+     // Basic sanitization
+     app_name_or_path = app_name_or_path.trim().slice(0, 500);
+
+     try {
+       console.log('[Main] Opening external app:', app_name_or_path);
+
+       // First try as a direct absolute path
+       if (path.isAbsolute(app_name_or_path) && fs.existsSync(app_name_or_path)) {
+         const result = await shell.openPath(app_name_or_path);
+         if (!result) return { success: true };
+       }
+
+       const lowerName = (app_name_or_path || '').toLowerCase().trim();
+
+       if (process.platform === 'win32') {
+         // Look up well-known app name (handles UWP shell: paths and simple exe names)
+         const winCmd = WINDOWS_APP_MAP[lowerName];
+
+         return new Promise((resolve) => {
+           let cmdToRun;
+
+           if (winCmd) {
+             // Known app — use mapped command directly
+             if (winCmd.startsWith('explorer.exe shell:') || winCmd.startsWith('ms-settings:')) {
+               // UWP / settings URI — pass to cmd start without extra quotes
+               cmdToRun = `start "" "${winCmd}"`;
+             } else {
+               cmdToRun = winCmd;
+             }
+           } else {
+             // Assume it's an executable name or path
+             cmdToRun = `"${app_name_or_path}"`;
+           }
+
+           exec(cmdToRun, (error, stdout, stderr) => {
+             if (error) {
+               console.error('[Main] Failed to open external app:', error);
+               resolve({ success: false, error: error.message });
+             } else {
+               resolve({ success: true });
+             }
+           });
+         });
+       } else if (process.platform === 'darwin') {
+         exec(`open "${app_name_or_path}"`, (error) => {
+           if (error) {
+             console.error('[Main] Failed to open external app:', error);
+             resolve({ success: false, error: error.message });
+           } else {
+             resolve({ success: true });
+           }
+         });
+       } else {
+         // Linux
+         exec(`xdg-open "${app_name_or_path}"`, (error) => {
+           if (error) {
+             console.error('[Main] Failed to open external app:', error);
+             resolve({ success: false, error: error.message });
+           } else {
+             resolve({ success: true });
+           }
+         });
+       }
+     } catch (error) {
+       console.error('[Main] Error opening external app:', error);
+       return { success: false, error: error.message };
+     }
+   });
+
+   app.on('will-quit', () => {
     // Clear persistent intervals
     if (networkCheckInterval) clearInterval(networkCheckInterval);
     if (clipboardCheckInterval) clearInterval(clipboardCheckInterval);

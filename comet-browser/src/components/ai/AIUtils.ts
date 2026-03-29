@@ -106,7 +106,7 @@ export function extractSiteFromContext(content: string, url: string): string | u
 export function applyInlineMarkdown(text: string): string {
   return text
     // Images: ![alt](url) → <img> (must come before link processing)
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;margin:8px 0;display:block;"/>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:12px;margin:20px 0;display:block;box-shadow:0 10px 30px rgba(0,0,0,0.12);"/>')
     // Links: [text](url)
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#0ea5e9;text-decoration:underline;">$1</a>')
     .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
@@ -465,6 +465,18 @@ export interface PDFSection {
   detailLevel?: PDFDetailLevel;
 }
 
+export type PDFImageActionType = 'screenshot' | 'url' | 'base64';
+
+export interface PDFImageAction {
+  type: PDFImageActionType;
+  src?: string;
+  alt?: string;
+  caption?: string;
+  width?: string | number;
+  height?: string | number;
+  page?: number;
+}
+
 export interface EnhancedPDFData {
   title: string;
   subtitle?: string;
@@ -473,6 +485,7 @@ export interface EnhancedPDFData {
   includeActionLogs?: boolean;
   includeOCRData?: boolean;
   theme?: 'default' | 'dark' | 'minimal';
+  images?: PDFImageAction[];
 }
 
 export const PDF_ICONS: Record<string, string> = {

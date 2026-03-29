@@ -405,6 +405,14 @@ declare global {
             runScheduledTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
             deleteScheduledTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
 
+            // Auto-update APIs
+            checkForUpdates: () => Promise<{ updateAvailable?: boolean; updateInfo?: any }>;
+            quitAndInstall: () => void;
+            clearAuthData: () => void;
+            openExternalUrl: (url: string) => Promise<{ success: boolean; error?: string }>;
+            getVersion: () => Promise<string>;
+            getPlatform: () => string;
+
         };
 
     }

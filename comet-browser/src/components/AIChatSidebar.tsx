@@ -10,6 +10,7 @@ import {
   MoreVertical,
   Sparkles,
   Image as ImageIcon,
+  Image,
   Eye, EyeOff, Brain, Search, Loader2, MousePointerClick,
   CheckCircle2, AlertCircle, Layers,
   Share2, CopyIcon, Trash2, Printer, Cpu, Rocket, Camera, Terminal, MoreHorizontal, Play, History
@@ -133,8 +134,8 @@ interface AIChatSidebarProps {
   toggleCollapse: () => void;
   selectedEngine: string;
   setSelectedEngine: (engine: string) => void;
-  theme: 'dark' | 'light' | 'system';
-  setTheme: (theme: 'dark' | 'light' | 'system') => void;
+  theme: 'dark' | 'light' | 'system' | 'vibrant';
+  setTheme: (theme: 'dark' | 'light' | 'system' | 'vibrant') => void;
   backgroundImage: string;
   setBackgroundImage: (imageUrl: string) => void;
   backend: 'firebase' | 'mysql';
@@ -319,18 +320,18 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   // Scheduling State - controlled by props or local
   const [localSchedulingIntent, setLocalSchedulingIntent] = useState<SchedulingIntent | null>(null);
   const schedulingIntent = props.schedulingIntent !== undefined ? props.schedulingIntent : localSchedulingIntent;
-  const setSchedulingIntent = props.setSchedulingIntent 
-    ? props.setSchedulingIntent 
+  const setSchedulingIntent = props.setSchedulingIntent
+    ? props.setSchedulingIntent
     : setLocalSchedulingIntent;
-  
+
   // Use controlled modal state from props if provided
   const [localShowSchedulingModal, setLocalShowSchedulingModal] = useState(false);
   const showSchedulingModal = props.showSchedulingModal !== undefined ? props.showSchedulingModal : localShowSchedulingModal;
-  const setShowSchedulingModal = props.showSchedulingModal !== undefined 
+  const setShowSchedulingModal = props.showSchedulingModal !== undefined
     ? (val: boolean) => {
-        if (props.setBrowserDisabled) props.setBrowserDisabled(val);
-        if (props.setShowSchedulingModal) props.setShowSchedulingModal(val);
-      }
+      if (props.setBrowserDisabled) props.setBrowserDisabled(val);
+      if (props.setShowSchedulingModal) props.setShowSchedulingModal(val);
+    }
     : setLocalShowSchedulingModal;
 
   useEffect(() => {
@@ -430,7 +431,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           enabled: config.enabled,
           prompt: inputMessage,
         });
-        
+
         setMessages(prev => [...prev, {
           role: 'model',
           content: `✅ **Task Scheduled Successfully!**
@@ -444,7 +445,7 @@ ${config.notification?.onComplete ? '🔔 You will be notified when complete.' :
 
 You can manage this task anytime from the Automation panel.`
         } as ExtendedChatMessage]);
-        
+
         setShowSchedulingModal(false);
         setSchedulingIntent(null);
         if (props.setBrowserDisabled) props.setBrowserDisabled(false);
@@ -499,7 +500,7 @@ I couldn't schedule the task. The background service may not be running. Please 
     }
 
     const combinedResults = results.join('\n\n');
-    
+
     // Store in context for future use
     if (combinedResults) {
       searchContextStore.addWebSearch(topic, combinedResults);
@@ -716,7 +717,7 @@ I couldn't schedule the task. The background service may not be running. Please 
         // Clean up text format to remove the action commands from the visible message
         // parseAICommands now handles ALL formats (JSON, brackets, HTML comments) with built-in deduplication
         let { commands, responseText } = prepareCommandsForExecution(response.text);
-        
+
         // Also strip any remaining command tags/JSON for display
         responseText = stripAllCommands(responseText);
 
@@ -726,11 +727,11 @@ I couldn't schedule the task. The background service may not be running. Please 
           const updated = [...prev];
           const lastIdx = updated.length - 1;
           if (updated[lastIdx].role === 'model') {
-             updated[lastIdx] = { 
-               ...updated[lastIdx], 
-               content: responseText,
-               thinkText: response.thought // 🚀 PERSIST reasoning for exports/copy
-             };
+            updated[lastIdx] = {
+              ...updated[lastIdx],
+              content: responseText,
+              thinkText: response.thought // 🚀 PERSIST reasoning for exports/copy
+            };
           }
           return updated;
         });
@@ -784,8 +785,8 @@ I couldn't schedule the task. The background service may not be running. Please 
 
         // If the queue was manually emptied (aborted) by the user during execution
         if (finalCommands.length === 0 && commands.length > 0) {
-           setMessages(prev => [...prev, { role: 'model', content: '(⚠️ Sequence aborted by user)' } as ExtendedChatMessage]);
-           break;
+          setMessages(prev => [...prev, { role: 'model', content: '(⚠️ Sequence aborted by user)' } as ExtendedChatMessage]);
+          break;
         }
 
         // Loop Synthesis step: Feed action outputs back into context
@@ -795,9 +796,9 @@ I couldn't schedule the task. The background service may not be running. Please 
 
         currentHistory = [
           ...currentHistory,
-          { 
-            role: 'user', 
-            content: `Action outputs for the steps above:\n${actionResults}\n\nPlease analyze these results. If any step failed, explain why and execute an alternative action if possible using command formatting. If the steps succeeded or you have sufficient data, provide the comprehensive final answer to the original request now.` 
+          {
+            role: 'user',
+            content: `Action outputs for the steps above:\n${actionResults}\n\nPlease analyze these results. If any step failed, explain why and execute an alternative action if possible using command formatting. If the steps succeeded or you have sufficient data, provide the comprehensive final answer to the original request now.`
           }
         ];
       }
@@ -1061,11 +1062,11 @@ I couldn't schedule the task. The background service may not be running. Please 
         case 'WEB_SEARCH': {
           let query = command.value.trim().replace(/^["'](.*)["']$/, '$1') || 'Comet AI Browser';
           let searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-          
+
           // If the AI mistakenly uses WEB_SEARCH but provides a direct URL, handle it as a direct navigation
           if (query.match(/^https?:\/\/[^\s]+/i) || query.match(/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}(\/.*)?$/)) {
-             searchUrl = query.startsWith('http') ? query : `https://${query}`;
-             query = `Opening URL: ${searchUrl}`; // Just for logging
+            searchUrl = query.startsWith('http') ? query : `https://${query}`;
+            query = `Opening URL: ${searchUrl}`; // Just for logging
           }
 
           setActiveView('browser');
@@ -1104,19 +1105,19 @@ I couldn't schedule the task. The background service may not be running. Please 
                   const newOcrLabel = `WEB_SEARCH_FALLBACK_DOM`;
                   if (last && last.role === 'model') {
                     // Update last message with truncated text
-                    return [...prev.slice(0, -1), { 
-                      ...last, 
-                      isOcr: true, 
-                      ocrLabel: newOcrLabel, 
-                      ocrText: `${scrubbed}\n\n[Content truncated for clarity. Use specific DOM_SEARCH for more detail.]` 
+                    return [...prev.slice(0, -1), {
+                      ...last,
+                      isOcr: true,
+                      ocrLabel: newOcrLabel,
+                      ocrText: `${scrubbed}\n\n[Content truncated for clarity. Use specific DOM_SEARCH for more detail.]`
                     }];
                   }
-                  return [...prev, { 
-                    role: 'model', 
-                    content: 'I pulled some fallback content from the search page.', 
-                    isOcr: true, 
-                    ocrLabel: newOcrLabel, 
-                    ocrText: scrubbed 
+                  return [...prev, {
+                    role: 'model',
+                    content: 'I pulled some fallback content from the search page.',
+                    isOcr: true,
+                    ocrLabel: newOcrLabel,
+                    ocrText: scrubbed
                   } as ExtendedChatMessage];
                 });
               } else {
@@ -1144,7 +1145,7 @@ I couldn't schedule the task. The background service may not be running. Please 
                 }
               }
             } catch (fallbackErr) {
-               output = `No results found for "${query}". Do NOT invent data — tell the user you could not find current information.`;
+              output = `No results found for "${query}". Do NOT invent data — tell the user you could not find current information.`;
             }
           }
           break;
@@ -1157,10 +1158,10 @@ I couldn't schedule the task. The background service may not be running. Please 
             const scrubbed = scrubbedContent(res.content);
             output = `Page content read successfully (${scrubbed.length} chars):\n${scrubbed.substring(0, 4000)}...`;
             await BrowserAI.addToVectorMemory(scrubbed, { type: 'page_content', url: currentUrl });
-            
+
             // Store in context for reuse
             searchContextStore.addPageContent(currentUrl, currentUrl, scrubbed);
-            
+
             setMessages(prev => {
               const last = prev[prev.length - 1];
               if (last && last.role === 'model') {
@@ -1297,7 +1298,7 @@ I couldn't schedule the task. The background service may not be running. Please 
         case 'SCHEDULE_TASK': {
           let taskData: { schedule?: string; type?: string; name?: string; description?: string } = {};
           let rawValue = (command.value || '').trim();
-          
+
           // Try JSON format first
           try {
             // Handle JSON wrapped in code blocks or quotes
@@ -1315,9 +1316,9 @@ I couldn't schedule the task. The background service may not be running. Please 
             const [cron, taskType, taskName, description] = parts;
             taskData = { schedule: cron, type: taskType, name: taskName, description };
           }
-          
+
           const { schedule, type, name, description } = taskData;
-          
+
           if (!schedule || !type || !name) {
             output = 'SCHEDULE_TASK requires: {"schedule": "cron", "type": "pdf-generate", "name": "Task Name", "description": "..."}';
             break;
@@ -1337,7 +1338,7 @@ I couldn't schedule the task. The background service may not be running. Please 
               timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
               outputPath: '~/Documents/Comet-AI',
             };
-            
+
             setSchedulingIntent(intent);
             setShowSchedulingModal(true);
             if (props.setBrowserDisabled) props.setBrowserDisabled(true);
@@ -1352,13 +1353,13 @@ I couldn't schedule the task. The background service may not be running. Please 
         // Format: JSON object with structured pages and sections
         case 'CREATE_PDF_JSON': {
           let rawValue = (command.value || '').trim();
-          
+
           let pdfData: any;
           let parsedJson: any = null;
-          
+
           // Clean up malformed input
           rawValue = rawValue.replace(/^\s*\]+\s*:\s*/, '').trim();
-          
+
           // Try to extract and parse JSON from the command value
           try {
             // First try parsing the whole value as JSON
@@ -1380,7 +1381,7 @@ I couldn't schedule the task. The background service may not be running. Please 
                   }
                 }
               }
-              
+
               // Try to find JSON object anywhere in the text
               if (!parsedJson) {
                 const objMatch = rawValue.match(/\{[\s\S]*?(?:title|pages)[\s\S]*?\}/);
@@ -1399,11 +1400,11 @@ I couldn't schedule the task. The background service may not be running. Please 
                 }
               }
             }
-            
+
             if (!parsedJson || typeof parsedJson !== 'object') {
               throw new Error('No valid JSON found in CREATE_PDF_JSON command');
             }
-            
+
             pdfData = parsedJson;
           } catch (e) {
             // JSON parsing failed - fall back to markdown generation
@@ -1413,13 +1414,13 @@ I couldn't schedule the task. The background service may not be running. Please 
             output += `\n\nOr use markdown format: [GENERATE_PDF: Title | actual content here...]`;
             break;
           }
-          
+
           // Validate required fields
           if (!pdfData.title && !pdfData.pages) {
             output = '❌ JSON must have at least "title" or "pages" field';
             break;
           }
-          
+
           const pdfTitle = pdfData.title || 'Document';
           const pdfSubtitle = pdfData.subtitle || '';
           const pdfAuthor = pdfData.author || 'Comet AI';
@@ -1427,10 +1428,22 @@ I couldn't schedule the task. The background service may not be running. Please 
           const watermark = pdfData.watermark || '';
           const bgColor = pdfData.bgColor || '#ffffff';
           const priority = pdfData.priority || 'normal';
-          
+
+          // Extract images from JSON (new action format)
+          const pdfImagesFromJson: Array<{ type: string; src?: string; caption?: string; alt?: string; width?: number | string }> = [];
+          if (pdfData.images && Array.isArray(pdfData.images)) {
+            for (const img of pdfData.images) {
+              if (img.type === 'url' && img.src) {
+                pdfImagesFromJson.push({ type: 'url', src: img.src, caption: img.caption, alt: img.alt, width: img.width });
+              } else if (img.type === 'screenshot') {
+                pdfImagesFromJson.push({ type: 'screenshot', caption: img.caption, alt: img.alt || 'Screenshot', width: img.width || '100%' });
+              }
+            }
+          }
+
           // Build markdown content from JSON structure
           let pdfContent = '';
-          
+
           // Add metadata at the top
           const metaParts: string[] = [];
           if (pdfSubtitle) metaParts.push(`*${pdfSubtitle}*`);
@@ -1438,15 +1451,15 @@ I couldn't schedule the task. The background service may not be running. Please 
           if (metaParts.length > 0) {
             pdfContent += metaParts.join('\n') + '\n\n---\n\n';
           }
-          
+
           // Process pages
           if (pdfData.pages && Array.isArray(pdfData.pages)) {
             for (let i = 0; i < pdfData.pages.length; i++) {
               const page = pdfData.pages[i];
-              
+
               // Page title
               pdfContent += `## ${page.icon || ''} ${page.title || `Section ${i + 1}`}\n\n`;
-              
+
               // Process sections
               if (page.sections && Array.isArray(page.sections)) {
                 for (const section of page.sections) {
@@ -1459,7 +1472,7 @@ I couldn't schedule the task. The background service may not be running. Please 
                 // Fallback: page has direct content
                 pdfContent += `${page.content}\n\n`;
               }
-              
+
               // Page break between pages (except last)
               if (i < pdfData.pages.length - 1) {
                 pdfContent += '\n---\n\n';
@@ -1469,7 +1482,7 @@ I couldn't schedule the task. The background service may not be running. Please 
             // Fallback: direct content
             pdfContent += pdfData.content;
           }
-          
+
           // Add metadata markers for template processing
           const metadataMarkers = [
             `[TEMPLATE:${template}]`,
@@ -1477,9 +1490,165 @@ I couldn't schedule the task. The background service may not be running. Please 
             bgColor !== '#ffffff' ? `[BG_COLOR:${bgColor}]` : '',
             priority !== 'normal' ? `[PRIORITY:${priority}]` : '',
           ].filter(Boolean).join('');
-          
+
           pdfContent = metadataMarkers + '\n\n' + pdfContent;
-          
+
+          // Process images from JSON (URLs need fetching, screenshots need capture)
+          const jsonImageResults: Array<{ src: string; caption?: string; alt?: string; width?: string | number }> = [];
+
+          if (pdfImagesFromJson.length > 0) {
+            console.log(`[PDF-LOG] Processing ${pdfImagesFromJson.length} images from JSON...`);
+            if (isDevMode) appendTerminalLog('JSON Images', `Processing ${pdfImagesFromJson.length} images from JSON...`);
+          }
+
+          for (const img of pdfImagesFromJson) {
+            if (img.type === 'url' && img.src) {
+              try {
+                const normalized = img.src.startsWith('http') ? img.src : `https://${img.src}`;
+                console.log(`[PDF-LOG] Fetching JSON image: ${normalized}`);
+                if (isDevMode) appendTerminalLog('Image Fetch', `Fetching JSON image: ${normalized}`);
+                const response = await fetch(normalized);
+                if (response.ok) {
+                  const blob = await response.blob();
+                  const dataUrl = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.onerror = () => reject(new Error('Failed to read image'));
+                    reader.readAsDataURL(blob);
+                  });
+                  console.log(`[PDF-LOG] ✅ JSON image fetched successfully: ${normalized} (${Math.round(dataUrl.length / 1024)}KB)`);
+                  if (isDevMode) appendTerminalLog('Image Fetch', `✅ Loaded: ${normalized} (${Math.round(dataUrl.length / 1024)}KB)`);
+                  jsonImageResults.push({
+                    src: dataUrl,
+                    caption: img.caption,
+                    alt: img.alt || 'Embedded image',
+                    width: img.width || '100%'
+                  });
+                } else {
+                  console.log(`[PDF-LOG] ❌ Failed to fetch JSON image: ${normalized} (HTTP ${response.status})`);
+                  if (isDevMode) appendTerminalLog('Image Fetch', `❌ Failed: ${normalized} (${response.status})`, false);
+                }
+              } catch (e: any) {
+                console.log(`[PDF-LOG] ❌ Exception fetching JSON image: ${img.src} - ${e.message}`);
+                if (isDevMode) appendTerminalLog('Image Fetch', `❌ Error: ${img.src} - ${e.message}`, false);
+              }
+            } else if (img.type === 'screenshot') {
+              try {
+                console.log(`[PDF-LOG] Capturing screenshot for PDF...`);
+                if (isDevMode) appendTerminalLog('Screenshot', '📸 Capturing browser view for JSON image...');
+                updateVisualStage('capturing', 'Capturing screenshot for PDF...');
+                const dataUrl: string | null = await window.electronAPI.captureBrowserViewScreenshot();
+                if (dataUrl) {
+                  console.log(`[PDF-LOG] ✅ Screenshot captured (${Math.round(dataUrl.length / 1024)}KB)`);
+                  if (isDevMode) appendTerminalLog('Screenshot', `✅ Captured (${Math.round(dataUrl.length / 1024)}KB) - added to PDF`);
+                  jsonImageResults.push({
+                    src: dataUrl,
+                    caption: img.caption || `Screenshot at ${new Date().toLocaleTimeString()}`,
+                    alt: img.alt || 'Browser screenshot',
+                    width: img.width || '100%'
+                  });
+                } else {
+                  console.log(`[PDF-LOG] ❌ No browser view available for screenshot`);
+                  if (isDevMode) appendTerminalLog('Screenshot', '❌ No browser view available', false);
+                }
+              } catch (e: any) {
+                console.log(`[PDF-LOG] ❌ Screenshot capture failed: ${e.message}`);
+                if (isDevMode) appendTerminalLog('Screenshot', `❌ Error: ${e.message}`, false);
+              } finally {
+                updateVisualStage('idle');
+              }
+            }
+          }
+
+          // ✅ Process [CAPTURE_SCREEN] inline tags in PDF content
+          const screenshotTagRegex = /\[CAPTURE_SCREEN\s*(?:\|\s*caption:([^\]]+))?\]/gi;
+          let screenshotMatch;
+          while ((screenshotMatch = screenshotTagRegex.exec(pdfContent)) !== null) {
+            const rawTag = screenshotMatch[0];
+            const cap = (screenshotMatch[1] || '').trim();
+            try {
+              console.log(`[PDF-LOG] Processing inline [CAPTURE_SCREEN] tag...`);
+              if (isDevMode) appendTerminalLog('Screenshot', '📸 Capturing browser view for inline tag...');
+              const dataUrl = await window.electronAPI.captureBrowserViewScreenshot();
+              if (dataUrl) {
+                const imgMd = `\n\n![Screenshot](${dataUrl})${cap ? `\n*${cap}*` : ''}\n\n`;
+                // Use a safe multi-replace approach
+                pdfContent = pdfContent.split(rawTag).join(imgMd);
+                console.log(`[PDF-LOG] ✅ Inline screenshot captured and replaced`);
+              } else {
+                pdfContent = pdfContent.split(rawTag).join('\n\n*[Current browser view unavailable for screenshot]*\n\n');
+              }
+            } catch (e: any) {
+              console.error('[PDF] Inline screenshot failed:', e);
+              pdfContent = pdfContent.split(rawTag).join(`\n\n*[Error capturing screenshot: ${e.message}]*\n\n`);
+            }
+          }
+
+          // ✅ Process [IMAGE_URL] inline tags in PDF content
+          const inlineImageUrlRegex = /\[IMAGE_URL:([\s\S]+?)\]/gi;
+          let imageUrlMatch;
+          while ((imageUrlMatch = inlineImageUrlRegex.exec(pdfContent)) !== null) {
+            const raw = imageUrlMatch[0];
+            const payload = (imageUrlMatch[1] || '').trim();
+            if (!payload) continue;
+            
+            const segments = payload.split('|').map(segment => segment.trim()).filter(Boolean);
+            if (segments.length === 0) continue;
+            
+            const rawUrl = segments.shift() || '';
+            const url = rawUrl.replace(/\s+/g, '');
+            if (!url) continue;
+            
+            let cap: string | undefined;
+            segments.forEach(segment => {
+              const [key, ...valueParts] = segment.split(':');
+              if (!key || valueParts.length === 0) return;
+              if (key.toLowerCase().trim() === 'caption') {
+                cap = valueParts.join(':').trim();
+              }
+            });
+
+            try {
+              const normalized = url.startsWith('http') ? url : `https://${url}`;
+              console.log(`[PDF-LOG] Fetching inline [IMAGE_URL]: ${normalized}`);
+              if (isDevMode) appendTerminalLog('Image Fetch', `📸 Fetching inline asset: ${normalized}`);
+              
+              const imgRes = await fetch(normalized);
+              if (imgRes.ok) {
+                const blob = await imgRes.blob();
+                const dataUrl = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result as string);
+                  reader.onerror = () => reject(new Error('Failed to read image'));
+                  reader.readAsDataURL(blob);
+                });
+                const imgMd = `\n\n![Image](${dataUrl})${cap ? `\n*${cap}*` : ''}\n\n`;
+                pdfContent = pdfContent.split(raw).join(imgMd);
+                console.log(`[PDF-LOG] ✅ Inline image fetched and replaced: ${normalized}`);
+                if (isDevMode) appendTerminalLog('Image Fetch', `✅ Loaded: ${normalized}`);
+              } else {
+                pdfContent = pdfContent.split(raw).join(`\n\n*[Failed to fetch image: ${normalized} (HTTP ${imgRes.status})]*\n\n`);
+                if (isDevMode) appendTerminalLog('Image Fetch', `❌ Failed: ${normalized} (${imgRes.status})`, false);
+              }
+            } catch (e: any) {
+              console.error('[PDF] Inline image fetch failed:', e);
+              pdfContent = pdfContent.split(raw).join(`\n\n*[Error fetching image: ${e.message}]*\n\n`);
+              if (isDevMode) appendTerminalLog('Image Fetch', `❌ Error: ${e.message}`, false);
+            }
+          }
+
+          if (jsonImageResults.length > 0) {
+            console.log(`[PDF-LOG] ✅ Added ${jsonImageResults.length} images to PDF content`);
+            if (isDevMode) appendTerminalLog('JSON Images', `✅ Added ${jsonImageResults.length} images to PDF`);
+          }
+
+          // Add JSON images to pdfContent as markdown
+          if (jsonImageResults.length > 0) {
+            const imagesMarkdown = '\n\n---\n\n## Images\n\n' +
+              jsonImageResults.map((img, idx) => `![${img.alt || 'Image'}](${img.src})` + (img.caption ? `\n*${img.caption}*` : '')).join('\n\n');
+            pdfContent += imagesMarkdown;
+          }
+
           setIsGeneratingPDF(true);
           setPdfProgress(0);
           setShowTerminal(true);
@@ -1487,15 +1656,15 @@ I couldn't schedule the task. The background service may not be running. Please 
 
           await preloadCometIconLocal();
           const iconSource = (window as any).__cometIconBase64 || null;
-          
+
           try {
-            const cleanHTML = generateSmartPDF(pdfContent, iconSource);
+            const cleanHTML = generateSmartPDF(pdfContent, iconSource, jsonImageResults);
             const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML) as any;
-            
+
             setIsGeneratingPDF(false);
             setPdfProgress(100);
             setStreamingPDFContent('');
-            
+
             if (res.success) {
               output = `✅ **PDF Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**Template:** ${template}\n**File:** ${res.filePath}`;
             } else {
@@ -1530,7 +1699,7 @@ I couldn't schedule the task. The background service may not be running. Please 
           for (const part of allParts) {
             // Skip empty parts or just "]:"
             if (!part || part === ']:' || part === ':') continue;
-            
+
             // Parse key:value options
             const kvMatch = part.match(/^(title|author|subtitle|screenshot|filename|template|tags|category|watermark)\s*:\s*(.+)$/i);
             if (kvMatch) {
@@ -1552,12 +1721,12 @@ I couldn't schedule the task. The background service may not be running. Please 
 
           // First non-option part is always the title if no explicit title: key
           let pdfTitle = options.title || contentParts[0]?.trim() || 'Document';
-          
+
           // Clean up title if it's clearly malformed
           if (!pdfTitle || pdfTitle.length < 2 || /^\[?\s*\]?\s*$/.test(pdfTitle)) {
             pdfTitle = contentParts.length > 1 ? contentParts[1]?.trim() || 'Document' : 'Document';
           }
-          
+
           // Fix for "title | actual title" or "title: actual title"
           if (pdfTitle.toLowerCase() === 'title' && contentParts[1]) {
             pdfTitle = contentParts[1];
@@ -1573,10 +1742,10 @@ I couldn't schedule the task. The background service may not be running. Please 
             || options.screenshot?.toLowerCase() === 'true'
             || mentionScreenshot;
           const shouldIncludeAttachments = options.attachments?.toLowerCase() !== 'no';
-          
+
           // Build content from remaining parts (skip title)
           let pdfContent = contentParts.slice(1).join(' | ').trim();
-          
+
           // If content is still empty or placeholder, try the first content part
           if (!pdfContent || pdfContent.length < 10 || /^\[?\s*\]?\s*$/.test(pdfContent)) {
             pdfContent = contentParts[0]?.trim() || command.context || '';
@@ -1774,7 +1943,7 @@ I couldn't schedule the task. The background service may not be running. Please 
 
           await preloadCometIconLocal();
           const iconSource = (window as any).__cometIconBase64 || null;
-          
+
           setIsGeneratingPDF(true);
           setPdfProgress(0);
           setShowTerminal(true);
@@ -1783,19 +1952,19 @@ I couldn't schedule the task. The background service may not be running. Please 
           // Replicate slide logic for the success message UI
           const slides = pdfContent.split(/---\n?/).filter(s => s.trim().length > 10);
           const isSlideShow = slides.length > 2;
-          
+
           setStreamingPDFContent(`Generating PDF: ${pdfTitle}...`);
           const cleanHTML = generateSmartPDF(pdfContent, iconSource, pdfImages.length > 0 ? pdfImages : undefined);
           const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML) as any;
-          
+
           setIsGeneratingPDF(false);
           setPdfProgress(100);
           setStreamingPDFContent('');
           updateVisualStage('idle');
-          
+
           if (res.success) {
             output = `✅ **PDF GENERATION SUCCESSFUL**\n\n### 📄 Document Overview\n- **Title:** ${pdfTitle}\n- **Pages:** ${isSlideShow ? slides.length : '1'}\n- **Format:** ${isSlideShow ? 'Slide Deck (Presenton Style)' : 'Standard Report'}\n- **📁 File Path:** \`${res.filePath}\`\n- **Status:** ✅ Downloaded Successfully\n\nYou can find the PDF at: **${res.filePath}**\n\nWould you like me to open the document for you?`;
-            
+
             // Add a special message with an "Open PDF" button
             setMessages(prev => [...prev, {
               role: 'model',
@@ -1883,13 +2052,13 @@ I couldn't schedule the task. The background service may not be running. Please 
 
         case 'EXPLAIN_CAPABILITIES': {
           setShowCapabilities(true);
-          
+
           // Get platform-specific commands
           const platform = (typeof process !== 'undefined' && process.platform) || 'darwin';
           const isMac = platform === 'darwin';
           const isWindows = platform === 'win32';
           const isLinux = platform === 'linux';
-          
+
           // Step 1: Announce demonstration start
           setMessages(prev => [...prev, { role: 'model', content: "🚀 **Initiating Full Capability Demonstration...**\n\nI'll showcase real tasks across all my capabilities." }]);
           await new Promise(resolve => setTimeout(resolve, 800));
@@ -1898,7 +2067,7 @@ I couldn't schedule the task. The background service may not be running. Please 
           const searchStepId = addThinkingStep('Searching latest news...');
           setMessages(prev => [...prev, { role: 'model', content: "📰 **Task 1: Real-Time Web Search**\nSearching for latest technology news..." }]);
           await new Promise(resolve => setTimeout(resolve, 500));
-          
+
           let newsResults = '';
           try {
             const searchResults = await window.electronAPI.webSearchRag('latest technology news today 2026');
@@ -1914,12 +2083,12 @@ I couldn't schedule the task. The background service may not be running. Please 
           // Step 3: System Info via Shell Command
           setMessages(prev => [...prev, { role: 'model', content: "🖥️ **Task 2: Shell Command Execution**\nGetting WiFi/network information..." }]);
           await new Promise(resolve => setTimeout(resolve, 500));
-          
+
           let wifiInfo = '';
           try {
-            let wifiCmd = isMac ? '/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | grep SSID' : 
-                          isWindows ? 'netsh wlan show interfaces | findstr SSID' : 
-                          'iwgetid -r';
+            let wifiCmd = isMac ? '/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | grep SSID' :
+              isWindows ? 'netsh wlan show interfaces | findstr SSID' :
+                'iwgetid -r';
             const shellResult = await window.electronAPI.executeShellCommand(wifiCmd);
             wifiInfo = shellResult.success ? (shellResult.output || 'WiFi connected').trim() : 'Network info retrieved';
           } catch (e) {
@@ -1951,7 +2120,7 @@ I couldn't schedule the task. The background service may not be running. Please 
           // Step 6: Screenshot Capture
           setMessages(prev => [...prev, { role: 'model', content: "📸 **Task 5: Screenshot Capture**\nCapturing and analyzing screen..." }]);
           await new Promise(resolve => setTimeout(resolve, 1000));
-          
+
           let screenshotBase64: string | undefined;
           try {
             if (window.electronAPI.visionCaptureBase64) {
@@ -1968,10 +2137,10 @@ I couldn't schedule the task. The background service may not be running. Please 
           // Step 7: Generate Comprehensive Capability Report PDF
           setMessages(prev => [...prev, { role: 'model', content: "📄 **Task 6: PDF Generation**\nCreating comprehensive capability report with screenshots..." }]);
           await new Promise(resolve => setTimeout(resolve, 500));
-          
+
           await preloadCometIconLocal();
           const iconSource = (window as any).__cometIconBase64 || null;
-          
+
           const capabilityFeatures = [
             'Browser Automation: Navigate, search, and interact with web pages autonomously',
             'Real-Time Web Search: Live search with RAG-powered context retrieval',
@@ -1987,9 +2156,9 @@ I couldn't schedule the task. The background service may not be running. Please 
             'Multi-Step Agency: Chained command execution with approval gates',
             'Cross-Device Authorization: QR-based high-risk action approval',
           ];
-          
+
           const pdfTitle = `Comet_AI_Capability_Report_${new Date().toISOString().split('T')[0]}`;
-          
+
           // Use the enhanced PDF builder with screenshot support
           const { buildCapabilityReportPDF } = await import('./ai/AIUtils');
           const capabilityPDF = buildCapabilityReportPDF({
@@ -1998,12 +2167,13 @@ I couldn't schedule the task. The background service may not be running. Please 
             features: capabilityFeatures,
             platform: 'Windows, macOS, Linux, Android'
           }, screenshotBase64, iconSource);
-          
+
           await window.electronAPI.generatePDF(pdfTitle, capabilityPDF);
           setMessages(prev => [...prev, { role: 'model', content: "✅ **Capability Report PDF generated and saved!**" }]);
 
           // Final Summary
-          setMessages(prev => [...prev, { role: 'model', content: `
+          setMessages(prev => [...prev, {
+            role: 'model', content: `
 ## ✅ **Full Demonstration Complete!**
 
 I've successfully executed the following real tasks:
@@ -2052,7 +2222,7 @@ I've successfully executed the following real tasks:
           const stepId = addThinkingStep('Capturing screenshot...', 'Taking screenshot and running OCR');
           try {
             let ocrText = '';
-            
+
             // First try: Capture browser view screenshot (most reliable for browser content)
             if (window.electronAPI.captureBrowserViewScreenshot) {
               const screenshotData = await window.electronAPI.captureBrowserViewScreenshot();
@@ -2072,7 +2242,7 @@ I've successfully executed the following real tasks:
                 }
               }
             }
-            
+
             // Fallback: Try vision describe if OCR didn't work
             if (!ocrText && window.electronAPI.visionDescribe) {
               try {
@@ -2082,7 +2252,7 @@ I've successfully executed the following real tasks:
                 console.error('Vision describe failed:', visionErr);
               }
             }
-            
+
             // Final fallback: Try basic OCR
             if (!ocrText && window.electronAPI.ocrScreenText) {
               try {
@@ -2092,9 +2262,9 @@ I've successfully executed the following real tasks:
                 console.error('OCR screen text failed:', ocrErr);
               }
             }
-            
+
             resolveThinkingStep(stepId, 'done', ocrText ? 'Screenshot captured and analyzed' : 'Screenshot captured');
-            
+
             if (ocrText) {
               output = `📸 **Screenshot Analyzed** (${ocrText.length} chars)\n\n${ocrText.substring(0, 4000)}${ocrText.length > 4000 ? '\n\n_(truncated)..._' : ''}`;
               await BrowserAI.addToVectorMemory(ocrText, { type: 'screenshot_ocr', url: currentUrl });
@@ -2140,12 +2310,12 @@ I've successfully executed the following real tasks:
             output = 'DOM_SEARCH requires a query parameter.';
             break;
           }
-          
+
           const searchStepId = addThinkingStep(`Searching DOM for "${query}"...`);
           setDOMSearchLoading(true);
           setDOMSearchQuery(query);
           setDOMSearchResults([]);
-          
+
           try {
             const res = await window.electronAPI.searchDOM(query);
             if (res.error) {
@@ -2159,7 +2329,7 @@ I've successfully executed the following real tasks:
                 score: r.score || 0,
                 tag: r.tag || 'element'
               }));
-              
+
               setDOMSearchResults(results);
               const formattedResults = results.map((r, i) => `${i + 1}. ${r.context}: "${r.text}"`).join('\n');
               output = `DOM search for "${query}" returned ${results.length} results:\n${formattedResults.substring(0, 4000)}`;
@@ -2206,7 +2376,7 @@ I've successfully executed the following real tasks:
           // Parse scheduling data from command value (JSON format)
           let scheduleData: any = {};
           const rawValue = command.value.trim();
-          
+
           try {
             if (rawValue) {
               if (rawValue.includes('{')) {
@@ -2226,7 +2396,7 @@ I've successfully executed the following real tasks:
           } catch (e) {
             console.error('Failed to parse scheduling data:', e);
           }
-          
+
           // Create scheduling intent
           const intent: SchedulingIntent = {
             detected: true,
@@ -2241,7 +2411,7 @@ I've successfully executed the following real tasks:
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
             outputPath: scheduleData.outputPath || '~/Documents/Comet-AI',
           };
-          
+
           // Use props to set up and show modal
           if (props.setSchedulingIntent) {
             props.setSchedulingIntent(intent);
@@ -2252,7 +2422,7 @@ I've successfully executed the following real tasks:
           if (props.setBrowserDisabled) {
             props.setBrowserDisabled(true);
           }
-          
+
           output = `Opening scheduling modal for: ${intent.taskName}`;
           break;
         }
@@ -2260,7 +2430,7 @@ I've successfully executed the following real tasks:
         case 'DOM_READ_FILTERED': {
           const query = command.value.trim();
           const readStepId = addThinkingStep('Reading secure DOM...');
-          
+
           try {
             const res = await window.electronAPI.extractSecureDOM();
             if (res.error) {
@@ -2278,11 +2448,11 @@ I've successfully executed the following real tasks:
                   filterStats: { piiRemoved: 0, scriptsRemoved: 0, stylesRemoved: 0, navRemoved: 0, adsRemoved: 0 }
                 }
               };
-              
+
               setDOMMeta(domResult.metadata);
-              
+
               const contextForAI = secureDOMReader.buildContextForAI(domResult, query);
-              
+
               if (query) {
                 const searchResults = secureDOMReader.searchDOM(domResult.elements, { query, maxResults: 10 });
                 setDOMSearchResults(searchResults);
@@ -2291,7 +2461,7 @@ I've successfully executed the following real tasks:
               } else {
                 output = `Secure DOM read complete (${(res.content || '').length} chars filtered).\n\nContent:\n${contextForAI.substring(0, 4000)}...`;
               }
-              
+
               await BrowserAI.addToVectorMemory(contextForAI, { type: 'secure_dom_read', url: currentUrl });
 
               setMessages(prev => {
@@ -2358,12 +2528,12 @@ I've successfully executed the following real tasks:
 
   const formatMessageForExport = (m: ExtendedChatMessage) => {
     let result = `${m.role.toUpperCase()}:\n`;
-    
+
     // AI Reasoning / Thinking
     if (m.thinkText) {
       result += `\n[AI REASONING]\n${m.thinkText.trim()}\n[/AI REASONING]\n`;
     }
-    
+
     // OCR Sources (Collapsible in UI, shown as structured data in export)
     if (m.isOcr && m.ocrText) {
       result += `\n[OCR_RESULT]\n${JSON.stringify({
@@ -2388,7 +2558,7 @@ I've successfully executed the following real tasks:
         }))
       }, null, 2)}\n[/ACTION_CHAIN_JSON]\n`;
     }
-    
+
     // Media Attachments
     if (m.mediaItems && m.mediaItems.length > 0) {
       result += `\n[MEDIA_ATTACHMENTS_JSON]\n${JSON.stringify({
@@ -2499,13 +2669,13 @@ I've successfully executed the following real tasks:
   const exportChat = useCallback(async (format: 'text' | 'pdf') => {
     if (messages.length === 0) return;
     setShowActionsMenu(false);
-    
+
     // Format full session
     const fullContent = messages.map(m => formatMessageForExport(m)).join('\n\n' + '='.repeat(40) + '\n\n');
 
     // Include action logs in export (separate from main chat)
     const actionLogsExport = actionLogsStore.exportAsJSON();
-    const shellLogsExport = actionLogsStore.getShellLogs().length > 0 
+    const shellLogsExport = actionLogsStore.getShellLogs().length > 0
       ? actionLogsStore.exportAsText().split('[SHELL_COMMANDS_LOG]')[1] || ''
       : '';
 
@@ -2518,7 +2688,7 @@ I've successfully executed the following real tasks:
         // Robustly convert tags to HTML using multi-stage parsing
         const convertTagsToHTML = (text: string): string => {
           let html = text;
-          
+
           // AI Reasoning tags
           const reasoningBlocks = extractAIReasoning(text);
           for (const block of reasoningBlocks) {
@@ -2528,7 +2698,7 @@ I've successfully executed the following real tasks:
               `<div style="background:#f8fafc; padding:15px; border-left:4px solid #0ea5e9; margin:10px 0; font-style:italic; font-size:12px; color:#475569;"><strong>AI Reasoning</strong><br/>${escaped}</div>`
             );
           }
-          
+
           // OCR Result tags
           const ocrResult = extractOCRResult(text);
           if (ocrResult.success && ocrResult.data) {
@@ -2536,7 +2706,7 @@ I've successfully executed the following real tasks:
             html = html.replace(/\[\s*OCR_RESULT\s*\][\s\S]*?\[\s*\/OCR_RESULT\s*\]/gi,
               `<div style="background:#fef3c7; padding:15px; border-left:4px solid #f59e0b; margin:10px 0; font-size:12px; color:#92400e;"><strong>OCR Result</strong><br/><pre style="font-size:10px; overflow-x:auto;">${jsonStr}</pre></div>`);
           }
-          
+
           // Action Chain JSON tags
           const actionChain = extractActionChain(text);
           if (actionChain.success && actionChain.data) {
@@ -2544,7 +2714,7 @@ I've successfully executed the following real tasks:
             html = html.replace(/\[\s*ACTION_CHAIN_JSON\s*\][\s\S]*?\[\s*\/ACTION_CHAIN_JSON\s*\]/gi,
               `<div style="background:#0f172a; color:#e2e8f0; padding:15px; border-radius:10px; margin:10px 0; font-family:monospace; font-size:11px;"><strong>Action Chain (JSON)</strong><br/><pre style="font-size:10px; overflow-x:auto;">${jsonStr}</pre></div>`);
           }
-          
+
           // Media Attachments JSON tags
           const mediaResult = extractMediaAttachments(text);
           if (mediaResult.success && mediaResult.data) {
@@ -2552,10 +2722,10 @@ I've successfully executed the following real tasks:
             html = html.replace(/\[\s*MEDIA_ATTACHMENTS_JSON\s*\][\s\S]*?\[\s*\/MEDIA_ATTACHMENTS_JSON\s*\]/gi,
               `<div style="background:#dbeafe; padding:15px; border-left:4px solid #3b82f6; margin:10px 0; font-size:12px; color:#1e40af;"><strong>Media Attachments (JSON)</strong><br/><pre style="font-size:10px; overflow-x:auto;">${jsonStr}</pre></div>`);
           }
-          
+
           return html.replace(/\n/g, '<br/>');
         };
-        
+
         const bodyContent = `
           <div style="white-space: pre-wrap; font-size: 14px; color: #1e293b;">
             ${convertTagsToHTML(fullContent)}
@@ -2565,11 +2735,11 @@ I've successfully executed the following real tasks:
             <pre style="font-size:11px; color:#475569; white-space:pre-wrap; word-break:break-all;">${actionLogsExport}</pre>
           </div>
         `;
-        
+
         await preloadCometIconLocal();
         const iconSource = (window as any).__cometIconBase64 || null;
         const bandedHtml = generateSmartPDF(bodyContent, iconSource);
-        
+
         await window.electronAPI.generatePDF('Comet Intelligence Report', bandedHtml);
         setFeedback('PDF Document Ready with Action Logs');
       }
@@ -2778,7 +2948,7 @@ I've successfully executed the following real tasks:
                 </p>
               </div>
               <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                <motion.div 
+                <motion.div
                   className="h-full bg-sky-500"
                   initial={{ width: "0%" }}
                   animate={{ width: `${pdfProgress}%` }}
@@ -2787,29 +2957,74 @@ I've successfully executed the following real tasks:
               </div>
               {pdfVisualStage !== 'idle' && (
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
                   transition={{ duration: 0.35 }}
                   className="mt-4 flex items-center gap-3 px-4 py-3 bg-black/60 border border-white/10 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.4)]"
                 >
                   <motion.div
-                    className="w-10 h-10 rounded-2xl bg-sky-500/20 flex items-center justify-center border border-sky-500/30 text-sky-300"
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 1, repeat: Infinity }}
+                    className="relative w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center"
+                    animate={pdfVisualStage === 'capturing' ? {
+                      boxShadow: [
+                        '0 0 0 0 rgba(14, 165, 233, 0.4)',
+                        '0 0 0 8px rgba(14, 165, 233, 0)',
+                        '0 0 0 0 rgba(14, 165, 233, 0)'
+                      ]
+                    } : {}}
+                    transition={{ duration: 1.5, repeat: pdfVisualStage === 'capturing' ? Infinity : 0 }}
                   >
-                    <Camera size={20} className="text-white" />
+                    <motion.div
+                      className="absolute inset-0 rounded-2xl bg-white/20"
+                      animate={pdfVisualStage === 'capturing' ? { opacity: [0, 1, 0], scale: [1, 1.5] } : {}}
+                      transition={{ duration: 0.6, repeat: Infinity }}
+                    />
+                    {pdfVisualStage === 'capturing' ? (
+                      <Camera size={20} className="text-white relative z-10" />
+                    ) : (
+                      <Image size={20} className="text-white relative z-10" />
+                    )}
                   </motion.div>
                   <div className="text-left">
-                    <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white/70">
-                      {pdfVisualStage === 'capturing' ? 'Capturing screenshot' : 'Scanning visuals'}
-                    </p>
-                    <p className="text-[10px] text-white/40 leading-tight">
+                    <motion.p
+                      className="text-[11px] font-black uppercase tracking-[0.3em] text-white/70"
+                      animate={pdfVisualStage === 'capturing' ? { opacity: [1, 0.7, 1] } : {}}
+                      transition={{ duration: 0.5, repeat: Infinity }}
+                    >
+                      {pdfVisualStage === 'capturing' ? '📸 Capturing screenshot' : '🌐 Fetching visuals'}
+                    </motion.p>
+                    <motion.p
+                      className="text-[10px] text-white/40 leading-tight"
+                      key={pdfVisualStage}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.2 }}
+                    >
                       {pdfVisualStage === 'capturing'
-                        ? 'Recording the current browser view into your report.'
-                        : 'Downloading referenced images before rendering the document.'}
-                    </p>
+                        ? 'Recording the current browser view into your report...'
+                        : 'Downloading referenced images before rendering the document...'}
+                    </motion.p>
                   </div>
+                  <motion.div
+                    className="ml-auto flex gap-0.5"
+                    animate={pdfVisualStage === 'capturing' ? { opacity: 1 } : { opacity: 0.5 }}
+                  >
+                    {[0, 1, 2].map((i) => (
+                      <motion.div
+                        key={i}
+                        className="w-1 h-3 bg-sky-400 rounded-full"
+                        animate={pdfVisualStage === 'capturing' ? {
+                          height: [12, 20, 12],
+                          opacity: [0.5, 1, 0.5]
+                        } : {}}
+                        transition={{
+                          duration: 0.6,
+                          repeat: Infinity,
+                          delay: i * 0.15
+                        }}
+                      />
+                    ))}
+                  </motion.div>
                 </motion.div>
               )}
             </div>
@@ -2861,21 +3076,21 @@ I've successfully executed the following real tasks:
       <AnimatePresence>
         {permissionPending && (
           <div className="absolute inset-0 z-[10001] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
-              <ClickPermissionModal
-                context={permissionPending.context}
-                onAllow={async (alwaysAllow) => { 
-                  const ctx = permissionPending.context;
-                  if (alwaysAllow && window.electronAPI?.permGrant) {
-                    const permKey = `${ctx.actionType}:${ctx.target || ctx.what}`;
-                    await window.electronAPI.permGrant(permKey, 'execute', ctx.action, false);
-                    if (ctx.risk !== 'high' && window.electronAPI?.setAutoApprovalCommand) {
-                      const autoCommand = ctx.target || ctx.what || ctx.action;
-                      await window.electronAPI.setAutoApprovalCommand({ command: autoCommand, enabled: true });
-                    }
+            <ClickPermissionModal
+              context={permissionPending.context}
+              onAllow={async (alwaysAllow) => {
+                const ctx = permissionPending.context;
+                if (alwaysAllow && window.electronAPI?.permGrant) {
+                  const permKey = `${ctx.actionType}:${ctx.target || ctx.what}`;
+                  await window.electronAPI.permGrant(permKey, 'execute', ctx.action, false);
+                  if (ctx.risk !== 'high' && window.electronAPI?.setAutoApprovalCommand) {
+                    const autoCommand = ctx.target || ctx.what || ctx.action;
+                    await window.electronAPI.setAutoApprovalCommand({ command: autoCommand, enabled: true });
                   }
-                  permissionPending.resolve(true); 
-                  setPermissionPending(null); 
-                }}
+                }
+                permissionPending.resolve(true);
+                setPermissionPending(null);
+              }}
               onDeny={() => { permissionPending.resolve(false); setPermissionPending(null); }}
             />
           </div>
@@ -2914,34 +3129,49 @@ I've successfully executed the following real tasks:
               <Sparkles size={18} />
             </button>
             <div className="relative group">
-               <button className="p-2.5 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-all">
-                 <MoreVertical size={18} />
-               </button>
-               <div className="absolute right-0 top-full mt-2 w-48 bg-[#0a0a0f] border border-white/5 rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100] p-2 backdrop-blur-2xl">
-                 <button onClick={() => exportChat('pdf')} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
-                   <Printer size={14} className="text-sky-400" /> Export branded PDF
-                 </button>
-                 <button onClick={() => exportChat('text')} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
-                   <FileText size={14} className="text-purple-400" /> Export as .txt
-                 </button>
-                 <button onClick={copyChatToClipboard} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
-                   <CopyIcon size={14} className="text-amber-400" /> Copy full session
-                 </button>
-                 <div className="my-1 border-t border-white/5" />
-                 <button onClick={() => setShowLLMProviderSettings(!showLLMProviderSettings)} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
-                   <Cpu size={14} className="text-green-400" /> Intelligence Settings
-                 </button>
-                 <button onClick={clearChat} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-red-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 transition-all">
-                   <Trash2 size={14} /> Clear reasoning chain
-                 </button>
-               </div>
+              <button className="p-2.5 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-all">
+                <MoreVertical size={18} />
+              </button>
+              <div className="absolute right-0 top-full mt-2 w-48 bg-[#0a0a0f] border border-white/5 rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100] p-2 backdrop-blur-2xl">
+                <button onClick={() => exportChat('pdf')} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+                  <Printer size={14} className="text-sky-400" /> Export branded PDF
+                </button>
+                <button onClick={() => exportChat('text')} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+                  <FileText size={14} className="text-purple-400" /> Export as .txt
+                </button>
+                <button onClick={copyChatToClipboard} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+                  <CopyIcon size={14} className="text-amber-400" /> Copy full session
+                </button>
+                <div className="my-1 border-t border-white/5" />
+                {/* Theme cycle button — cycles dark → light → vibrant → dark */}
+                <button
+                  onClick={() => {
+                    const cycle: Array<'dark' | 'light' | 'vibrant'> = ['dark', 'light', 'vibrant'];
+                    const cur = props.theme === 'system' ? 'dark' : (props.theme as 'dark' | 'light' | 'vibrant');
+                    const idx = cycle.indexOf(cur);
+                    props.setTheme(cycle[(idx + 1) % cycle.length]);
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all"
+                >
+                  <span className="text-base leading-none">
+                    {props.theme === 'light' ? '☀️' : props.theme === 'vibrant' ? '🔮' : '🌑'}
+                  </span>
+                  Theme: {props.theme === 'light' ? 'Light' : props.theme === 'vibrant' ? 'Vibrant' : 'Dark'}
+                </button>
+                <button onClick={() => setShowLLMProviderSettings(!showLLMProviderSettings)} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+                  <Cpu size={14} className="text-green-400" /> Intelligence Settings
+                </button>
+                <button onClick={clearChat} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-red-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 transition-all">
+                  <Trash2 size={14} /> Clear reasoning chain
+                </button>
+              </div>
             </div>
             <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-2.5 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-all">
               {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </button>
             {store.tabs.some(t => t.groupId === 'ai-session') && (
-              <button 
-                onClick={() => store.closeTabGroup('ai-session')} 
+              <button
+                onClick={() => store.closeTabGroup('ai-session')}
                 className="p-2.5 rounded-xl hover:bg-red-500/10 text-red-400/60 hover:text-red-400 transition-all border border-red-500/10"
                 title="Close AI Session Tabs"
               >
@@ -3017,7 +3247,7 @@ I've successfully executed the following real tasks:
                         if (match && match[1] === 'mermaid' && (window as any).mermaid) {
                           return (
                             <div className="my-5 rounded-3xl overflow-hidden border border-white/5 bg-slate-900/50 p-6 flex flex-col items-center shadow-2xl">
-                              <div 
+                              <div
                                 className="mermaid w-full flex justify-center"
                                 dangerouslySetInnerHTML={{ __html: codeContent }}
                                 ref={(el) => {
@@ -3032,10 +3262,10 @@ I've successfully executed the following real tasks:
 
                         return match ? (
                           <div className="my-5 rounded-3xl overflow-hidden border border-white/5 shadow-2xl">
-                            <SyntaxHighlighter 
-                              style={dracula as any} 
-                              language={match[1]} 
-                              PreTag="div" 
+                            <SyntaxHighlighter
+                              style={dracula as any}
+                              language={match[1]}
+                              PreTag="div"
                               customStyle={{ margin: 0, padding: '1.5rem', fontSize: '11px' }}
                             >
                               {codeContent}
@@ -3153,16 +3383,16 @@ I've successfully executed the following real tasks:
 
                         let colorClass = log.success ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' : 'bg-red-500/10 border-red-500/30 text-red-400';
                         if (log.success) {
-                           if (isClick) colorClass = 'bg-amber-500/10 border-amber-500/30 text-amber-500';
-                           else if (isOcr) colorClass = 'bg-purple-500/10 border-purple-500/30 text-purple-400';
-                           else if (isPdf) colorClass = 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-pointer hover:bg-emerald-500/20';
+                          if (isClick) colorClass = 'bg-amber-500/10 border-amber-500/30 text-amber-500';
+                          else if (isOcr) colorClass = 'bg-purple-500/10 border-purple-500/30 text-purple-400';
+                          else if (isPdf) colorClass = 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-pointer hover:bg-emerald-500/20';
                         }
 
                         return (
-                          <div 
-                            key={idx} 
+                          <div
+                            key={idx}
                             onClick={() => isPdf && window.electronAPI.openPDF(log.output)}
-                            className={`px-3 py-1.5 rounded-full flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest border transition-all duration-300 hover:scale-105 shadow-sm active:scale-95 ${colorClass}`} 
+                            className={`px-3 py-1.5 rounded-full flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest border transition-all duration-300 hover:scale-105 shadow-sm active:scale-95 ${colorClass}`}
                             title={isPdf ? 'Click to open PDF' : log.output}
                           >
                             {isSearch && <Search size={12} />}
@@ -3177,7 +3407,7 @@ I've successfully executed the following real tasks:
 
                     </div>
                   )}
-                  
+
                   {/* DOM Search Results Display */}
                   {i === messages.length - 1 && (domSearchResults.length > 0 || domSearchLoading || domMeta) && (
                     <DOMSearchDisplay
@@ -3189,7 +3419,7 @@ I've successfully executed the following real tasks:
                       timestamp={domMeta?.timestamp}
                     />
                   )}
-                  
+
                   {/* OCR Search Results Display */}
                   {i === messages.length - 1 && (ocrSearchResults.length > 0 || ocrSearchLoading) && (
                     <DOMSearchDisplay

@@ -190,7 +190,7 @@ const LandingPage = () => {
                 <nav className="fixed top-10 left-0 right-0 z-50 bg-black/20 backdrop-blur-xl border-b border-white/5">
                     <div className="max-w-7xl mx-auto px-8 py-4 flex justify-between items-center">
                         <div className="flex items-center gap-3 group cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                            <img src="icon.ico" className="w-10 h-10 drop-shadow-[0_0_15px_rgba(56,189,248,0.6)] group-hover:scale-110 transition-transform" alt="Logo" />
+                            <img src="/icon.png" className="w-10 h-10 drop-shadow-[0_0_15px_rgba(56,189,248,0.6)] group-hover:scale-110 transition-transform" alt="Logo" />
                             <span className="font-black text-2xl tracking-tighter text-white">COMET</span>
                         </div>
                         <div className="flex items-center gap-4">
@@ -424,7 +424,7 @@ const LandingPage = () => {
                     <div className="absolute bottom-0 left-0 w-full h-[500px] bg-gradient-to-t from-sky-500/5 to-transparent pointer-events-none" />
                     <div className="max-w-7xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-12 relative z-10">
                         <div className="flex items-center gap-4 group cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                            <img src="icon.ico" className="w-12 h-12 grayscale group-hover:grayscale-0 transition-all opacity-40 group-hover:opacity-100" />
+                            <img src="/icon.png" className="w-12 h-12 grayscale group-hover:grayscale-0 transition-all opacity-40 group-hover:opacity-100" />
                             <span className="font-black text-4xl tracking-tighter text-white opacity-20 group-hover:opacity-100 transition-opacity">COMET</span>
                         </div>
                         <div className="made-in-india-gradient-text text-4xl font-black uppercase tracking-[0.2em] animate-pulse">

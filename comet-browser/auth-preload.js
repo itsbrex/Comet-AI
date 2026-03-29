@@ -1,5 +1,24 @@
 const { ipcRenderer } = require('electron');
 
+const createAuthTitle = () => {
+  const title = document.createElement('div');
+  title.id = 'comet-auth-title';
+  title.textContent = 'Sign in to Comet-AI';
+  Object.assign(title.style, {
+    position: 'fixed',
+    top: '12px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#ffffff',
+    zIndex: '10000000',
+    pointerEvents: 'none',
+    textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+  });
+  return title;
+};
+
 const createTrafficLights = () => {
   const wrapper = document.createElement('div');
   wrapper.id = 'comet-auth-traffic';
@@ -69,6 +88,11 @@ const createDragOverlay = () => {
     if (!document.getElementById('comet-auth-traffic')) {
       const traffic = createTrafficLights();
       body.appendChild(traffic);
+    }
+
+    if (!document.getElementById('comet-auth-title')) {
+      const title = createAuthTitle();
+      body.appendChild(title);
     }
 
   window.addEventListener('keyup', (event) => {

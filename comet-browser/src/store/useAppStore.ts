@@ -160,8 +160,8 @@ export interface BrowserState {
     setAiSafetyMode: (enabled: boolean) => void;
 
     // Theme settings
-    theme: "system" | "dark" | "light";
-    setTheme: (theme: "system" | "dark" | "light") => void;
+    theme: "system" | "dark" | "light" | "vibrant";
+    setTheme: (theme: "system" | "dark" | "light" | "vibrant") => void;
 
     // Online status
     isOnline: boolean;
@@ -724,7 +724,7 @@ export const useAppStore = create<BrowserState>()(
             setAiSafetyMode: (enabled: boolean) => set({ aiSafetyMode: enabled }),
 
             // Theme settings
-            setTheme: (theme: "light" | "dark" | "system") => set({ theme }),
+            setTheme: (theme: "light" | "dark" | "system" | "vibrant") => set({ theme }),
 
             // Online status
             setIsOnline: (online: boolean) => set({ isOnline: online }),

@@ -557,7 +557,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTaskLogs: (date) => ipcRenderer.invoke('automation:get-logs', date),
   getTaskResults: (taskId) => ipcRenderer.invoke('automation:get-results', taskId),
 
-  // Window utilities
-  bringWindowToTop: () => ipcRenderer.invoke('bring-window-to-top'),
-  getAppIcon: () => ipcRenderer.invoke('get-app-icon-base64'),
+   // Window utilities
+   bringWindowToTop: () => ipcRenderer.invoke('bring-window-to-top'),
+   getAppIcon: () => ipcRenderer.invoke('get-app-icon-base64'),
+
+   // Auto-update APIs
+   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+   quitAndInstall: () => ipcRenderer.invoke('quit-and-install'),
+   clearAuthData: () => ipcRenderer.invoke('clear-auth'),
+   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
+   getVersion: () => ipcRenderer.invoke('get-app-version'),
+   getPlatform: () => ipcRenderer.invoke('get-platform'),
 });

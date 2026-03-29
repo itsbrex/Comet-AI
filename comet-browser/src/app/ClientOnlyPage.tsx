@@ -12,7 +12,9 @@ import {
   Terminal, Settings as GhostSettings, FolderOpen, Sparkles, ScanLine, Search, X,
   Puzzle, Code2, Briefcase, Image as ImageIcon, User as UserIcon, Maximize2, Minimize2, RefreshCcw, Download as DownloadIcon,
   Layout, MoreVertical, MoreHorizontal, CreditCard, ArrowRight, Languages, Share2, Lock, Shield, Volume2, Square, Music2, Waves, Presentation, Package,
-  Zap, Check, Paperclip, MousePointer2
+  Zap, Check, Paperclip, MousePointer2,
+  // ── NEW: theme icon ──
+  Sun, Moon, Palette,
 } from 'lucide-react';
 import AIChatSidebar from '@/components/AIChatSidebar';
 import LandingPage from '@/components/LandingPage';
@@ -66,6 +68,26 @@ import { fetchAiOverview } from '@/lib/aiManager';
 import type { AiOverviewResponse } from '@/lib/aiManager';
 import { getRecommendedGeminiModel } from '@/lib/modelRegistry';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// THEME TYPES
+// Three concrete themes + "system" (resolves to dark/light at runtime).
+// "vibrant" maps to the .vibrant CSS class defined in globals.css.
+// ─────────────────────────────────────────────────────────────────────────────
+type AppTheme = 'dark' | 'light' | 'vibrant' | 'system';
+
+/** Cycle order for the header toggle button */
+const THEME_CYCLE: AppTheme[] = ['dark', 'light', 'vibrant'];
+
+/** Icon + label shown in the header button for the CURRENT theme */
+function ThemeIcon({ theme }: { theme: AppTheme }) {
+  if (theme === 'light') return <Sun size={16} />;
+  if (theme === 'vibrant') return <Palette size={16} />;
+  return <Moon size={16} />;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SIDEBAR ICON (unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
 const SidebarIcon = ({ icon, label, active, onClick, collapsed }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, collapsed: boolean }) => (
   <button
     onClick={onClick}
@@ -85,6 +107,9 @@ const SidebarIcon = ({ icon, label, active, onClick, collapsed }: { icon: React.
   </button>
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MUSIC VISUALIZER (unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
 const MusicVisualizer = ({ color = 'rgb', isPlaying = false }: { color?: string, isPlaying: boolean }) => {
   if (!isPlaying) return null;
 
@@ -121,6 +146,9 @@ const MusicVisualizer = ({ color = 'rgb', isPlaying = false }: { color?: string,
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HOME PAGE
+// ─────────────────────────────────────────────────────────────────────────────
 export default function Home() {
   const store = useAppStore();
   const { shouldRenderTab, isTabSuspended } = useOptimizedTabs();
@@ -137,9 +165,9 @@ export default function Home() {
   };
 
   const [showCart, setShowCart] = useState(false);
-  const [urlPrediction, setUrlPrediction] = useState<string | null>(null); // Changed to string | null
+  const [urlPrediction, setUrlPrediction] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
-  const [suggestions, setSuggestions] = useState<any[]>([]); // New state for additional suggestions
+  const [suggestions, setSuggestions] = useState<any[]>([]);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, visible: boolean } | null>(null);
   const [aiOverview, setAiOverview] = useState<AiOverviewState | null>(null);
   const [showTabSwitcher, setShowTabSwitcher] = useState(false);
@@ -148,7 +176,7 @@ export default function Home() {
   const [showContextMenu, setShowContextMenu] = useState<{ x: number, y: number } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
-  const [aiPickColor, setAiPickColor] = useState('rgb'); // 'rgb' or a hex string
+  const [aiPickColor, setAiPickColor] = useState('rgb');
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'in_progress' | 'completed' | 'failed'>('idle');
   const [showDownloads, setShowDownloads] = useState(false);
@@ -159,14 +187,12 @@ export default function Home() {
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const [showTranslateDialog, setShowTranslateDialog] = useState(false);
 
-  // Helper to close translate dialog and re-enable browser
   const closeTranslateDialog = () => {
     setShowTranslateDialog(false);
     setIsBrowserDisabled(false);
     window.electronAPI?.showAllViews();
   };
 
-  // Helper to open translate dialog
   const openTranslateDialog = () => {
     setShowTranslateDialog(true);
     setIsBrowserDisabled(true);
@@ -176,8 +202,8 @@ export default function Home() {
   const [translateMethod, setTranslateMethod] = useState<'google' | 'chrome-ai'>('google');
   const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
   const [isAmbientPlaying, setIsAmbientPlaying] = useState(false);
-  const [inputValue, setInputValue] = useState(store.currentUrl); // New state for input field's raw value
-  const [showSpotlightSearch, setShowSpotlightSearch] = useState(false); // New state for global spotlight search
+  const [inputValue, setInputValue] = useState(store.currentUrl);
+  const [showSpotlightSearch, setShowSpotlightSearch] = useState(false);
   const [isPopupWindow, setIsPopupWindow] = useState(false);
   const [activeExtensions, setActiveExtensions] = useState<any[]>([]);
   const [isBrowserDisabled, setIsBrowserDisabled] = useState(false);
@@ -229,10 +255,8 @@ export default function Home() {
     { icon: <Lock size={20} />, label: 'Passwords', manager: 'password' },
     { icon: <Shield size={20} />, label: 'Firewall', manager: 'firewall' },
     { icon: <Share2 size={20} />, label: 'P2P Sync', manager: 'p2p' },
-    // Redundant items integrated into header or settings
   ];
 
-  // Handle sidebar item clicks - now mostly using local panels
   const handleSidebarClick = (item: any) => {
     if (item.view) {
       store.setActiveView(item.view);
@@ -260,7 +284,6 @@ export default function Home() {
   useEffect(() => {
     store.setActiveView('browser');
 
-    // Handle panel query parameter for deep-linking (e.g., from popup windows)
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const panel = params.get('panel');
@@ -333,11 +356,9 @@ export default function Home() {
         if (theme && theme.colors) {
           const colors = theme.colors;
           const root = document.documentElement;
-          // Map Chrome theme colors to our CSS variables
           if (colors.frame) root.style.setProperty('--primary-bg', `rgb(${colors.frame.join(',')})`);
           if (colors.toolbar) root.style.setProperty('--navbar-bg', `rgb(${colors.toolbar.join(',')})`);
           if (colors.tab_text) root.style.setProperty('--primary-text', `rgb(${colors.tab_text.join(',')})`);
-          // Add more mappings as needed
           const providerId = store.aiProvider || 'ollama';
           const modelName = resolveProviderModel(providerId);
           setAiOverview({ query: `Theme Applied`, result: `Successfully applied Chrome theme.`, sources: null, isLoading: false, provider: providerId, model: modelName });
@@ -380,10 +401,9 @@ export default function Home() {
       let text = await window.electronAPI.getSelectedText();
 
       if (!text || text.trim().length === 0) {
-        // Fallback to full page content if no selection
         const pageContent = await window.electronAPI.extractPageContent();
         if (pageContent && pageContent.content) {
-          text = pageContent.content.substring(0, 5000); // Limit to reasonable length
+          text = pageContent.content.substring(0, 5000);
         }
       }
 
@@ -392,7 +412,6 @@ export default function Home() {
       const utterance = new SpeechSynthesisUtterance(pageText);
       const voices = window.speechSynthesis.getVoices();
 
-      // Language code to Name mapping for better matching
       const langMap: Record<string, string> = {
         'hi': 'Hindi', 'ta': 'Tamil', 'te': 'Telugu', 'bn': 'Bengali', 'ml': 'Malayalam', 'kn': 'Kannada'
       };
@@ -440,16 +459,11 @@ export default function Home() {
     const shouldPlay = () => {
       if (!store.enableAmbientMusic) return false;
       switch (store.ambientMusicMode) {
-        case 'always':
-          return true;
-        case 'google':
-          return store.currentUrl.includes('google.com/search');
-        case 'idle':
-          // TODO: Implement idle detection
-          return false;
+        case 'always': return true;
+        case 'google': return store.currentUrl.includes('google.com/search');
+        case 'idle': return false;
         case 'off':
-        default:
-          return false;
+        default: return false;
       }
     };
 
@@ -495,10 +509,10 @@ export default function Home() {
   const rightClickTimerRef = useRef<any>(null);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 2) { // Right click
+    if (e.button === 2) {
       rightClickTimerRef.current = setTimeout(() => {
         handlePopSearch();
-      }, 500); // 500ms hold
+      }, 500);
     }
   };
 
@@ -566,14 +580,6 @@ export default function Home() {
         } else if (e.key === '-') {
           e.preventDefault();
           window.electronAPI?.changeZoom(1);
-        } else if (e.key === '0') {
-          e.preventDefault();
-          // Reset zoom logic - we'll handle this in main.js
-          const shortcuts = [
-            { accelerator: 'CommandOrControl+0', action: 'zoom-reset' }
-          ];
-          // Since the main process already handles zoom-reset via globalShortcut, 
-          // we just need to make sure the key event doesn't propagate if we're in the browser.
         }
       }
     };
@@ -611,22 +617,14 @@ export default function Home() {
 
   const resolveProviderModel = useCallback((providerId: string) => {
     switch (providerId) {
-      case 'google-flash':
-        return getRecommendedGeminiModel('google-flash');
-      case 'google':
-        return store.geminiModel || getRecommendedGeminiModel('google');
-      case 'openai':
-        return store.openaiModel || 'gpt-4o';
-      case 'anthropic':
-        return store.anthropicModel || 'claude-3-5-sonnet-latest';
-      case 'xai':
-        return store.xaiModel || 'grok-2-latest';
-      case 'groq':
-        return store.groqModel || 'llama-3.3-70b-versatile';
-      case 'ollama':
-        return store.ollamaModel;
-      default:
-        return providerId;
+      case 'google-flash': return getRecommendedGeminiModel('google-flash');
+      case 'google': return store.geminiModel || getRecommendedGeminiModel('google');
+      case 'openai': return store.openaiModel || 'gpt-4o';
+      case 'anthropic': return store.anthropicModel || 'claude-3-5-sonnet-latest';
+      case 'xai': return store.xaiModel || 'grok-2-latest';
+      case 'groq': return store.groqModel || 'llama-3.3-70b-versatile';
+      case 'ollama': return store.ollamaModel;
+      default: return providerId;
     }
   }, [
     store.anthropicModel,
@@ -716,17 +714,39 @@ export default function Home() {
     store.localLlmMode,
   ]);
 
-  // Apply Theme
+  // ─────────────────────────────────────────────────────────────────────────
+  // APPLY THEME
+  // Resolves 'system' → OS preference, then applies the correct CSS class.
+  // 'vibrant' adds a .vibrant class (defined in globals.css) in addition to
+  // removing dark/light so the browser chrome picks up the purple colour ramp.
+  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
-    if (store.theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      root.classList.add(systemTheme);
-    } else {
-      root.classList.add(store.theme);
+
+    // Remove all theme classes first
+    root.classList.remove('light', 'dark', 'vibrant');
+
+    let resolved: AppTheme = store.theme as AppTheme;
+
+    if (resolved === 'system') {
+      resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
+
+    // Apply the resolved class
+    root.classList.add(resolved);
   }, [store.theme]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // THEME CYCLE HELPER  (dark → light → vibrant → dark → …)
+  // Calls the existing store.setTheme so settings panel stays in sync.
+  // ─────────────────────────────────────────────────────────────────────────
+  const cycleTheme = useCallback(() => {
+    const current = store.theme as AppTheme;
+    // Treat 'system' as 'dark' for cycling purposes
+    const idx = THEME_CYCLE.indexOf(current === 'system' ? 'dark' : current);
+    const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
+    store.setTheme(next);
+  }, [store.theme, store.setTheme]);
 
   // Init Browser Intelligence
   useEffect(() => {
@@ -756,13 +776,12 @@ export default function Home() {
     };
 
     window.addEventListener('resize', handleSmartScaling);
-    handleSmartScaling(); // Initial call
+    handleSmartScaling();
     return () => window.removeEventListener('resize', handleSmartScaling);
   }, [store.sidebarWidth]);
 
   // PWA Service Worker Registration
   useEffect(() => {
-    // Disable SW in development to prevent stale caches with Turbopack chunks
     if (process.env.NODE_ENV === 'development') return;
 
     if ('serviceWorker' in navigator) {
@@ -776,7 +795,7 @@ export default function Home() {
     }
   }, []);
 
-  // Fetch initial online status and listen for changes
+  // Fetch initial online status
   useEffect(() => {
     if (window.electronAPI) {
       window.electronAPI.getIsOnline().then((onlineStatus) => {
@@ -784,7 +803,6 @@ export default function Home() {
         console.log("Initial online status:", onlineStatus);
       });
 
-      // Sync Adblocker state on startup
       if (store.enableAdblocker) {
         window.electronAPI.toggleAdblocker(true);
       }
@@ -810,19 +828,17 @@ export default function Home() {
   // Debounced Predictor and Suggestions Fetcher
   useEffect(() => {
     const timer = setTimeout(async () => {
-      if (isTyping && inputValue.length > 1) { // Trigger on 2+ chars
-        // Fetch URL prediction
+      if (isTyping && inputValue.length > 1) {
         const preds = await BrowserAI.predictUrl(inputValue, store.history.map(h => h.url));
         setUrlPrediction(preds[0] || null);
 
-        // Fetch additional suggestions
         if (window.electronAPI) {
           const webSuggestions = await window.electronAPI.getSuggestions(inputValue);
           const appSearch = await window.electronAPI.searchApplications(inputValue);
           const appSuggestions = appSearch.success ? appSearch.results.map((app: any) => ({
             type: 'app',
             text: app.name,
-            url: app.path, // Use URL field for path for simplicity
+            url: app.path,
             icon: <Briefcase size={14} />
           })) : [];
 
@@ -830,20 +846,20 @@ export default function Home() {
         }
       } else {
         setUrlPrediction(null);
-        setSuggestions([]); // Clear suggestions when not typing or input is too short
+        setSuggestions([]);
       }
     }, 150);
     return () => clearTimeout(timer);
-  }, [inputValue, isTyping, store.history]); // Depend on inputValue
+  }, [inputValue, isTyping, store.history]);
 
-  const inputRef = useRef<HTMLInputElement>(null); // New ref for the input element
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Active Time Tracker
   useEffect(() => {
     if (store.user && store.activeStartTime) {
       const interval = setInterval(() => {
         store.updateActiveTime();
-      }, 30000); // Pulse every 30 seconds
+      }, 30000);
 
       return () => clearInterval(interval);
     }
@@ -864,7 +880,6 @@ export default function Home() {
       const cleanup = window.electronAPI.onAudioStatusChanged((isPlaying) => {
         setIsAudioPlaying(isPlaying);
 
-        // "AI" Color Picker - select a premium color when audio starts
         if (isPlaying) {
           const premiumColors = ['rgb', '#00E5FF', '#FF00E5', '#7000FF', '#00FF94', '#FFD600'];
           const randomColor = premiumColors[Math.floor(Math.random() * premiumColors.length)];
@@ -888,14 +903,14 @@ export default function Home() {
         console.log(`Download completed: ${filename}`);
         setDownloadStatus('completed');
         setIsDownloading(false);
-        setTimeout(() => setDownloadStatus('idle'), 3000); // Reset status after 3 seconds
+        setTimeout(() => setDownloadStatus('idle'), 3000);
       });
 
       const cleanupFailed = window.electronAPI.on('download-failed', (filename: string) => {
         console.error(`Download failed: ${filename}`);
         setDownloadStatus('failed');
         setIsDownloading(false);
-        setTimeout(() => setDownloadStatus('idle'), 3000); // Reset status after 3 seconds
+        setTimeout(() => setDownloadStatus('idle'), 3000);
       });
 
       return () => {
@@ -919,12 +934,33 @@ export default function Home() {
           case 'open-settings': setShowSettings(true); break;
           case 'new-incognito-tab': store.addIncognitoTab(); break;
           case 'toggle-spotlight': setShowSpotlightSearch(prev => !prev); break;
+          case 'cycle-theme': cycleTheme(); break;
+          case 'open-history': store.setSettingsSection('history'); setShowSettings(true); break;
+          case 'open-downloads': setShowDownloads(true); break;
+          case 'open-extensions': store.setSettingsSection('extensions'); setShowSettings(true); break;
+          case 'open-bookmarks': store.setSettingsSection('vault'); setShowSettings(true); break;
+          case 'open-workspace': store.setActiveView('workspace'); break;
+          case 'open-webstore': store.setActiveView('webstore'); break;
+          case 'open-ai-chat': store.setActiveView('browser'); break;
+          case 'open-media-studio': store.setActiveView('media-studio'); break;
+          case 'open-presenton': store.setActiveView('presenton'); break;
+          case 'open-p2p-sync': store.setActiveView('p2p-sync'); break;
+          case 'open-password-manager': store.setActiveView('password-manager'); break;
+          case 'open-proxy-firewall': store.setActiveView('proxy-firewall'); break;
+          case 'open-pdf-workspace': store.setActiveView('pdf-workspace'); break;
+          case 'open-coding-dashboard': store.setActiveView('coding-dashboard'); break;
+          case 'open-documentation': store.setActiveView('documentation'); break;
+          case 'open-cart': setShowCart(true); break;
+          case 'open-camera': setShowCamera(true); break;
+          case 'open-clipboard': setShowClipboard(true); break;
+          case 'toggle-ai-assist': store.setEnableAIAssist(!store.enableAIAssist); break;
+          case 'toggle-ai-overview': store.setEnableAiOverview(!store.enableAiOverview); break;
+          case 'reload-tab': window.electronAPI.reload(); break;
         }
       });
 
-      // Handle settings section changes from main process
       const cleanupSettings = window.electronAPI.on('set-settings-section', (section: string) => {
-        setSettingsSection(section);
+        store.setSettingsSection(section);
         setShowSettings(true);
       });
 
@@ -933,7 +969,7 @@ export default function Home() {
         cleanupSettings();
       };
     }
-  }, [store.addTab, store.removeTab, store.activeTabId, store.nextTab, store.prevTab, store.toggleSidebar]);
+  }, [store.addTab, store.removeTab, store.activeTabId, store.nextTab, store.prevTab, store.toggleSidebar, cycleTheme]);
 
   // Fetch extensions when popup is opened
   useEffect(() => {
@@ -958,9 +994,9 @@ export default function Home() {
     }
   }, [store.aiProvider]);
 
-  const handleGo = (urlToNavigate?: string, options?: { newTab?: boolean; active?: boolean }) => { // Accept optional URL and options
+  const handleGo = (urlToNavigate?: string, options?: { newTab?: boolean; active?: boolean }) => {
     const { newTab = false, active = true } = options || {};
-    let url = urlToNavigate || inputValue.trim(); // Use inputValue if no specific URL provided
+    let url = urlToNavigate || inputValue.trim();
     if (!url) return;
 
     if (url.startsWith('>>')) {
@@ -969,7 +1005,6 @@ export default function Home() {
         setInputValue('');
         return;
       } else {
-        // Fallback for when electronAPI is not available
         console.warn("Electron API not available for agent task");
         return;
       }
@@ -989,12 +1024,10 @@ export default function Home() {
       return;
     }
 
-    // Enhanced Calculator
     const mathChars = /^[0-9+\-*/().\s^%|&!~<>]+$/;
     const mathFuncs = /(Math\.(abs|acos|asin|atan|atan2|ceil|cos|exp|floor|log|max|min|pow|random|round|sin|sqrt|tan|PI|E))/g;
     if (mathChars.test(url) || mathFuncs.test(url)) {
       try {
-        // Safe evaluation context
         const result = new Function(`return ${url.replace(/\^/g, '**')}`)();
         if (typeof result === 'number' && !isNaN(result)) {
           const searchUrl = `${searchEngines[store.selectedEngine as keyof typeof searchEngines].url}${encodeURIComponent(url + " = " + result)}`;
@@ -1004,10 +1037,6 @@ export default function Home() {
           return;
         }
       } catch (e) { }
-    }
-
-    if (url.startsWith('/')) {
-      // ... command logic
     }
 
     if (url.includes('.') && !url.includes(' ') && !url.startsWith('http')) {
@@ -1020,14 +1049,13 @@ export default function Home() {
     if (newTab) {
       store.addTab(url);
     } else {
-      store.setCurrentUrl(url); // Ensure global state is updated
+      store.setCurrentUrl(url);
       if (window.electronAPI) {
         window.electronAPI.navigateBrowserView({ tabId: store.activeTabId, url });
       }
     }
   };
 
-  // New function to handle suggestion clicks
   const handleSuggestionClick = (suggestion: any) => {
     if (suggestion.type === 'app') {
       if (window.electronAPI && suggestion.url) {
@@ -1036,10 +1064,9 @@ export default function Home() {
     } else {
       handleGo(suggestion.url);
     }
-    setSuggestions([]); // Clear suggestions after selection
-    setIsTyping(false); // Stop typing state
+    setSuggestions([]);
+    setIsTyping(false);
   };
-
 
   const handleOfflineSave = async () => {
     if (!window.electronAPI) return;
@@ -1086,7 +1113,7 @@ export default function Home() {
               });
             }
           });
-          return items.slice(0, 5); // Just take the most prominent ones
+          return items.slice(0, 5);
         })()
       `);
       if (result && result.length > 0) {
@@ -1104,7 +1131,6 @@ export default function Home() {
 
     const railWidth = railVisible ? 70 : 0;
     const aiSidebarWidth = !store.sidebarOpen ? 0 : (store.isSidebarCollapsed ? 70 : store.sidebarWidth);
-
     const headerHeight = 40 + 56;
 
     let x = 0;
@@ -1150,8 +1176,6 @@ export default function Home() {
 
   useEffect(() => {
     if (window.electronAPI) {
-      // Only hide BrowserView for full-screen overlays that completely cover the page
-      // Small overlays (context menu, AI overview, etc.) will use z-[9999] to appear on top
       const hasFullScreenOverlay = !store.hasSeenWelcomePage || !store.hasCompletedStartupSetup || showSettings || activeManager !== null || showCamera || showDownloads || showCart || showExtensionsPopup || showClipboard || showSpotlightSearch || aiOverview || (isTyping && suggestions.length > 0) || showTranslateDialog || showSchedulingModal;
 
       if (hasFullScreenOverlay) {
@@ -1159,7 +1183,6 @@ export default function Home() {
         return;
       }
 
-      // Keep BrowserView visible for browser mode, small overlays will layer on top
       if (store.activeView === 'browser' && store.activeTabId) {
         const bounds = calculateBounds();
         window.electronAPI.activateView({ tabId: store.activeTabId, bounds });
@@ -1195,7 +1218,6 @@ export default function Home() {
           store.updateTab(tabId, { url });
           if (tabId === store.activeTabId) {
             store.setCurrentUrl(url);
-            // Add to history for URL predictor
             if (url && url !== 'about:blank' && !url.startsWith('file:') && !url.includes('google.com/search')) {
               store.addToHistory({ url, title: url });
             }
@@ -1223,8 +1245,6 @@ export default function Home() {
     }
   }, [store.activeTabId, store.tabs]);
 
-
-
   useEffect(() => {
     if (window.electronAPI) {
       const cleanup = window.electronAPI.onAddNewTab((url: string) => {
@@ -1243,7 +1263,7 @@ export default function Home() {
   useEffect(() => {
     if (!window.electronAPI) {
       console.warn("electronAPI is not available. Running outside of Electron or preload script failed.");
-      return; // Exit early if electronAPI is not available
+      return;
     }
 
     const cleanup = window.electronAPI.onAuthCallback(async (event: any, url: string) => {
@@ -1251,7 +1271,6 @@ export default function Home() {
       try {
         const parsed = new URL(url);
 
-        // === CASE 1: Google OAuth Code Flow (Authorization Code returned) ===
         const code = parsed.searchParams.get("code");
         if (code) {
           console.log('[Auth] Received OAuth code — exchanging for tokens...');
@@ -1264,7 +1283,6 @@ export default function Home() {
             return;
           }
 
-          // Exchange code → tokens
           const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1286,18 +1304,15 @@ export default function Home() {
           const tokens = await tokenRes.json();
           console.log('[Auth] Token exchange successful');
 
-          // Persist refresh token for Gmail service
           if (tokens.refresh_token && window.electronAPI) {
             window.electronAPI.saveGoogleConfig({ clientId, clientSecret, redirectUri });
           }
 
-          // Fetch user profile from Google
           const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
             headers: { Authorization: `Bearer ${tokens.access_token}` },
           });
           const profile = await profileRes.json();
 
-          // Sign in to Firebase with the id_token
           if (tokens.id_token) {
             try {
               const { GoogleAuthProvider } = await import('firebase/auth');
@@ -1309,7 +1324,6 @@ export default function Home() {
             }
           }
 
-          // Set the user in the store
           store.setUser({
             uid: profile.sub,
             email: profile.email || '',
@@ -1324,7 +1338,6 @@ export default function Home() {
           return;
         }
 
-        // === CASE 2: Legacy deep-link flow (uid/email passed directly in URL) ===
         const status = parsed.searchParams.get("auth_status");
         const token = parsed.searchParams.get("id_token") || parsed.searchParams.get("token");
         const uid = parsed.searchParams.get("uid");
@@ -1347,9 +1360,23 @@ export default function Home() {
 
           if (token) {
             const credential = GoogleAuthProvider.credential(token);
+
+            const isFirebaseIdToken = (() => {
+              try {
+                const payload = JSON.parse(atob(token.split('.')[1] || ''));
+                return typeof payload?.iss === 'string' && payload.iss.includes('securetoken.google.com');
+              } catch {
+                return false;
+              }
+            })();
+
             try {
-              await firebaseService.signInWithCredential(credential);
-              console.log("Firebase signed in successfully via deep link");
+              if (isFirebaseIdToken) {
+                console.log('[Auth] Received Firebase ID token from deep link; skipping Google credential sign-in.');
+              } else {
+                await firebaseService.signInWithCredential(credential);
+                console.log("Firebase signed in successfully via deep link");
+              }
             } catch (e) {
               console.error("Firebase sign-in failed:", e);
             }
@@ -1376,35 +1403,13 @@ export default function Home() {
     return cleanup;
   }, [store]);
 
-  // Auto-trigger Google Login if no user and not already seen welcome page
-  // Auto-trigger Google Login - Use Store Config
   useEffect(() => {
-    // 1. Fetch App Config first
     if (!store.clientId) {
       store.fetchAppConfig();
     }
-
-    // 2. Auto-login if conditions met (commented out by default to prevent spam, but logic is ready)
-    /*
-    if (!store.user && !store.hasSeenWelcomePage && window.electronAPI && store.googleClientId) {
-      const clientId = store.googleClientId;
-      const redirectUri = store.googleRedirectUri;
-
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${clientId}&` +
-        `redirect_uri=${redirectUri}&` +
-        `response_type=code&` +
-        `scope=email profile openid&` +
-        `access_type=offline&` +
-        `prompt=consent`;
-
-      window.electronAPI.openAuthWindow(authUrl);
-      store.setHasSeenWelcomePage(true);
-    }
-    */
   }, [store.user, store.hasSeenWelcomePage, store.clientId]);
 
-  // Early return for standalone popup windows
+  // ── Early return for standalone popup windows (unchanged) ──
   if (isPopupWindow) {
     const params = new URLSearchParams(window.location.search);
     const panel = params.get('panel');
@@ -1474,6 +1479,9 @@ export default function Home() {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MAIN RENDER
+  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className={`flex flex-col h-screen w-full bg-deep-space overflow-hidden relative font-sans text-primary-text transition-all duration-700`}>
       <TitleBar
@@ -1530,14 +1538,12 @@ export default function Home() {
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: store.isSidebarCollapsed ? 70 : store.sidebarWidth, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }} // Faster transition
+              transition={{ duration: 0.3, ease: 'easeOut' }}
               className={`relative h-full border-r border-border-color cursor-grab active:cursor-grabbing ${store.sidebarSide === 'left' ? 'order-first' : 'order-last'} no-drag-region bg-black/20`}
               onUpdate={() => {
-                // Trigger resize during animation to keep BrowserView in sync
                 if (window.electronAPI) window.dispatchEvent(new Event('resize'));
               }}
             >
-              {/* Manual Resize Handle */}
               {!store.isSidebarCollapsed && (
                 <div
                   className={`absolute top-0 bottom-0 w-1 cursor-col-resize z-50 hover:bg-deep-space-accent-neon/30 transition-colors ${store.sidebarSide === 'left' ? 'right-0' : 'left-0'}`}
@@ -1593,6 +1599,7 @@ export default function Home() {
             </motion.div>
           )}
         </AnimatePresence>
+
         <main className="flex-1 flex flex-col relative overflow-hidden bg-black/5 min-w-0">
           {store.activeView === 'browser' && (
             <header className="h-[56px] flex-shrink-0 flex items-center px-4 gap-4 border-b border-white/5 bg-black/40 backdrop-blur-3xl z-40 no-drag-region">
@@ -1616,13 +1623,15 @@ export default function Home() {
                 <button onClick={() => window.electronAPI?.goForward()} className="p-2 rounded-xl hover:bg-primary-bg/10 text-secondary-text hover:text-primary-text transition-all" title="Go Forward"><ChevronRight size={18} /></button>
                 <button onClick={() => window.electronAPI?.reload()} className="p-2 rounded-xl hover:bg-primary-bg/10 text-secondary-text hover:text-primary-text transition-all" title="Reload Page"><RotateCw size={18} /></button>
               </div>
+
+              {/* ── URL BAR (unchanged) ── */}
               <div className="flex-1 flex justify-center">
                 <div className="w-full max-w-2xl relative group">
                   <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
                     <Search size={14} className="text-secondary-text group-focus-within:text-primary-text transition-colors" />
                   </div>
                   <input
-                    ref={inputRef} // Add ref
+                    ref={inputRef}
                     type="text"
                     value={inputValue}
                     onChange={(e) => { setInputValue(e.target.value); setIsTyping(true); }}
@@ -1630,37 +1639,31 @@ export default function Home() {
                     onBlur={() => setIsTyping(false)}
                     onClick={(e) => (e.target as HTMLInputElement).select()}
                     onKeyDown={(e) => {
-                      // Shift+Enter: Insert new line (for multi-line queries)
                       if (e.key === 'Enter' && e.shiftKey) {
                         e.preventDefault();
                         const input = e.target as HTMLInputElement;
                         const start = input.selectionStart || inputValue.length;
                         const newValue = inputValue.slice(0, start) + '\n' + inputValue.slice(start);
                         setInputValue(newValue);
-                        setTimeout(() => {
-                          input.setSelectionRange(start + 1, start + 1);
-                        }, 0);
+                        setTimeout(() => { input.setSelectionRange(start + 1, start + 1); }, 0);
                         return;
                       }
-                      // Ctrl+Enter or Cmd+Enter: Search in new tab
                       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                         e.preventDefault();
                         handleGo(inputValue, { newTab: true, active: true });
                         return;
                       }
-                      // Alt+Enter: Open in background tab
                       if (e.key === 'Enter' && e.altKey) {
                         e.preventDefault();
                         handleGo(inputValue, { newTab: true, active: false });
                         return;
                       }
-                      // Regular Enter: Navigate
                       if (e.key === 'Enter') handleGo(inputValue);
                       if (e.key === 'Tab' && urlPrediction && isTyping) {
                         e.preventDefault();
-                        setInputValue(urlPrediction); // Update input value with prediction
+                        setInputValue(urlPrediction);
                         setUrlPrediction(null);
-                        handleGo(urlPrediction); // Navigate to the predicted URL
+                        handleGo(urlPrediction);
                       }
                     }}
                     placeholder={`Search with ${store.selectedEngine} or enter URL...`}
@@ -1722,14 +1725,12 @@ export default function Home() {
                         <div
                           key={index}
                           className="flex items-center gap-3 px-4 py-2 hover:bg-accent/10 cursor-pointer text-sm"
-                          onClick={() => {
-                            handleSuggestionClick(s);
-                          }}
+                          onClick={() => { handleSuggestionClick(s); }}
                         >
                           {s.type === 'search' && <Search size={14} className="text-secondary-text" />}
                           {s.type === 'history' && <RefreshCcw size={14} className="text-secondary-text" />}
                           {s.type === 'bookmark' && <Bookmark size={14} className="text-secondary-text" />}
-                          {s.type === 'app' && s.icon} {/* Render app icon */}
+                          {s.type === 'app' && s.icon}
                           <span className="flex-1 text-primary-text truncate">{s.text}</span>
                           <span className="text-secondary-text text-xs">{s.url}</span>
                         </div>
@@ -1739,12 +1740,26 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* ── RIGHT HEADER ACTIONS ── */}
               <div className="flex items-center gap-1">
                 <button onClick={() => { setSettingsSection('history'); setShowSettings(true); }} className="p-1.5 rounded-lg text-secondary-text hover:text-primary-text transition-all" title="History">
                   <RefreshCcw size={14} />
                 </button>
                 <button onClick={handleReadAloud} className={`p-1.5 rounded-lg transition-all ${isReadingAloud ? 'text-accent animate-pulse' : 'text-secondary-text hover:text-primary-text'}`} title="Read Aloud">
                   {isReadingAloud ? <Square size={14} /> : <Volume2 size={14} />}
+                </button>
+
+                {/* ── THEME CYCLE BUTTON (NEW) ────────────────────────────────────
+                    Cycles: dark → light → vibrant → dark → …
+                    Icon and title update to reflect the CURRENT active theme.
+                    Sits naturally in the existing right-side button cluster.
+                ─────────────────────────────────────────────────────────────────── */}
+                <button
+                  onClick={cycleTheme}
+                  className="p-1.5 rounded-lg text-secondary-text hover:text-primary-text transition-all"
+                  title={`Theme: ${store.theme} — click to switch`}
+                >
+                  <ThemeIcon theme={store.theme as AppTheme} />
                 </button>
 
                 <div className="w-[1px] h-6 bg-border-color mx-1" />
@@ -1777,6 +1792,7 @@ export default function Home() {
             </header>
           )}
 
+          {/* ── VIEWS (all unchanged) ── */}
           <div className="flex-1 relative">
             <AnimatePresence mode="wait">
               {store.activeView === 'landing-page' && (
@@ -1789,7 +1805,6 @@ export default function Home() {
                   <WorkspaceDashboard />
                 </motion.div>
               )}
-
               {store.activeView === 'browser' && (
                 <motion.div key="browser" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
                   <div className={`h-full flex ${store.studentMode ? 'p-4 gap-4' : 'p-2'}`}>
@@ -1808,7 +1823,6 @@ export default function Home() {
                           </div>
                         </div>
                       )}
-                      {/* This area is now intentionally blank. The BrowserView is managed by the main process. */}
                       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-sky-500/20 to-transparent pointer-events-none" />
                     </div>
                     {store.studentMode && (
@@ -1831,31 +1845,26 @@ export default function Home() {
                   <WebStore onClose={() => store.setActiveView('browser')} />
                 </motion.div>
               )}
-
               {store.activeView === 'pdf' && (
                 <motion.div key="pdf" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[60] bg-[#020205]">
                   <PDFWorkspace />
                 </motion.div>
               )}
-
               {store.activeView === 'coding' && (
                 <motion.div key="coding" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[60] bg-[#020205]">
                   <CodingDashboard />
                 </motion.div>
               )}
-
               {store.activeView === 'media' && (
                 <motion.div key="media" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[60] bg-[#020205]">
                   <MediaStudio />
                 </motion.div>
               )}
-
               {store.activeView === 'documentation' && (
                 <motion.div key="documentation" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute inset-0 z-[100] bg-[#020205] overflow-auto custom-scrollbar">
                   <Documentation />
                 </motion.div>
               )}
-
               {store.activeView === 'presenton' && (
                 <motion.div key="presenton" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[60] bg-[#020205]">
                   <PresentonStudio />
@@ -1863,75 +1872,34 @@ export default function Home() {
               )}
             </AnimatePresence>
 
-            {/* Feature Overlays */}
+            {/* Feature Overlays (all unchanged) */}
             <AnimatePresence>
               {showSettings && (
-                <SettingsPanel
-                  onClose={handleSettingsClose}
-                  defaultSection={settingsSection}
-                />
+                <SettingsPanel onClose={handleSettingsClose} defaultSection={settingsSection} />
               )}
 
-              {/* Standalone popups are now handled externally via separate windows */}
-
-              {/* Standalone popups are now handled via separate BrowserWindows */}
-
-              {/* Manager Overlays */}
               {activeManager === 'password' && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="absolute inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center"
-                >
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="absolute inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center">
                   <div className="w-full max-w-4xl h-[80vh] bg-[#020205] rounded-2xl border border-white/10 shadow-2xl overflow-hidden relative">
-                    <button
-                      onClick={() => setActiveManager(null)}
-                      className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 rounded-xl text-white/60 hover:text-white transition-all"
-                      title="Close"
-                    >
-                      <X size={20} />
-                    </button>
+                    <button onClick={() => setActiveManager(null)} className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 rounded-xl text-white/60 hover:text-white transition-all" title="Close"><X size={20} /></button>
                     <PasswordManager />
                   </div>
                 </motion.div>
               )}
 
               {activeManager === 'firewall' && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="absolute inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center"
-                >
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="absolute inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center">
                   <div className="w-full max-w-4xl h-[80vh] bg-[#020205] rounded-2xl border border-white/10 shadow-2xl overflow-hidden relative">
-                    <button
-                      onClick={() => setActiveManager(null)}
-                      className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 rounded-xl text-white/60 hover:text-white transition-all"
-                      title="Close"
-                    >
-                      <X size={20} />
-                    </button>
+                    <button onClick={() => setActiveManager(null)} className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 rounded-xl text-white/60 hover:text-white transition-all" title="Close"><X size={20} /></button>
                     <ProxyFirewallManager />
                   </div>
                 </motion.div>
               )}
 
               {activeManager === 'p2p' && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="absolute inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center"
-                >
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="absolute inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center">
                   <div className="w-full max-w-4xl h-[80vh] bg-[#020205] rounded-2xl border border-white/10 shadow-2xl overflow-hidden relative">
-                    <button
-                      onClick={() => setActiveManager(null)}
-                      className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 rounded-xl text-white/60 hover:text-white transition-all"
-                      title="Close"
-                    >
-                      <X size={20} />
-                    </button>
+                    <button onClick={() => setActiveManager(null)} className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 rounded-xl text-white/60 hover:text-white transition-all" title="Close"><X size={20} /></button>
                     <P2PSyncManager />
                   </div>
                 </motion.div>
@@ -1976,6 +1944,7 @@ export default function Home() {
         </main>
       </div>
 
+      {/* ── CONTEXT MENU (unchanged) ── */}
       <AnimatePresence>
         {showContextMenu && (
           <>
@@ -2021,6 +1990,11 @@ export default function Home() {
                 <Plus size={14} />
                 <span className="text-xs font-bold uppercase tracking-widest">Create Shortcut</span>
               </button>
+              {/* ── Theme cycle in context menu too ── */}
+              <button onClick={() => { cycleTheme(); setShowContextMenu(null); }} className="w-full px-4 py-2 flex items-center gap-3 hover:bg-accent/10 text-secondary-text hover:text-accent transition-all">
+                <Palette size={14} />
+                <span className="text-xs font-bold uppercase tracking-widest">Switch Theme</span>
+              </button>
               <button onClick={async () => {
                 setShowContextMenu(null);
                 if (window.electronAPI) {
@@ -2044,6 +2018,7 @@ export default function Home() {
         )}
       </AnimatePresence>
 
+      {/* ── TRANSLATE DIALOG (unchanged) ── */}
       <AnimatePresence>
         {showTranslateDialog && (
           <motion.div
@@ -2055,28 +2030,18 @@ export default function Home() {
             <div className="w-full max-w-sm max-h-[80vh] bg-[#0a0a0f] border border-white/10 rounded-2xl shadow-3xl overflow-hidden flex flex-col">
               <div className="flex-shrink-0 p-6 pb-4">
                 <h3 className="text-sm font-black uppercase tracking-widest text-white mb-4 text-center">TRANSLATE SITE</h3>
-
                 <div className="flex gap-2 mb-4">
-                  <button
-                    onClick={() => setTranslateMethod('google')}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold border transition-all ${translateMethod === 'google' ? 'bg-accent/20 border-accent/40 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:text-white'}`}
-                  >
+                  <button onClick={() => setTranslateMethod('google')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold border transition-all ${translateMethod === 'google' ? 'bg-accent/20 border-accent/40 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:text-white'}`}>
                     Google
                   </button>
-                  <button
-                    onClick={() => setTranslateMethod('chrome-ai')}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold border transition-all ${translateMethod === 'chrome-ai' ? 'bg-accent/20 border-accent/40 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:text-white'}`}
-                  >
+                  <button onClick={() => setTranslateMethod('chrome-ai')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold border transition-all ${translateMethod === 'chrome-ai' ? 'bg-accent/20 border-accent/40 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:text-white'}`}>
                     Chrome AI
                   </button>
                 </div>
                 <p className="text-[10px] text-white/30 text-center">
-                  {translateMethod === 'google'
-                    ? 'Google: Fast, relies on Google servers'
-                    : 'Chrome AI: On-device, private, requires Chrome 144+'}
+                  {translateMethod === 'google' ? 'Google: Fast, relies on Google servers' : 'Chrome AI: On-device, private, requires Chrome 144+'}
                 </p>
               </div>
-
               <div className="flex-1 overflow-y-auto px-6 pb-4 custom-scrollbar">
                 <div className="grid grid-cols-2 gap-2">
                   {store.availableLanguages.map((langCode) => {
@@ -2116,6 +2081,8 @@ export default function Home() {
       </AnimatePresence>
 
       <audio ref={ambientAudioRef} src={store.ambientMusicUrl} loop hidden />
+
+      {/* ── SETTINGS / OVERLAYS (all unchanged) ── */}
       <AnimatePresence>
         {showSettings && (
           <div
@@ -2152,7 +2119,6 @@ export default function Home() {
                       className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-sky-400/30 transition-all cursor-pointer"
                       onClick={async () => {
                         if (d.status === 'completed' && window.electronAPI?.openFile) {
-                          // Use path if available, otherwise fall back to name
                           const fileToOpen = d.path || d.name;
                           await window.electronAPI.openFile(fileToOpen);
                         }
@@ -2253,17 +2219,18 @@ export default function Home() {
           </div>
         )}
       </AnimatePresence>
+
       <SpotlightSearchOverlay show={showSpotlightSearch} onClose={() => setShowSpotlightSearch(false)} />
+
       {showSchedulingModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          <SchedulingModal 
-            isOpen={showSchedulingModal} 
+          <SchedulingModal
+            isOpen={showSchedulingModal}
             onClose={() => {
               setShowSchedulingModal(false);
               setIsBrowserDisabled(false);
             }}
             onConfirm={async (config) => {
-              // Get scheduling intent from store or default
               if (window.electronAPI?.scheduleTask) {
                 await window.electronAPI.scheduleTask({
                   name: 'Scheduled Task',
