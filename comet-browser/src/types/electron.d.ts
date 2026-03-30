@@ -86,6 +86,7 @@ declare global {
             getSelectedText: () => Promise<string>; // For context menu integration
             sendToAIChatInput: (text: string) => void; // For sending selected text to AI chat
             captureBrowserViewScreenshot: () => Promise<string>; // For vision capabilities
+            loadSkill: (skillId: string) => Promise<string>; // Load modular AI skills context
 
             // Dev-MCP & Analytics
             sendMcpCommand: (command: string, data: any) => Promise<any>;

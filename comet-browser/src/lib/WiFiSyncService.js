@@ -112,11 +112,23 @@ var WiFiSyncService = /** @class */ (function (_super) {
         _this.discoveryInterval = null;
         _this.clients = new Set();
         _this._lastReceivedClipboard = '';
+        _this.clientSockets = new Map();
         _this.port = port;
         _this.deviceId = "desktop-".concat(os.hostname().substring(0, 8));
+        _this.deviceName = os.hostname();
         _this.pairingCode = Math.floor(100000 + Math.random() * 900000).toString();
         return _this;
     }
+    WiFiSyncService.prototype.setDeviceId = function (deviceId, deviceName) {
+        this.deviceId = deviceId;
+        this.deviceName = deviceName;
+    };
+    WiFiSyncService.prototype.getDeviceId = function () {
+        return this.deviceId;
+    };
+    WiFiSyncService.prototype.getDeviceName = function () {
+        return this.deviceName;
+    };
     WiFiSyncService.prototype.start = function () {
         var _this = this;
         try {
@@ -332,6 +344,31 @@ var WiFiSyncService = /** @class */ (function (_super) {
                 client.send(data);
             }
         });
+    };
+    WiFiSyncService.prototype.broadcastClipboard = function (text) {
+        this.broadcast({
+            type: 'clipboard-sync',
+            text: text,
+            timestamp: Date.now()
+        });
+    };
+    WiFiSyncService.prototype.connectToDevice = function (deviceId) {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                console.log('[WiFi-Sync] Attempting to connect to device via cloud relay:', deviceId);
+                return [2 /*return*/, false];
+            });
+        });
+    };
+    WiFiSyncService.prototype.disconnectFromDevice = function (deviceId) {
+        var socket = this.clientSockets.get(deviceId);
+        if (socket) {
+            socket.close();
+            this.clientSockets.delete(deviceId);
+        }
+    };
+    WiFiSyncService.prototype.getConnectedClients = function () {
+        return Array.from(this.clientSockets.keys());
     };
     return WiFiSyncService;
 }(events_1.EventEmitter));

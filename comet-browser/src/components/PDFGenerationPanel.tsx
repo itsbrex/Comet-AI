@@ -44,7 +44,7 @@ const STAGE_CONFIG: Record<string, { icon: React.ReactNode; color: string; label
   idle: { icon: <FileText size={16} />, color: 'text-white/40', label: 'Ready' },
   parsing: { icon: <Settings size={16} />, color: 'text-sky-400', label: 'Parsing Content' },
   preparing: { icon: <FileBarChart size={16} />, color: 'text-purple-400', label: 'Preparing Template' },
-  rendering: { icon: <Image size={16} />, color: 'text-pink-400', label: 'Rendering' },
+  rendering: { icon: <Image size={16} />, color: 'text-violet-400', label: 'Rendering' },
   generating: { icon: <Loader2 size={16} className="animate-spin" />, color: 'text-amber-400', label: 'Generating PDF' },
   saving: { icon: <Download size={16} />, color: 'text-green-400', label: 'Saving to Disk' },
   complete: { icon: <CheckCircle2 size={16} />, color: 'text-green-400', label: 'Complete' },

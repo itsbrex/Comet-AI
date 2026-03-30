@@ -68,34 +68,34 @@ const PDFWorkspace = () => {
     };
 
     return (
-        <div className="flex h-screen bg-[#050510] text-white">
+        <div className="flex h-full w-full bg-[var(--primary-bg)] text-[var(--primary-text)] relative z-50">
             {/* Sidebar */}
-            <div className="w-72 border-r border-white/5 p-6 flex flex-col gap-6 glass-dark relative z-10">
+            <div className="w-72 border-r border-[var(--border-color)] p-6 flex flex-col gap-6 adaptive-theme-surface relative z-50">
                 <div className="flex items-center gap-2 text-deep-space-accent-neon font-bold text-xl mb-4">
                     <FileText size={24} />
                     <span>Docs AI</span>
                 </div>
 
                 <div className="space-y-4">
-                    <label className="block p-4 rounded-2xl border-2 border-dashed border-white/10 hover:border-deep-space-accent-neon/30 hover:bg-white/5 transition-all cursor-pointer text-center">
+                    <label className="block p-4 rounded-2xl border-2 border-dashed border-[var(--border-color)] hover:border-accent/30 hover:bg-[var(--primary-bg)]/5 transition-all cursor-pointer text-center">
                         <input type="file" className="hidden" accept="application/pdf,image/*" onChange={handleFileChange} />
-                        <Download className="mx-auto mb-2 text-white/30" />
-                        <span className="text-xs font-bold text-white/60">Upload PDF or Image</span>
+                        <Download className="mx-auto mb-2 text-[var(--secondary-text)]/30" />
+                        <span className="text-xs font-bold text-[var(--secondary-text)]/60">Upload PDF or Image</span>
                     </label>
 
                     {file && (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 rounded-2xl bg-white/5 space-y-4">
-                            <p className="text-xs font-mono text-white/40 truncate">{file.name}</p>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 rounded-2xl bg-[var(--primary-bg)]/5 space-y-4">
+                            <p className="text-xs font-mono text-[var(--secondary-text)]/40 truncate">{file.name}</p>
                             <button
                                 onClick={runOCR}
                                 disabled={isProcessing}
-                                className="w-full py-2 bg-deep-space-accent-neon text-deep-space-bg rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-[0_0_15px_rgba(0,255,255,0.3)] disabled:opacity-50"
+                                className="w-full py-2 bg-accent text-[var(--primary-bg)] rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg disabled:opacity-50"
                             >
                                 {isProcessing ? `OCR: ${progress}%` : 'Extract Text (OCR)'}
                             </button>
                             <button
                                 onClick={addAnnotation}
-                                className="w-full py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] uppercase font-bold tracking-widest text-white/60 hover:bg-white/10 hover:text-white transition-all"
+                                className="w-full py-2 bg-[var(--primary-bg)]/5 border border-[var(--border-color)] rounded-xl text-[10px] uppercase font-bold tracking-widest text-[var(--secondary-text)]/60 hover:bg-[var(--primary-bg)]/10 hover:text-[var(--primary-text)] transition-all"
                             >
                                 Add Annotation
                             </button>
@@ -112,7 +112,7 @@ const PDFWorkspace = () => {
             </div>
 
             {/* Main Preview Area */}
-            <div className="flex-1 overflow-hidden relative p-8 flex flex-col items-center justify-center bg-black/40">
+            <div className="flex-1 overflow-hidden relative p-8 flex flex-col items-center justify-center bg-[var(--primary-bg)]">
                 {!fileUrl ? (
                     <div className="text-center opacity-20">
                         <div className="w-24 h-24 rounded-full border-2 border-white/20 flex items-center justify-center mx-auto mb-6">

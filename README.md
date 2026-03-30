@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.6--stable-blue)]()
+[![Version](https://img.shields.io/badge/Version-0.2.6--patch-blue)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
 [![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
@@ -35,7 +35,7 @@ Most browsers are built for monetization. Comet is built for **control**.
 
 ---
 
-## ✨ Features (v0.2.6-stable)
+## ✨ Features (v0.2.6-patch)
 
 ### 🤖 AI Agent
 - Multi-step autonomous task execution via chained commands
@@ -221,7 +221,7 @@ flutter run
 
 ## ⬇️ Downloads
 
-**Latest Release: v0.2.6-stable** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
+**Latest Release: v0.2.6-patch** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
 
 | Platform | Download | Status |
 |----------|----------|--------|
@@ -245,10 +245,11 @@ flutter run
 
 ---
 
-## 📝 v0.2.6 Highlights
-- **Unified versioning** – Welcome screen, settings, sidebars, mac SwiftUI sheet, and capability panel now pull the version from package.json via `useAppVersion` so 0.2.6 shows everywhere consistently.
-- **Document generation stability** – DOCX generator fixed (headers/footers/table mapping) and PPTX/PDF templating updated (no watermark on thumbnails, custom backgrounds, inline images/tables/styling supported).
-- **Docs & releases** – README downloads/badge updated to 0.2.6 with fresh release notes and changelog entry.
+## 📝 v0.2.6-patch Highlights
+- **Hardened Mobile Sync** – Implemented reliable auto-reconnection for mobile devices using `shared_preferences`. The mobile app now remembers the last connected desktop and recovers connections automatically.
+- **Auto-Relay for Generated Files** – AI-generated reports (PDF/DOCX/PPTX) are now automatically synced to the local relay directory and instantly pushed to the mobile app for immediate viewing.
+- **Firebase Hygiene & Cleanup** – Automated routines now periodically purge orphaned relay files from Firebase Storage and clean up old `temp_` database entries, maintaining system performance and privacy.
+- **Unified versioning** – All UI surfaces now consistently report v0.2.6, pulling directly from context-aware versioning logic.
 
 ## 🗺️ Roadmap
 
@@ -327,15 +328,20 @@ Comet AI Browser is built by a **16-year-old student** from India, preparing for
 
 ## 📋 Changelog
 
-### v0.2.6 (2026-03-30) - Unified versioning & docx stability
+### v0.2.6 (2026-03-30) - Sync Hardening & Branded Outputs
 #### New Features
+- **Reliable Mobile Reconnect** – Integrated `shared_preferences` into the Flutter client. Mobile devices now persist pair data and auto-reconnect to the desktop shell upon app launch or connection loss.
+- **Instant Result Relay** – Desktop-generated files are now automatically mirrored to the `Comet-AI/public` sync path. Mobile clients receive instant notifications via `file-generated` events to view results immediately.
+- **Firebase Persistence Hygiene** – Added a background cleanup task in `CloudSyncService` to purge orphaned relay data and old `temp_` prefixed entries from Firebase Realtime Database and Storage after 24 hours.
 - **Runtime versioning everywhere** – All UI surfaces (welcome screen, settings, capability panel, AI sidebars, mac SwiftUI sheet) now read the installed version from `package.json` via `useAppVersion`, eliminating manual string updates.
 - **Branded document outputs** – PPTX thumbnails no longer show watermarks; custom backgrounds/palettes, inline images/tables/styling, and watermark-on-inner-slides defaults were refreshed.
 - **Parser flexibility** – JSON command parser now accepts top-level `commands`, infers `pptx` when `slides` are provided, and supports image slots inside pages/analysis.
 
 #### Bug Fixes
+- **IPC Scoping Resolution** – Fixed a `ReferenceError` in `main.js` within the `desktop-control` handler where arguments were incorrectly scoped.
 - **DOCX generation** – Header/footer creation uses proper docx `Header`/`Footer` blocks; table mapping syntax error resolved, preventing `Cannot read properties of undefined (reading 'children')`.
 - **AI file generation** – PDF/PPTX/Docx generators now allow inline images within analysis content and avoid double-watermarking on thumbnails.
+- **CloudSync Initialization** – Fixed property access errors where `firebaseService` was expected to have a `database` member; now correctly uses `getDatabase` for real-time sync.
 
 ### v0.2.5 (2026-03-26) - Automation, mac polish & schedule UX
 #### New Features

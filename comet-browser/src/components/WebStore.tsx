@@ -23,22 +23,22 @@ const WebStore = ({ onClose }: { onClose: () => void }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300">
+        <div className="relative w-full h-full flex items-center justify-center p-8 bg-[var(--primary-bg)] backdrop-blur-xl animate-in fade-in duration-300">
             <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="w-full max-w-5xl h-[80vh] bg-[#020205] border border-white/5 rounded-[2.5rem] overflow-hidden flex shadow-[0_0_50px_rgba(0,0,0,0.8)] relative"
+                className="w-full max-w-5xl h-[80vh] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[2.5rem] overflow-hidden flex shadow-[0_8px_32px_var(--shadow-color)] relative"
             >
                 {/* Sidebar */}
-                <div className="w-64 border-r border-white/5 p-8 flex flex-col gap-8 bg-black/40 backdrop-blur-2xl">
-                    <div className="flex items-center gap-3 text-white font-black text-2xl tracking-tighter">
+                <div className="w-64 border-r border-[var(--border-color)] p-8 flex flex-col gap-8 bg-[var(--primary-bg)]/40 backdrop-blur-2xl">
+                    <div className="flex items-center gap-3 text-[var(--primary-text)] font-black text-2xl tracking-tighter">
                         <ShoppingBag size={28} className="text-sky-400" />
                         <span>NEBULA</span>
                     </div>
                     <nav className="space-y-3">
-                        <button className="w-full text-left px-5 py-3 rounded-2xl bg-white/5 text-white text-sm font-bold border border-white/10">All Modules</button>
-                        <button className="w-full text-left px-5 py-3 rounded-2xl text-slate-400 hover:bg-white/5 hover:text-white transition-all text-sm font-bold">Themes</button>
-                        <button className="w-full text-left px-5 py-3 rounded-2xl text-slate-400 hover:bg-white/5 hover:text-white transition-all text-sm font-bold">Intelligence</button>
+                        <button className="w-full text-left px-5 py-3 rounded-2xl bg-[var(--primary-bg)]/10 text-[var(--primary-text)] text-sm font-bold border border-[var(--border-color)]">All Modules</button>
+                        <button className="w-full text-left px-5 py-3 rounded-2xl text-[var(--secondary-text)] hover:bg-[var(--primary-bg)]/5 hover:text-[var(--primary-text)] transition-all text-sm font-bold">Themes</button>
+                        <button className="w-full text-left px-5 py-3 rounded-2xl text-[var(--secondary-text)] hover:bg-[var(--primary-bg)]/5 hover:text-[var(--primary-text)] transition-all text-sm font-bold">Intelligence</button>
                     </nav>
                 </div>
 

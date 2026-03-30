@@ -189,27 +189,33 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     background: 'linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) 88%, transparent), color-mix(in srgb, var(--primary-bg) 96%, transparent))',
     borderColor: 'var(--border-color)',
     color: 'var(--primary-text)',
+    boxShadow: isLightTheme ? '0 4px 12px var(--shadow-color)' : '0 10px 40px var(--shadow-color)',
   } as React.CSSProperties;
   const softPanelStyle = {
     background: 'color-mix(in srgb, var(--card-bg) 92%, transparent)',
     borderColor: 'var(--border-color)',
     color: 'var(--primary-text)',
+    backdropFilter: 'blur(20px)',
   } as React.CSSProperties;
   const popoverStyle = {
     background: 'color-mix(in srgb, var(--card-bg) 96%, transparent)',
     borderColor: 'var(--border-color)',
     color: 'var(--primary-text)',
+    backdropFilter: 'blur(30px)',
   } as React.CSSProperties;
   const userBubbleStyle = {
-    background: isLightTheme
-      ? 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, white), color-mix(in srgb, var(--accent-light) 18%, white))'
+    background: props.theme === 'custom' ? 'var(--user-bubble-bg, var(--card-bg))' : isLightTheme
+      ? 'var(--primary-bg)'
       : 'color-mix(in srgb, var(--card-bg) 92%, transparent)',
-    borderColor: isLightTheme ? 'color-mix(in srgb, var(--accent) 32%, transparent)' : 'rgba(255,255,255,0.12)',
+    borderColor: 'var(--border-color)',
+    boxShadow: isLightTheme ? '0 4px 15px var(--shadow-color)' : 'none',
     color: 'var(--primary-text)',
   } as React.CSSProperties;
   const modelBubbleStyle = {
-    background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, var(--accent-light) 8%, var(--card-bg)))',
-    borderColor: 'color-mix(in srgb, var(--accent) 26%, transparent)',
+    background: props.theme === 'custom' ? 'var(--model-bubble-bg, var(--card-bg))' : isLightTheme
+      ? 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 5%, var(--primary-bg)), color-mix(in srgb, var(--accent-light) 2%, var(--primary-bg)))'
+      : 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, var(--accent-light) 8%, var(--card-bg)))',
+    borderColor: isLightTheme ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'color-mix(in srgb, var(--accent) 26%, transparent)',
     color: 'var(--primary-text)',
   } as React.CSSProperties;
 
@@ -656,6 +662,22 @@ I couldn't schedule the task. The background service may not be running. Please 
       if (props.setBrowserDisabled) props.setBrowserDisabled(true);
     }
 
+    // ✅ NEW: Load document skill if user wants to create pdf/docx/pptx
+    let skillContext = '';
+    const docFormatMatch = rawContent.match(/\b(pdf|docx?|pptx?)\b/i);
+    if (docFormatMatch && window.electronAPI?.loadSkill) {
+      const format = docFormatMatch[1].toLowerCase();
+      const normalizedFormat = format === 'doc' || format === 'docx' ? 'docx' : format === 'ppt' ? 'pptx' : format;
+      try {
+        const skillId = addThinkingStep(`Loading ${normalizedFormat.toUpperCase()} skill...`);
+        skillContext = await window.electronAPI.loadSkill(normalizedFormat);
+        resolveThinkingStep(skillId, 'done', 'Skill loaded');
+        console.log(`[SkillLoader] Loaded skill for ${normalizedFormat}`);
+      } catch (e) {
+        console.warn('[SkillLoader] Failed to load skill:', e);
+      }
+    }
+
     const { content: protectedContent, wasProtected } = Security.fortress(rawContent);
     const userMessage: ExtendedChatMessage = {
       role: 'user',
@@ -739,6 +761,9 @@ I couldn't schedule the task. The background service may not be running. Please 
           : '',
         liveSearchContext
           ? `[LIVE SEARCH RESULTS — USE ONLY THESE FOR CURRENT FACTS, DO NOT INVENT DATA]\n${liveSearchContext}`
+          : '',
+        skillContext
+          ? `[📝 DOCUMENT SKILL — FOLLOW THESE FORMATTING RULES]\n${skillContext}`
           : '',
       ].filter(Boolean).join('\n\n');
 
@@ -2911,11 +2936,12 @@ I've successfully executed the following real tasks:
 
     const savedConversations = lsGet<Conversation[]>('conversations_list', []);
     setConversations(savedConversations);
-    if (savedConversations.length > 0) {
-      const latest = savedConversations[0];
-      setActiveConversationId(latest.id);
-      setMessages(latest.messages as ExtendedChatMessage[]);
-    }
+    // Start with new chat on app restart - uncomment below to restore previous conversation
+    // if (savedConversations.length > 0) {
+    //   const latest = savedConversations[0];
+    //   setActiveConversationId(latest.id);
+    //   setMessages(latest.messages as ExtendedChatMessage[]);
+    // }
 
     return () => {
       window.removeEventListener('online', hOnline);
@@ -3234,7 +3260,7 @@ I've successfully executed the following real tasks:
       </AnimatePresence>
 
       {/* Header */}
-      <header className="p-5 flex flex-col gap-3 border-b backdrop-blur-xl sticky top-0 z-[50]" style={sidebarShellStyle}>
+      <header className="h-[76px] px-5 flex flex-col justify-center border-b backdrop-blur-xl sticky top-0 z-[50]" style={sidebarShellStyle}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-9 h-9 rounded-2xl p-1.5 border" style={softPanelStyle}>
@@ -3631,20 +3657,27 @@ I've successfully executed the following real tasks:
 
           <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/10">
             <div className="flex items-center gap-2">
-              <button onClick={() => fileInputRef.current?.click()} className="p-3 rounded-2xl hover:bg-white/5 text-secondary-text hover:text-primary-text transition-all"><Paperclip size={20} /></button>
+              <button onClick={() => fileInputRef.current?.click()} className="p-3 rounded-2xl hover:bg-accent/5 text-secondary-text hover:text-primary-text transition-all"><Paperclip size={20} /></button>
               <button
                 onClick={() => setShowConversationHistory(true)}
                 title="Conversation history"
-                className="p-3 rounded-2xl hover:bg-white/5 text-secondary-text hover:text-primary-text transition-all"
+                className="p-3 rounded-2xl hover:bg-accent/5 text-secondary-text hover:text-primary-text transition-all"
               >
                 <History size={20} />
               </button>
-              <button onClick={() => setShowActionsMenu(!showActionsMenu)} className={`p-3 rounded-2xl transition-all ${showActionsMenu ? 'bg-white/10 text-primary-text' : 'hover:bg-white/5 text-secondary-text hover:text-primary-text'}`}><MoreHorizontal size={20} /></button>
+              <button onClick={() => setShowActionsMenu(!showActionsMenu)} className={`p-3 rounded-2xl transition-all ${showActionsMenu ? 'bg-accent/10 text-primary-text' : 'hover:bg-accent/5 text-secondary-text hover:text-primary-text'}`}><MoreHorizontal size={20} /></button>
             </div>
             <button
               onClick={() => handleSendMessage()}
               disabled={isLoading || (!inputMessage.trim() && attachments.length === 0)}
-              className="group flex items-center justify-center w-12 h-12 rounded-[1.5rem] bg-sky-500 text-black shadow-[0_10px_20px_rgba(56,189,248,0.3)] transition-all hover:scale-105 active:scale-95 disabled:opacity-10 disabled:grayscale"
+              className={`group flex items-center justify-center w-12 h-12 rounded-[1.5rem] transition-all hover:scale-105 active:scale-95 disabled:opacity-10 disabled:grayscale`}
+              style={{
+                background: props.theme === 'custom' ? 'var(--custom-btn-bg)' : 'var(--accent)',
+                color: props.theme === 'custom' ? 'var(--custom-btn-text)' : 'white',
+                boxShadow: isLightTheme 
+                  ? '0 4px 12px var(--shadow-color)' 
+                  : '0 4px 15px var(--shadow-color)'
+              }}
             >
               <Send size={20} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </button>

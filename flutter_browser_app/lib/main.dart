@@ -183,6 +183,7 @@ void main(List<String> args) async {
   try {
     await Firebase.initializeApp();
     await SyncService().initialize('comet-default-user');
+    SyncService().tryAutoReconnect();
 
     Timer.periodic(const Duration(seconds: 3), (timer) async {
       final data = await Clipboard.getData(Clipboard.kTextPlain);

@@ -1,9 +1,10 @@
 import { EventEmitter } from 'events';
-import { Database, ref, set, onValue, get, push, update, remove, onDisconnect } from 'firebase/database';
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from 'firebase/auth';
+import { Database, ref, set, onValue, get, push, update, remove, onDisconnect, getDatabase } from 'firebase/database';
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged, User, getAuth } from 'firebase/auth';
+import { getStorage, ref as storageRef, deleteObject, FirebaseStorage } from 'firebase/storage';
 import firebaseService from './FirebaseService';
 import { Security } from './Security';
-import { CloudConfig, DeviceInfo } from './SyncMethodManager';
+import { CloudConfig } from './SyncMethodManager';
 
 interface CloudDevice {
     deviceId: string;
@@ -13,6 +14,7 @@ interface CloudDevice {
     lastSeen: number;
     publicIp?: string;
     port?: number;
+    online?: boolean;
 }
 
 interface PendingData {
@@ -25,6 +27,7 @@ interface PendingData {
 export class CloudSyncService extends EventEmitter {
     private static instance: CloudSyncService;
     private db: Database | null = null;
+    private storage: FirebaseStorage | null = null;
     private auth: any = null;
     private user: User | null = null;
     private userId: string | null = null;
@@ -64,8 +67,10 @@ export class CloudSyncService extends EventEmitter {
     }
 
     private async _setupAuth(): Promise<void> {
-        this.auth = firebaseService.auth;
-        this.db = firebaseService.database;
+        if (!firebaseService.app) return;
+        this.auth = getAuth(firebaseService.app);
+        this.db = getDatabase(firebaseService.app);
+        this.storage = getStorage(firebaseService.app);
 
         onAuthStateChanged(this.auth, async (user) => {
             if (user) {
@@ -159,7 +164,10 @@ export class CloudSyncService extends EventEmitter {
             const maxAge = 24 * 60 * 60 * 1000;
             const now = Date.now();
 
-            const paths = ['clipboard', 'history', 'prompts', 'commands', 'files'];
+            const paths = [
+                'clipboard', 'history', 'prompts', 'commands', 'files',
+                'temp_clipboard', 'temp_history', 'temp_files', 'p2p_relay_metadata'
+            ];
             
             for (const path of paths) {
                 const dataRef = ref(this.db, `${path}/${this.userId}`);
@@ -170,10 +178,21 @@ export class CloudSyncService extends EventEmitter {
                     const updated: any = {};
                     let hasUpdates = false;
                     
-                    Object.entries(data).forEach(([key, value]: [string, any]) => {
+                    Object.entries(data).forEach(async ([key, value]: [string, any]) => {
                         if (value?.timestamp && (now - value.timestamp) > maxAge) {
                             updated[key] = null;
                             hasUpdates = true;
+                            
+                            // Specific cleanup for relay files in Storage
+                            if (path === 'p2p_relay_metadata' && value.storagePath && this.storage) {
+                                try {
+                                    const fileRef = storageRef(this.storage, value.storagePath);
+                                    await deleteObject(fileRef);
+                                    console.log(`[CloudSync] Deleted orphan relay file: ${value.storagePath}`);
+                                } catch (storageErr) {
+                                    // Ignore if file already deleted
+                                }
+                            }
                         }
                     });
                     

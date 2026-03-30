@@ -75,6 +75,12 @@ class _DesktopControlPageState extends State<DesktopControlPage>
           msg['pin'] as String,
           msg['qrData'] as String?,
         );
+      } else if (mounted && msg['action'] == 'file-generated') {
+        _showFileReadyDialog(
+          msg['name'] as String,
+          msg['url'] as String,
+          msg['type'] as String?,
+        );
       }
     });
 
@@ -178,6 +184,40 @@ class _DesktopControlPageState extends State<DesktopControlPage>
         _actionLogs.removeLast();
       }
     });
+  }
+
+  void _showFileReadyDialog(String name, String url, String? type) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('File Generated'),
+        content: Text('Desktop has generated "$name". Would you like to view it?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              if (type == 'pdf') {
+                Navigator.of(context).pushNamed(
+                  '/pdf-viewer',
+                  arguments: {'fileUrl': url, 'fileName': name},
+                );
+              } else {
+                // If DOCX/PPTX, PDF viewer might not handle it directly unless we pass it to system share/open
+                Navigator.of(context).pushNamed(
+                  '/pdf-viewer', // assuming it falls back to download/open externally
+                  arguments: {'fileUrl': url, 'fileName': name},
+                );
+              }
+            },
+            child: const Text('View File'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showShellApprovalDialog(String command, String pin, String? qrData) {

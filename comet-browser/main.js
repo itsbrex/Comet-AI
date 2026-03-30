@@ -4503,7 +4503,7 @@ function autoSyncFileToMobile(filename, buffer, fileType) {
     console.log(`[Auto-Sync] Saved to public directory: ${publicPath}`);
 
     if (typeof wifiSyncService !== 'undefined' && wifiSyncService) {
-      const fileUrl = `http://${wifiSyncService.getLocalIp()}:3999/public/${filename}`;
+      const fileUrl = `http://${wifiSyncService.getLocalIp()}:3999/${encodeURIComponent(filename)}`;
       wifiSyncService.sendToMobile({
         action: 'file-generated',
         name: filename,
@@ -7690,6 +7690,18 @@ ipcMain.removeHandler('generate-pdf');
   ipcMain.handle('permission-auto-command', async (event, { command, enabled }) => {
     permissionStore.setAutoCommand(command, enabled);
     return { success: true, commands: permissionStore.getAutoApprovedCommands() };
+  });
+
+  // Skill Loader - loads document generation skills (pdf/docx/pptx)
+  ipcMain.handle('load-skill', async (event, format) => {
+    const { skillLoader } = require('./src/lib/SkillLoader.ts');
+    try {
+      const skill = await skillLoader.load(format);
+      return { success: true, skill };
+    } catch (e) {
+      console.error('[Main] Error loading skill:', e);
+      return { success: false, error: e.message };
+    }
   });
 
   ipcMain.handle('permission-auto-commands', async () => {

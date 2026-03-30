@@ -95,7 +95,7 @@ const TitleBar = ({ onToggleSpotlightSearch, onOpenSettings }: TitleBarProps) =>
         <div
             className={`h-10 backdrop-blur-xl flex items-center justify-between px-4 select-none drag-region fixed top-0 left-0 right-0 z-[200] ${showTabBar ? 'border-b' : ''}`}
             style={{
-                background: 'color-mix(in srgb, var(--navbar-bg) 92%, transparent)',
+                background: store.theme === 'light' ? '#FFFFFF' : 'color-mix(in srgb, var(--navbar-bg) 92%, transparent)',
                 borderColor: 'var(--border-color)',
             }}
         >
@@ -141,7 +141,7 @@ const TitleBar = ({ onToggleSpotlightSearch, onOpenSettings }: TitleBarProps) =>
                     <img
                         src={(store.user && store.user.photoURL) || store.localPhotoURL || ''}
                         alt="Profile"
-                        className="w-6 h-6 rounded-full border border-white/10 cursor-pointer object-cover shadow-sm hover:scale-105 transition-transform"
+                        className="w-6 h-6 rounded-full border border-border-color cursor-pointer object-cover shadow-sm hover:scale-105 transition-transform"
                         onClick={() => router.push('/settings?section=profile')}
                         title={store.user?.displayName || store.user?.email || 'User Profile'}
                     />
@@ -151,8 +151,10 @@ const TitleBar = ({ onToggleSpotlightSearch, onOpenSettings }: TitleBarProps) =>
                         disabled={isSigningIn}
                         className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all flex items-center gap-1 ${
                             isSigningIn
-                                ? 'bg-sky-500/5 text-sky-400/50 border-sky-500/20 cursor-not-allowed'
-                                : 'bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border-sky-500/30 cursor-pointer'
+                                ? 'bg-accent/5 text-accent/50 border-accent/20 cursor-not-allowed'
+                                : store.theme === 'light'
+                                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200 cursor-pointer'
+                                    : 'bg-accent/10 hover:bg-accent/20 text-accent border-accent/30 cursor-pointer'
                         }`}
                         title={isSigningIn ? 'Opening browser...' : 'Sign in with Google'}
                     >

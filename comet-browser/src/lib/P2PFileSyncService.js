@@ -466,7 +466,7 @@ var P2PFileSyncService = /** @class */ (function (_super) {
                             return [3 /*break*/, 9];
                         }
                         encryptedData = encryptResult.encryptedData, iv = encryptResult.iv, authTag = encryptResult.authTag, salt = encryptResult.salt;
-                        storagePath = "users/".concat(this.userId, "/relay_files/").concat(this.remoteDeviceId, "/").concat(file.id);
+                        storagePath = "users/".concat(this.userId, "/temp_relay_files/").concat(this.remoteDeviceId, "/").concat(file.id);
                         fileRef = (0, storage_1.ref)(this.storage, storagePath);
                         return [4 /*yield*/, (0, storage_1.uploadBytes)(fileRef, new Uint8Array(encryptedData))];
                     case 6:

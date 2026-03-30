@@ -6,11 +6,11 @@
    ───────────────────────────────────────────────────────────── */
 @theme {
   --color-primary-bg: #FFFFFF;
-  --color-primary-text: #1F2937;
-  --color-secondary-text: #4B5563;
-  --color-accent: #1D4ED8;
-  --color-accent-light: #3B82F6;
-  --color-border-color: #E5E7EB;
+  --color-primary-text: #0F172A;
+  --color-secondary-text: #475569;
+  --color-accent: #2563EB;
+  --color-accent-light: #60A5FA;
+  --color-border-color: #E2E8F0;
 
   --color-dark-bg: #020205;
   --color-dark-text: #F8FAFC;
@@ -30,26 +30,27 @@
   /* structural */
   --primary-bg: #FFFFFF;
   --navbar-bg: #FFFFFF;
-  --card-bg: #F9FAFB;
-  --primary-text: #1F2937;
-  --secondary-text: #4B5563;
-  --accent: #1D4ED8;
-  --accent-light: #3B82F6;
-  --border-color: #E5E7EB;
+  --card-bg: #F8FAFC;
+  --primary-text: #0F172A;
+  --secondary-text: #475569;
+  --accent: #2563EB;
+  --accent-light: #60A5FA;
+  --border-color: #E2E8F0;
 
-  /* legacy color tokens kept for Tailwind compatibility */
+  /* legacy color tokens */
   --color-primary-bg: #FFFFFF;
-  --color-primary-text: #1F2937;
-  --color-secondary-text: #4B5563;
-  --color-accent: #1D4ED8;
-  --color-accent-light: #3B82F6;
-  --color-border-color: #E5E7EB;
+  --color-primary-text: #0F172A;
+  --color-secondary-text: #475569;
+  --color-accent: #2563EB;
+  --color-accent-light: #60A5FA;
+  --color-border-color: #E2E8F0;
 
-  /* glow / neon (neutral in light) */
-  --deep-space-glow: rgba(14, 165, 233, 0.25);
-  --deep-space-accent-neon: #0EA5E9;
-  --custom-primary: #ff6b6b;
-  --custom-secondary: #22d3ee;
+  /* glow / neon */
+  --deep-space-glow: rgba(37, 99, 235, 0.15);
+  --deep-space-accent-neon: #2563EB;
+  --custom-primary: #8B5CF6;
+  --custom-secondary: #06B6D4;
+  --shadow-color: rgba(15, 23, 42, 0.15); /* Safe neutral fallback */
 
   /* fonts */
   --font-display: "Space Grotesk", "Manrope", "Syne", "Inter", system-ui, sans-serif;
@@ -60,16 +61,21 @@
    DARK THEME  (deep space, sky-blue accent)
    ───────────────────────────────────────────────────────────── */
 .dark {
-  --primary-bg: #020205;
-  --navbar-bg: #0a0a10;
-  --card-bg: #0a0a10;
+  --primary-bg: #010103;
+  --navbar-bg: rgba(2, 2, 5, 0.82);
+  --card-bg: #050508;
+  --sidebar-bg: #020204;
   --primary-text: #F8FAFC;
   --secondary-text: #94A3B8;
-  --accent: #38BDF8;
+  --accent: #38BDF8; /* Sky-blue accent from backup */
   --accent-light: #7DD3FC;
   --border-color: rgba(56, 189, 248, 0.15);
+  --glass-bg: rgba(5, 5, 10, 0.65);
+  --glass-border: rgba(56, 189, 248, 0.18);
+  --shadow-color: rgba(0, 0, 0, 0.6);
+  --overlay-bg: rgba(0, 0, 0, 0.85);
 
-  --color-primary-bg: #020205;
+  --color-primary-bg: #010103;
   --color-primary-text: #F8FAFC;
   --color-secondary-text: #94A3B8;
   --color-accent: #38BDF8;
@@ -77,7 +83,7 @@
   --color-border-color: rgba(56, 189, 248, 0.15);
   --color-dark-border: rgba(56, 189, 248, 0.15);
 
-  --deep-space-glow: rgba(56, 189, 248, 0.40);
+  --deep-space-glow: rgba(56, 189, 248, 0.35);
   --deep-space-accent-neon: #38BDF8;
 
   color-scheme: dark;
@@ -87,25 +93,30 @@
    LIGHT THEME  (rich slate-white, cobalt-blue accent)
    ───────────────────────────────────────────────────────────── */
 .light {
-  --primary-bg: #ffffff;
-  --navbar-bg: rgba(255, 255, 255, 0.98);
-  --card-bg: #ffffff;
-  --primary-text: #0B152F;
-  --secondary-text: #334155;
-  --accent: #1E3A8A;
-  --accent-light: #3B82F6;
-  --border-color: #CBD5E1;
+  --primary-bg: #F5F7FB; /* Crystalline Ice */
+  --navbar-bg: rgba(255, 255, 255, 0.88);
+  --card-bg: #FFFFFF;
+  --sidebar-bg: #FAFBFE;
+  --primary-text: #1E293B;
+  --secondary-text: #64748B;
+  --accent: #2563EB; /* Cobalt Blue */
+  --accent-light: #60A5FA;
+  --border-color: rgba(148, 163, 184, 0.12);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(37, 99, 235, 0.12);
+  --shadow-color: rgba(15, 23, 42, 0.08); /* Neutral shadow for true light look */
+  --overlay-bg: rgba(245, 247, 251, 0.82);
 
-  --color-primary-bg: #ffffff;
-  --color-primary-text: #0B152F;
-  --color-secondary-text: #334155;
-  --color-accent: #1E3A8A;
-  --color-accent-light: #3B82F6;
-  --color-border-color: #CBD5E1;
-  --color-dark-border: rgba(30, 58, 138, 0.22);
+  --color-primary-bg: #F5F7FB;
+  --color-primary-text: #1E293B;
+  --color-secondary-text: #64748B;
+  --color-accent: #2563EB;
+  --color-accent-light: #60A5FA;
+  --color-border-color: rgba(148, 163, 184, 0.12);
+  --color-dark-border: rgba(37, 99, 235, 0.1);
 
-  --deep-space-glow: rgba(30, 58, 138, 0.26);
-  --deep-space-accent-neon: #1E3A8A;
+  --deep-space-glow: rgba(37, 99, 235, 0.15);
+  --deep-space-accent-neon: #2563EB;
 
   color-scheme: light;
 }
@@ -122,25 +133,30 @@
    VIBRANT THEME  (deep purple cosmos, neon fuchsia + aurora)
    ───────────────────────────────────────────────────────────── */
 .vibrant {
-  --primary-bg: #050111;
-  --navbar-bg: rgba(10, 4, 28, 0.92);
-  --card-bg: rgba(22, 10, 48, 0.82);
-  --primary-text: #F8EDFF;
-  --secondary-text: #DDD6FE;
-  --accent: #FF66C4;
-  --accent-light: #22D3EE;
-  --border-color: rgba(255, 102, 196, 0.26);
+  --primary-bg: #040209;
+  --navbar-bg: rgba(8, 4, 20, 0.82);
+  --card-bg: #0C0816;
+  --sidebar-bg: #06040C;
+  --primary-text: #F1F5F9;
+  --secondary-text: #A5B4FC;
+  --accent: #8B5CF6;
+  --accent-light: #06B6D4;
+  --border-color: rgba(139, 92, 246, 0.28);
+  --glass-bg: rgba(12, 8, 22, 0.72);
+  --glass-border: rgba(139, 92, 246, 0.35);
+  --shadow-color: rgba(0, 0, 0, 0.65); /* Neutralized from purple */
+  --overlay-bg: rgba(8, 4, 20, 0.88);
 
-  --color-primary-bg: #050111;
-  --color-primary-text: #F8EDFF;
-  --color-secondary-text: #DDD6FE;
-  --color-accent: #FF66C4;
-  --color-accent-light: #22D3EE;
-  --color-border-color: rgba(255, 102, 196, 0.26);
-  --color-dark-border: rgba(255, 102, 196, 0.26);
+  --color-primary-bg: #040209;
+  --color-primary-text: #F1F5F9;
+  --color-secondary-text: #A5B4FC;
+  --color-accent: #8B5CF6;
+  --color-accent-light: #06B6D4;
+  --color-border-color: rgba(139, 92, 246, 0.28);
+  --color-dark-border: rgba(139, 92, 246, 0.28);
 
-  --deep-space-glow: rgba(255, 102, 196, 0.65);
-  --deep-space-accent-neon: #FF66C4;
+  --deep-space-glow: rgba(139, 92, 246, 0.5);
+  --deep-space-accent-neon: #8B5CF6;
 
   color-scheme: dark;
 }
@@ -165,6 +181,7 @@
 
   --deep-space-glow: color-mix(in srgb, var(--custom-primary) 45%, transparent);
   --deep-space-accent-neon: var(--custom-primary);
+  --shadow-color: rgba(0, 0, 0, 0.6); /* Neutral shadow for custom themes */
 
   color-scheme: dark;
 }
@@ -215,25 +232,25 @@ body {
 /* Vibrant body: neon ribbons + ink backdrop */
 .vibrant body {
   background:
-    radial-gradient(1200px at 12% 18%, rgba(139, 92, 246, 0.18) 0%, transparent 52%),
-    radial-gradient(1000px at 88% 12%, rgba(236, 72, 153, 0.18) 0%, transparent 50%),
-    linear-gradient(135deg, rgba(5, 1, 17, 0.96) 0%, rgba(10, 3, 28, 0.96) 60%, rgba(7, 2, 22, 0.98) 100%),
-    #050111;
+    radial-gradient(1200px at 12% 18%, rgba(139, 92, 246, 0.15) 0%, transparent 52%),
+    radial-gradient(1000px at 88% 12%, rgba(6, 182, 212, 0.12) 0%, transparent 50%),
+    linear-gradient(135deg, rgba(4, 2, 18, 0.98) 0%, rgba(8, 4, 32, 0.98) 60%, rgba(5, 2, 24, 0.99) 100%),
+    #040212;
 }
 
 /* Glassmorphism for Vibrant Panels */
 .vibrant .glass-panel {
-  background: rgba(15, 8, 32, 0.4);
-  backdrop-filter: blur(25px) saturate(180%);
-  -webkit-backdrop-filter: blur(25px) saturate(180%);
-  border: 1px solid rgba(232, 121, 249, 0.15);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+  background: rgba(10, 6, 36, 0.45);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(139, 92, 246, 0.18);
+  box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.5);
 }
 
 .vibrant .glass-sidebar {
-  background: rgba(5, 2, 15, 0.65);
-  backdrop-filter: blur(35px) saturate(160%);
-  -webkit-backdrop-filter: blur(35px) saturate(160%);
+  background: rgba(6, 3, 24, 0.7);
+  backdrop-filter: blur(40px) saturate(160%);
+  -webkit-backdrop-filter: blur(40px) saturate(160%);
   border-right: 1px solid rgba(139, 92, 246, 0.15);
 }
 
@@ -323,9 +340,9 @@ body {
 }
 
 .vibrant .glass-vibrant {
-  background: linear-gradient(135deg, rgba(255, 102, 196, 0.08), rgba(34, 211, 238, 0.05));
-  border-color: rgba(255, 102, 196, 0.25);
-  box-shadow: 0 20px 60px rgba(5, 1, 17, 0.78), 0 0 46px rgba(34, 211, 238, 0.12);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(6, 182, 212, 0.08));
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 20px 60px rgba(4, 2, 18, 0.8), 0 0 50px rgba(139, 92, 246, 0.15);
 }
 
 .light .glass-vibrant {
@@ -336,9 +353,9 @@ body {
 }
 
 .glass-dark {
-  background-color: rgba(0, 0, 0, 0.40);
+  background-color: var(--glass-bg, rgba(0, 0, 0, 0.40));
   backdrop-filter: blur(40px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.05));
 }
 
 .light .glass-dark {
@@ -347,9 +364,9 @@ body {
 }
 
 .glass {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--glass-bg, rgba(255, 255, 255, 0.05));
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.10));
 }
 
 .light .glass {
@@ -371,8 +388,8 @@ body {
 }
 
 .vibrant .card-premium {
-  background-color: rgba(20, 8, 40, 0.60);
-  border-color: rgba(240, 171, 252, 0.12);
+  background-color: rgba(10, 6, 32, 0.65);
+  border-color: rgba(139, 92, 246, 0.15);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -488,11 +505,11 @@ body {
    NEON / GLOW EFFECTS
    ───────────────────────────────────────────────────────────── */
 .text-neon {
-  text-shadow: 0 0 10px var(--deep-space-glow), 0 0 20px var(--deep-space-glow);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.25);
 }
 
 .neon-glow {
-  box-shadow: 0 0 20px var(--deep-space-glow);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 /* Light: soften glow */
@@ -504,13 +521,13 @@ body {
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.18);
 }
 
-/* Vibrant: intense purple neon */
+/* Vibrant: intense violet neon */
 .vibrant .text-neon {
-  text-shadow: 0 0 12px rgba(232, 121, 249, 0.70), 0 0 28px rgba(232, 121, 249, 0.30);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
 .vibrant .neon-glow {
-  box-shadow: 0 0 24px rgba(232, 121, 249, 0.45);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.4);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -539,7 +556,7 @@ body {
   background: linear-gradient(90deg, var(--accent), #818CF8, #C084FC, #f472b6);
   background-size: 200% auto;
   animation: progress-gradient 2s linear infinite;
-  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
 }
 
 @keyframes progress-gradient {
@@ -598,7 +615,7 @@ body {
 
 .neural-prompt:focus {
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  box-shadow: 0 0 15px color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
   background: rgba(0, 0, 0, 0.60);
 }
 
@@ -633,16 +650,15 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: patriotic-gradient 5s linear infinite;
+  animation: patriotic-gradient 4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   display: inline-block;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
 }
 
 @keyframes patriotic-gradient {
-  0% {
-    background-position: 100% 0%;
-  }
-
-  100% {
-    background-position: 0% 0%;
-  }
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }

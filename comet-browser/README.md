@@ -1,4 +1,10 @@
-#  Comet AI Browser (v0.2.5)!      [Made with Love in India](https://madewithlove.org.in/badge.svg)
+#  Comet AI Browser (v0.2.6)!      [Made with Love in India](https://madewithlove.org.in/badge.svg)
+
+### v0.2.6 New Features
+- **On-Demand Skill Loading**: Document generation skills (PDF/DOCX/PPTX) now load dynamically when needed, reducing AI context size by ~150 lines
+- **DMG Build Compatibility**: Skills moved to `public/skills/` folder for .dmg builds, with fallback instructions if files missing
+- **Simplified AI Constants**: Removed embedded document instructions from AIConstants.ts, now loaded on-demand
+- **P2P & Clipboard Panels**: Added to Flutter mobile settings for sync mode, auto-reconnect, and clipboard history
 
 ### v0.2.5 New Features
 - **Auto-Executing Shell Commands**: All shell commands now auto-execute without permission dialogs
@@ -15,7 +21,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.5--stable-green)]()
+[![Version](https://img.shields.io/badge/Version-0.2.6--stable-green)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 ![Maintained](https://img.shields.io/badge/Maintained-Yes-green)
 ![Hardware](https://img.shields.io/badge/Tested_On-i5--8250U_|_8GB-orange)

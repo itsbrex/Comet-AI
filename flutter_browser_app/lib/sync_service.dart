@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'main.dart';
 
@@ -195,6 +196,9 @@ class SyncService {
   String? _desktopIp;
   int? _desktopPort;
   bool isConnectedToDesktop = false;
+  bool _isReconnecting = false;
+  Timer? _reconnectTimer;
+  static const String _lastDeviceKey = 'last_connected_device';
 
   // UDP Discovery
   RawDatagramSocket? _discoverySocket;
@@ -298,12 +302,16 @@ class SyncService {
           _handleDesktopMessage(data);
         },
         onDone: () {
+          print('[Sync] Desktop connection closed');
           isConnectedToDesktop = false;
           if (!completer.isCompleted) completer.completeError('Disconnected');
+          _scheduleReconnect();
         },
         onError: (error) {
+          print('[Sync] Desktop connection error: $error');
           isConnectedToDesktop = false;
           if (!completer.isCompleted) completer.completeError(error);
+          _scheduleReconnect();
         },
       );
 
@@ -321,14 +329,68 @@ class SyncService {
       await completer.future.timeout(const Duration(seconds: 10));
 
       isConnectedToDesktop = true;
+      _isReconnecting = false;
+      _reconnectTimer?.cancel();
+      _saveDeviceLocally(ip, port, deviceId);
       print('[Sync] Connected and Authenticated to desktop at $ip:$port');
     } catch (e) {
       _desktopSocket?.close();
       _desktopSocket = null;
       isConnectedToDesktop = false;
       print('[Sync] Failed to connect to desktop: $e');
+      if (_isReconnecting) {
+        _scheduleReconnect();
+      }
       rethrow;
     }
+  }
+
+  Future<void> _saveDeviceLocally(String ip, int port, String deviceId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final deviceData = jsonEncode({
+        'ip': ip,
+        'port': port,
+        'deviceId': deviceId,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      });
+      await prefs.setString(_lastDeviceKey, deviceData);
+      print('[Sync] Saved device info for auto-reconnect: $ip:$port');
+    } catch (e) {
+      print('[Sync] Failed to save device info: $e');
+    }
+  }
+
+  Future<void> tryAutoReconnect() async {
+    if (isConnectedToDesktop || _isReconnecting) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final deviceJson = prefs.getString(_lastDeviceKey);
+      if (deviceJson == null) return;
+
+      final deviceData = jsonDecode(deviceJson);
+      final ip = deviceData['ip'];
+      final port = deviceData['port'];
+      final deviceId = deviceData['deviceId'];
+
+      print('[Sync] Attempting auto-reconnect to $ip:$port...');
+      _isReconnecting = true;
+      await connectToDesktop(ip, port, deviceId);
+    } catch (e) {
+      print('[Sync] Auto-reconnect failed: $e');
+      _isReconnecting = false;
+      _scheduleReconnect();
+    }
+  }
+
+  void _scheduleReconnect() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 10), () {
+      if (!isConnectedToDesktop) {
+        tryAutoReconnect();
+      }
+    });
   }
 
   void _handleDesktopMessage(dynamic data) {

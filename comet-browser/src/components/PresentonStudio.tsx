@@ -128,15 +128,15 @@ const PresentonStudio = () => {
 
     if (!showSetup && iframeSrc) {
         return (
-            <div className="h-full w-full flex flex-col bg-[#020205]">
+            <div className="h-full w-full flex flex-col bg-primary-bg">
                 {/* Header Bar */}
-                <div className="h-12 flex items-center justify-between px-4 bg-black/60 backdrop-blur-xl border-b border-white/5 shrink-0">
+                <div className="h-12 flex items-center justify-between px-4 bg-[var(--navbar-bg)]/80 backdrop-blur-xl border-b border-[var(--border-color)] shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.3)]">
                             <Presentation size={16} className="text-white" />
                         </div>
-                        <span className="text-sm font-black uppercase tracking-widest text-white/80">Presenton Studio</span>
-                        <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest px-2 py-0.5 bg-white/5 rounded-full border border-white/10">AI Presentations</span>
+                        <span className="text-sm font-black uppercase tracking-widest text-[var(--primary-text)]/80">Presenton Studio</span>
+                        <span className="text-[9px] font-bold text-[var(--secondary-text)]/40 uppercase tracking-widest px-2 py-0.5 bg-[var(--primary-bg)]/5 rounded-full border border-[var(--border-color)]">AI Presentations</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
@@ -183,7 +183,7 @@ const PresentonStudio = () => {
     }
 
     return (
-        <div className="h-full w-full overflow-y-auto custom-scrollbar bg-[#020205]">
+        <div className="h-full w-full overflow-y-auto custom-scrollbar bg-primary-bg">
             <div className="max-w-3xl mx-auto py-16 px-8">
                 {/* Hero Section */}
                 <motion.div
@@ -198,10 +198,10 @@ const PresentonStudio = () => {
                         </div>
                     </div>
 
-                    <h1 className="text-5xl font-black uppercase tracking-tighter text-white mb-4">
+                    <h1 className="text-5xl font-black uppercase tracking-tighter text-[var(--primary-text)] mb-4">
                         Presenton <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-500">Studio</span>
                     </h1>
-                    <p className="text-white/40 text-lg max-w-lg mx-auto leading-relaxed font-medium">
+                    <p className="text-[var(--secondary-text)]/60 text-lg max-w-lg mx-auto leading-relaxed font-medium">
                         Open-source AI presentation generator. Create beautiful slides from prompts, documents, or existing PPTX files.
                     </p>
 
@@ -209,10 +209,10 @@ const PresentonStudio = () => {
                         <span className="px-3 py-1 rounded-full bg-orange-500/10 border border-orange-400/20 text-orange-400 text-[10px] font-black uppercase tracking-widest">
                             <Sparkles size={10} className="inline mr-1" /> AI-Powered
                         </span>
-                        <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-black uppercase tracking-widest">
+                        <span className="px-3 py-1 rounded-full bg-[var(--primary-bg)]/5 border border-[var(--border-color)] text-[var(--secondary-text)]/40 text-[10px] font-black uppercase tracking-widest">
                             Apache 2.0
                         </span>
-                        <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-black uppercase tracking-widest">
+                        <span className="px-3 py-1 rounded-full bg-[var(--primary-bg)]/5 border border-[var(--border-color)] text-[var(--secondary-text)]/40 text-[10px] font-black uppercase tracking-widest">
                             Self-Hosted
                         </span>
                     </div>
@@ -230,10 +230,10 @@ const PresentonStudio = () => {
                         { icon: <Globe size={20} />, title: 'Multiple LLMs', desc: 'OpenAI, Gemini, Claude, Ollama', color: 'text-sky-400' },
                         { icon: <Presentation size={20} />, title: 'Export Ready', desc: 'PPTX & PDF export with themes', color: 'text-purple-400' },
                     ].map((f, i) => (
-                        <div key={i} className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all group">
+                        <div key={i} className="p-6 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] hover:border-accent/40 shadow-sm transition-all group">
                             <div className={`${f.color} mb-4 group-hover:scale-110 transition-transform`}>{f.icon}</div>
-                            <p className="font-bold text-white text-sm mb-1">{f.title}</p>
-                            <p className="text-[11px] text-white/30">{f.desc}</p>
+                            <p className="font-bold text-[var(--primary-text)] text-sm mb-1">{f.title}</p>
+                            <p className="text-[11px] text-[var(--secondary-text)]/40">{f.desc}</p>
                         </div>
                     ))}
                 </motion.div>
@@ -246,13 +246,13 @@ const PresentonStudio = () => {
                     className="space-y-6"
                 >
                     {/* Docker Setup */}
-                    <div className="p-8 rounded-[2rem] bg-white/[0.02] border border-white/5 space-y-6">
+                    <div className="p-8 rounded-[2rem] bg-[var(--card-bg)] border border-[var(--border-color)] space-y-6">
                         <div className="flex items-center gap-3">
                             <Server size={20} className="text-orange-400" />
-                            <h3 className="text-lg font-black text-white uppercase tracking-tight">Quick Setup</h3>
+                            <h3 className="text-lg font-black text-[var(--primary-text)] uppercase tracking-tight">Quick Setup</h3>
                         </div>
 
-                        <p className="text-sm text-white/40">
+                        <p className="text-sm text-[var(--secondary-text)]/60">
                             Run this Docker command to start Presenton locally. The app will be available at <code className="text-orange-400 bg-orange-400/10 px-1.5 py-0.5 rounded text-xs">localhost:5000</code>.
                         </p>
 
@@ -279,10 +279,10 @@ const PresentonStudio = () => {
                     </div>
 
                     {/* Connection URL */}
-                    <div className="p-8 rounded-[2rem] bg-white/[0.02] border border-white/5 space-y-6">
+                    <div className="p-8 rounded-[2rem] bg-[var(--card-bg)] border border-[var(--border-color)] space-y-6">
                         <div className="flex items-center gap-3">
                             <Globe size={20} className="text-sky-400" />
-                            <h3 className="text-lg font-black text-white uppercase tracking-tight">Connect</h3>
+                            <h3 className="text-lg font-black text-[var(--primary-text)] uppercase tracking-tight">Connect</h3>
                         </div>
 
                         <div className="flex gap-3">
@@ -291,7 +291,7 @@ const PresentonStudio = () => {
                                 value={presentonUrl}
                                 onChange={(e) => setPresentonUrl(e.target.value)}
                                 placeholder="http://localhost:5000"
-                                className="flex-1 bg-black/40 border border-white/10 rounded-xl py-3 px-5 text-sm text-white font-medium focus:outline-none focus:ring-1 focus:ring-orange-400/50 transition-all placeholder:text-white/20"
+                                className="flex-1 bg-[var(--primary-bg)]/40 border border-[var(--border-color)] rounded-xl py-3 px-5 text-sm text-[var(--primary-text)] font-medium focus:outline-none focus:ring-1 focus:ring-orange-400/50 transition-all placeholder:text-[var(--secondary-text)]/20"
                             />
                             <button
                                 onClick={() => checkConnection(presentonUrl)}
@@ -330,7 +330,7 @@ const PresentonStudio = () => {
                         <button
                             onClick={handleAutoRunDocker}
                             disabled={isLoading}
-                            className="flex-1 py-5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-[0_0_30px_rgba(245,158,11,0.3)] hover:shadow-[0_0_50px_rgba(245,158,11,0.5)] disabled:opacity-50 flex items-center justify-center gap-3"
+                            className="flex-1 py-5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-3"
                         >
                             {isLoading ? (
                                 <><Loader2 size={18} className="animate-spin" /> Starting...</>
@@ -341,7 +341,7 @@ const PresentonStudio = () => {
                         <button
                             onClick={handleLaunch}
                             disabled={isLoading}
-                            className="flex-1 py-5 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-3"
+                            className="flex-1 py-5 bg-[var(--primary-bg)]/10 border border-[var(--border-color)] hover:bg-[var(--primary-bg)]/20 text-[var(--primary-text)] rounded-2xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-3"
                         >
                             {isLoading ? (
                                 <><Loader2 size={18} className="animate-spin" /> Connecting...</>
@@ -351,7 +351,7 @@ const PresentonStudio = () => {
                         </button>
                         <button
                             onClick={handleLaunchAnyway}
-                            className="px-6 py-5 bg-white/5 border border-white/10 hover:bg-white/10 text-white/40 hover:text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2"
+                            className="px-6 py-5 bg-[var(--primary-bg)]/5 border border-[var(--border-color)] hover:bg-[var(--primary-bg)]/10 text-[var(--secondary-text)]/40 hover:text-[var(--primary-text)] rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2"
                         >
                             Skip <ArrowRight size={14} />
                         </button>

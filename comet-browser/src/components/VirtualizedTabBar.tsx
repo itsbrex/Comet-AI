@@ -73,18 +73,22 @@ export const VirtualizedTabBar: React.FC<VirtualizedTabBarProps> = ({
             scrollContainerRef.current.scrollLeft += e.deltaY;
           }
         }}
-      className="h-10 flex items-center px-4 gap-1 bg-black/20 overflow-x-auto custom-scrollbar drag-region"
+      className="h-10 flex items-center px-4 gap-1 overflow-x-auto custom-scrollbar drag-region"
     >
       {tabs.map((tab) => (
         <div
           key={tab.id}
           onClick={() => handleTabClick(tab.id)}
           className={`group flex items-center h-8 px-4 rounded-t-xl min-w-[140px] max-w-[200px] cursor-pointer transition-all border-t border-x no-drag-region ${activeTabId === tab.id
-              ? 'bg-white/5 border-white/10 text-white shadow-[0_-2px_10px_rgba(56,189,248,0.1)]'
-              : 'bg-transparent border-transparent text-slate-400 hover:bg-white/[0.02]'
+              ? store.theme === 'light'
+                ? 'bg-white border-white text-primary-text shadow-[0_-4px_15px_var(--shadow-color)]'
+                : 'bg-white/10 border-white/20 text-white shadow-[0_-2px_10px_var(--shadow-color)]'
+              : store.theme === 'light'
+                ? 'bg-transparent border-transparent text-slate-400 opacity-50 hover:opacity-80 hover:bg-black/5'
+                : 'bg-transparent border-transparent text-slate-400 hover:bg-white/[0.02]'
               }`}
         >
-            {tab.isAudible && <Volume2 size={12} className="mr-2 flex-shrink-0 text-sky-400 animate-pulse" />}
+            {tab.isAudible && <Volume2 size={12} className="mr-2 flex-shrink-0 text-accent animate-pulse" />}
             {!tab.isAudible && (
               tab.url && tab.url.startsWith('http') ? (
                 <img
@@ -113,7 +117,9 @@ export const VirtualizedTabBar: React.FC<VirtualizedTabBarProps> = ({
                 e.stopPropagation();
                 onTabClose(tab.id);
               }}
-              className="ml-2 p-1 rounded-md hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all no-drag-region"
+              className={`ml-2 p-1 rounded-md transition-all opacity-0 group-hover:opacity-100 no-drag-region ${
+                store.theme === 'light' ? 'hover:bg-black/5 text-slate-500' : 'hover:bg-white/10 text-white'
+              }`}
               title="Close Tab"
             >
               <Plus size={10} className="rotate-45" />
@@ -122,7 +128,9 @@ export const VirtualizedTabBar: React.FC<VirtualizedTabBarProps> = ({
         ))}
         <button
           onClick={onAddTab}
-          className="p-1.5 rounded-lg text-slate-500 hover:bg-white/5 hover:text-white transition-all ml-2 no-drag-region"
+          className={`p-1.5 rounded-lg transition-all ml-2 no-drag-region ${
+            store.theme === 'light' ? 'text-slate-500 hover:bg-black/5 hover:text-primary-text' : 'text-slate-500 hover:bg-white/5 hover:text-white'
+          }`}
           title="Add New Tab"
         >
           <Plus size={14} />
@@ -133,7 +141,9 @@ export const VirtualizedTabBar: React.FC<VirtualizedTabBarProps> = ({
               window.electronAPI.translateWebsite({ targetLanguage: store.selectedLanguage });
             }
           }}
-          className="p-1.5 rounded-lg text-slate-500 hover:bg-white/5 hover:text-white transition-all ml-2 no-drag-region"
+          className={`p-1.5 rounded-lg transition-all ml-2 no-drag-region ${
+            store.theme === 'light' ? 'text-slate-500 hover:bg-black/5 hover:text-primary-text' : 'text-slate-500 hover:bg-white/5 hover:text-white'
+          }`}
           title="Translate Page"
         >
           <Globe size={14} />

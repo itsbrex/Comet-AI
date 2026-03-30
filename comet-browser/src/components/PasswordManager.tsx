@@ -63,7 +63,7 @@ export default function PasswordManager() {
     );
 
     return (
-        <div className="flex flex-col h-full bg-[#020205] text-white p-6 gap-6 relative overflow-hidden">
+        <div className="flex flex-col h-full bg-[var(--primary-bg)] text-[var(--primary-text)] p-6 gap-6 relative overflow-hidden">
             {/* Background Aesthetic */}
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-500/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2" />
 
@@ -73,8 +73,8 @@ export default function PasswordManager() {
                         <Lock className="text-violet-400" size={24} />
                     </div>
                     <div>
-                        <h2 className="text-xl font-black uppercase tracking-widest italic">Neural Vault</h2>
-                        <p className="text-[10px] text-gray-500 font-bold tracking-tighter flex items-center gap-2">
+                        <h2 className="text-xl font-black uppercase tracking-widest italic text-[var(--primary-text)]">Neural Vault</h2>
+                        <p className="text-[10px] text-[var(--secondary-text)]/50 font-bold tracking-tighter flex items-center gap-2">
                             <ShieldCheck size={12} className="text-emerald-400" />
                             QUANTUM-ENCRYPTED SECURE STORAGE
                         </p>
@@ -83,13 +83,13 @@ export default function PasswordManager() {
 
                 <div className="flex items-center gap-4">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--secondary-text)]/40" size={14} />
                         <input
                             type="text"
                             placeholder="Filter vault..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500/50 w-64 transition-all"
+                            className="bg-[var(--primary-bg)]/5 border border-[var(--border-color)] rounded-xl py-2 pl-9 pr-4 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500/50 w-64 text-[var(--primary-text)] transition-all"
                         />
                     </div>
                     <button
@@ -104,36 +104,36 @@ export default function PasswordManager() {
             </div>
 
             {isAdding && (
-                <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 flex flex-col gap-4 animate-in fade-in slide-in-from-top-4 z-10">
+                <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl p-6 flex flex-col gap-4 animate-in fade-in slide-in-from-top-4 z-10 shadow-sm">
                     <div className="grid grid-cols-3 gap-6">
                         <div className="flex flex-col gap-2">
-                            <label className="text-[10px] font-black uppercase text-gray-500 ml-1">Domain / Site</label>
+                            <label className="text-[10px] font-black uppercase text-[var(--secondary-text)]/50 ml-1">Domain / Site</label>
                             <input
                                 value={newPass.site}
                                 onChange={(e) => setNewPass({ ...newPass, site: e.target.value })}
-                                type="text" placeholder="example.com" className="bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none"
+                                type="text" placeholder="example.com" className="bg-[var(--primary-bg)]/5 border border-[var(--border-color)] rounded-xl p-3 text-sm focus:outline-none text-[var(--primary-text)]"
                             />
                         </div>
                         <div className="flex flex-col gap-2">
-                            <label className="text-[10px] font-black uppercase text-gray-500 ml-1">Username / Email</label>
+                            <label className="text-[10px] font-black uppercase text-[var(--secondary-text)]/50 ml-1">Username / Email</label>
                             <input
                                 value={newPass.username}
                                 onChange={(e) => setNewPass({ ...newPass, username: e.target.value })}
-                                type="text" placeholder="user@mail.com" className="bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none"
+                                type="text" placeholder="user@mail.com" className="bg-[var(--primary-bg)]/5 border border-[var(--border-color)] rounded-xl p-3 text-sm focus:outline-none text-[var(--primary-text)]"
                             />
                         </div>
                         <div className="flex flex-col gap-2">
-                            <label className="text-[10px] font-black uppercase text-gray-500 ml-1">Password</label>
+                            <label className="text-[10px] font-black uppercase text-[var(--secondary-text)]/50 ml-1">Password</label>
                             <input
                                 value={newPass.password}
                                 onChange={(e) => setNewPass({ ...newPass, password: e.target.value })}
-                                type="password" placeholder="••••••••" className="bg-white/5 border border-white/10 rounded-xl p-3 text-sm focus:outline-none"
+                                type="password" placeholder="••••••••" className="bg-[var(--primary-bg)]/5 border border-[var(--border-color)] rounded-xl p-3 text-sm focus:outline-none text-[var(--primary-text)]"
                             />
                         </div>
                     </div>
                     <div className="flex justify-end gap-3 mt-2">
-                        <button type="button" onClick={() => setIsAdding(false)} className="px-6 py-2 text-xs font-bold text-gray-500 hover:text-white transition-colors">Cancel</button>
-                        <button type="button" onClick={handleAdd} className="btn-vibrant-primary px-8">Seal Entry</button>
+                        <button type="button" onClick={() => setIsAdding(false)} className="px-6 py-2 text-xs font-bold text-[var(--secondary-text)] hover:text-[var(--primary-text)] transition-colors">Cancel</button>
+                        <button type="button" onClick={handleAdd} className="bg-violet-600 hover:bg-violet-500 text-white rounded-xl px-8 py-2 font-bold text-xs transition-all">Seal Entry</button>
                     </div>
                 </div>
             )}
@@ -148,14 +148,14 @@ export default function PasswordManager() {
                     ) : (
                         filtered.map((item) => (
                             <div key={item.id} className="group bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 rounded-2xl p-4 flex items-center transition-all">
-                                <div className="p-3 bg-white/5 rounded-xl mr-4 group-hover:text-violet-400 transition-colors">
+                                <div className="p-3 bg-[var(--primary-bg)]/10 rounded-xl mr-4 group-hover:text-violet-400 transition-colors">
                                     <Globe size={18} />
                                 </div>
 
                                 <div className="flex-1">
-                                    <h3 className="font-black text-sm">{item.site}</h3>
+                                    <h3 className="font-black text-sm text-[var(--primary-text)]">{item.site}</h3>
                                     <div className="flex items-center gap-4 mt-0.5">
-                                        <div className="flex items-center gap-1.5 text-gray-500">
+                                        <div className="flex items-center gap-1.5 text-[var(--secondary-text)]/60">
                                             <User size={12} />
                                             <span className="text-xs font-medium">{item.username || 'No username'}</span>
                                         </div>
@@ -163,15 +163,15 @@ export default function PasswordManager() {
                                 </div>
 
                                 <div className="flex flex-col items-end gap-2 pr-6">
-                                    <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-lg border border-white/10">
-                                        <span className="text-xs font-mono tracking-wider tabular-nums">
+                                    <div className="flex items-center gap-2 bg-[var(--primary-bg)]/40 px-3 py-1.5 rounded-lg border border-[var(--border-color)]">
+                                        <span className="text-xs font-mono tracking-wider tabular-nums text-[var(--primary-text)]">
                                             {showPlain[item.id] ? item.password : '••••••••••••'}
                                         </span>
                                         <button
                                             type="button"
                                             title={showPlain[item.id] ? "Hide Password" : "Show Password"}
                                             onClick={() => togglePassword(item.id)}
-                                            className="text-gray-500 hover:text-white transition-colors p-1"
+                                            className="text-[var(--secondary-text)]/40 hover:text-[var(--primary-text)] transition-colors p-1"
                                         >
                                             {showPlain[item.id] ? <EyeOff size={14} /> : <Eye size={14} />}
                                         </button>
@@ -183,7 +183,7 @@ export default function PasswordManager() {
                                         type="button"
                                         title="Copy Password"
                                         onClick={() => handleCopy(item.password, item.id)}
-                                        className={`p-2 rounded-lg transition-all ${copiedId === item.id ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white'}`}
+                                        className={`p-2 rounded-lg transition-all ${copiedId === item.id ? 'bg-emerald-500/20 text-emerald-400' : 'bg-[var(--primary-bg)]/5 hover:bg-[var(--primary-bg)]/10 text-[var(--secondary-text)]/40 hover:text-[var(--primary-text)]'}`}
                                     >
                                         {copiedId === item.id ? <Check size={16} /> : <Copy size={16} />}
                                     </button>

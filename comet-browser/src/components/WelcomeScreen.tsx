@@ -189,7 +189,7 @@ export default function WelcomeScreen() {
         { icon: <Layers size={16} />, title: 'RAG Memory', desc: 'Vector-indexed session memory. The browser recalls your context semantically — like a co-pilot that never forgets.', accent: 'text-violet-400', delay: 0.6 },
         { icon: <Shield size={16} />, title: 'Triple-Lock Security', desc: 'Visual Sandbox + Syntactic Firewall + Human-in-the-Loop. Every OS action requires your explicit approval.', accent: 'text-emerald-400', delay: 0.7 },
         { icon: <Search size={16} />, title: 'Live Web Search', desc: 'Pre-flight real-time search before every AI answer. Zero hallucination — only verified data feeds the LLM.', accent: 'text-amber-400', delay: 0.8 },
-        { icon: <FileText size={16} />, title: 'PDF Generation', desc: 'One-shot branded reports with embedded screenshots, tables, charts — streamed live as they generate.', accent: 'text-pink-400', delay: 0.9 },
+        { icon: <FileText size={16} />, title: 'PDF Generation', desc: 'One-shot branded reports with embedded screenshots, tables, charts — streamed live as they generate.', accent: 'text-indigo-400', delay: 0.9 },
         { icon: <Wifi size={16} />, title: 'WiFi Sync', desc: 'P2P cross-device sync with AES-256 encryption. Control your desktop from Comet Mobile via QR pairing.', accent: 'text-sky-400', delay: 1.0 },
         { icon: <Cpu size={16} />, title: 'Multi-LLM Engine', desc: 'Switch between Gemini, GPT-4, Claude, Groq, and local Ollama models — including GPT-OSS 120B.', accent: 'text-orange-400', delay: 1.1, badge: 'NEW' },
         { icon: <ScanLine size={16} />, title: 'DOM + OCR Vision', desc: 'Secure DOM reading with PII scrubbing, injection detection, and Tesseract OCR for full visual awareness.', accent: 'text-teal-400', delay: 1.2 },
@@ -631,7 +631,7 @@ export default function WelcomeScreen() {
                                     { name: 'GPT-4o', sub: 'OpenAI Cloud', icon: '/ai-logos/chatgpt.png', color: 'border-emerald-500/20 hover:border-emerald-500/40' },
                                     { name: 'Claude 3.5', sub: 'Anthropic Cloud', icon: '/ai-logos/claude.webp', color: 'border-amber-500/20 hover:border-amber-500/40' },
                                     { name: 'Groq LPU', sub: 'Fastest Inference', icon: '/ai-logos/Grok.png', color: 'border-violet-500/20 hover:border-violet-500/40' },
-                                    { name: 'Ollama Local', sub: 'Full Privacy', icon: '/ai-logos/ollama.png', color: 'border-pink-500/20 hover:border-pink-500/40' },
+                                    { name: 'Ollama Local', sub: 'Full Privacy', icon: '/ai-logos/ollama.png', color: 'border-indigo-500/20 hover:border-indigo-500/40' },
                                 ].map((p, i) => (
                                     <motion.div
                                         key={p.name}

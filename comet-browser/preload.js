@@ -607,6 +607,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
    quitAndInstall: () => ipcRenderer.invoke('quit-and-install'),
    clearAuthData: () => ipcRenderer.invoke('clear-auth'),
    openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
+
+   // Skill Loader - loads document generation skills
+   loadSkill: (format) => ipcRenderer.invoke('load-skill', format),
    getVersion: () => ipcRenderer.invoke('get-app-version'),
    getPlatform: () => ipcRenderer.invoke('get-platform'),
 });

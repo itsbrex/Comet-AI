@@ -58,6 +58,7 @@ var FirebaseService = /** @class */ (function () {
         this.firestore = null;
         this.authReadyCallbacks = [];
         this.authInitialized = false;
+        this.persistenceReady = Promise.resolve();
         this.initializeFirebase();
     }
     FirebaseService.prototype.reinitialize = function () {
@@ -91,6 +92,13 @@ var FirebaseService = /** @class */ (function () {
                 this.app = !(0, app_1.getApps)().length ? (0, app_1.initializeApp)(firebaseConfig) : (0, app_1.getApp)();
                 this.auth = (0, auth_1.getAuth)(this.app);
                 this.firestore = (0, firestore_1.getFirestore)(this.app);
+                this.persistenceReady = (0, auth_1.setPersistence)(this.auth, auth_1.browserLocalPersistence)
+                    .then(function () {
+                    console.log('[Firebase] Auth persistence set to local.');
+                })
+                    .catch(function (error) {
+                    console.warn('[Firebase] Failed to enable local auth persistence:', error);
+                });
                 // Listen for the initial auth state to set authInitialized
                 this.auth.onAuthStateChanged(function () {
                     _this.authInitialized = true;
@@ -111,6 +119,18 @@ var FirebaseService = /** @class */ (function () {
             this.authReadyCallbacks.push(callback);
         }
     };
+    FirebaseService.prototype.ensurePersistenceReady = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, this.persistenceReady];
+                    case 1:
+                        _a.sent();
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
     FirebaseService.prototype.signInWithCustomToken = function (token) {
         return __awaiter(this, void 0, void 0, function () {
             var result, error_1;
@@ -121,16 +141,19 @@ var FirebaseService = /** @class */ (function () {
                             return [2 /*return*/, null];
                         _a.label = 1;
                     case 1:
-                        _a.trys.push([1, 3, , 4]);
-                        return [4 /*yield*/, (0, auth_1.signInWithCustomToken)(this.auth, token)];
+                        _a.trys.push([1, 4, , 5]);
+                        return [4 /*yield*/, this.ensurePersistenceReady()];
                     case 2:
+                        _a.sent();
+                        return [4 /*yield*/, (0, auth_1.signInWithCustomToken)(this.auth, token)];
+                    case 3:
                         result = _a.sent();
                         return [2 /*return*/, result.user];
-                    case 3:
+                    case 4:
                         error_1 = _a.sent();
                         console.error("Error signing in with custom token:", error_1);
                         return [2 /*return*/, null];
-                    case 4: return [2 /*return*/];
+                    case 5: return [2 /*return*/];
                 }
             });
         });
@@ -145,16 +168,19 @@ var FirebaseService = /** @class */ (function () {
                             return [2 /*return*/, null];
                         _a.label = 1;
                     case 1:
-                        _a.trys.push([1, 3, , 4]);
-                        return [4 /*yield*/, (0, auth_1.signInWithCredential)(this.auth, credential)];
+                        _a.trys.push([1, 4, , 5]);
+                        return [4 /*yield*/, this.ensurePersistenceReady()];
                     case 2:
+                        _a.sent();
+                        return [4 /*yield*/, (0, auth_1.signInWithCredential)(this.auth, credential)];
+                    case 3:
                         result = _a.sent();
                         return [2 /*return*/, result.user];
-                    case 3:
+                    case 4:
                         error_2 = _a.sent();
                         console.error("Error signing in with credential:", error_2);
                         return [2 /*return*/, null];
-                    case 4: return [2 /*return*/];
+                    case 5: return [2 /*return*/];
                 }
             });
         });
@@ -170,16 +196,19 @@ var FirebaseService = /** @class */ (function () {
                         provider = new auth_1.GoogleAuthProvider();
                         _a.label = 1;
                     case 1:
-                        _a.trys.push([1, 3, , 4]);
-                        return [4 /*yield*/, (0, auth_1.signInWithPopup)(this.auth, provider)];
+                        _a.trys.push([1, 4, , 5]);
+                        return [4 /*yield*/, this.ensurePersistenceReady()];
                     case 2:
+                        _a.sent();
+                        return [4 /*yield*/, (0, auth_1.signInWithPopup)(this.auth, provider)];
+                    case 3:
                         result = _a.sent();
                         return [2 /*return*/, result.user];
-                    case 3:
+                    case 4:
                         error_3 = _a.sent();
                         console.error("Error signing in with Google:", error_3);
                         return [2 /*return*/, null];
-                    case 4: return [2 /*return*/];
+                    case 5: return [2 /*return*/];
                 }
             });
         });
@@ -194,16 +223,19 @@ var FirebaseService = /** @class */ (function () {
                             return [2 /*return*/, null];
                         _a.label = 1;
                     case 1:
-                        _a.trys.push([1, 3, , 4]);
-                        return [4 /*yield*/, (0, auth_1.getRedirectResult)(this.auth)];
+                        _a.trys.push([1, 4, , 5]);
+                        return [4 /*yield*/, this.ensurePersistenceReady()];
                     case 2:
+                        _a.sent();
+                        return [4 /*yield*/, (0, auth_1.getRedirectResult)(this.auth)];
+                    case 3:
                         result = _a.sent();
                         return [2 /*return*/, result ? result.user : null];
-                    case 3:
+                    case 4:
                         error_4 = _a.sent();
                         console.error("Error handling redirect result:", error_4);
                         return [2 /*return*/, null];
-                    case 4: return [2 /*return*/];
+                    case 5: return [2 /*return*/];
                 }
             });
         });

@@ -114,7 +114,7 @@ const ThinkingPanel = memo(function ThinkingPanel({ steps = [], thinkText, initi
                     className="flex items-start gap-2"
                   >
                     <div className={`mt-0.5 flex-shrink-0 w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-all ${
-                      step.status === 'running' ? 'border-sky-400 bg-sky-400/20 shadow-[0_0_6px_rgba(56,189,248,0.3)]'
+                      step.status === 'running' ? 'border-sky-400 bg-sky-400/20'
                       : step.status === 'done'    ? 'border-green-400/60 bg-green-400/10'
                                                  : 'border-red-400/60 bg-red-400/10'
                     }`}>
