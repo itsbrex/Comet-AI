@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth, User, signInWithCustomToken as firebaseSignInWithCustomToken, signOut as firebaseSignOut, onAuthStateChanged as firebaseOnAuthStateChanged, GoogleAuthProvider, signInWithPopup, getRedirectResult, signInWithCredential as firebaseSignInWithCredential, AuthCredential } from 'firebase/auth';
+import { getAuth, Auth, User, signInWithCustomToken as firebaseSignInWithCustomToken, signOut as firebaseSignOut, onAuthStateChanged as firebaseOnAuthStateChanged, GoogleAuthProvider, signInWithPopup, getRedirectResult, signInWithCredential as firebaseSignInWithCredential, AuthCredential, browserLocalPersistence, setPersistence } from 'firebase/auth';
 import { getFirestore, Firestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { firebaseConfigStorage, FirebaseConfig } from './firebaseConfigStorage';
 
@@ -9,6 +9,7 @@ class FirebaseService {
   public firestore: Firestore | null = null;
   private authReadyCallbacks: (() => void)[] = [];
   private authInitialized: boolean = false;
+  private persistenceReady: Promise<void> = Promise.resolve();
 
   constructor() {
     this.initializeFirebase();
@@ -48,6 +49,13 @@ class FirebaseService {
         this.app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
         this.auth = getAuth(this.app);
         this.firestore = getFirestore(this.app);
+        this.persistenceReady = setPersistence(this.auth, browserLocalPersistence)
+          .then(() => {
+            console.log('[Firebase] Auth persistence set to local.');
+          })
+          .catch((error) => {
+            console.warn('[Firebase] Failed to enable local auth persistence:', error);
+          });
 
         // Listen for the initial auth state to set authInitialized
         this.auth.onAuthStateChanged(() => {
@@ -69,9 +77,14 @@ class FirebaseService {
     }
   }
 
+  public async ensurePersistenceReady() {
+    await this.persistenceReady;
+  }
+
   async signInWithCustomToken(token: string): Promise<User | null> {
     if (!this.auth) return null;
     try {
+      await this.ensurePersistenceReady();
       const result = await firebaseSignInWithCustomToken(this.auth, token);
       return result.user;
     } catch (error) {
@@ -83,6 +96,7 @@ class FirebaseService {
   async signInWithCredential(credential: AuthCredential): Promise<User | null> {
     if (!this.auth) return null;
     try {
+      await this.ensurePersistenceReady();
       const result = await firebaseSignInWithCredential(this.auth, credential);
       return result.user;
     } catch (error) {
@@ -95,6 +109,7 @@ class FirebaseService {
     if (!this.auth) return null;
     const provider = new GoogleAuthProvider();
     try {
+      await this.ensurePersistenceReady();
       const result = await signInWithPopup(this.auth, provider);
       return result.user;
     } catch (error) {
@@ -106,6 +121,7 @@ class FirebaseService {
   async handleRedirectResult(): Promise<User | null> {
     if (!this.auth) return null;
     try {
+      await this.ensurePersistenceReady();
       const result = await getRedirectResult(this.auth);
       return result ? result.user : null;
     } catch (error) {

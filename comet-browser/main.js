@@ -1,12 +1,32 @@
-const { app, BrowserWindow, ipcMain, BrowserView, session, shell, clipboard, dialog, globalShortcut, Menu, protocol, desktopCapturer, screen, nativeImage, net } = require('electron');
+const { app, BrowserWindow, ipcMain, BrowserView, session, shell, clipboard, dialog, globalShortcut, Menu, protocol, desktopCapturer, screen, nativeImage, net, safeStorage } = require('electron');
 const QRCode = require('qrcode');
 const contextMenuRaw = require('electron-context-menu');
 const contextMenu = contextMenuRaw.default || contextMenuRaw;
 const fs = require('fs');
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+const PptxGenJS = require('pptxgenjs');
+const {
+  Document,
+  Packer,
+  Paragraph,
+  HeadingLevel,
+  TextRun,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  ImageRun,
+  PageNumber,
+  Header,
+  Footer,
+  BorderStyle,
+  VerticalAlign,
+  AlignmentType,
+  PageOrientation,
+} = require('docx');
 const path = require('path');
 const os = require('os');
-const { spawn, exec } = require('child_process');
+const { spawn, exec, spawnSync } = require('child_process');
 const Store = require('electron-store');
 const store = new Store();
 const { createWorker } = require('tesseract.js');
@@ -14,6 +34,102 @@ const screenshot = require('screenshot-desktop');
 const Jimp = require('jimp');
 const util = require('util');
 const execPromise = util.promisify(exec);
+const AUTH_SESSION_KEY = 'secure_auth_session_v1';
+const LEGACY_AUTH_TOKEN_KEY = 'auth_token';
+const LEGACY_USER_INFO_KEY = 'user_info';
+
+const getAuthStorageBackend = () => {
+  if (process.platform !== 'linux') {
+    return process.platform;
+  }
+
+  try {
+    return safeStorage.getSelectedStorageBackend();
+  } catch {
+    return 'unknown';
+  }
+};
+
+const canEncryptAuthSession = () => {
+  if (!safeStorage || !safeStorage.isEncryptionAvailable()) {
+    return false;
+  }
+
+  const backend = getAuthStorageBackend();
+  return backend !== 'basic_text' && backend !== 'unknown';
+};
+
+const saveSecureAuthSession = (sessionPayload = {}) => {
+  if (!sessionPayload || typeof sessionPayload !== 'object') {
+    return false;
+  }
+
+  if (!canEncryptAuthSession()) {
+    console.warn('[Auth] Secure storage unavailable; auth session was not persisted.');
+    return false;
+  }
+
+  const encrypted = safeStorage.encryptString(JSON.stringify(sessionPayload));
+  store.set(AUTH_SESSION_KEY, {
+    version: 1,
+    encrypted: true,
+    updatedAt: Date.now(),
+    backend: getAuthStorageBackend(),
+    payload: encrypted.toString('base64'),
+  });
+
+  return true;
+};
+
+const getSecureAuthSession = () => {
+  const saved = store.get(AUTH_SESSION_KEY);
+  if (!saved || typeof saved !== 'object') {
+    return null;
+  }
+
+  try {
+    if (!saved.encrypted || !saved.payload || !canEncryptAuthSession()) {
+      return null;
+    }
+
+    const decrypted = safeStorage.decryptString(Buffer.from(saved.payload, 'base64'));
+    return JSON.parse(decrypted);
+  } catch (error) {
+    console.error('[Auth] Failed to decrypt secure auth session:', error);
+    return null;
+  }
+};
+
+const clearSecureAuthSession = () => {
+  store.delete(AUTH_SESSION_KEY);
+};
+
+const migrateLegacyAuthSession = () => {
+  const existingSession = getSecureAuthSession();
+  if (existingSession) {
+    if (store.has(LEGACY_AUTH_TOKEN_KEY)) store.delete(LEGACY_AUTH_TOKEN_KEY);
+    if (store.has(LEGACY_USER_INFO_KEY)) store.delete(LEGACY_USER_INFO_KEY);
+    return;
+  }
+
+  const legacyToken = store.get(LEGACY_AUTH_TOKEN_KEY);
+  const legacyUser = store.get(LEGACY_USER_INFO_KEY);
+
+  if (!legacyToken && !legacyUser) {
+    return;
+  }
+
+  if (saveSecureAuthSession({
+    token: legacyToken || null,
+    user: legacyUser || null,
+    migratedFromLegacyStore: true,
+    savedAt: Date.now(),
+  })) {
+    store.delete(LEGACY_AUTH_TOKEN_KEY);
+    store.delete(LEGACY_USER_INFO_KEY);
+    console.log('[Auth] Migrated legacy auth data into secure session storage.');
+  }
+};
 
 // Register the custom `app://` scheme early so we can safely load static assets from the exported build.
 protocol.registerSchemesAsPrivileged([
@@ -64,6 +180,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 let p2pSyncService = null; // Declare p2pSyncService here
 let wifiSyncService = null; // Declare wifiSyncService here
+let cloudSyncService = null; // Declare cloudSyncService here
 
 // Desktop Automation Services (Comet-AI Guide v2)
 const { PermissionStore } = require('./src/lib/permission-store.js');
@@ -148,6 +265,16 @@ const isMac = process.platform === 'darwin';
 const openWindows = new Set();
 let mainWindow = null;
 let macSidebarWindow = null;
+
+// Detect python availability once (used to choose optional pipelines; never mandatory for .dmg)
+const pythonAvailable = (() => {
+  try {
+    const res = spawnSync('python3', ['--version'], { encoding: 'utf8' });
+    return res.status === 0;
+  } catch {
+    return false;
+  }
+})();
 
 const getTopWindow = () => {
   if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
@@ -477,6 +604,142 @@ const registerAppFileProtocol = () => {
 // ============================================================================
 // PDF GENERATION ENGINE (Branded & Robust)
 // ============================================================================
+const iconMimeType = 'image/png';
+
+// Environment-aware icon path resolver with multiple fallbacks
+// Handles both dev (.js files next to assets/) and packaged (.app/Contents/Resources/)
+const resolveCometIcon = () => {
+  const iconName = 'icon.png';
+  const isDev = !app.isPackaged;
+  const resourcesPath = app.isPackaged 
+    ? (process.resourcesPath || path.join(app.getAppPath(), '..', '..', 'Resources'))
+    : path.join(__dirname, 'assets');
+  const appPath = app.getAppPath();
+  
+  const candidates = isDev ? [
+    // Development paths (relative to main.js location)
+    path.join(__dirname, 'assets', iconName),
+    path.join(__dirname, iconName),
+    path.join(appPath, 'assets', iconName),
+    path.join(appPath, iconName),
+    // Fallback to public folder
+    path.join(appPath, 'public', iconName),
+    path.join(process.cwd(), 'public', iconName),
+  ] : [
+    // Packaged paths (.app/Contents/Resources/)
+    path.join(resourcesPath, 'app.asar.unpacked', 'assets', iconName),
+    path.join(resourcesPath, 'app.asar.unpacked', iconName),
+    path.join(resourcesPath, 'assets', iconName),
+    path.join(resourcesPath, 'app', 'assets', iconName),
+    path.join(resourcesPath, iconName),
+    path.join(resourcesPath, 'app.asar', 'assets', iconName),
+    path.join(resourcesPath, 'app.asar', iconName),
+  ];
+
+  // Add extra emergency fallbacks
+  const emergencyPaths = [
+    path.join(os.homedir(), 'Documents', 'Comet-AI', 'icon.png'),
+    path.join(os.homedir(), '.comet', 'icon.png'),
+    '/Applications/Comet-AI.app/Contents/Resources/assets/icon.png',
+  ];
+
+  const allCandidates = [...candidates, ...emergencyPaths];
+
+  for (const p of allCandidates) {
+    try {
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+        const stat = fs.statSync(p);
+        if (stat.size > 100 && stat.size < 10 * 1024 * 1024) { // 100 bytes to 10MB sanity check
+          return p;
+        }
+      }
+    } catch {
+      // continue to next
+    }
+  }
+  return null;
+};
+
+const loadBrandIcon = () => {
+  let iconBase64 = '';
+  let iconMime = iconMimeType;
+  try {
+    const iconPath = resolveCometIcon();
+    if (iconPath && fs.existsSync(iconPath)) {
+      iconBase64 = fs.readFileSync(iconPath).toString('base64');
+      iconMime = 'image/png';
+    } else {
+      console.warn('[BrandIcon] Could not find icon.png, trying bundled fallbacks...');
+      // Try common paths directly as fallback
+      const fallbacks = [
+        path.join(__dirname, 'assets', 'icon.png'),
+        path.join(app.getAppPath(), 'assets', 'icon.png'),
+      ];
+      for (const fb of fallbacks) {
+        try {
+          if (fs.existsSync(fb)) {
+            iconBase64 = fs.readFileSync(fb).toString('base64');
+            iconMime = 'image/png';
+            break;
+          }
+        } catch { /* ignore */ }
+      }
+    }
+  } catch (e) {
+    console.error('[BrandIcon] Load failed', e);
+  }
+  return { iconBase64, iconMime };
+};
+
+const dataUrlToBuffer = (dataUrl) => {
+  if (!dataUrl || typeof dataUrl !== 'string') return null;
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/i);
+  if (!match) return null;
+  return { buffer: Buffer.from(match[2], 'base64'), mime: match[1] };
+};
+
+const normalizePages = (payload) => {
+  if (payload?.pages && Array.isArray(payload.pages) && payload.pages.length) return payload.pages;
+  if (payload?.content) {
+    return [{
+      title: payload.title || 'Document',
+      sections: [{ title: payload.subtitle || 'Content', content: payload.content }]
+    }];
+  }
+  return [{
+    title: payload?.title || 'Document',
+    sections: [{ title: 'Content', content: ' ' }]
+  }];
+};
+
+// Basic text styling parser for bold/strike/italic; returns array of text runs (for pptx/docx)
+const toStyledRuns = (text, opts = {}) => {
+  if (!text) return [{ text, ...opts }];
+  const runs = [];
+  const regex = /(\*\*([^*]+)\*\*|~~([^~]+)~~|\*([^*]+)\*|__([^_]+)__)/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) runs.push({ text: text.slice(lastIndex, match.index), ...opts });
+    if (match[2]) runs.push({ text: match[2], bold: true, ...opts });
+    else if (match[3]) runs.push({ text: match[3], strike: true, ...opts });
+    else if (match[4]) runs.push({ text: match[4], italic: true, ...opts });
+    else if (match[5]) runs.push({ text: match[5], bold: true, ...opts });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) runs.push({ text: text.slice(lastIndex), ...opts });
+  return runs;
+};
+
+const templatePalette = (name = 'professional') => {
+  const map = {
+    professional: { bg: '#0b1224', text: '#0f172a', accent: '#38bdf8' },
+    dark: { bg: '#0d1117', text: '#e5e7eb', accent: '#22d3ee' },
+    executive: { bg: '#f8fafc', text: '#0f172a', accent: '#1e3a8a' },
+    minimalist: { bg: '#ffffff', text: '#111827', accent: '#0ea5e9' }
+  };
+  return map[name] || map.professional;
+};
 const PDF_TEMPLATES = {
   professional: (title, content, iconBase64, metadata = {}) => {
     const { author = '', category = '', tags = [], watermark = '', bgColor = '#ffffff' } = metadata;
@@ -489,74 +752,96 @@ const PDF_TEMPLATES = {
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', sans-serif; line-height: 1.8; color: #1e293b; background: ${bgColor}; padding: 50px 60px; min-height: 100vh; overflow-x: hidden; }
-    .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 100px; color: rgba(0,0,0,0.03); font-weight: 900; white-space: nowrap; z-index: -1; font-family: 'Outfit', sans-serif; pointer-events: none; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0ea5e9; padding-bottom: 25px; margin-bottom: 40px; flex-wrap: wrap; }
-    .brand { display: flex; align-items: center; gap: 15px; }
-    .brand-name { font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 1.6rem; color: #0ea5e9; }
-    .brand-name span { color: #0f172a; }
-    .doc-tag { background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%); color: white; padding: 8px 20px; border-radius: 30px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; }
-    h1 { font-family: 'Outfit', sans-serif; color: #0f172a; font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; margin: 30px 0 15px; word-wrap: break-word; }
-    .meta-grid { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 40px; padding: 20px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; }
+    body { font-family: 'Inter', sans-serif; line-height: 1.8; color: #111827; background: #f8fafc; padding: 32px 42px; min-height: 100vh; overflow-x: hidden; }
+    /* Watermark that works with Electron printToPDF - positioned to repeat on each page */
+    .watermark-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
+    .watermark { position: absolute; top: 50%; left: 50%; width: 200%; height: 200%; text-align: center; vertical-align: middle; line-height: 200px; transform: translate(-50%, -50%) rotate(-35deg); font-size: 80px; color: rgba(0,0,0,0.035); font-weight: 900; white-space: nowrap; font-family: 'Outfit', sans-serif; pointer-events: none; }
+    @media print { .watermark-container { position: fixed; } }
+    .page-with-watermark { position: relative; overflow: visible; }
+    .cover { position: relative; background: linear-gradient(135deg, ${bgColor} 0%, #0b1224 85%); color: #e5f3ff; border-radius: 24px; padding: 42px 46px 48px; box-shadow: 0 20px 60px rgba(0,0,0,0.22); overflow: hidden; min-height: 88vh; display: flex; flex-direction: column; gap: 20px; page-break-after: always; }
+    .cover::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 25% 25%, rgba(255,255,255,0.08), transparent 45%), radial-gradient(circle at 80% 10%, rgba(56,189,248,0.3), transparent 40%); mix-blend-mode: screen; pointer-events: none; }
+    .cover-top { display: flex; justify-content: space-between; align-items: center; gap: 18px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 14px; z-index: 1; }
+    .brand-name { font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 1.7rem; color: #e5f3ff; letter-spacing: -0.02em; }
+    .brand-name span { color: #38bdf8; }
+    .doc-tag { background: rgba(255,255,255,0.12); color: #e0f2fe; padding: 9px 18px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.18em; border: 1px solid rgba(255,255,255,0.18); }
+    .eyebrow { font-size: 0.8rem; letter-spacing: 0.24em; text-transform: uppercase; color: #a5e7ff; font-weight: 800; margin-bottom: 8px; }
+    h1 { font-family: 'Outfit', sans-serif; color: #e5f3ff; font-size: 2.8rem; font-weight: 900; letter-spacing: -0.035em; line-height: 1.1; margin: 6px 0 12px; word-wrap: break-word; }
+    .subtitle { color: #cce9ff; font-size: 1.05rem; max-width: 70ch; }
+    .cover-meta { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; margin-top: auto; padding-top: 8px; }
+    .meta-pill { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 10px 14px; color: #e0f2fe; font-size: 0.9rem; display: flex; flex-direction: column; gap: 4px; }
+    .meta-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.16em; color: #93c5fd; font-weight: 700; }
+    .page-content { background: #ffffff; border-radius: 20px; padding: 30px 32px; margin-top: 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.08); position: relative; z-index: 1; }
+    .meta-grid { display: flex; flex-wrap: wrap; gap: 18px; margin-bottom: 28px; padding: 16px; background: #f8fafc; border-radius: 14px; border: 1px solid #e2e8f0; }
     .meta-item { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
-    .meta-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.15em; color: #64748b; font-weight: 700; }
-    .meta-value { font-size: 0.9rem; color: #0f172a; font-weight: 600; word-break: break-word; }
-    .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 30px; }
-    .tag { background: rgba(14, 165, 233, 0.1); color: #0ea5e9; padding: 4px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
-    .content { font-size: 1rem; line-height: 1.8; width: 100%; }
-    .content h2 { margin: 40px 0 20px; color: #0f172a; font-family: 'Outfit', sans-serif; font-size: 1.6rem; font-weight: 800; border-left: 6px solid #0ea5e9; padding-left: 15px; word-wrap: break-word; }
-    .content h3 { margin: 30px 0 15px; color: #334155; font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 700; }
-    .content p { margin-bottom: 20px; text-align: left; word-wrap: break-word; }
-    .content ul, .content ol { margin: 15px 0 20px 25px; }
-    .content li { margin-bottom: 10px; }
-    .table-wrapper { width: 100%; overflow-x: auto; margin: 30px 0; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    table { width: 100%; min-width: 500px; border-collapse: collapse; background: white; }
+    .meta-label-inline { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.15em; color: #6b7280; font-weight: 700; }
+    .meta-value { font-size: 0.95rem; color: #0f172a; font-weight: 600; word-break: break-word; }
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .tag { background: rgba(56, 189, 248, 0.14); color: #0ea5e9; padding: 5px 12px; border-radius: 18px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+    .content { font-size: 1rem; line-height: 1.82; width: 100%; color: #111827; }
+    .content h2 { margin: 32px 0 18px; color: #0f172a; font-family: 'Outfit', sans-serif; font-size: 1.55rem; font-weight: 800; border-left: 6px solid #38bdf8; padding-left: 14px; word-wrap: break-word; }
+    .content h3 { margin: 26px 0 14px; color: #1f2937; font-family: 'Outfit', sans-serif; font-size: 1.18rem; font-weight: 700; }
+    .content p { margin-bottom: 18px; text-align: left; word-wrap: break-word; }
+    .content ul, .content ol { margin: 12px 0 18px 24px; }
+    .content li { margin-bottom: 8px; }
+    .table-wrapper { width: 100%; overflow-x: auto; margin: 26px 0; border-radius: 14px; box-shadow: 0 6px 22px rgba(0,0,0,0.08); page-break-inside: avoid; }
+    table { width: 100%; min-width: 520px; border-collapse: collapse; background: white; page-break-inside: auto; }
     thead { display: table-header-group; }
     tbody { display: table-row-group; }
-    tr { display: table-row; }
-    th { background: linear-gradient(135deg, #0f172a 0%, #334155 100%); color: white; padding: 16px 18px; text-align: left; font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; display: table-cell; }
-    td { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; display: table-cell; word-break: break-word; }
+    tr { display: table-row; page-break-inside: avoid; break-inside: avoid; }
+    th { background: #0f172a; color: white; padding: 15px 17px; text-align: left; font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; display: table-cell; }
+    td { padding: 13px 17px; border-bottom: 1px solid #e5e7eb; font-size: 0.92rem; display: table-cell; word-break: break-word; page-break-inside: avoid; break-inside: avoid; }
     tr:last-child td { border-bottom: none; }
     tr:nth-child(even) td { background: #f8fafc; }
-    hr { border: none; height: 3px; background: linear-gradient(to right, #0ea5e9, transparent); margin: 40px 0; border-radius: 3px; }
-    pre { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #e2e8f0; padding: 25px; border-radius: 15px; font-family: 'JetBrains Mono', monospace; overflow-x: auto; margin: 25px 0; font-size: 0.85rem; line-height: 1.6; border: 1px solid #334155; word-wrap: break-word; white-space: pre-wrap; }
+    hr { border: none; height: 2.5px; background: linear-gradient(to right, #38bdf8, transparent); margin: 34px 0; border-radius: 3px; }
+    pre { background: #0f172a; color: #e2e8f0; padding: 22px; border-radius: 14px; font-family: 'JetBrains Mono', monospace; overflow-x: auto; margin: 22px 0; font-size: 0.9rem; line-height: 1.6; border: 1px solid #1e293b; word-wrap: break-word; white-space: pre-wrap; page-break-inside: avoid; }
     code { background: #f1f5f9; padding: 2px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.85em; color: #0ea5e9; word-break: break-all; }
     pre code { background: none; padding: 0; color: inherit; }
-    blockquote { border-left: 6px solid #0ea5e9; padding: 20px 25px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 0 15px 15px 0; color: #0369a1; margin: 25px 0; font-style: italic; font-size: 1rem; }
-    .footer { margin-top: 60px; padding-top: 25px; border-top: 2px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-    .footer-left { font-size: 0.75rem; color: #64748b; }
+    blockquote { border-left: 6px solid #38bdf8; padding: 18px 22px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 0 14px 14px 0; color: #0f172a; margin: 22px 0; font-style: italic; font-size: 1rem; page-break-inside: avoid; }
+    figure, img { max-width: 100%; border-radius: 14px; margin: 22px 0; box-shadow: 0 8px 28px rgba(0,0,0,0.12); page-break-inside: avoid; break-inside: avoid; }
+    .footer { margin-top: 46px; padding-top: 22px; border-top: 2px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .footer-left { font-size: 0.78rem; color: #6b7280; }
     .footer-center { text-align: center; }
-    .footer-right { text-align: right; font-size: 0.8rem; color: #0ea5e9; font-weight: 700; }
-    img { max-width: 100%; border-radius: 16px; margin: 25px 0; box-shadow: 0 10px 40px rgba(0,0,0,0.15); }
-    @page { margin: 0; size: A4; }
+    .footer-right { text-align: right; font-size: 0.82rem; color: #0ea5e9; font-weight: 700; }
+    @page { margin: 14mm 14mm 16mm 14mm; size: A4; }
   </style>
 </head>
 <body>
-  ${watermark ? `<div class="watermark">${watermark}</div>` : ''}
-  <div class="header">
-    <div class="brand">
-      ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="Comet" style="width:40px;height:40px;object-fit:contain;"/>` : '<span style="font-size:1.8rem">🌠</span>'}
-      <span class="brand-name">Comet<span>AI</span></span>
+  ${watermark ? `<div class="watermark-container"><div class="watermark">${watermark}</div></div>` : ''}
+  <section class="cover">
+    <div class="cover-top">
+      <div class="brand">
+        ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="Comet" style="width:44px;height:44px;object-fit:contain;filter:drop-shadow(0 6px 20px rgba(56,189,248,0.55));"/>` : '<span style="font-size:1.9rem">🌠</span>'}
+        <span class="brand-name">Comet<span>AI</span></span>
+      </div>
+      <div class="doc-tag">${category || 'Intelligence Report'}</div>
     </div>
-    <div class="doc-tag">${category || 'Intelligence Report'}</div>
+    <div class="cover-body">
+      <div class="eyebrow">Neural Intelligence Export</div>
+      <h1>${title || 'Research Document'}</h1>
+      <p class="subtitle">${author ? `Prepared by ${author}` : 'Generated by Comet-AI Automation'}</p>
+    </div>
+    <div class="cover-meta">
+      <div class="meta-pill"><span class="meta-label">Generated</span><span>${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>
+      <div class="meta-pill"><span class="meta-label">Document ID</span><span>CMT-${Math.random().toString(36).slice(2, 8).toUpperCase()}</span></div>
+      <div class="meta-pill"><span class="meta-label">Engine</span><span>COMET V2.5</span></div>
+      ${tags && tags.length ? `<div class="meta-pill"><span class="meta-label">Tags</span><span>${tags.join(', ')}</span></div>` : ''}
+    </div>
+  </section>
+
+  <div class="page-content">
+    <div class="meta-grid">
+      ${author ? `<div class="meta-item"><span class="meta-label-inline">Author</span><span class="meta-value">${author}</span></div>` : ''}
+      <div class="meta-item"><span class="meta-label-inline">Category</span><span class="meta-value">${category || 'Report'}</span></div>
+      <div class="meta-item"><span class="meta-label-inline">Generated</span><span class="meta-value">${new Date().toLocaleString('en-US')}</span></div>
+    </div>
+    ${tags && tags.length ? `<div class="tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` : ''}
+    <div class="content">${content}</div>
   </div>
-  
-  <h1>${title || 'Research Document'}</h1>
-  
-  <div class="meta-grid">
-    ${author ? `<div class="meta-item"><span class="meta-label">Author</span><span class="meta-value">${author}</span></div>` : ''}
-    <div class="meta-item"><span class="meta-label">Document ID</span><span class="meta-value">CMT-${Math.random().toString(36).slice(2, 8).toUpperCase()}</span></div>
-    <div class="meta-item"><span class="meta-label">Generated</span><span class="meta-value">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>
-    <div class="meta-item"><span class="meta-label">Engine</span><span class="meta-value">COMET V2.5</span></div>
-  </div>
-  
-  ${tags && tags.length ? `<div class="tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` : ''}
-  
-  <div class="content">${content}</div>
   
   <div class="footer">
     <div class="footer-left">&copy; ${new Date().getFullYear()} Comet AI Browser • Neural Intelligence Export</div>
-    <div class="footer-center">${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="" style="width:28px;height:28px;object-fit:contain;"/>` : '🌠'}</div>
+    <div class="footer-center">${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="" style="width:26px;height:26px;object-fit:contain;"/>` : '🌠'}</div>
     <div class="footer-right">CONFIDENTIAL • AI GENERATED</div>
   </div>
 </body>
@@ -576,7 +861,10 @@ const PDF_TEMPLATES = {
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', sans-serif; line-height: 1.7; color: #1a1a2e; background: #ffffff; padding: 50px 60px; }
-    .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 100px; color: rgba(0,0,0,0.015); font-weight: 900; z-index: -1; pointer-events: none; }
+    /* Watermark that works with Electron printToPDF */
+    .watermark-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
+    .watermark { position: absolute; top: 50%; left: 50%; width: 200%; height: 200%; text-align: center; vertical-align: middle; line-height: 200px; transform: translate(-50%, -50%) rotate(-45deg); font-size: 70px; color: rgba(0,0,0,0.02); font-weight: 900; white-space: nowrap; font-family: 'Playfair Display', serif; pointer-events: none; }
+    @media print { .watermark-container { position: fixed; } }
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 60px; padding-bottom: 30px; border-bottom: 1px solid #e5e7eb; }
     .brand { display: flex; align-items: center; gap: 12px; }
     .brand-text { font-family: 'Playfair Display', serif; font-weight: 900; font-size: 1.6rem; color: #1a1a2e; }
@@ -604,7 +892,7 @@ const PDF_TEMPLATES = {
   </style>
 </head>
 <body>
-  ${watermark ? `<div class="watermark">${watermark}</div>` : ''}
+  ${watermark ? `<div class="watermark-container"><div class="watermark">${watermark}</div></div>` : ''}
   <div class="header">
     <div class="brand">
       ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="" style="width:40px;height:40px;"/>` : '<span style="font-size:1.8rem">🌠</span>'}
@@ -643,7 +931,10 @@ const PDF_TEMPLATES = {
     @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Source+Sans+3:wght@400;600;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Source Sans 3', sans-serif; line-height: 1.8; color: #333333; background: #ffffff; padding: 50px 60px; min-height: 100vh; overflow-x: hidden; }
-    .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 80px; color: rgba(0,0,0,0.02); font-weight: 900; z-index: -1; pointer-events: none; }
+    /* Watermark that works with Electron printToPDF */
+    .watermark-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
+    .watermark { position: absolute; top: 50%; left: 50%; width: 200%; height: 200%; text-align: center; vertical-align: middle; line-height: 200px; transform: translate(-50%, -50%) rotate(-45deg); font-size: 60px; color: rgba(0,0,0,0.015); font-weight: 900; white-space: nowrap; font-family: 'Merriweather', serif; pointer-events: none; }
+    @media print { .watermark-container { position: fixed; } }
     .header { text-align: center; margin-bottom: 40px; padding-bottom: 30px; border-bottom: 3px double #333; }
     .institution { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.3em; color: #666; margin-bottom: 25px; font-weight: 600; }
     h1 { font-family: 'Merriweather', serif; font-size: 2.2rem; font-weight: 900; color: #1a1a1a; line-height: 1.2; margin-bottom: 20px; word-wrap: break-word; }
@@ -673,7 +964,7 @@ const PDF_TEMPLATES = {
   </style>
 </head>
 <body>
-  ${watermark ? `<div class="watermark">${watermark}</div>` : ''}
+  ${watermark ? `<div class="watermark-container"><div class="watermark">${watermark}</div></div>` : ''}
   <div class="header">
     <div class="institution">${institution || 'Comet AI Research Institute'}</div>
     <h1>${title || 'Research Paper'}</h1>
@@ -711,7 +1002,10 @@ const PDF_TEMPLATES = {
     @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Space Grotesk', sans-serif; line-height: 1.8; color: #111; background: ${bgColor}; padding: 60px 60px; min-height: 100vh; overflow-x: hidden; max-width: 800px; margin: 0 auto; }
-    .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 100px; color: rgba(0,0,0,0.015); font-weight: 700; z-index: -1; pointer-events: none; }
+    /* Watermark that works with Electron printToPDF */
+    .watermark-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
+    .watermark { position: absolute; top: 50%; left: 50%; width: 200%; height: 200%; text-align: center; vertical-align: middle; line-height: 200px; transform: translate(-50%, -50%) rotate(-45deg); font-size: 70px; color: rgba(0,0,0,0.01); font-weight: 700; white-space: nowrap; font-family: 'Space Grotesk', sans-serif; pointer-events: none; }
+    @media print { .watermark-container { position: fixed; } }
     .header { margin-bottom: 50px; }
     .brand { margin-bottom: 30px; opacity: 0.3; }
     h1 { font-size: 2.5rem; font-weight: 700; line-height: 1.1; margin-bottom: 15px; letter-spacing: -0.03em; word-wrap: break-word; }
@@ -732,7 +1026,7 @@ const PDF_TEMPLATES = {
   </style>
 </head>
 <body>
-  ${watermark ? `<div class="watermark">${watermark}</div>` : ''}
+  ${watermark ? `<div class="watermark-container"><div class="watermark">${watermark}</div></div>` : ''}
   <div class="header">
     <div class="brand">Comet AI</div>
     <h1>${title || 'Document'}</h1>
@@ -758,7 +1052,10 @@ const PDF_TEMPLATES = {
     @import url('https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=Share+Tech+Mono&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Oxanium', sans-serif; line-height: 1.8; color: #e0e0e0; background: ${bgColor}; padding: 50px 60px; min-height: 100vh; overflow-x: hidden; }
-    .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 100px; color: rgba(255,255,255,0.02); font-weight: 700; z-index: -1; pointer-events: none; }
+    /* Watermark that works with Electron printToPDF - uses opacity for dark mode */
+    .watermark-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
+    .watermark { position: absolute; top: 50%; left: 50%; width: 200%; height: 200%; text-align: center; vertical-align: middle; line-height: 200px; transform: translate(-50%, -50%) rotate(-45deg); font-size: 80px; color: rgba(255,255,255,0.015); font-weight: 700; white-space: nowrap; font-family: 'Oxanium', sans-serif; pointer-events: none; }
+    @media print { .watermark-container { position: fixed; } }
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #22d3ee; flex-wrap: wrap; gap: 15px; }
     .brand { display: flex; align-items: center; gap: 15px; }
     .brand-name { font-weight: 700; font-size: 1.4rem; color: #22d3ee; }
@@ -788,7 +1085,7 @@ const PDF_TEMPLATES = {
   </style>
 </head>
 <body>
-  ${watermark ? `<div class="watermark">${watermark}</div>` : ''}
+  ${watermark ? `<div class="watermark-container"><div class="watermark">${watermark}</div></div>` : ''}
   <div class="header">
     <div class="brand">
       ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="" style="width:40px;height:40px;filter:brightness(0) invert(1);"/>` : '<span style="font-size:1.5rem;filter:brightness(0) invert(1);">🌠</span>'}
@@ -1622,6 +1919,14 @@ async function createWindow() {
 
   registerWindow(mainWindow);
 
+  // Fullscreen event listeners - notify renderer to recalculate BrowserView bounds
+  mainWindow.on('enter-full-screen', () => {
+    mainWindow.webContents.send('window-fullscreen-changed', true);
+  });
+  mainWindow.on('leave-full-screen', () => {
+    mainWindow.webContents.send('window-fullscreen-changed', false);
+  });
+
   // CRITICAL: Multiple safeguards to ensure window ALWAYS shows
   let windowShown = false;
 
@@ -2094,24 +2399,60 @@ ipcMain.handle('delete-persistent-data', async (event, key) => {
   }
 });
 
-// Secure Auth Storage (using electron-store)
-ipcMain.on('save-auth-token', (event, { token, user }) => {
-  store.set('auth_token', token);
-  store.set('user_info', user);
-  console.log('[Auth] Token and user info saved to secure storage');
+// Secure Auth Storage
+ipcMain.on('save-auth-token', (event, { token, user, ...rest }) => {
+  const currentSession = getSecureAuthSession() || {};
+  const saved = saveSecureAuthSession({
+    ...currentSession,
+    ...rest,
+    token: token || currentSession.token || null,
+    user: user || currentSession.user || null,
+    savedAt: Date.now(),
+  });
+
+  if (saved) {
+    console.log('[Auth] Auth token and user info saved to secure storage.');
+  }
+});
+
+ipcMain.on('save-auth-session', (event, sessionPayload) => {
+  const currentSession = getSecureAuthSession() || {};
+  const saved = saveSecureAuthSession({
+    ...currentSession,
+    ...(sessionPayload || {}),
+    savedAt: Date.now(),
+  });
+
+  event.reply('auth-session-saved', {
+    success: saved,
+    backend: getAuthStorageBackend(),
+  });
 });
 
 ipcMain.handle('get-auth-token', () => {
-  return store.get('auth_token');
+  return getSecureAuthSession()?.token || null;
 });
 
 ipcMain.handle('get-user-info', () => {
-  return store.get('user_info');
+  return getSecureAuthSession()?.user || null;
+});
+
+ipcMain.handle('get-auth-session', () => {
+  const session = getSecureAuthSession();
+  if (!session) {
+    return null;
+  }
+
+  return {
+    ...session,
+    storageBackend: getAuthStorageBackend(),
+  };
 });
 
 ipcMain.on('clear-auth', () => {
-  store.delete('auth_token');
-  store.delete('user_info');
+  clearSecureAuthSession();
+  store.delete(LEGACY_AUTH_TOKEN_KEY);
+  store.delete(LEGACY_USER_INFO_KEY);
   console.log('[Auth] Auth data cleared');
 });
 
@@ -2261,7 +2602,19 @@ ipcMain.on('open-auth-window', (event, authUrl) => {
         const data = JSON.parse(message);
         if (data.type === 'comet-auth-success' && data.data) {
           if (mainWindow) {
-            mainWindow.webContents.send('auth-callback', `comet-browser://auth?auth_status=success&uid=${data.data.uid}&email=${encodeURIComponent(data.data.email || '')}`);
+            const authParams = new URLSearchParams({
+              auth_status: 'success',
+              uid: data.data.uid || '',
+              email: data.data.email || '',
+            });
+
+            if (data.data.name) authParams.set('name', data.data.name);
+            if (data.data.photo) authParams.set('photo', data.data.photo);
+            if (data.data.id_token) authParams.set('id_token', data.data.id_token);
+            if (data.data.token) authParams.set('token', data.data.token);
+            if (data.data.firebase_config) authParams.set('firebase_config', data.data.firebase_config);
+
+            mainWindow.webContents.send('auth-callback', `comet-browser://auth?${authParams.toString()}`);
           }
           authWindow.close();
         }
@@ -4139,6 +4492,31 @@ app.whenReady().then(async () => {
     }
   });
 
+function autoSyncFileToMobile(filename, buffer, fileType) {
+  try {
+    const publicDir = path.join(app.getPath('documents'), 'Comet-AI', 'public');
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
+    const publicPath = path.join(publicDir, filename);
+    fs.writeFileSync(publicPath, buffer);
+    console.log(`[Auto-Sync] Saved to public directory: ${publicPath}`);
+
+    if (typeof wifiSyncService !== 'undefined' && wifiSyncService) {
+      const fileUrl = `http://${wifiSyncService.getLocalIp()}:3999/public/${filename}`;
+      wifiSyncService.sendToMobile({
+        action: 'file-generated',
+        name: filename,
+        url: fileUrl,
+        type: fileType
+      });
+      console.log(`[Auto-Sync] Sent notification to mobile: ${fileUrl}`);
+    }
+  } catch (err) {
+    console.error(`[Auto-Sync] Failed to sync ${filename} to mobile:`, err);
+  }
+}
+
 // Recreated PDF Generation Protocol (Branded & Robust)
 ipcMain.removeHandler('generate-pdf');
 
@@ -4169,35 +4547,12 @@ ipcMain.removeHandler('generate-pdf');
     notifyAI(`🔄 Initializing branded worker for PDF: ${title}...`);
     updateProgress(5, 'parsing');
 
-    // 0. Load Branding Icon — try multiple paths (dev and packaged .dmg)
-    let iconBase64 = '';
-    let iconMimeType = 'image/png';
-    try {
-      const appPath = app.getAppPath();
-      const isPackaged = app.isPackaged;
-      const iconCandidates = isPackaged ? [
-        { p: path.join(appPath, 'assets', 'icon.png'), mime: 'image/png' },
-        { p: path.join(appPath, 'icon.png'),           mime: 'image/png' },
-        { p: path.join(process.resourcesPath, 'app', 'assets', 'icon.png'), mime: 'image/png' },
-        { p: path.join(process.resourcesPath, 'icon.png'), mime: 'image/png' },
-      ] : [
-        { p: path.join(__dirname, 'assets', 'icon.png'), mime: 'image/png' },
-        { p: path.join(__dirname, 'icon.png'),           mime: 'image/png' },
-        { p: path.join(appPath, 'assets', 'icon.png'),  mime: 'image/png' },
-      ];
-      for (const candidate of iconCandidates) {
-        try {
-          if (fs.existsSync(candidate.p)) {
-            iconBase64 = fs.readFileSync(candidate.p).toString('base64');
-            iconMimeType = candidate.mime;
-            logMain(`Loaded branding icon from: ${candidate.p}`);
-            break;
-          }
-        } catch (e) { /* skip inaccessible paths in packaged app */ }
-      }
-      if (!iconBase64) logMain('No branding icon found — using text fallback.');
-    } catch (e) {
-      logErr('Failed to load branding icon', e);
+    // 0. Load Branding Icon — shared helper
+    const { iconBase64, iconMime } = loadBrandIcon();
+    if (iconBase64) {
+      logMain('Branding icon loaded for PDF.');
+    } else {
+      logMain('No branding icon found — using text fallback.');
     }
 
     let workerWindow = null;
@@ -4343,6 +4698,9 @@ ipcMain.removeHandler('generate-pdf');
       fs.writeFileSync(fullPath, pdfBuffer);
       logMain(`PDF saved successfully: ${fullPath}`);
       
+      // Auto-sync to mobile
+      autoSyncFileToMobile(filename, pdfBuffer, 'pdf');
+      
       // 7. Cleanup & Notify UI
       if (mainWindow && !mainWindow.isDestroyed()) {
         logMain('Notifying frontend of new download...');
@@ -4404,6 +4762,540 @@ ipcMain.removeHandler('generate-pdf');
       }
       // Cleanup temp file
       try { if (tempHtmlPath && fs.existsSync(tempHtmlPath)) fs.unlinkSync(tempHtmlPath); } catch(e) {}
+    }
+  });
+
+  // Python availability check (for optional flows; generation does not require it)
+  ipcMain.handle('check-python-available', async () => pythonAvailable);
+
+  // PPTX generation (JS-only, .dmg safe)
+  ipcMain.handle('generate-pptx', async (event, payload = {}) => {
+    try {
+      const pptx = new PptxGenJS();
+      pptx.layout = 'LAYOUT_16x9';
+      pptx.title = payload.title || 'Presentation';
+      pptx.author = payload.author || 'Comet-AI';
+      pptx.subject = payload.subtitle || '';
+      const { iconBase64 } = loadBrandIcon();
+      const title = payload.title || 'Slides';
+      const subtitle = payload.subtitle || '';
+      const palette = templatePalette(payload.template || 'professional');
+
+      // GOD-TIER COVER SLIDE
+      const cover = pptx.addSlide();
+      cover.background = { color: palette.bg };
+
+      // Top accent bar
+      cover.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.15, fill: { color: palette.accent } });
+
+      // Large branded logo
+      if (iconBase64) {
+        cover.addImage({ data: `data:image/png;base64,${iconBase64}`, x: 4.25, y: 1.0, w: 1.5, h: 1.5 });
+      }
+
+      // Title with gradient-like effect (large white text)
+      cover.addText(title, {
+        x: 0.5, y: 2.8, w: 9, h: 1.2,
+        fontSize: 44, bold: true, color: 'FFFFFF',
+        align: 'center', fontFace: 'Arial'
+      });
+
+      // Subtitle
+      if (subtitle) {
+        cover.addText(subtitle, {
+          x: 0.5, y: 3.9, w: 9, h: 0.6,
+          fontSize: 22, color: palette.accent, align: 'center', fontFace: 'Arial'
+        });
+      }
+
+      // Author and date
+      const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      if (payload.author) {
+        cover.addText(`by ${payload.author}`, {
+          x: 0.5, y: 4.6, w: 9, h: 0.4,
+          fontSize: 16, color: 'AAAAAA', align: 'center'
+        });
+      }
+      cover.addText(dateStr, {
+        x: 0.5, y: 5.0, w: 9, h: 0.4,
+        fontSize: 14, color: '888888', align: 'center'
+      });
+
+      // Bottom accent bar
+      cover.addShape(pptx.ShapeType.rect, { x: 0, y: 5.475, w: 10, h: 0.15, fill: { color: palette.accent } });
+
+      // Two-column content slides with enhanced layout
+      const pages = normalizePages(payload);
+      pages.forEach((page, pageIndex) => {
+        const slide = pptx.addSlide();
+        slide.background = { color: 'FFFFFF' };
+
+        // Header bar with accent color
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.9, fill: { color: palette.accent } });
+
+        // Slide title in header
+        slide.addText(page.title || `Section ${pageIndex + 1}`, {
+          x: 0.5, y: 0.15, w: 8, h: 0.6,
+          fontSize: 26, bold: true, color: 'FFFFFF', fontFace: 'Arial', margin: 0
+        });
+
+        // Small logo in header
+        if (iconBase64) {
+          slide.addImage({ data: `data:image/png;base64,${iconBase64}`, x: 9.0, y: 0.15, w: 0.6, h: 0.6 });
+        }
+
+        // Determine layout based on content
+        const hasImage = Array.isArray(page.images) && page.images.length > 0;
+        const hasTable = (page.sections || []).some(s => Array.isArray(s.table) && s.table.length);
+
+        let bodyY = 1.2;
+
+        if (hasTable) {
+          // Table-focused layout
+          (page.sections || []).forEach((section, idx) => {
+            if (section.title) {
+              slide.addText(section.title, {
+                x: 0.5, y: bodyY, w: 9, h: 0.5,
+                fontSize: 18, bold: true, color: palette.accent
+              });
+              bodyY += 0.5;
+            }
+
+            if (Array.isArray(section.table) && section.table.length) {
+              const tableData = section.table.map((r) =>
+                (Array.isArray(r) ? r : []).map((c) => ({
+                  text: c?.toString?.() || '',
+                  options: { fill: { color: idx % 2 === 0 ? 'F8F9FA' : 'FFFFFF' } }
+                }))
+              );
+              slide.addTable(tableData, {
+                x: 0.5, y: bodyY, w: 9, h: 2.5,
+                colW: [3, 3, 3],
+                border: { pt: 0.5, color: 'DDDDDD' },
+                fontFace: 'Arial',
+                fontSize: 12,
+              });
+              bodyY += 2.8;
+            }
+
+            // Content below table
+            if (section.content) {
+              slide.addText(section.content, {
+                x: 0.5, y: bodyY, w: 9, h: 1.5,
+                fontSize: 14, color: '333333', valign: 'top'
+              });
+              bodyY += 1.8;
+            }
+          });
+        } else if (hasImage) {
+          // Two-column layout: text left, image right
+          const first = page.images[0];
+          const parsed = dataUrlToBuffer(first.src || '');
+          if (parsed) {
+            slide.addImage({
+              data: `data:${parsed.mime};base64,${parsed.buffer.toString('base64')}`,
+              x: 5.2, y: 1.1, w: 4.3, h: 3.2,
+              shadow: { type: 'outer', blur: 3, offset: 2, angle: 45, opacity: 0.2 }
+            });
+          }
+
+          // Content on left side
+          const sectionBlocks = (page.sections || []).map((section) => {
+            if (section.title) return `• ${section.title}\n  ${section.content || ''}`;
+            return section.content || '';
+          }).filter(Boolean);
+
+          if (sectionBlocks.length) {
+            slide.addText(sectionBlocks.join('\n\n'), {
+              x: 0.5, y: 1.1, w: 4.5, h: 3.5,
+              fontSize: 15, color: '333333', valign: 'top', lineSpacingMultiple: 1.3
+            });
+          }
+        } else {
+          // Full-width text layout
+          (page.sections || []).forEach((section) => {
+            if (section.title) {
+              slide.addText(section.title, {
+                x: 0.5, y: bodyY, w: 9, h: 0.5,
+                fontSize: 20, bold: true, color: palette.accent
+              });
+              bodyY += 0.6;
+            }
+
+            const blocks = (section.content || '').split(/\n{2,}/).filter(Boolean);
+            blocks.forEach((block) => {
+              slide.addText(block.replace(/\n/g, ' '), {
+                x: 0.5, y: bodyY, w: 9, h: 0.8,
+                fontSize: 14, color: '444444', valign: 'top'
+              });
+              bodyY += 0.9;
+            });
+          });
+        }
+
+        // Watermark
+        if (payload.watermark) {
+          slide.addText(payload.watermark, {
+            x: 0.8, y: 3.2, w: 8.5, h: 1,
+            fontSize: 42, bold: true, color: 'EEEEEE', rotate: -22, align: 'center'
+          });
+        }
+
+        // Footer with page number
+        slide.addText(`${pageIndex + 2} / ${pages.length + 1}`, {
+          x: 9, y: 5.2, w: 0.8, h: 0.3,
+          fontSize: 10, color: 'AAAAAA', align: 'right'
+        });
+      });
+
+      // ENHANCED IMAGES SLIDE
+      if (Array.isArray(payload.images) && payload.images.length) {
+        const imgSlide = pptx.addSlide();
+        imgSlide.background = { color: 'FFFFFF' };
+
+        // Header
+        imgSlide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.9, fill: { color: palette.accent } });
+        imgSlide.addText('Gallery', {
+          x: 0.5, y: 0.15, w: 8, h: 0.6,
+          fontSize: 26, bold: true, color: 'FFFFFF', margin: 0
+        });
+
+        // Grid of images (2x2)
+        let x = 0.5, y = 1.2;
+        payload.images.slice(0, 4).forEach((img, idx) => {
+          if (!img?.src) return;
+          const parsed = dataUrlToBuffer(img.src);
+          if (!parsed) return;
+          imgSlide.addImage({
+            data: `data:${parsed.mime};base64,${parsed.buffer.toString('base64')}`,
+            x, y, w: 4.3, h: 2.8,
+            shadow: { type: 'outer', blur: 2, offset: 1, angle: 45, opacity: 0.15 }
+          });
+          x += 4.7;
+          if ((idx + 1) % 2 === 0) { x = 0.5; y += 3.1; }
+        });
+      }
+
+      // THANK YOU SLIDE
+      const thankYou = pptx.addSlide();
+      thankYou.background = { color: palette.bg };
+      thankYou.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.15, fill: { color: palette.accent } });
+
+      if (iconBase64) {
+        thankYou.addImage({ data: `data:image/png;base64,${iconBase64}`, x: 4.25, y: 1.5, w: 1.5, h: 1.5 });
+      }
+      thankYou.addText('Thank You', {
+        x: 0.5, y: 3.2, w: 9, h: 1,
+        fontSize: 48, bold: true, color: 'FFFFFF', align: 'center'
+      });
+      thankYou.addText('Questions & Discussion', {
+        x: 0.5, y: 4.2, w: 9, h: 0.5,
+        fontSize: 20, color: palette.accent, align: 'center'
+      });
+      thankYou.addShape(pptx.ShapeType.rect, { x: 0, y: 5.475, w: 10, h: 0.15, fill: { color: palette.accent } });
+
+      const buffer = await pptx.write('nodebuffer');
+      const downloads = path.join(os.homedir(), 'Downloads');
+      const safeTitle = (title || 'slides').replace(/[^a-z0-9]/gi, '_');
+      const filename = `${safeTitle}_${Math.floor(Date.now() / 1000)}.pptx`;
+      const fullPath = path.join(downloads, filename);
+      fs.writeFileSync(fullPath, buffer);
+
+      // Auto-sync to mobile
+      autoSyncFileToMobile(filename, buffer, 'pptx');
+
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('download-started', { name: filename, path: fullPath });
+        mainWindow.webContents.send('download-complete', { name: filename, path: fullPath });
+      }
+
+      return { success: true, filePath: fullPath, pythonAvailable };
+    } catch (err) {
+      console.error('[PPTX] Generation failed:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  // DOCX generation (JS-only)
+  ipcMain.handle('generate-docx', async (event, payload = {}) => {
+    try {
+      const { iconBase64 } = loadBrandIcon();
+      const iconBuffer = iconBase64 ? Buffer.from(iconBase64, 'base64') : null;
+
+      const children = [];
+      const title = payload.title || 'Report';
+      const subtitle = payload.subtitle || '';
+      const palette = templatePalette(payload.template || 'professional');
+      const bodyColor = palette.text.replace('#', '');
+
+      children.push(new Paragraph({ text: title, heading: HeadingLevel.TITLE }));
+      if (subtitle) children.push(new Paragraph({ text: subtitle, heading: HeadingLevel.HEADING_2 }));
+      if (payload.author) children.push(new Paragraph({ text: `Author: ${payload.author}` }));
+
+      const pages = normalizePages(payload);
+      pages.forEach((page) => {
+        children.push(new Paragraph({ text: page.title || 'Section', heading: HeadingLevel.HEADING_1 }));
+        (page.sections || []).forEach((section) => {
+          if (section.title) children.push(new Paragraph({ text: section.title, heading: HeadingLevel.HEADING_2 }));
+          // Body text with basic styling
+          const blocks = (section.content || '').split(/\n{2,}/).filter(Boolean);
+          if (blocks.length === 0) {
+            children.push(new Paragraph({ children: toStyledRuns(section.content || '', { color: bodyColor }) }));
+          } else {
+            blocks.forEach((block) => {
+              const lines = block.split('\n').filter(Boolean);
+              lines.forEach((line) => {
+                children.push(new Paragraph({ children: toStyledRuns(line, { color: bodyColor }), spacing: { after: 120 } }));
+              });
+            });
+          }
+
+          // Tables
+          if (Array.isArray(section.table) && section.table.length) {
+            const tableRows = section.table.map((row) =>
+              new TableRow({
+                children: (Array.isArray(row) ? row : []).map((cell) =>
+                  new TableCell({
+                    width: { size: 9000 / Math.max(1, row.length), type: WidthType.DXA },
+                    children: [new Paragraph({ children: toStyledRuns(cell?.toString?.() || '', { color: bodyColor }) })],
+                  })
+                ),
+              })
+            );
+            children.push(new Table({
+              width: { size: 9360, type: WidthType.DXA },
+              rows: tableRows,
+            }));
+          }
+        });
+      });
+
+      if (Array.isArray(payload.images)) {
+        payload.images.slice(0, 5).forEach((img) => {
+          const parsed = dataUrlToBuffer(img?.src);
+          if (!parsed) return;
+          children.push(new Paragraph({ children: [new TextRun(img?.caption || 'Image')] }));
+          children.push(new Paragraph({
+            children: [
+              new ImageRun({
+                data: parsed.buffer,
+                transformation: { width: 450, height: 300 },
+                type: (parsed.mime?.split('/')[1] || 'png'),
+              })
+            ],
+          }));
+        });
+      }
+
+      const doc = new Document({
+        sections: [{
+          properties: {
+            page: {
+              size: {
+                width: 12240,
+                height: 15840,
+              },
+              margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+              orientation: PageOrientation.PORTRAIT,
+            },
+          },
+          headers: {
+            default: new Header({
+              children: [
+                new Table({
+                  width: { size: 100, type: WidthType.PERCENTAGE },
+                  borders: {
+                    top: { style: BorderStyle.SINGLE, size: 12, color: palette.accent.replace('#', '') },
+                    bottom: { style: BorderStyle.SINGLE, size: 12, color: palette.accent.replace('#', '') },
+                    left: { style: BorderStyle.NONE, size: 0 },
+                    right: { style: BorderStyle.NONE, size: 0 },
+                    insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+                    insideVertical: { style: BorderStyle.NONE, size: 0 },
+                  },
+                  rows: [
+                    new TableRow({
+                      children: [
+                        new TableCell({
+                          width: { size: 20, type: WidthType.PERCENTAGE },
+                          verticalAlign: VerticalAlign.CENTER,
+                          borders: {
+                            top: { style: BorderStyle.NONE, size: 0 },
+                            bottom: { style: BorderStyle.NONE, size: 0 },
+                            left: { style: BorderStyle.NONE, size: 0 },
+                            right: { style: BorderStyle.NONE, size: 0 },
+                          },
+                          children: [
+                            new Paragraph({
+                              children: iconBuffer ? [
+                                new ImageRun({
+                                  data: iconBuffer,
+                                  transformation: { width: 32, height: 32 },
+                                  type: 'png',
+                                }),
+                              ] : [],
+                            }),
+                          ],
+                        }),
+                        new TableCell({
+                          width: { size: 50, type: WidthType.PERCENTAGE },
+                          verticalAlign: VerticalAlign.CENTER,
+                          borders: {
+                            top: { style: BorderStyle.NONE, size: 0 },
+                            bottom: { style: BorderStyle.NONE, size: 0 },
+                            left: { style: BorderStyle.NONE, size: 0 },
+                            right: { style: BorderStyle.NONE, size: 0 },
+                          },
+                          children: [
+                            new Paragraph({
+                              children: [
+                                new TextRun({ text: 'Comet-AI', bold: true, size: 28, color: palette.accent.replace('#', '') }),
+                              ],
+                            }),
+                            new Paragraph({
+                              children: [
+                                new TextRun({ text: 'Intelligent Automation Platform', size: 18, color: '666666', italics: true }),
+                              ],
+                            }),
+                          ],
+                        }),
+                        new TableCell({
+                          width: { size: 30, type: WidthType.PERCENTAGE },
+                          verticalAlign: VerticalAlign.CENTER,
+                          horizontalAlign: AlignmentType.RIGHT,
+                          borders: {
+                            top: { style: BorderStyle.NONE, size: 0 },
+                            bottom: { style: BorderStyle.NONE, size: 0 },
+                            left: { style: BorderStyle.NONE, size: 0 },
+                            right: { style: BorderStyle.NONE, size: 0 },
+                          },
+                          children: [
+                            new Paragraph({
+                              alignment: AlignmentType.RIGHT,
+                              children: [
+                                new TextRun({ text: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), size: 18, color: '888888' }),
+                              ],
+                            }),
+                            new Paragraph({
+                              alignment: AlignmentType.RIGHT,
+                              children: [
+                                new TextRun({ text: payload.author ? `By: ${payload.author}` : '', size: 16, color: '999999' }),
+                              ],
+                            }),
+                          ],
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+                new Paragraph({ spacing: { before: 100, after: 100 } }),
+              ],
+            })
+          },
+          footers: {
+            default: new Footer({
+              children: [
+                new Table({
+                  width: { size: 100, type: WidthType.PERCENTAGE },
+                  borders: {
+                    top: { style: BorderStyle.SINGLE, size: 6, color: palette.accent.replace('#', '') },
+                    bottom: { style: BorderStyle.NONE, size: 0 },
+                    left: { style: BorderStyle.NONE, size: 0 },
+                    right: { style: BorderStyle.NONE, size: 0 },
+                    insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+                    insideVertical: { style: BorderStyle.NONE, size: 0 },
+                  },
+                  rows: [
+                    new TableRow({
+                      children: [
+                        new TableCell({
+                          width: { size: 33, type: WidthType.PERCENTAGE },
+                          verticalAlign: VerticalAlign.CENTER,
+                          borders: {
+                            top: { style: BorderStyle.NONE, size: 0 },
+                            bottom: { style: BorderStyle.NONE, size: 0 },
+                            left: { style: BorderStyle.NONE, size: 0 },
+                            right: { style: BorderStyle.NONE, size: 0 },
+                          },
+                          children: [
+                            new Paragraph({
+                              children: [
+                                new TextRun({ text: 'Comet-AI', size: 16, bold: true, color: palette.accent.replace('#', '') }),
+                                new TextRun({ text: ' | Confidential', size: 16, color: '999999' }),
+                              ],
+                            }),
+                          ],
+                        }),
+                        new TableCell({
+                          width: { size: 34, type: WidthType.PERCENTAGE },
+                          verticalAlign: VerticalAlign.CENTER,
+                          horizontalAlign: AlignmentType.CENTER,
+                          borders: {
+                            top: { style: BorderStyle.NONE, size: 0 },
+                            bottom: { style: BorderStyle.NONE, size: 0 },
+                            left: { style: BorderStyle.NONE, size: 0 },
+                            right: { style: BorderStyle.NONE, size: 0 },
+                          },
+                          children: [
+                            new Paragraph({
+                              alignment: AlignmentType.CENTER,
+                              children: [
+                                new TextRun({ text: 'Page ', size: 18, color: '666666' }),
+                                new TextRun({ children: [PageNumber.CURRENT], size: 18, color: '666666' }),
+                                new TextRun({ text: ' of ', size: 18, color: '666666' }),
+                                new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 18, color: '666666' }),
+                              ],
+                            }),
+                          ],
+                        }),
+                        new TableCell({
+                          width: { size: 33, type: WidthType.PERCENTAGE },
+                          verticalAlign: VerticalAlign.CENTER,
+                          horizontalAlign: AlignmentType.RIGHT,
+                          borders: {
+                            top: { style: BorderStyle.NONE, size: 0 },
+                            bottom: { style: BorderStyle.NONE, size: 0 },
+                            left: { style: BorderStyle.NONE, size: 0 },
+                            right: { style: BorderStyle.NONE, size: 0 },
+                          },
+                          children: [
+                            new Paragraph({
+                              alignment: AlignmentType.RIGHT,
+                              children: [
+                                new TextRun({ text: title || 'Document', size: 16, color: '888888', italics: true }),
+                              ],
+                            }),
+                          ],
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+              ],
+            })
+          },
+          children,
+        }],
+      });
+
+      const buffer = await Packer.toBuffer(doc);
+      const downloads = path.join(os.homedir(), 'Downloads');
+      const safeTitle = (title || 'report').replace(/[^a-z0-9]/gi, '_');
+      const filename = `${safeTitle}_${Math.floor(Date.now() / 1000)}.docx`;
+      const fullPath = path.join(downloads, filename);
+      fs.writeFileSync(fullPath, buffer);
+
+      // Auto-sync to mobile
+      autoSyncFileToMobile(filename, buffer, 'docx');
+
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('download-started', { name: filename, path: fullPath });
+        mainWindow.webContents.send('download-complete', { name: filename, path: fullPath });
+      }
+
+      return { success: true, filePath: fullPath, pythonAvailable };
+    } catch (err) {
+      console.error('[DOCX] Generation failed:', err);
+      return { success: false, error: err.message };
     }
   });
 
@@ -4530,21 +5422,35 @@ ipcMain.removeHandler('generate-pdf');
     });
   }
 
+  migrateLegacyAuthSession();
+
   // Load persistent auth token on startup from secure storage
   mainWindow.webContents.once('did-finish-load', () => {
-    const savedToken = store.get('auth_token');
-    const savedUser = store.get('user_info');
-    if (savedToken) {
-      mainWindow.webContents.send('load-auth-token', savedToken);
-      if (savedUser) mainWindow.webContents.send('load-user-info', savedUser);
-      console.log('[Main] Loaded and sent persistent auth data to renderer.');
+    const savedSession = getSecureAuthSession();
+    if (savedSession) {
+      if (savedSession.token) {
+        mainWindow.webContents.send('load-auth-token', savedSession.token);
+      }
+      if (savedSession.user) {
+        mainWindow.webContents.send('load-user-info', savedSession.user);
+      }
+      mainWindow.webContents.send('load-auth-session', {
+        ...savedSession,
+        storageBackend: getAuthStorageBackend(),
+      });
+      console.log('[Main] Loaded and sent persistent auth session to renderer.');
     }
   });
 
   // Handle successful authentication from external sources (e.g. landing page)
   ipcMain.on('set-auth-token', (event, token) => {
     console.log('[Main] Setting auth token');
-    store.set('auth_token', token);
+    const currentSession = getSecureAuthSession() || {};
+    saveSecureAuthSession({
+      ...currentSession,
+      token,
+      savedAt: Date.now(),
+    });
     if (mainWindow) {
       mainWindow.webContents.send('load-auth-token', token);
     }
@@ -4837,9 +5743,9 @@ ipcMain.removeHandler('generate-pdf');
         }
       } else if (command === 'desktop-control') {
         // Handle desktop-control commands from mobile
-        const action = args.action || msg.action;
-        const prompt = args.prompt || msg.prompt;
-        const promptId = args.promptId || msg.promptId || commandId;
+        const action = args.action;
+        const prompt = args.prompt;
+        const promptId = args.promptId || commandId;
         
         console.log(`[WiFi-Sync] Desktop Control: action=${action}, promptId=${promptId}`);
         
@@ -4960,6 +5866,71 @@ ipcMain.removeHandler('generate-pdf');
   } catch (e) {
     console.error('[Main] Failed to initialize WiFi Sync Service:', e);
   }
+
+  // Cloud Sync Service (Remote device connections via Firebase)
+  try {
+    const { CloudSyncService } = require('./src/lib/CloudSyncService.js');
+    cloudSyncService = CloudSyncService.getInstance();
+    cloudSyncService.initialize();
+    cloudSyncService.setDeviceInfo(
+      `desktop-${os.hostname().substring(0, 8)}`,
+      os.hostname(),
+      'desktop'
+    );
+
+    // Listen for prompts from mobile via cloud
+    cloudSyncService.on('cloud-prompt', async ({ prompt, promptId, fromDeviceId }) => {
+      console.log(`[CloudSync] Received prompt from mobile: "${prompt.substring(0, 50)}..."`);
+      
+      if (mainWindow) {
+        mainWindow.webContents.send('remote-ai-prompt', { prompt, promptId, fromDeviceId });
+      }
+
+      // Execute on desktop AI and stream response back
+      try {
+        const targetModel = store.get('ollama_model') || 'deepseek-r1:8b';
+        const provider = (targetModel.includes('gemini') || targetModel.includes('google')) ? 'google-flash' : 'ollama';
+        
+        const streamEvent = {
+          sender: {
+            isDestroyed: () => false,
+            send: (_channel, data) => {
+              if (data?.type === 'text-delta') {
+                cloudSyncService.sendAIResponse(fromDeviceId, promptId, data.textDelta || '', true);
+              } else if (data?.type === 'finish') {
+                cloudSyncService.sendAIResponse(fromDeviceId, promptId, '', false);
+              } else if (data?.type === 'error') {
+                cloudSyncService.sendAIResponse(fromDeviceId, promptId, `Error: ${data.error || 'Stream failed'}`, false);
+              }
+            }
+          }
+        };
+
+        await llmGenerateHandler([{ role: 'user', content: prompt }], {
+          model: targetModel,
+          provider: provider,
+          baseUrl: store.get('ollama_base_url') || undefined,
+        }, streamEvent);
+      } catch (err) {
+        console.error('[CloudSync] AI execution failed:', err);
+        cloudSyncService.sendAIResponse(fromDeviceId, promptId, `Error: ${err.message}`, false);
+      }
+    });
+
+    // Listen for file sync requests
+    cloudSyncService.on('cloud-file-sync', async ({ files, fromDeviceId }) => {
+      console.log(`[CloudSync] Receiving files from mobile: ${files.length} files`);
+      
+      if (mainWindow) {
+        mainWindow.webContents.send('cloud-files-received', { files, fromDeviceId });
+      }
+    });
+
+    console.log('[Main] Cloud Sync Service initialized');
+  } catch (e) {
+    console.error('[Main] Failed to initialize Cloud Sync Service:', e);
+  }
+
   ipcMain.handle('get-wifi-sync-uri', () => {
     return wifiSyncService ? wifiSyncService.getConnectUri() : null;
   });
@@ -5047,6 +6018,91 @@ ipcMain.removeHandler('generate-pdf');
       port: 3004
     };
   });
+
+  // Cloud Sync IPC Handlers
+  ipcMain.handle('login-to-cloud', async (event, email, password) => {
+    if (!cloudSyncService) return { success: false, error: 'Cloud sync not initialized' };
+    try {
+      await cloudSyncService.login(email, password);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('logout-from-cloud', async () => {
+    if (!cloudSyncService) return;
+    await cloudSyncService.logout();
+  });
+
+  ipcMain.handle('save-cloud-config', async (event, provider, config) => {
+    if (!cloudSyncService) return { success: false };
+    try {
+      await cloudSyncService.configure({ provider, ...config });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('get-cloud-devices', async () => {
+    if (!cloudSyncService) return [];
+    return cloudSyncService.getDevices();
+  });
+
+  ipcMain.handle('connect-to-cloud-device', async (event, deviceId) => {
+    if (!cloudSyncService) return { success: false };
+    try {
+      const success = await cloudSyncService.connectToDevice(deviceId);
+      return { success };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('disconnect-from-cloud-device', async (event, deviceId) => {
+    if (!cloudSyncService) return;
+    cloudSyncService.disconnectFromDevice(deviceId);
+  });
+
+  ipcMain.handle('sync-clipboard', async (event, text) => {
+    if (!cloudSyncService) return;
+    await cloudSyncService.syncClipboard(text);
+  });
+
+  ipcMain.handle('sync-history', async (event, history) => {
+    if (!cloudSyncService) return;
+    await cloudSyncService.syncHistory(history);
+  });
+
+  ipcMain.handle('send-desktop-control', async (event, targetDeviceId, action, args) => {
+    if (!cloudSyncService) return { error: 'Cloud sync not initialized' };
+    return await cloudSyncService.sendDesktopControl(targetDeviceId, action, args);
+  });
+
+  // Cloud status listeners
+  if (cloudSyncService) {
+    cloudSyncService.on('connected', (userId) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('cloud-sync-status', { connected: true, userId });
+      }
+    });
+    cloudSyncService.on('disconnected', () => {
+      if (mainWindow) {
+        mainWindow.webContents.send('cloud-sync-status', { connected: false });
+      }
+    });
+    cloudSyncService.on('device-connected', (deviceId) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('cloud-device-connected', { deviceId });
+      }
+    });
+    cloudSyncService.on('device-disconnected', (deviceId) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('cloud-device-disconnected', { deviceId });
+      }
+    });
+  }
 
   // Handle file downloads
   session.defaultSession.on('will-download', (event, item, webContents) => {

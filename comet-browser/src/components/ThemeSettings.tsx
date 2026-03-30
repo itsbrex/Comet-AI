@@ -1,16 +1,18 @@
 "use client";
 
 import React from 'react';
+import { useAppStore } from '@/store/useAppStore';
 
 interface ThemeSettingsProps {
-  theme: 'dark' | 'light' | 'system' | 'vibrant';
-  setTheme: (theme: 'dark' | 'light' | 'system' | 'vibrant') => void;
+  theme: 'dark' | 'light' | 'system' | 'vibrant' | 'custom';
+  setTheme: (theme: 'dark' | 'light' | 'system' | 'vibrant' | 'custom') => void;
   backgroundImage: string;
   setBackgroundImage: (imageUrl: string) => void;
+  showCanvasOverlay?: boolean;
 }
 
 const THEMES: {
-  id: 'dark' | 'light' | 'system' | 'vibrant';
+  id: 'dark' | 'light' | 'system' | 'vibrant' | 'custom';
   label: string;
   emoji: string;
   preview: string; // Tailwind-compatible inline style gradient
@@ -50,6 +52,16 @@ const THEMES: {
     desc: 'Purple nebula',
   },
   {
+    id: 'custom',
+    label: 'Custom',
+    emoji: '🎨',
+    preview: 'linear-gradient(135deg, var(--custom-primary, #ff6b6b) 0%, var(--custom-secondary, #22d3ee) 100%)',
+    accent: 'text-orange-300',
+    border: 'border-orange-400/50',
+    activeBg: 'bg-orange-500/10',
+    desc: 'Two-color browser tint',
+  },
+  {
     id: 'system',
     label: 'System',
     emoji: '🖥️',
@@ -61,11 +73,22 @@ const THEMES: {
   },
 ];
 
-const ThemeSettings: React.FC<ThemeSettingsProps> = ({ theme, setTheme, backgroundImage, setBackgroundImage }) => {
+const ThemeSettings: React.FC<ThemeSettingsProps> = ({
+  theme,
+  setTheme,
+  backgroundImage,
+  setBackgroundImage,
+  showCanvasOverlay = true,
+}) => {
+  const customThemePrimary = useAppStore((state) => state.customThemePrimary);
+  const customThemeSecondary = useAppStore((state) => state.customThemeSecondary);
+  const setCustomThemePrimary = useAppStore((state) => state.setCustomThemePrimary);
+  const setCustomThemeSecondary = useAppStore((state) => state.setCustomThemeSecondary);
+
   return (
     <div className="space-y-4">
       <div className="space-y-3">
-        <label className="block text-[10px] uppercase font-bold tracking-widest text-white/40">
+        <label className="block text-[10px] uppercase font-bold tracking-widest text-secondary-text">
           Appearance
         </label>
 
@@ -77,10 +100,10 @@ const ThemeSettings: React.FC<ThemeSettingsProps> = ({ theme, setTheme, backgrou
               <button
                 key={t.id}
                 onClick={() => setTheme(t.id)}
-                className={`relative group flex flex-col gap-2 p-3 rounded-2xl border transition-all duration-200 text-left overflow-hidden
+                  className={`relative group flex flex-col gap-2 p-3 rounded-2xl border transition-all duration-200 text-left overflow-hidden
                   ${isActive
                     ? `${t.activeBg} ${t.border} shadow-lg`
-                    : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06] hover:border-white/10'
+                    : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.06] hover:border-white/20'
                   }`}
               >
                 {/* Mini preview tile */}
@@ -102,7 +125,7 @@ const ThemeSettings: React.FC<ThemeSettingsProps> = ({ theme, setTheme, backgrou
                     <p className={`text-[10px] font-black uppercase tracking-[0.15em] ${isActive ? t.accent : 'text-white/50'}`}>
                       {t.emoji} {t.label}
                     </p>
-                    <p className="text-[8px] text-white/25 font-medium mt-0.5">{t.desc}</p>
+                    <p className="text-[8px] text-secondary-text font-medium mt-0.5 opacity-80">{t.desc}</p>
                   </div>
                   {isActive && (
                     <div className={`w-4 h-4 rounded-full flex items-center justify-center ${t.activeBg} ${t.border} border`}>
@@ -118,23 +141,72 @@ const ThemeSettings: React.FC<ThemeSettingsProps> = ({ theme, setTheme, backgrou
         </div>
 
         {/* Active theme badge */}
-        <p className="text-[9px] text-white/20 italic text-center">
-          Active: <span className="text-white/40 font-bold uppercase">{theme}</span>
+        <p className="text-[9px] text-secondary-text italic text-center opacity-80">
+          Active: <span className="text-primary-text font-bold uppercase">{theme}</span>
         </p>
       </div>
 
-      <div className="space-y-2">
-        <label className="block text-[10px] uppercase font-bold tracking-widest text-white/40">
-          Canvas Overlay
-        </label>
-        <input
-          type="text"
-          placeholder="Image URL..."
-          className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2 text-xs text-white placeholder:text-white/10 focus:border-deep-space-accent-neon/30 outline-none transition-all"
-          value={backgroundImage}
-          onChange={(e) => setBackgroundImage(e.target.value)}
-        />
-      </div>
+      {theme === 'custom' && (
+        <div className="grid grid-cols-1 gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div>
+            <label className="block text-[10px] uppercase font-bold tracking-widest text-secondary-text mb-2">
+              Primary Color
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={customThemePrimary}
+                onChange={(e) => setCustomThemePrimary(e.target.value)}
+                className="h-11 w-14 rounded-xl border border-white/15 bg-transparent p-1 cursor-pointer"
+              />
+              <input
+                type="text"
+                value={customThemePrimary}
+                onChange={(e) => setCustomThemePrimary(e.target.value)}
+                className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-primary-text outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase font-bold tracking-widest text-secondary-text mb-2">
+              Secondary Color
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={customThemeSecondary}
+                onChange={(e) => setCustomThemeSecondary(e.target.value)}
+                className="h-11 w-14 rounded-xl border border-white/15 bg-transparent p-1 cursor-pointer"
+              />
+              <input
+                type="text"
+                value={customThemeSecondary}
+                onChange={(e) => setCustomThemeSecondary(e.target.value)}
+                className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-primary-text outline-none"
+              />
+            </div>
+          </div>
+          <div
+            className="h-20 rounded-2xl border border-white/10 shadow-inner"
+            style={{ background: `linear-gradient(135deg, ${customThemePrimary} 0%, ${customThemeSecondary} 100%)` }}
+          />
+        </div>
+      )}
+
+      {showCanvasOverlay && (
+        <div className="space-y-2">
+          <label className="block text-[10px] uppercase font-bold tracking-widest text-secondary-text">
+            Canvas Overlay
+          </label>
+          <input
+            type="text"
+            placeholder="Image URL..."
+            className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-primary-text placeholder:text-secondary-text outline-none transition-all focus:border-[var(--accent)]"
+            value={backgroundImage}
+            onChange={(e) => setBackgroundImage(e.target.value)}
+          />
+        </div>
+      )}
     </div>
   );
 };

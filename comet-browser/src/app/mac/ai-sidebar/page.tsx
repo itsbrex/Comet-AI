@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useAppVersion } from '@/lib/useAppVersion';
 
 const quickActions = [
   {
@@ -28,6 +29,7 @@ const defaultSettings = [
 ];
 
 const MacAiSidebarPage = () => {
+  const versionLabel = `v${useAppVersion()}`;
   const [activeAction, setActiveAction] = useState(quickActions[0].title);
   const [settingsState, setSettingsState] = useState(
     () => Object.fromEntries(defaultSettings.map(setting => [setting.key, setting.value]))
@@ -212,7 +214,7 @@ const MacAiSidebarPage = () => {
 
       <footer style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8' }}>
         <span>Live on macOS build · SwiftUI-inspired sheet</span>
-        <span>v0.2.5</span>
+        <span>{versionLabel}</span>
       </footer>
     </div>
   );

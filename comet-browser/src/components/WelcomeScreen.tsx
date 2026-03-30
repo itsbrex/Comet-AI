@@ -10,6 +10,7 @@ import {
     LogIn, User, Download, Github, ExternalLink, Play, X
 } from 'lucide-react';
 import { firebaseConfigStorage } from '@/lib/firebaseConfigStorage';
+import { useAppVersion } from '@/lib/useAppVersion';
 
 /* ─── Floating Particle ────────────────────────────────────────────── */
 const Particle = ({ delay, x, y, size }: { delay: number; x: number; y: number; size: number }) => (
@@ -103,6 +104,7 @@ export default function WelcomeScreen() {
     const [mouseY, setMouseY] = useState(0);
     const [activeFeature, setActiveFeature] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
+    const versionLabel = `v${useAppVersion()}`;
 
     const motionX = useMotionValue(0);
     const motionY = useMotionValue(0);
@@ -270,7 +272,7 @@ export default function WelcomeScreen() {
 
                     <div className="flex items-center gap-6">
                         {[
-                            { label: 'v0.2.3', icon: <Star size={10} /> },
+                            { label: versionLabel, icon: <Star size={10} /> },
                             { label: 'India', icon: <Globe size={10} /> },
                             { label: 'MIT License', icon: <Lock size={10} /> },
                         ].map(item => (
@@ -555,7 +557,7 @@ export default function WelcomeScreen() {
                                             ))}
                                         </div>
                                         <div className="text-[8px] font-black uppercase tracking-widest text-white/15">
-                                            INDIA · v0.2.3
+                                            INDIA · {versionLabel}
                                         </div>
                                     </div>
 

@@ -530,4 +530,139 @@ class SyncService {
       'command': command,
     });
   }
+
+  // Cloud Sync Methods
+  String? _cloudUserId;
+  String? _cloudDeviceId;
+  bool _cloudConnected = false;
+  DatabaseReference? _cloudDevicesRef;
+  final StreamController<Map<String, dynamic>> _cloudDevicesController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onCloudDevicesUpdated =>
+      _cloudDevicesController.stream;
+
+  Future<void> initializeCloud(String userId, {String? deviceId}) async {
+    _cloudUserId = userId;
+    if (deviceId != null) {
+      _cloudDeviceId = deviceId;
+    } else {
+      try {
+        final dir = await getApplicationDocumentsDirectory();
+        final file = File('${dir.path}/device_id.txt');
+        if (await file.exists()) {
+          _cloudDeviceId = await file.readAsString();
+        } else {
+          _cloudDeviceId = const Uuid().v4();
+          await file.writeAsString(_cloudDeviceId!);
+        }
+      } catch (e) {
+        print('[CloudSync] Error loading/saving device ID: $e');
+        _cloudDeviceId = const Uuid().v4();
+      }
+    }
+    print('[CloudSync] Initialized for user: $userId, device: $_cloudDeviceId');
+    _startCloudDeviceListener();
+  }
+
+  void _startCloudDeviceListener() {
+    if (_cloudUserId == null) return;
+
+    _cloudDevicesRef = FirebaseDatabase.instance.ref('devices/$_cloudUserId');
+    _cloudDevicesRef!.onValue.listen((event) {
+      if (event.snapshot.value != null) {
+        final Map<dynamic, dynamic> data = event.snapshot.value as Map;
+        _cloudDevicesController.add(Map<String, dynamic>.from(data));
+      }
+    });
+  }
+
+  Future<bool> connectToCloudDevice(String targetDeviceId) async {
+    if (_cloudUserId == null || _cloudDeviceId == null) return false;
+
+    try {
+      final connectionRef = FirebaseDatabase.instance
+          .ref('connections/$_cloudUserId/$_cloudDeviceId/$targetDeviceId');
+
+      await connectionRef.set({
+        'requestedAt': DateTime.now().millisecondsSinceEpoch,
+        'status': 'pending'
+      });
+
+      // Wait for acceptance
+      final completer = Completer<bool>();
+
+      FirebaseDatabase.instance
+          .ref(
+              'connections/$_cloudUserId/$targetDeviceId/$_cloudDeviceId/status')
+          .onValue
+          .listen((event) {
+        if (event.snapshot.value == 'accepted') {
+          if (!completer.isCompleted) completer.complete(true);
+        } else if (event.snapshot.value == 'rejected') {
+          if (!completer.isCompleted) completer.complete(false);
+        }
+      });
+
+      return completer.future.timeout(const Duration(seconds: 30));
+    } catch (e) {
+      print('[CloudSync] Connection failed: $e');
+      return false;
+    }
+  }
+
+  void disconnectFromCloudDevice(String targetDeviceId) {
+    if (_cloudUserId == null || _cloudDeviceId == null) return;
+    _cloudDevicesRef?.child(targetDeviceId).update({'online': false});
+  }
+
+  Future<void> syncClipboardToCloud(String text) async {
+    if (_cloudUserId == null) return;
+    final clipboardRef =
+        FirebaseDatabase.instance.ref('clipboard/$_cloudUserId');
+    await clipboardRef.set({
+      'content': text,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'deviceId': _cloudDeviceId
+    });
+  }
+
+  Future<void> syncHistoryToCloud(List<Map> history) async {
+    if (_cloudUserId == null) return;
+    final historyRef = FirebaseDatabase.instance.ref('history/$_cloudUserId');
+    await historyRef.set(
+        {'items': history, 'timestamp': DateTime.now().millisecondsSinceEpoch});
+  }
+
+  void sendPromptToCloudDevice(String deviceId, String prompt,
+      {String? promptId}) {
+    if (_cloudUserId == null) return;
+    final promptRef =
+        FirebaseDatabase.instance.ref('prompts/$_cloudUserId/$deviceId');
+    promptRef.set({
+      'promptId': promptId ?? 'prompt_${DateTime.now().millisecondsSinceEpoch}',
+      'fromDeviceId': _cloudDeviceId,
+      'prompt': prompt,
+      'timestamp': DateTime.now().millisecondsSinceEpoch
+    });
+  }
+
+  void forwardPromptToCloudDesktops(String prompt, {String? promptId}) async {
+    if (_cloudUserId == null) return;
+
+    // Get all online desktop devices
+    final devicesSnapshot =
+        await FirebaseDatabase.instance.ref('devices/$_cloudUserId').get();
+    if (devicesSnapshot.value != null) {
+      final Map<dynamic, dynamic> devices = devicesSnapshot.value as Map;
+      for (final entry in devices.entries) {
+        if (entry.key != _cloudDeviceId &&
+            entry.value['deviceType'] == 'desktop' &&
+            entry.value['online'] == true) {
+          sendPromptToCloudDevice(entry.key, prompt, promptId: promptId);
+        }
+      }
+    }
+  }
+
+  bool get isCloudConnected => _cloudConnected;
 }

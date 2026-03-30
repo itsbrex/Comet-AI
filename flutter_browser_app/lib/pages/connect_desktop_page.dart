@@ -18,10 +18,13 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
   bool isConnecting = false;
   bool isConnected = false;
   bool showScanner = false;
+  bool isCloudMode = false;
   String? desktopIp;
   String? errorMessage;
   final List<Map<String, dynamic>> _discoveredDevices = [];
+  final List<Map<String, dynamic>> _cloudDevices = [];
   StreamSubscription? _discoverySubscription;
+  StreamSubscription? _cloudDevicesSubscription;
 
   @override
   void initState() {
@@ -54,6 +57,15 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
   }
 
   void _startDiscovery() {
+    if (isCloudMode) {
+      _startCloudDiscovery();
+    } else {
+      _startLocalDiscovery();
+    }
+  }
+
+  void _startLocalDiscovery() {
+    _discoveredDevices.clear();
     SyncService().startDiscovery();
     _discoverySubscription = SyncService().onDeviceDiscovered.listen((device) {
       if (mounted) {
@@ -67,9 +79,34 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
     });
   }
 
+  void _startCloudDiscovery() {
+    _cloudDevices.clear();
+    if (SyncService().onCloudDevicesUpdated != null) {
+      _cloudDevicesSubscription =
+          SyncService().onCloudDevicesUpdated.listen((devices) {
+        if (mounted) {
+          setState(() {
+            _cloudDevices.clear();
+            devices.forEach((key, value) {
+              if (key != SyncService().deviceId) {
+                _cloudDevices.add({
+                  'deviceId': key,
+                  'deviceName': value['deviceName'] ?? 'Unknown',
+                  'deviceType': value['deviceType'] ?? 'desktop',
+                  'isOnline': value['online'] ?? false,
+                });
+              }
+            });
+          });
+        }
+      });
+    }
+  }
+
   @override
   void dispose() {
     _discoverySubscription?.cancel();
+    _cloudDevicesSubscription?.cancel();
     SyncService().stopDiscovery();
     controller?.dispose();
     super.dispose();
@@ -262,6 +299,77 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
           icon: Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      isCloudMode = false;
+                      _startDiscovery();
+                    });
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: !isCloudMode ? Color(0xFF00E5FF) : Colors.white10,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.wifi,
+                            size: 16,
+                            color:
+                                !isCloudMode ? Colors.black : Colors.white70),
+                        SizedBox(width: 4),
+                        Text('Local',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: !isCloudMode
+                                    ? Colors.black
+                                    : Colors.white70)),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      isCloudMode = true;
+                      _startDiscovery();
+                    });
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isCloudMode ? Color(0xFF9C27B0) : Colors.white10,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.cloud,
+                            size: 16,
+                            color: isCloudMode ? Colors.white : Colors.white70),
+                        SizedBox(width: 4),
+                        Text('Cloud',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: isCloudMode
+                                    ? Colors.white
+                                    : Colors.white70)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       body: Container(
         color: Colors.black,
@@ -288,61 +396,144 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                     style: TextStyle(color: Colors.white70)),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              children: [
-                const Icon(
-                  Icons.qr_code_scanner,
-                  size: 60,
-                  color: Color(0xFF00E5FF),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Scan QR Code',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    fontFamily: 'Outfit',
+          if (!isCloudMode) ...[
+            Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.qr_code_scanner,
+                    size: 60,
+                    color: Color(0xFF00E5FF),
                   ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(
-            height: 250,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40.0),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Stack(
-                  children: [
-                    QRView(
-                      key: qrKey,
-                      onQRViewCreated: _onQRViewCreated,
-                      overlay: QrScannerOverlayShape(
-                        borderColor: const Color(0xFF00E5FF),
-                        borderRadius: 20,
-                        borderLength: 30,
-                        borderWidth: 8,
-                        cutOutSize: 200,
-                      ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Scan QR Code',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontFamily: 'Outfit',
                     ),
-                    if (isConnecting)
-                      Container(
-                        color: Colors.black54,
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                              color: Color(0xFF00E5FF)),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 250,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40.0),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Stack(
+                    children: [
+                      QRView(
+                        key: qrKey,
+                        onQRViewCreated: _onQRViewCreated,
+                        overlay: QrScannerOverlayShape(
+                          borderColor: const Color(0xFF00E5FF),
+                          borderRadius: 20,
+                          borderLength: 30,
+                          borderWidth: 8,
+                          cutOutSize: 200,
                         ),
                       ),
-                  ],
+                      if (isConnecting)
+                        Container(
+                          color: Colors.black54,
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                                color: Color(0xFF00E5FF)),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          if (_discoveredDevices.isNotEmpty) ...[
+          ],
+          if (isCloudMode && _cloudDevices.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 30, 20, 10),
+              child: Row(
+                children: [
+                  Icon(Icons.cloud, color: Color(0xFF9C27B0), size: 16),
+                  SizedBox(width: 8),
+                  Text(
+                    'CLOUD DEVICES (Same Account)',
+                    style: TextStyle(
+                      color: Color(0xFF9C27B0),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              itemCount: _cloudDevices.length,
+              itemBuilder: (context, index) {
+                final device = _cloudDevices[index];
+                final bool isOnline = device['isOnline'] ?? false;
+                return Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(15),
+                    child: Material(
+                      color: Colors.white.withOpacity(0.05),
+                      child: ListTile(
+                        onTap: isOnline
+                            ? () async {
+                                setState(() => isConnecting = true);
+                                final success = await SyncService()
+                                    .connectToCloudDevice(device['deviceId']);
+                                if (mounted) {
+                                  setState(() {
+                                    isConnecting = false;
+                                    if (success) {
+                                      isConnected = true;
+                                    } else {
+                                      errorMessage = 'Connection failed';
+                                    }
+                                  });
+                                }
+                              }
+                            : null,
+                        leading: Container(
+                          padding: EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: isOnline
+                                ? Color(0xFF9C27B0).withOpacity(0.1)
+                                : Colors.white.withOpacity(0.05),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.desktop_windows,
+                              color: isOnline
+                                  ? Color(0xFF9C27B0)
+                                  : Colors.white30),
+                        ),
+                        title: Text(device['deviceName'],
+                            style: TextStyle(
+                                color: isOnline ? Colors.white : Colors.white30,
+                                fontWeight: FontWeight.bold)),
+                        subtitle: Text(isOnline ? 'Online' : 'Offline',
+                            style: TextStyle(
+                                color:
+                                    isOnline ? Colors.green : Colors.white30)),
+                        trailing: isOnline
+                            ? Icon(Icons.chevron_right, color: Colors.white24)
+                            : null,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ] else if (!isCloudMode && _discoveredDevices.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 30, 20, 10),
               child: Row(
@@ -412,9 +603,36 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                         strokeWidth: 2, color: Colors.white24),
                   ),
                   SizedBox(height: 10),
-                  Text('Searching for local devices...',
+                  Text(
+                      isCloudMode
+                          ? 'Searching cloud devices...'
+                          : 'Searching for local devices...',
                       style: TextStyle(color: Colors.white24, fontSize: 12)),
                 ],
+              ),
+            ),
+          if (isCloudMode)
+            Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Container(
+                padding: EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Color(0xFF9C27B0).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: Color(0xFF9C27B0).withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.cloud, color: Color(0xFF9C27B0)),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Cloud mode connects devices via your account. Devices must be logged in with the same account to appear here.',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           if (errorMessage != null)

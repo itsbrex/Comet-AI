@@ -6,7 +6,7 @@ import {
   NOT_FOUND_SIGNALS,
   INTERNAL_TAG_RE
 } from './AIConstants';
-import { cleanTagsFromText } from './RobustParsers';
+import { cleanTagsFromText, robustJSONParse } from './RobustParsers';
 
 export interface ThreatRecord {
   strikes?: number;
@@ -857,15 +857,14 @@ export function generateSmartPDF(
 
   const jsonMatch = sanitizedContent.match(/\{[\s\S]*?\}/);
   if (jsonMatch) {
-    try {
-      const parsed = JSON.parse(jsonMatch[0]);
+    const robustResult = robustJSONParse(jsonMatch[0]);
+    if (robustResult.success) {
+      const parsed = robustResult.data;
       if (parsed.template) template = parsed.template.toLowerCase();
       if (parsed.title) title = parsed.title;
       if (parsed.content && typeof parsed.content === 'string' && parsed.content.length > 0) {
         sanitizedContent = parsed.content;
       }
-    } catch {
-      // ignore invalid JSON, keep raw text
     }
   }
 

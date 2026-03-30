@@ -14,6 +14,8 @@ class _RemoteSettingsPageState extends State<RemoteSettingsPage> {
   bool _isLoading = true;
   bool _isConnected = false;
   bool _hasChanges = false;
+  bool _showClipboardHistory = false;
+  List<String> _clipboardHistory = [];
   StreamSubscription? _settingsSubscription;
 
   final Map<String, SettingCategory> _categories = {
@@ -66,6 +68,26 @@ class _RemoteSettingsPageState extends State<RemoteSettingsPage> {
         'notifications_enabled',
       ],
     ),
+    'p2p': SettingCategory(
+      name: 'P2P & Sync',
+      icon: Icons.sync_alt,
+      color: const Color(0xFF4CAF50),
+      settings: [
+        'sync_mode',
+        'auto_reconnect',
+        'temp_storage',
+      ],
+    ),
+    'clipboard': SettingCategory(
+      name: 'Clipboard',
+      icon: Icons.content_paste,
+      color: const Color(0xFF9C27B0),
+      settings: [
+        'clipboard_sync_enabled',
+        'clipboard_history',
+        'clipboard_interval',
+      ],
+    ),
   };
 
   @override
@@ -83,6 +105,15 @@ class _RemoteSettingsPageState extends State<RemoteSettingsPage> {
           _settings[msg['key']] = msg['value'];
         });
       }
+    });
+
+    SyncService().onClipboardSynced.listen((text) {
+      setState(() {
+        _clipboardHistory.insert(0, text);
+        if (_clipboardHistory.length > 20) {
+          _clipboardHistory = _clipboardHistory.sublist(0, 20);
+        }
+      });
     });
   }
 
@@ -116,6 +147,12 @@ class _RemoteSettingsPageState extends State<RemoteSettingsPage> {
           'search_engine': 'google',
           'run_in_background': true,
           'notifications_enabled': true,
+          'sync_mode': 'local_cloud',
+          'auto_reconnect': true,
+          'temp_storage': true,
+          'clipboard_sync_enabled': true,
+          'clipboard_history': true,
+          'clipboard_interval': '2',
         };
         _isLoading = false;
       });
@@ -223,9 +260,88 @@ class _RemoteSettingsPageState extends State<RemoteSettingsPage> {
       children: [
         ..._categories.entries
             .map((entry) => _buildCategorySection(entry.key, entry.value)),
+        const SizedBox(height: 20),
+        _buildClipboardHistoryPanel(),
         const SizedBox(height: 30),
         _buildDangerZone(),
       ],
+    );
+  }
+
+  Widget _buildClipboardHistoryPanel() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Column(
+        children: [
+          ListTile(
+            leading: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFF9C27B0).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child:
+                  const Icon(Icons.history, color: Color(0xFF9C27B0), size: 20),
+            ),
+            title: const Text('Clipboard History',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600)),
+            subtitle: Text('${_clipboardHistory.length} items',
+                style: TextStyle(
+                    color: Colors.white.withOpacity(0.4), fontSize: 12)),
+            trailing: IconButton(
+              icon: Icon(
+                _showClipboardHistory ? Icons.expand_less : Icons.expand_more,
+                color: Colors.white70,
+              ),
+              onPressed: () {
+                setState(() {
+                  _showClipboardHistory = !_showClipboardHistory;
+                });
+              },
+            ),
+          ),
+          if (_showClipboardHistory) ...[
+            const Divider(color: Colors.white10, height: 1),
+            if (_clipboardHistory.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text('No clipboard history yet',
+                    style: TextStyle(color: Colors.white38)),
+              )
+            else
+              ...List.generate(_clipboardHistory.length, (index) {
+                final text = _clipboardHistory[index];
+                return ListTile(
+                  dense: true,
+                  title: Text(
+                    text.length > 50 ? '${text.substring(0, 50)}...' : text,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text('Item ${index + 1}',
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.3), fontSize: 10)),
+                  trailing: IconButton(
+                    icon:
+                        const Icon(Icons.copy, color: Colors.white38, size: 18),
+                    onPressed: () {
+                      // Copy to clipboard
+                    },
+                  ),
+                );
+              }),
+          ],
+        ],
+      ),
     );
   }
 
@@ -573,6 +689,47 @@ class _RemoteSettingsPageState extends State<RemoteSettingsPage> {
       'label': 'Notifications',
       'description': 'Show desktop notifications',
       'type': 'toggle',
+    },
+    'sync_mode': {
+      'label': 'Sync Mode',
+      'description': 'How to connect devices',
+      'type': 'select',
+      'options': [
+        {'label': 'Local Only (WiFi)', 'value': 'local'},
+        {'label': 'Cloud Only', 'value': 'cloud'},
+        {'label': 'Local + Cloud', 'value': 'local_cloud'},
+      ],
+    },
+    'auto_reconnect': {
+      'label': 'Auto Reconnect',
+      'description': 'Automatically reconnect to saved devices',
+      'type': 'toggle',
+    },
+    'temp_storage': {
+      'label': 'Temp Storage (P2P)',
+      'description': 'Use Firebase as temp storage only (P2P mode)',
+      'type': 'toggle',
+    },
+    'clipboard_sync_enabled': {
+      'label': 'Clipboard Sync',
+      'description': 'Sync clipboard between devices',
+      'type': 'toggle',
+    },
+    'clipboard_history': {
+      'label': 'Clipboard History',
+      'description': 'Show recent clipboard items',
+      'type': 'toggle',
+    },
+    'clipboard_interval': {
+      'label': 'Sync Interval',
+      'description': 'How often to check clipboard',
+      'type': 'select',
+      'options': [
+        {'label': '1 second', 'value': '1'},
+        {'label': '2 seconds', 'value': '2'},
+        {'label': '5 seconds', 'value': '5'},
+        {'label': '10 seconds', 'value': '10'},
+      ],
     },
   };
 }

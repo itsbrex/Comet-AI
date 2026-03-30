@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Zap, Code, ExternalLink, ShieldCheck, Cpu } from 'lucide-react';
 import { COMMAND_REGISTRY } from '@/lib/AICommandParser';
+import { useAppVersion } from '@/lib/useAppVersion';
 
 interface CapabilitiesPanelProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface CapabilitiesPanelProps {
 }
 
 const CapabilitiesPanel: React.FC<CapabilitiesPanelProps> = ({ isOpen, onClose }) => {
+  const versionLabel = `v${useAppVersion()}`;
   return (
     <AnimatePresence>
       {isOpen && (
@@ -25,7 +27,7 @@ const CapabilitiesPanel: React.FC<CapabilitiesPanelProps> = ({ isOpen, onClose }
               </div>
               <div>
                 <h3 className="text-sm font-black uppercase tracking-widest text-white">Strict Intelligence Registry</h3>
-                <p className="text-[10px] text-white/40 font-bold uppercase tracking-tight mt-0.5">Available Agentic Capabilities (v0.2.5)</p>
+                <p className="text-[10px] text-white/40 font-bold uppercase tracking-tight mt-0.5">Available Agentic Capabilities ({versionLabel})</p>
               </div>
             </div>
             <button 

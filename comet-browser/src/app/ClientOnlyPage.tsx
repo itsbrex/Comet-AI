@@ -73,15 +73,15 @@ import { getRecommendedGeminiModel } from '@/lib/modelRegistry';
 // Three concrete themes + "system" (resolves to dark/light at runtime).
 // "vibrant" maps to the .vibrant CSS class defined in globals.css.
 // ─────────────────────────────────────────────────────────────────────────────
-type AppTheme = 'dark' | 'light' | 'vibrant' | 'system';
+type AppTheme = 'dark' | 'light' | 'vibrant' | 'custom' | 'system';
 
 /** Cycle order for the header toggle button */
-const THEME_CYCLE: AppTheme[] = ['dark', 'light', 'vibrant'];
+const THEME_CYCLE: AppTheme[] = ['dark', 'light', 'vibrant', 'custom'];
 
 /** Icon + label shown in the header button for the CURRENT theme */
 function ThemeIcon({ theme }: { theme: AppTheme }) {
   if (theme === 'light') return <Sun size={16} />;
-  if (theme === 'vibrant') return <Palette size={16} />;
+  if (theme === 'vibrant' || theme === 'custom') return <Palette size={16} />;
   return <Moon size={16} />;
 }
 
@@ -209,6 +209,24 @@ export default function Home() {
   const [isBrowserDisabled, setIsBrowserDisabled] = useState(false);
   const [showSchedulingModal, setShowSchedulingModal] = useState(false);
   const [schedulingIntent, setSchedulingIntent] = useState<SchedulingIntent | null>(null);
+
+  const isFirebaseIdToken = useCallback((token: string) => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1] || ''));
+      return typeof payload?.iss === 'string' && payload.iss.includes('securetoken.google.com');
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const isJwtExpired = useCallback((token: string) => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1] || ''));
+      return typeof payload?.exp === 'number' ? payload.exp * 1000 <= Date.now() + 30_000 : false;
+    } catch {
+      return true;
+    }
+  }, []);
 
   const handleSettingsClose = useCallback(() => {
     setShowSettings(false);
@@ -724,7 +742,7 @@ export default function Home() {
     const root = window.document.documentElement;
 
     // Remove all theme classes first
-    root.classList.remove('light', 'dark', 'vibrant');
+    root.classList.remove('light', 'dark', 'vibrant', 'custom');
 
     let resolved: AppTheme = store.theme as AppTheme;
 
@@ -732,9 +750,12 @@ export default function Home() {
       resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
 
+    root.style.setProperty('--custom-primary', store.customThemePrimary || '#ff6b6b');
+    root.style.setProperty('--custom-secondary', store.customThemeSecondary || '#22d3ee');
+
     // Apply the resolved class
     root.classList.add(resolved);
-  }, [store.theme]);
+  }, [store.theme, store.customThemePrimary, store.customThemeSecondary]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // THEME CYCLE HELPER  (dark → light → vibrant → dark → …)
@@ -1157,7 +1178,23 @@ export default function Home() {
       window.electronAPI.setBrowserViewBounds(bounds);
     }
     window.addEventListener('resize', calculateBounds);
-    return () => window.removeEventListener('resize', calculateBounds);
+    
+    let cleanupFullscreen: (() => void) | undefined;
+    if (window.electronAPI?.onWindowFullscreenChanged) {
+      cleanupFullscreen = window.electronAPI.onWindowFullscreenChanged(() => {
+        requestAnimationFrame(() => {
+          if (window.electronAPI) {
+            const bounds = calculateBounds();
+            window.electronAPI.setBrowserViewBounds(bounds);
+          }
+        });
+      });
+    }
+    
+    return () => {
+      window.removeEventListener('resize', calculateBounds);
+      cleanupFullscreen?.();
+    };
   }, [calculateBounds]);
 
   // View Management Effects
@@ -1266,6 +1303,30 @@ export default function Home() {
       return;
     }
 
+    let disposed = false;
+    const restoreStoredSession = async () => {
+      try {
+        const savedSession = await window.electronAPI.getAuthSession();
+        if (disposed || !savedSession?.user) {
+          return;
+        }
+
+        store.setUser(savedSession.user);
+        store.setHasSeenWelcomePage(true);
+        store.setActiveView('browser');
+
+        const token = typeof savedSession.token === 'string' ? savedSession.token : null;
+        if (token && !isFirebaseIdToken(token) && !isJwtExpired(token)) {
+          await firebaseService.signInWithCredential(GoogleAuthProvider.credential(token));
+          console.log('[Auth] Restored Firebase session from secure token cache.');
+        }
+      } catch (error) {
+        console.warn('[Auth] Failed to restore stored auth session:', error);
+      }
+    };
+
+    restoreStoredSession();
+
     const cleanup = window.electronAPI.onAuthCallback(async (event: any, url: string) => {
       console.log("Auth callback received in ClientOnlyPage:", url);
       try {
@@ -1330,6 +1391,19 @@ export default function Home() {
             displayName: profile.name || profile.email?.split('@')[0] || '',
             photoURL: profile.picture || '',
           });
+          window.electronAPI.saveAuthSession({
+            token: tokens.id_token || tokens.access_token || null,
+            refreshToken: tokens.refresh_token || null,
+            provider: 'google-id-token',
+            user: {
+              uid: profile.sub,
+              email: profile.email || '',
+              displayName: profile.name || profile.email?.split('@')[0] || '',
+              photoURL: profile.picture || '',
+            },
+            firebaseConfig: firebaseConfigStorage.load(),
+            savedAt: Date.now(),
+          });
           if (profile.email?.endsWith('@ponsrischool.in')) store.setAdmin(true);
           store.setHasSeenWelcomePage(true);
           store.setActiveView('browser');
@@ -1345,6 +1419,7 @@ export default function Home() {
         const name = parsed.searchParams.get("name");
         const photo = parsed.searchParams.get("photo");
         const configParam = parsed.searchParams.get("firebase_config");
+        let parsedFirebaseConfig: any = firebaseConfigStorage.load();
 
         if (status === "success" && uid && email) {
           if (configParam) {
@@ -1353,6 +1428,7 @@ export default function Home() {
               firebaseConfigStorage.save(config);
               store.setCustomFirebaseConfig(config);
               firebaseService.reinitialize();
+              parsedFirebaseConfig = config;
             } catch (e) {
               console.error("Failed to parse returned firebase config:", e);
             }
@@ -1361,17 +1437,8 @@ export default function Home() {
           if (token) {
             const credential = GoogleAuthProvider.credential(token);
 
-            const isFirebaseIdToken = (() => {
-              try {
-                const payload = JSON.parse(atob(token.split('.')[1] || ''));
-                return typeof payload?.iss === 'string' && payload.iss.includes('securetoken.google.com');
-              } catch {
-                return false;
-              }
-            })();
-
             try {
-              if (isFirebaseIdToken) {
+              if (isFirebaseIdToken(token)) {
                 console.log('[Auth] Received Firebase ID token from deep link; skipping Google credential sign-in.');
               } else {
                 await firebaseService.signInWithCredential(credential);
@@ -1388,6 +1455,18 @@ export default function Home() {
             displayName: name || email.split('@')[0],
             photoURL: photo || "",
           });
+          window.electronAPI.saveAuthSession({
+            token: token || null,
+            provider: token ? (isFirebaseIdToken(token) ? 'firebase-id-token' : 'google-id-token') : 'profile-only',
+            user: {
+              uid,
+              email,
+              displayName: name || email.split('@')[0],
+              photoURL: photo || "",
+            },
+            firebaseConfig: parsedFirebaseConfig,
+            savedAt: Date.now(),
+          });
 
           if (email.endsWith("@ponsrischool.in")) store.setAdmin(true);
 
@@ -1400,8 +1479,11 @@ export default function Home() {
       }
     });
 
-    return cleanup;
-  }, [store]);
+    return () => {
+      disposed = true;
+      cleanup();
+    };
+  }, [store, isFirebaseIdToken, isJwtExpired]);
 
   useEffect(() => {
     if (!store.clientId) {
@@ -1498,7 +1580,8 @@ export default function Home() {
       )}
 
       <div
-        className={`flex flex-1 overflow-hidden relative pt-10 bg-[#020205]`}
+        className={`flex flex-1 overflow-hidden relative pt-10`}
+        style={{ background: 'var(--primary-bg)' }}
         onContextMenu={handleContextMenu}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
@@ -1510,7 +1593,11 @@ export default function Home() {
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: 70, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
-              className="flex flex-col items-center py-6 gap-5 z-40 bg-black/40 backdrop-blur-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] border-r border-white/5 no-drag-region"
+              className="flex flex-col items-center py-6 gap-5 z-40 backdrop-blur-2xl shadow-[10px_0_30px_rgba(0,0,0,0.18)] border-r no-drag-region"
+              style={{
+                background: 'linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) 90%, transparent), color-mix(in srgb, var(--primary-bg) 96%, transparent))',
+                borderColor: 'var(--border-color)',
+              }}
             >
               {sidebarItems.map((item, idx) => (
                 <SidebarIcon
@@ -1532,14 +1619,24 @@ export default function Home() {
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
               onDragEnd={(e, info) => {
-                if (info.offset.x > 100 && store.sidebarSide === 'left') store.setSidebarSide('right');
-                if (info.offset.x < -100 && store.sidebarSide === 'right') store.setSidebarSide('left');
+                if (info.offset.x > 100 && store.sidebarSide === 'left') {
+                  store.setSidebarSide('right');
+                  if (window.electronAPI) window.dispatchEvent(new Event('resize'));
+                }
+                if (info.offset.x < -100 && store.sidebarSide === 'right') {
+                  store.setSidebarSide('left');
+                  if (window.electronAPI) window.dispatchEvent(new Event('resize'));
+                }
               }}
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: store.isSidebarCollapsed ? 70 : store.sidebarWidth, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
-              className={`relative h-full border-r border-border-color cursor-grab active:cursor-grabbing ${store.sidebarSide === 'left' ? 'order-first' : 'order-last'} no-drag-region bg-black/20`}
+              className={`relative h-full border-r border-border-color cursor-grab active:cursor-grabbing ${store.sidebarSide === 'left' ? 'order-first' : 'order-last'} no-drag-region`}
+              style={{
+                background: 'linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) 86%, transparent), color-mix(in srgb, var(--primary-bg) 97%, transparent))',
+                borderColor: 'var(--border-color)',
+              }}
               onUpdate={() => {
                 if (window.electronAPI) window.dispatchEvent(new Event('resize'));
               }}
@@ -1557,6 +1654,7 @@ export default function Home() {
                         : startX - moveEvent.clientX;
                       const newWidth = Math.max(280, Math.min(600, startWidth + delta));
                       store.setSidebarWidth(newWidth);
+                      if (window.electronAPI) window.dispatchEvent(new Event('resize'));
                     };
 
                     const onMouseUp = () => {
@@ -1600,9 +1698,15 @@ export default function Home() {
           )}
         </AnimatePresence>
 
-        <main className="flex-1 flex flex-col relative overflow-hidden bg-black/5 min-w-0">
+        <main className="flex-1 flex flex-col relative overflow-hidden min-w-0" style={{ background: 'color-mix(in srgb, var(--primary-bg) 92%, var(--card-bg))' }}>
           {store.activeView === 'browser' && (
-            <header className="h-[56px] flex-shrink-0 flex items-center px-4 gap-4 border-b border-white/5 bg-black/40 backdrop-blur-3xl z-40 no-drag-region">
+            <header
+              className="h-[56px] flex-shrink-0 flex items-center px-4 gap-4 border-b backdrop-blur-3xl z-40 no-drag-region"
+              style={{
+                background: 'color-mix(in srgb, var(--navbar-bg) 92%, transparent)',
+                borderColor: 'var(--border-color)',
+              }}
+            >
               <div className="flex items-center gap-1">
                 <button onClick={() => setRailVisible(!railVisible)} className={`p-2 rounded-xl transition-all ${railVisible ? 'text-secondary-text' : 'bg-accent text-primary-bg'}`} title="Toggle Tools Rail">
                   <Layout size={18} />

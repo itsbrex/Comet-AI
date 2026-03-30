@@ -55,7 +55,7 @@ export default function RootLayout({
   }, [store]);
 
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className={store.theme === 'system' ? '' : store.theme}>
       <body className={`font-sans antialiased bg-deep-space-bg ${isLandingPage ? 'overflow-auto' : 'overflow-hidden'} h-screen`}>
         {children}
       </body>

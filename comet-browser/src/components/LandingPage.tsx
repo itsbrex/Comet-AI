@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { searchEngines } from "./SearchEngineSettings";
 import { useAppStore } from "@/store/useAppStore";
 import { motion, useScroll, useTransform } from "framer-motion";
@@ -25,9 +25,19 @@ import {
     Download as DownloadIcon
 } from "lucide-react";
 import { firebaseConfigStorage, FirebaseConfig } from "@/lib/firebaseConfigStorage";
+import { useAppVersion } from "@/lib/useAppVersion";
 
-const COMET_README = `
-# ☄️ Comet-AI (v0.2.0)
+import { firebaseSyncService } from "@/lib/FirebaseSyncService";
+
+const LandingPage = () => {
+    const store = useAppStore();
+    const [isLoading, setIsLoading] = useState(false);
+    const [showStartup, setShowStartup] = useState(true);
+    const { scrollYProgress } = useScroll();
+    const appVersion = useAppVersion();
+    const versionLabel = `v${appVersion}`;
+    const COMET_README = useMemo(() => `
+# ☄️ Comet-AI (${versionLabel})
 Made in India 🇮🇳
 ### The Future of Autonomous Web Intelligence
 
@@ -41,20 +51,12 @@ Made in India 🇮🇳
 
 ---
 
-## 🚀 Version 0.2.0 "Stardust" Update
+## 🚀 Version ${versionLabel} \"Stardust\" Update
 *   **Neural Translation Engine**: Integrated Google Translate with AI fallback.
 *   **Ambient Workspace**: Procedural music and visualizer for productivity.
 *   **Performance++**: Reduced RAM footprint for 4GB systems.
 *   **Global Spotlight**: Instant ⌘+Space/Alt+Space access to everything.
-`.trim();
-
-import { firebaseSyncService } from "@/lib/FirebaseSyncService";
-
-const LandingPage = () => {
-    const store = useAppStore();
-    const [isLoading, setIsLoading] = useState(false);
-    const [showStartup, setShowStartup] = useState(true);
-    const { scrollYProgress } = useScroll();
+`.trim(), [versionLabel]);
 
     useEffect(() => {
         if (store.user && window.electronAPI) {
@@ -225,7 +227,7 @@ const LandingPage = () => {
                         <motion.div initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }}>
                             <div className="inline-block px-4 py-1.5 rounded-full bg-sky-500/10 border border-sky-400/20 text-sky-400 text-[10px] font-black uppercase tracking-widest mb-8">
                                 <Sparkles size={12} className="inline mr-2" />
-                                Neural Link Established • v0.2.0 Stardust
+                                Neural Link Established • {versionLabel} Stardust
                             </div>
                             <h1 className="text-7xl md:text-[8.5rem] font-black uppercase mb-8 leading-[0.82] tracking-tighter text-white">
                                 Navigate <br /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-indigo-400 to-purple-500 animate-gradient-x">THE VOID</span>
@@ -279,8 +281,8 @@ const LandingPage = () => {
                                             onClick={() => {
                                                 const platform = navigator.platform.toLowerCase();
                                                 let url = "https://github.com/Preet3627/Comet-AI/releases/latest";
-                                                if (platform.includes('win')) url = "https://github.com/Preet3627/Comet-AI/releases/download/v0.2.0/Comet-Setup.exe";
-                                                else if (platform.includes('mac')) url = "https://github.com/Preet3627/Comet-AI/releases/download/v0.2.0/Comet-Mac.dmg";
+                                                if (platform.includes('win')) url = `https://github.com/Preet3627/Comet-AI/releases/download/v${appVersion}/Comet-Setup.exe`;
+                                                else if (platform.includes('mac')) url = `https://github.com/Preet3627/Comet-AI/releases/download/v${appVersion}/Comet-Mac.dmg`;
                                                 window.open(url, '_blank');
                                             }}
                                             className="w-full py-4 glass-vibrant rounded-2xl border border-sky-400/30 flex items-center justify-center gap-3 group hover:bg-sky-400/10 transition-all"
@@ -288,7 +290,7 @@ const LandingPage = () => {
                                             <DownloadIcon size={18} className="text-sky-400" />
                                             <div className="text-left">
                                                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Download Latest Release</p>
-                                                <p className="text-[8px] font-bold text-sky-400/60 uppercase tracking-widest">v0.2.0 for {navigator.platform}</p>
+                                                <p className="text-[8px] font-bold text-sky-400/60 uppercase tracking-widest">{versionLabel} for {navigator.platform}</p>
                                             </div>
                                         </button>
                                     </div>
@@ -395,7 +397,7 @@ const LandingPage = () => {
                             </div>
                             <div>
                                 <h3 className="text-4xl font-black text-white uppercase tracking-tighter">Documentation</h3>
-                                <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs">V0.1.8 Hardware Specification</p>
+                                <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-xs">V{appVersion} Hardware Specification</p>
                             </div>
                         </div>
 

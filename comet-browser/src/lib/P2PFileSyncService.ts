@@ -376,7 +376,7 @@ export class P2PFileSyncService extends EventEmitter {
                 const { encryptedData, iv, authTag, salt } = encryptResult;
 
                 // Upload to Firebase Storage
-                const storagePath = `users/${this.userId}/relay_files/${this.remoteDeviceId}/${file.id}`;
+                const storagePath = `users/${this.userId}/temp_relay_files/${this.remoteDeviceId}/${file.id}`;
                 const fileRef = storageRef(this.storage, storagePath);
                 await uploadBytes(fileRef, new Uint8Array(encryptedData));
                 const downloadURL = await getDownloadURL(fileRef);

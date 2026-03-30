@@ -92,7 +92,13 @@ const TitleBar = ({ onToggleSpotlightSearch, onOpenSettings }: TitleBarProps) =>
     };
 
     return (
-        <div className={`h-10 bg-black/60 backdrop-blur-xl flex items-center justify-between px-4 select-none drag-region fixed top-0 left-0 right-0 z-[200] ${showTabBar ? 'border-b border-white/5' : ''}`}>
+        <div
+            className={`h-10 backdrop-blur-xl flex items-center justify-between px-4 select-none drag-region fixed top-0 left-0 right-0 z-[200] ${showTabBar ? 'border-b' : ''}`}
+            style={{
+                background: 'color-mix(in srgb, var(--navbar-bg) 92%, transparent)',
+                borderColor: 'var(--border-color)',
+            }}
+        >
             {!isMac ? (
                 <div className="flex items-center gap-2 no-drag-region">
                     <button onClick={handleClose} className="h-3 w-3 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center group">
@@ -111,7 +117,7 @@ const TitleBar = ({ onToggleSpotlightSearch, onOpenSettings }: TitleBarProps) =>
             {/* Comet AI Logo and Text */}
             <div className="flex items-center gap-2 px-3 drag-region">
                 <img src="icon.ico" alt="Comet AI Logo" className="w-5 h-5 object-contain" />
-                <span className="text-xs font-black uppercase tracking-widest text-white/80">Comet-AI</span>
+                <span className="text-xs font-black uppercase tracking-widest text-primary-text">Comet-AI</span>
             </div>
             {showTabBar && (
             <div className="flex-1 min-w-0 drag-region">
@@ -128,7 +134,7 @@ const TitleBar = ({ onToggleSpotlightSearch, onOpenSettings }: TitleBarProps) =>
             )}
 
             <div className="flex items-center no-drag-region h-full">
-                <button onClick={onToggleSpotlightSearch} className="p-1 text-white/60 hover:text-white transition-colors" title="Global Spotlight Search">
+                <button onClick={onToggleSpotlightSearch} className="p-1 text-secondary-text hover:text-primary-text transition-colors" title="Global Spotlight Search">
                     <Search size={18} />
                 </button>
                 {(store.user?.photoURL || store.localPhotoURL) ? (
@@ -158,7 +164,7 @@ const TitleBar = ({ onToggleSpotlightSearch, onOpenSettings }: TitleBarProps) =>
                         <span>{isSigningIn ? 'Opening...' : 'Sign in'}</span>
                     </button>
                 )}
-                <button onClick={handleOpenSettingsAction} className="ml-2 p-1 text-white/60 hover:text-white transition-colors">
+                <button onClick={handleOpenSettingsAction} className="ml-2 p-1 text-secondary-text hover:text-primary-text transition-colors">
                     <Settings size={18} />
                 </button>
             </div>

@@ -7,6 +7,7 @@ import {
   FileText, Camera, ScanLine, MousePointer2, Volume2, Sun, Terminal, Rocket, Languages, 
   Hourglass, Shield, Brain, Download, Code2, Database, Mail, Settings, Monitor
 } from 'lucide-react';
+import { useAppVersion } from '@/lib/useAppVersion';
 
 export interface AICommand {
     id: string;
@@ -230,6 +231,7 @@ export const AICommandQueue: React.FC<AICommandQueueProps> = ({
     currentCommandIndex,
     onCancel
 }) => {
+    const version = useAppVersion();
     if (commands.length === 0) return null;
 
     return (
@@ -251,7 +253,7 @@ export const AICommandQueue: React.FC<AICommandQueueProps> = ({
                         />
                     </div>
                     <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white">Action Chain</h3>
-                    <span className="text-[9px] text-white/30 font-mono">v0.2.5 JSON</span>
+                    <span className="text-[9px] text-white/30 font-mono">v{version} JSON</span>
                 </div>
                 <div className="px-2 py-0.5 bg-white/5 rounded-full text-[9px] text-white/40 font-mono border border-white/5">
                     {currentCommandIndex + 1} OF {commands.length}

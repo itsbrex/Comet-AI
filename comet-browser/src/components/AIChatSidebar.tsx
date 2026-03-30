@@ -38,6 +38,7 @@ import {
   cleanTagsFromText,
   extractActionCommands
 } from './ai/RobustParsers';
+import { useAppVersion } from '@/lib/useAppVersion';
 import AISetupGuide from './ai/AISetupGuide';
 import ThinkingIndicator from './ThinkingIndicator';
 import LLMProviderSettings from './LLMProviderSettings';
@@ -134,8 +135,8 @@ interface AIChatSidebarProps {
   toggleCollapse: () => void;
   selectedEngine: string;
   setSelectedEngine: (engine: string) => void;
-  theme: 'dark' | 'light' | 'system' | 'vibrant';
-  setTheme: (theme: 'dark' | 'light' | 'system' | 'vibrant') => void;
+  theme: 'dark' | 'light' | 'system' | 'vibrant' | 'custom';
+  setTheme: (theme: 'dark' | 'light' | 'system' | 'vibrant' | 'custom') => void;
   backgroundImage: string;
   setBackgroundImage: (imageUrl: string) => void;
   backend: 'firebase' | 'mysql';
@@ -172,6 +173,45 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     ollamaModelsList, setOllamaModelsList, setOllamaModel, geminiModel: storeGeminiModel,
     hasSeenNeuralSetup, setHasSeenNeuralSetup,
   } = store;
+  const appVersion = useAppVersion();
+  const versionLabel = `v${appVersion}`;
+  const resolvedTheme = useMemo<'dark' | 'light' | 'vibrant' | 'custom'>(() => {
+    if (props.theme === 'system') {
+      if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+      }
+      return 'light';
+    }
+    return props.theme;
+  }, [props.theme]);
+  const isLightTheme = resolvedTheme === 'light';
+  const sidebarShellStyle = {
+    background: 'linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) 88%, transparent), color-mix(in srgb, var(--primary-bg) 96%, transparent))',
+    borderColor: 'var(--border-color)',
+    color: 'var(--primary-text)',
+  } as React.CSSProperties;
+  const softPanelStyle = {
+    background: 'color-mix(in srgb, var(--card-bg) 92%, transparent)',
+    borderColor: 'var(--border-color)',
+    color: 'var(--primary-text)',
+  } as React.CSSProperties;
+  const popoverStyle = {
+    background: 'color-mix(in srgb, var(--card-bg) 96%, transparent)',
+    borderColor: 'var(--border-color)',
+    color: 'var(--primary-text)',
+  } as React.CSSProperties;
+  const userBubbleStyle = {
+    background: isLightTheme
+      ? 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, white), color-mix(in srgb, var(--accent-light) 18%, white))'
+      : 'color-mix(in srgb, var(--card-bg) 92%, transparent)',
+    borderColor: isLightTheme ? 'color-mix(in srgb, var(--accent) 32%, transparent)' : 'rgba(255,255,255,0.12)',
+    color: 'var(--primary-text)',
+  } as React.CSSProperties;
+  const modelBubbleStyle = {
+    background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, var(--accent-light) 8%, var(--card-bg)))',
+    borderColor: 'color-mix(in srgb, var(--accent) 26%, transparent)',
+    color: 'var(--primary-text)',
+  } as React.CSSProperties;
 
   // Core state
   const [messages, setMessages] = useState<ExtendedChatMessage[]>([]);
@@ -222,6 +262,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [streamingPDFContent, setStreamingPDFContent] = useState('');
   const [pdfProgress, setPdfProgress] = useState(0);
   const [pdfVisualStage, setPdfVisualStage] = useState<VisualStage>('idle');
+  const [pythonAvailable, setPythonAvailable] = useState<boolean>(false);
   const aiTabsAutoCloseRef = useRef(false);
 
   const findYouTubeLinkElement = (elements: DOMElement[]): DOMElement | null => {
@@ -353,6 +394,21 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
       });
     });
     return cleanup;
+  }, []);
+
+  // Detect Python availability once (used for optional QA guidance)
+  useEffect(() => {
+    const checkPy = async () => {
+      try {
+        if (window.electronAPI?.checkPythonAvailable) {
+          const ok = await window.electronAPI.checkPythonAvailable();
+          setPythonAvailable(!!ok);
+        }
+      } catch {
+        setPythonAvailable(false);
+      }
+    };
+    checkPy();
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -1349,70 +1405,114 @@ I couldn't schedule the task. The background service may not be running. Please 
           break;
         }
 
-        // ✅ NEW: CREATE_PDF_JSON - Primary JSON-based PDF generation
-        // Format: JSON object with structured pages and sections
-        case 'CREATE_PDF_JSON': {
-          let rawValue = (command.value || '').trim();
-
-          let pdfData: any;
-          let parsedJson: any = null;
+        // ✅ NEW: CREATE_PDF_JSON / CREATE_FILE_JSON - Primary JSON-based generation
+        // Format: JSON object with structured pages/sections (or slides) and images
+        case 'CREATE_PDF_JSON':
+        case 'CREATE_FILE_JSON': {
+          // Handle models that send structured objects instead of strings
+          let rawValue: any = command.value ?? '';
+          if (typeof rawValue !== 'string') {
+            try {
+              rawValue = JSON.stringify(rawValue);
+            } catch {
+              rawValue = String(rawValue);
+            }
+          }
+          rawValue = (rawValue as string).trim();
 
           // Clean up malformed input
           rawValue = rawValue.replace(/^\s*\]+\s*:\s*/, '').trim();
 
-          // Try to extract and parse JSON from the command value
-          try {
-            // First try parsing the whole value as JSON
+          let pdfData: any = null;
+
+          // Use robust JSON parsing - tries multiple strategies
+          const strategies: Array<() => any> = [
+            // 1) Direct robust parse of the whole value
+            () => robustJSONParse(rawValue).data,
+            // 2) Extract from markdown code blocks
+            () => {
+              const match = rawValue.match(/```(?:json)?\s*([\s\S]*?)```/);
+              return match ? robustJSONParse(match[1].trim()).data : null;
+            },
+            // 3) Find JSON object with title/pages anywhere in text
+            () => {
+              const match = rawValue.match(/\{[\s\S]*?"(?:title|pages|format)"[\s\S]*?\}/);
+              return match ? robustJSONParse(match[0]).data : null;
+            },
+            // 4) Find first { ... } block
+            () => {
+              const match = rawValue.match(/\{[\s\S]*?\}/);
+              return match ? robustJSONParse(match[0]).data : null;
+            },
+          ];
+
+          for (const strategy of strategies) {
             try {
-              parsedJson = JSON.parse(rawValue);
-            } catch {
-              // Try to extract JSON from markdown code blocks
-              const jsonMatch = rawValue.match(/```(?:json)?\s*([\s\S]*?)```/);
-              if (jsonMatch && jsonMatch[1]) {
-                try {
-                  parsedJson = JSON.parse(jsonMatch[1].trim());
-                } catch {
-                  // Try to fix unescaped newlines in the JSON
-                  const fixedJson = jsonMatch[1].trim().replace(/\\n/g, '\\\\n').replace(/\\r/g, '');
-                  try {
-                    parsedJson = JSON.parse(fixedJson);
-                  } catch {
-                    parsedJson = null;
-                  }
-                }
-              }
-
-              // Try to find JSON object anywhere in the text
-              if (!parsedJson) {
-                const objMatch = rawValue.match(/\{[\s\S]*?(?:title|pages)[\s\S]*?\}/);
-                if (objMatch) {
-                  try {
-                    parsedJson = JSON.parse(objMatch[0]);
-                  } catch {
-                    // Try fixing common JSON issues
-                    const fixed = objMatch[0].replace(/\n/g, '\\n').replace(/,\s*\]/g, ']').replace(/,\s*\}/g, '}');
-                    try {
-                      parsedJson = JSON.parse(fixed);
-                    } catch {
-                      parsedJson = null;
+              const result = strategy();
+              if (result && typeof result === 'object') {
+                // If wrapped as { commands: [ {type,value}, ... ] }, extract inner value
+                if (Array.isArray(result.commands)) {
+                  const inner = result.commands.find((c: any) =>
+                    typeof c?.type === 'string' &&
+                    ['CREATE_FILE_JSON', 'CREATE_PDF_JSON'].includes(c.type));
+                  if (inner?.value) {
+                    if (typeof inner.value === 'string') {
+                      const innerResult = robustJSONParse(inner.value);
+                      if (innerResult.success) {
+                        pdfData = innerResult.data;
+                        break;
+                      }
+                      try { pdfData = JSON.parse(inner.value); break; } catch { /* fall through */ }
+                      pdfData = inner.value;
+                      break;
                     }
+                    pdfData = inner.value;
+                    break;
                   }
                 }
+                pdfData = result;
+                break;
               }
-            }
+            } catch { /* try next strategy */ }
+          }
 
-            if (!parsedJson || typeof parsedJson !== 'object') {
-              throw new Error('No valid JSON found in CREATE_PDF_JSON command');
-            }
-
-            pdfData = parsedJson;
-          } catch (e) {
-            // JSON parsing failed - fall back to markdown generation
-            console.warn('[PDF] JSON parsing failed, falling back to GENERATE_PDF:', (e as Error).message);
+          if (!pdfData || typeof pdfData !== 'object') {
             output = `⚠️ JSON parsing failed. Please use proper JSON format.`;
             output += `\n\n**Correct format:**\n\`\`\`json\n{\n  "title": "Document Title",\n  "template": "professional",\n  "content": "Your content here..."\n}\n\`\`\``;
             output += `\n\nOr use markdown format: [GENERATE_PDF: Title | actual content here...]`;
             break;
+          }
+
+          if (!pdfData) pdfData = {};
+
+          // slides alias -> pages
+          if (!pdfData.pages && Array.isArray(pdfData.slides)) {
+            pdfData.pages = pdfData.slides.map((slide: any, i: number) => {
+              const sections: any[] = [];
+              if (Array.isArray(slide.sections)) {
+                slide.sections.forEach((s: any) => sections.push(s));
+              } else if (Array.isArray(slide.content)) {
+                slide.content.forEach((c: any, idx: number) => {
+                  sections.push({ title: slide.sectionTitles?.[idx] || '', content: c });
+                });
+              } else if (typeof slide.content === 'string') {
+                sections.push({ title: '', content: slide.content });
+              }
+              return {
+                title: slide.title || `Slide ${i + 1}`,
+                icon: slide.icon,
+                sections: sections.length ? sections : [{ title: '', content: slide.content || '' }],
+                images: slide.images,
+              };
+            });
+          }
+
+          // Minimal one-page fallback
+          if (!pdfData.pages && pdfData.content) {
+            pdfData.pages = [{
+              title: pdfData.title || 'Document',
+              sections: [{ title: pdfData.subtitle || 'Content', content: pdfData.content }]
+            }];
           }
 
           // Validate required fields
@@ -1421,9 +1521,13 @@ I couldn't schedule the task. The background service may not be running. Please 
             break;
           }
 
+          // Infer format: explicit -> use it; slides without format -> assume pptx; else pdf
+          let format = (pdfData.format || pdfData.output?.format || '').toLowerCase();
+          if (!format && pdfData.slides && !pdfData.pages) format = 'pptx';
+          if (!format) format = 'pdf';
           const pdfTitle = pdfData.title || 'Document';
           const pdfSubtitle = pdfData.subtitle || '';
-          const pdfAuthor = pdfData.author || 'Comet AI';
+          const pdfAuthor = pdfData.author || '';
           const template = pdfData.template || 'professional';
           const watermark = pdfData.watermark || '';
           const bgColor = pdfData.bgColor || '#ffffff';
@@ -1431,14 +1535,21 @@ I couldn't schedule the task. The background service may not be running. Please 
 
           // Extract images from JSON (new action format)
           const pdfImagesFromJson: Array<{ type: string; src?: string; caption?: string; alt?: string; width?: number | string }> = [];
-          if (pdfData.images && Array.isArray(pdfData.images)) {
-            for (const img of pdfData.images) {
-              if (img.type === 'url' && img.src) {
-                pdfImagesFromJson.push({ type: 'url', src: img.src, caption: img.caption, alt: img.alt, width: img.width });
-              } else if (img.type === 'screenshot') {
-                pdfImagesFromJson.push({ type: 'screenshot', caption: img.caption, alt: img.alt || 'Screenshot', width: img.width || '100%' });
-              }
+          const addImage = (img: any) => {
+            if (!img) return;
+            if ((img.type === 'url' || !img.type) && img.src) {
+              pdfImagesFromJson.push({ type: 'url', src: img.src, caption: img.caption, alt: img.alt, width: img.width });
+            } else if (img.type === 'screenshot') {
+              pdfImagesFromJson.push({ type: 'screenshot', caption: img.caption, alt: img.alt || 'Screenshot', width: img.width || '100%' });
             }
+          };
+          if (pdfData.images && Array.isArray(pdfData.images)) {
+            for (const img of pdfData.images) addImage(img);
+          }
+          if (Array.isArray(pdfData.pages)) {
+            pdfData.pages.forEach((p: any) => {
+              if (Array.isArray(p.images)) p.images.forEach((img: any) => addImage(img));
+            });
           }
 
           // Build markdown content from JSON structure
@@ -1649,31 +1760,56 @@ I couldn't schedule the task. The background service may not be running. Please 
             pdfContent += imagesMarkdown;
           }
 
+          const commonPayload = {
+            ...pdfData,
+            format,
+            title: pdfTitle,
+            subtitle: pdfSubtitle,
+            author: pdfAuthor,
+            template,
+            watermark,
+            bgColor,
+            priority,
+            pages: pdfData.pages,
+            images: jsonImageResults.length ? jsonImageResults : pdfImagesFromJson,
+            content: pdfContent,
+            pythonAvailable,
+          };
+
           setIsGeneratingPDF(true);
           setPdfProgress(0);
           setShowTerminal(true);
-          setStreamingPDFContent(`Preparing PDF: ${pdfTitle}...`);
+          setStreamingPDFContent(`Preparing ${format.toUpperCase()}: ${pdfTitle}...`);
 
           await preloadCometIconLocal();
           const iconSource = (window as any).__cometIconBase64 || null;
 
           try {
-            const cleanHTML = generateSmartPDF(pdfContent, iconSource, jsonImageResults);
-            const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML) as any;
-
+            if (format === 'pptx') {
+              const res = await window.electronAPI.generatePPTX(commonPayload);
+              output = res?.success
+                ? `✅ **PPTX Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**File:** ${res.filePath || 'Saved to Downloads'}`
+                : `❌ PPTX generation failed: ${res?.error || 'Unknown error'}`;
+            } else if (format === 'docx') {
+              const res = await window.electronAPI.generateDOCX(commonPayload);
+              output = res?.success
+                ? `✅ **DOCX Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**File:** ${res.filePath || 'Saved to Downloads'}`
+                : `❌ DOCX generation failed: ${res?.error || 'Unknown error'}`;
+            } else {
+              const cleanHTML = generateSmartPDF(pdfContent, iconSource, jsonImageResults);
+              const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML) as any;
+              if (res.success) {
+                output = `✅ **PDF Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**Template:** ${template}\n**File:** ${res.filePath}`;
+              } else {
+                output = `❌ PDF generation failed: ${res.error}`;
+              }
+            }
+          } catch (e: any) {
+            output = `❌ Error generating file: ${e.message}`;
+          } finally {
             setIsGeneratingPDF(false);
             setPdfProgress(100);
             setStreamingPDFContent('');
-
-            if (res.success) {
-              output = `✅ **PDF Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**Template:** ${template}\n**File:** ${res.filePath}`;
-            } else {
-              output = `❌ PDF generation failed: ${res.error}`;
-            }
-          } catch (e: any) {
-            setIsGeneratingPDF(false);
-            setStreamingPDFContent('');
-            output = `❌ Error generating PDF: ${e.message}`;
           }
           break;
         }
@@ -2163,7 +2299,7 @@ I couldn't schedule the task. The background service may not be running. Please 
           const { buildCapabilityReportPDF } = await import('./ai/AIUtils');
           const capabilityPDF = buildCapabilityReportPDF({
             author: 'Preet Kumar Patel (16-year-old student, India)',
-            version: 'v0.2.5',
+            version: versionLabel,
             features: capabilityFeatures,
             platform: 'Windows, macOS, Linux, Android'
           }, screenshotBase64, iconSource);
@@ -2193,7 +2329,7 @@ I've successfully executed the following real tasks:
 
 **Built by:** Preet Kumar Patel - A 16-year-old student from India 🇮🇳
 
-*Comet AI v0.2.5 - The AI-Native Browser*
+*Comet AI ${versionLabel} - The AI-Native Browser*
           ` }]);
 
           output = 'Full capability demonstration executed successfully with real tasks: search, shell command, volume, app launch, screenshot, and PDF generation.';
@@ -2681,7 +2817,7 @@ I've successfully executed the following real tasks:
 
     if (window.electronAPI) {
       if (format === 'text') {
-        const exportContent = `${fullContent}\n\n${'='.repeat(60)}\nACTION LOGS (v0.2.5 JSON Format)\n${'='.repeat(60)}\n\n${actionLogsExport}`;
+        const exportContent = `${fullContent}\n\n${'='.repeat(60)}\nACTION LOGS (${versionLabel} JSON Format)\n${'='.repeat(60)}\n\n${actionLogsExport}`;
         const res = await (window.electronAPI as any).exportChatAsTxt(exportContent);
         if (res?.success) setFeedback('Chat & Action Logs Exported to Downloads');
       } else {
@@ -2878,8 +3014,8 @@ I've successfully executed the following real tasks:
 
   if (props.isCollapsed) {
     return (
-      <div className="flex flex-col items-center h-full py-6 space-y-6 bg-[#020205] border-l border-white/5">
-        <button onClick={props.toggleCollapse} className="w-10 h-10 flex items-center justify-center rounded-2xl bg-white/5 hover:bg-white/10 text-white/40 transition-all">
+      <div className="flex flex-col items-center h-full py-6 space-y-6 border-l" style={sidebarShellStyle}>
+        <button onClick={props.toggleCollapse} className="w-10 h-10 flex items-center justify-center rounded-2xl transition-all text-secondary-text hover:text-primary-text" style={softPanelStyle}>
           {props.side === 'right' ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
         </button>
       </div>
@@ -2894,8 +3030,8 @@ I've successfully executed the following real tasks:
 
   return (
     <div
-      className={`flex flex-col h-full bg-[#020205] border-l border-white/10 overflow-hidden relative ${isFullScreen ? 'fixed inset-0 z-[9999]' : ''}`}
-      style={{ width: isFullScreen ? '100%' : sidebarWidth }}
+      className={`ai-sidebar-theme adaptive-theme-surface flex flex-col h-full border-l overflow-hidden relative ${isFullScreen ? 'fixed inset-0 z-[9999]' : ''}`}
+      style={{ width: isFullScreen ? '100%' : sidebarWidth, ...sidebarShellStyle }}
     >
       {/* Overlays */}
       <ConversationHistoryPanel
@@ -3098,24 +3234,25 @@ I've successfully executed the following real tasks:
       </AnimatePresence>
 
       {/* Header */}
-      <header className="p-5 flex flex-col gap-3 border-b border-white/5 bg-[#020205]/80 backdrop-blur-xl sticky top-0 z-[50]">
+      <header className="p-5 flex flex-col gap-3 border-b backdrop-blur-xl sticky top-0 z-[50]" style={sidebarShellStyle}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-white/10 to-transparent p-1.5 border border-white/10">
+            <div className="w-9 h-9 rounded-2xl p-1.5 border" style={softPanelStyle}>
               <img src="icon.png" alt="Comet" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h2 className="text-xs font-black uppercase tracking-[0.3em] text-white">Comet AI</h2>
+              <h2 className="text-xs font-black uppercase tracking-[0.3em] text-primary-text">Comet AI</h2>
               <div className="flex items-center gap-2 mt-1">
                 <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Autonomous</span>
+                <span className="text-[9px] font-bold text-secondary-text uppercase tracking-widest">Autonomous</span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setShowTerminal(v => !v)}
-              className={`p-2.5 rounded-xl transition-all relative ${showTerminal ? 'bg-green-500/20 text-green-400' : 'hover:bg-white/5 text-white/30 hover:text-white'}`}
+              className={`p-2.5 rounded-xl transition-all relative ${showTerminal ? 'bg-green-500/20 text-green-400' : 'text-secondary-text hover:text-primary-text'}`}
+              style={!showTerminal ? softPanelStyle : undefined}
               title="Toggle Terminal"
             >
               <Terminal size={18} />
@@ -3125,40 +3262,39 @@ I've successfully executed the following real tasks:
                 </span>
               )}
             </button>
-            <button onClick={() => setShowCapabilities(!showCapabilities)} className={`p-2.5 rounded-xl transition-all ${showCapabilities ? 'bg-sky-500/20 text-sky-400' : 'hover:bg-white/5 text-white/30 hover:text-white'}`} title="View AI Capabilities">
+            <button onClick={() => setShowCapabilities(!showCapabilities)} className={`p-2.5 rounded-xl transition-all ${showCapabilities ? 'bg-sky-500/20 text-sky-400' : 'text-secondary-text hover:text-primary-text'}`} style={!showCapabilities ? softPanelStyle : undefined} title="View AI Capabilities">
               <Sparkles size={18} />
             </button>
             <div className="relative group">
-              <button className="p-2.5 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-all">
+              <button className="p-2.5 rounded-xl text-secondary-text hover:text-primary-text transition-all" style={softPanelStyle}>
                 <MoreVertical size={18} />
               </button>
-              <div className="absolute right-0 top-full mt-2 w-48 bg-[#0a0a0f] border border-white/5 rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100] p-2 backdrop-blur-2xl">
-                <button onClick={() => exportChat('pdf')} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+              <div className="absolute right-0 top-full mt-2 w-48 border rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100] p-2 backdrop-blur-2xl" style={popoverStyle}>
+                <button onClick={() => exportChat('pdf')} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-secondary-text hover:text-primary-text transition-all">
                   <Printer size={14} className="text-sky-400" /> Export branded PDF
                 </button>
-                <button onClick={() => exportChat('text')} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+                <button onClick={() => exportChat('text')} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-secondary-text hover:text-primary-text transition-all">
                   <FileText size={14} className="text-purple-400" /> Export as .txt
                 </button>
-                <button onClick={copyChatToClipboard} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+                <button onClick={copyChatToClipboard} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-secondary-text hover:text-primary-text transition-all">
                   <CopyIcon size={14} className="text-amber-400" /> Copy full session
                 </button>
-                <div className="my-1 border-t border-white/5" />
-                {/* Theme cycle button — cycles dark → light → vibrant → dark */}
+                <div className="my-1 border-t border-white/10" />
                 <button
                   onClick={() => {
-                    const cycle: Array<'dark' | 'light' | 'vibrant'> = ['dark', 'light', 'vibrant'];
-                    const cur = props.theme === 'system' ? 'dark' : (props.theme as 'dark' | 'light' | 'vibrant');
+                    const cycle: Array<'dark' | 'light' | 'vibrant' | 'custom'> = ['dark', 'light', 'vibrant', 'custom'];
+                    const cur = props.theme === 'system' ? 'dark' : (props.theme as 'dark' | 'light' | 'vibrant' | 'custom');
                     const idx = cycle.indexOf(cur);
                     props.setTheme(cycle[(idx + 1) % cycle.length]);
                   }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-secondary-text hover:text-primary-text transition-all"
                 >
                   <span className="text-base leading-none">
-                    {props.theme === 'light' ? '☀️' : props.theme === 'vibrant' ? '🔮' : '🌑'}
+                    {props.theme === 'light' ? '☀️' : props.theme === 'vibrant' ? '🔮' : props.theme === 'custom' ? '🎨' : '🌑'}
                   </span>
-                  Theme: {props.theme === 'light' ? 'Light' : props.theme === 'vibrant' ? 'Vibrant' : 'Dark'}
+                  Theme: {props.theme === 'light' ? 'Light' : props.theme === 'vibrant' ? 'Vibrant' : props.theme === 'custom' ? 'Custom' : 'Dark'}
                 </button>
-                <button onClick={() => setShowLLMProviderSettings(!showLLMProviderSettings)} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white transition-all">
+                <button onClick={() => setShowLLMProviderSettings(!showLLMProviderSettings)} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-secondary-text hover:text-primary-text transition-all">
                   <Cpu size={14} className="text-green-400" /> Intelligence Settings
                 </button>
                 <button onClick={clearChat} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-red-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 transition-all">
@@ -3166,7 +3302,7 @@ I've successfully executed the following real tasks:
                 </button>
               </div>
             </div>
-            <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-2.5 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-all">
+            <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-2.5 rounded-xl text-secondary-text hover:text-primary-text transition-all" style={softPanelStyle}>
               {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </button>
             {store.tabs.some(t => t.groupId === 'ai-session') && (
@@ -3178,7 +3314,7 @@ I've successfully executed the following real tasks:
                 <Layers size={18} />
               </button>
             )}
-            <button onClick={props.toggleCollapse} className="p-2.5 rounded-xl hover:bg-white/5 text-white/30 hover:text-white transition-all">
+            <button onClick={props.toggleCollapse} className="p-2.5 rounded-xl text-secondary-text hover:text-primary-text transition-all" style={softPanelStyle}>
               <X size={18} />
             </button>
           </div>
@@ -3190,12 +3326,12 @@ I've successfully executed the following real tasks:
         <AnimatePresence mode="popLayout">
           {messages.length === 0 && (
             <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-              <div className="w-16 h-16 rounded-[2rem] bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center border border-white/10 shadow-2xl">
-                <Brain size={32} className="text-white/20" />
+              <div className="w-16 h-16 rounded-[2rem] flex items-center justify-center border shadow-2xl" style={softPanelStyle}>
+                <Brain size={32} className="text-secondary-text" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-white/40 uppercase tracking-widest">How can I assist your workflow?</h3>
-                <p className="text-[10px] text-white/20 uppercase tracking-tighter mt-1 font-bold">I can navigate, browse, and execute tasks across Comet.</p>
+                <h3 className="text-sm font-black text-secondary-text uppercase tracking-widest">How can I assist your workflow?</h3>
+                <p className="text-[10px] text-secondary-text uppercase tracking-tighter mt-1 font-bold">I can navigate, browse, and execute tasks across Comet.</p>
               </div>
             </motion.div>
           )}
@@ -3225,10 +3361,10 @@ I've successfully executed the following real tasks:
                   </div>
                 )}
 
-                <div className={`group relative max-w-[90%] p-5 rounded-[2.5rem] text-[13px] leading-relaxed transition-all duration-500 hover:shadow-2xl ${msg.role === 'user'
-                  ? 'bg-[#12121e] text-white border border-white/10 rounded-tr-none shadow-xl'
-                  : 'bg-gradient-to-br from-sky-500/10 to-sky-500/[0.02] text-slate-200 border border-sky-500/20 rounded-tl-none'
-                  }`}>
+                <div
+                  className={`group relative max-w-[90%] p-5 rounded-[2.5rem] text-[13px] leading-relaxed transition-all duration-500 hover:shadow-2xl ${msg.role === 'user' ? 'rounded-tr-none shadow-xl' : 'rounded-tl-none'}`}
+                  style={msg.role === 'user' ? userBubbleStyle : modelBubbleStyle}
+                >
                   {msg.role === 'model' && (
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-6 h-6 rounded-lg bg-sky-500/20 flex items-center justify-center text-sky-400 border border-sky-500/20">
@@ -3444,15 +3580,15 @@ I've successfully executed the following real tasks:
       </div>
 
       {/* Input Area */}
-      <footer className="p-6 pt-0 bg-gradient-to-t from-[#020205] via-[#020205] to-transparent sticky bottom-0">
-        <div className={`p-4 rounded-[2.5rem] bg-[#0d0d15] border transition-all shadow-2xl relative group ${shiftTabGlow
+      <footer className="p-6 pt-0 sticky bottom-0" style={{ background: 'linear-gradient(180deg, transparent, color-mix(in srgb, var(--primary-bg) 86%, transparent) 28%, var(--primary-bg) 100%)' }}>
+        <div className={`p-4 rounded-[2.5rem] border transition-all shadow-2xl relative group ${shiftTabGlow
           ? 'border-purple-500/80 shadow-[0_0_24px_4px_rgba(168,85,247,0.35)] focus-within:border-purple-500/80'
           : 'border-white/10 focus-within:border-sky-500/30'
-          }`}>
+          }`} style={softPanelStyle}>
 
-          <div className="absolute -top-10 left-4 flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/5">
+          <div className="absolute -top-10 left-4 flex items-center gap-2 px-3 py-1.5 backdrop-blur-md rounded-full border" style={popoverStyle}>
             <div className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
-            <span className="text-[8px] font-black uppercase tracking-widest text-white/40">{currentActiveModel}</span>
+            <span className="text-[8px] font-black uppercase tracking-widest text-secondary-text">{currentActiveModel}</span>
           </div>
 
           {attachments.length > 0 && (
@@ -3473,7 +3609,8 @@ I've successfully executed the following real tasks:
                 initial={{ opacity: 0, y: 15, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 15, scale: 0.95 }}
-                className="absolute bottom-28 left-4 z-[60] w-52 bg-[#0a0a10]/98 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden p-1.5"
+                className="absolute bottom-28 left-4 z-[60] w-52 backdrop-blur-3xl border rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden p-1.5"
+                style={popoverStyle}
               >
                 <button onClick={clearChat} className="w-full flex items-center gap-3 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-red-500/70 hover:text-red-400 hover:bg-red-400/10 rounded-2xl transition-all"><Trash2 size={14} /> Clear Thread</button>
                 <div className="h-px bg-white/5 my-1 mx-2" />
@@ -3489,20 +3626,20 @@ I've successfully executed the following real tasks:
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
             placeholder="Command your workspace..."
-            className="w-full bg-transparent text-sm text-white placeholder:text-white/10 outline-none resize-none h-24 py-2 modern-scrollbar font-medium"
+            className="w-full bg-transparent text-sm text-primary-text placeholder:text-secondary-text outline-none resize-none h-24 py-2 modern-scrollbar font-medium"
           />
 
-          <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/5">
+          <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/10">
             <div className="flex items-center gap-2">
-              <button onClick={() => fileInputRef.current?.click()} className="p-3 rounded-2xl hover:bg-white/5 text-white/20 hover:text-white transition-all"><Paperclip size={20} /></button>
+              <button onClick={() => fileInputRef.current?.click()} className="p-3 rounded-2xl hover:bg-white/5 text-secondary-text hover:text-primary-text transition-all"><Paperclip size={20} /></button>
               <button
                 onClick={() => setShowConversationHistory(true)}
                 title="Conversation history"
-                className="p-3 rounded-2xl hover:bg-white/5 text-white/20 hover:text-white transition-all"
+                className="p-3 rounded-2xl hover:bg-white/5 text-secondary-text hover:text-primary-text transition-all"
               >
                 <History size={20} />
               </button>
-              <button onClick={() => setShowActionsMenu(!showActionsMenu)} className={`p-3 rounded-2xl transition-all ${showActionsMenu ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-white/20 hover:text-white'}`}><MoreHorizontal size={20} /></button>
+              <button onClick={() => setShowActionsMenu(!showActionsMenu)} className={`p-3 rounded-2xl transition-all ${showActionsMenu ? 'bg-white/10 text-primary-text' : 'hover:bg-white/5 text-secondary-text hover:text-primary-text'}`}><MoreHorizontal size={20} /></button>
             </div>
             <button
               onClick={() => handleSendMessage()}
@@ -3513,7 +3650,7 @@ I've successfully executed the following real tasks:
             </button>
           </div>
         </div>
-        <p className="text-[8px] text-center text-white/5 mt-5 uppercase tracking-[0.5em] font-black">Neural Engine Active • v0.2.5 Patched</p>
+        <p className="text-[8px] text-center text-secondary-text mt-5 uppercase tracking-[0.5em] font-black opacity-60">Neural Engine Active • {versionLabel} Patched</p>
       </footer>
 
       <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => { }} />

@@ -3,6 +3,8 @@
  * Handles extraction and validation of AI commands from LLM responses
  */
 
+import { robustJSONParse } from '../components/ai/RobustParsers';
+
 export interface ParsedCommand {
     type: string;
     value: string;
@@ -25,6 +27,7 @@ export const COMMAND_REGISTRY = {
     READ_PAGE_CONTENT: { desc: 'Read text from active tab', example: '[READ_PAGE_CONTENT]' },
     LIST_OPEN_TABS: { desc: 'List all open browser tabs', example: '[LIST_OPEN_TABS]' },
     CREATE_PDF_JSON: { desc: 'Create PDF using structured JSON (PREFERRED)', example: '[CREATE_PDF_JSON: {"title":"Report", "pages":[...]}]' },
+    CREATE_FILE_JSON: { desc: 'Create PDF/PPTX/DOCX using structured JSON', example: '[CREATE_FILE_JSON: {"format":"pptx","title":"Report","slides":[...]}]' },
     GENERATE_PDF: { desc: 'Create PDF from markdown (FALLBACK)', example: '[GENERATE_PDF: Report | Content...]' },
     SHELL_COMMAND: { desc: 'Execute terminal commands (Safe)', example: '[SHELL_COMMAND: ls -la]' },
     SET_THEME: { desc: 'Switch between dark/light mode', example: '[SET_THEME: dark]' },
@@ -70,7 +73,7 @@ function getCategoryForType(type: string): string {
         READ_PAGE_CONTENT: 'browser', SCREENSHOT_ANALYZE: 'browser', EXTRACT_DATA: 'browser',
         CLICK_ELEMENT: 'automation', FIND_AND_CLICK: 'automation', FILL_FORM: 'automation',
         SHELL_COMMAND: 'system', OPEN_APP: 'system', SET_VOLUME: 'system', SET_BRIGHTNESS: 'system',
-        GENERATE_PDF: 'pdf', CREATE_PDF_JSON: 'pdf', GENERATE_DIAGRAM: 'pdf', OPEN_PDF: 'pdf',
+        GENERATE_PDF: 'pdf', CREATE_PDF_JSON: 'pdf', CREATE_FILE_JSON: 'pdf', GENERATE_DIAGRAM: 'pdf', OPEN_PDF: 'pdf',
         SHOW_IMAGE: 'media', SHOW_VIDEO: 'media',
         WAIT: 'utility', OPEN_VIEW: 'utility', OPEN_MCP_SETTINGS: 'utility', OPEN_AUTOMATION_SETTINGS: 'utility', LIST_AUTOMATIONS: 'automation', DELETE_AUTOMATION: 'automation', OPEN_SCHEDULING_MODAL: 'utility', SCHEDULE_TASK: 'utility',
         GMAIL_AUTHORIZE: 'gmail', GMAIL_LIST_MESSAGES: 'gmail', GMAIL_GET_MESSAGE: 'gmail',
@@ -95,12 +98,10 @@ function extractJSONCommands(content: string): ParsedCommand[] {
     for (const pattern of jsonPatterns) {
         let match: RegExpExecArray | null;
         while ((match = pattern.exec(content)) !== null) {
-            try {
-                // Sanitize unescaped newlines inside strings before parsing
-                let rawJson = match[0];
-                rawJson = rawJson.replace(/(?<=:\s*"(?:\\"|[^"])*)\n(?=(?:\\"|[^"])*")/g, '\\n');
-                
-                const parsed = JSON.parse(rawJson);
+            // Use robust JSON parsing for nested structures
+            const robustResult = robustJSONParse(match[0]);
+            if (robustResult.success) {
+                const parsed = robustResult.data;
                 
                 if (parsed.commands && Array.isArray(parsed.commands)) {
                     parsed.commands.forEach((cmd: any, _i: number) => {
@@ -110,15 +111,15 @@ function extractJSONCommands(content: string): ParsedCommand[] {
                         if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
                             commands.push({
                                 type: cmdType,
-                                value: cmdValue,
+                                value: typeof cmdValue === 'string' ? cmdValue : JSON.stringify(cmdValue),
                                 originalMatch: match![0],
                                 index: match!.index,
                             });
                         }
                     });
                 }
-            } catch (e) {
-                // Invalid JSON, fallback to brute-force extraction
+            } else {
+                // Fallback: brute-force extraction from raw text
                 const fbRegex = /"type"\s*:\s*"([^"]+)"\s*,\s*"value"\s*:\s*"([\s\S]*?)"(?=\s*\})/g;
                 let fbMatch;
                 while ((fbMatch = fbRegex.exec(match[0])) !== null) {
@@ -146,15 +147,13 @@ function extractJSONCommands(content: string): ParsedCommand[] {
     for (const pattern of codeBlockPatterns) {
         let match: RegExpExecArray | null;
         while ((match = pattern.exec(content)) !== null) {
-            try {
-                // 1) Strip wrapping backticks and tags
-                let rawJson = match[0].replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
-                
-                // 2) Sanitize unescaped newlines inside the JSON strings 
-                // This is a common hallucination where LLMs put real \n inside "value": "..." 
-                rawJson = rawJson.replace(/(?<=:\s*"(?:\\"|[^"])*)\n(?=(?:\\"|[^"])*")/g, '\\n');
-                
-                const parsed = JSON.parse(rawJson);
+            // Strip wrapping backticks and tags
+            let rawJson = match[0].replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+            
+            // Use robust JSON parsing for nested structures
+            const robustResult = robustJSONParse(rawJson);
+            if (robustResult.success) {
+                const parsed = robustResult.data;
                 
                 if (parsed.commands && Array.isArray(parsed.commands)) {
                     parsed.commands.forEach((cmd: any, _i: number) => {
@@ -164,15 +163,15 @@ function extractJSONCommands(content: string): ParsedCommand[] {
                         if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
                             commands.push({
                                 type: cmdType,
-                                value: cmdValue,
+                                value: typeof cmdValue === 'string' ? cmdValue : JSON.stringify(cmdValue),
                                 originalMatch: match![0],
                                 index: match!.index,
                             });
                         }
                     });
                 }
-            } catch (e) {
-                // Invalid JSON, fallback to brute-force extraction
+            } else {
+                // Fallback: brute-force extraction
                 const fbRegex = /"type"\s*:\s*"([^"]+)"\s*,\s*"value"\s*:\s*"([\s\S]*?)"(?=\s*\})/g;
                 let fbMatch;
                 while ((fbMatch = fbRegex.exec(match[0])) !== null) {

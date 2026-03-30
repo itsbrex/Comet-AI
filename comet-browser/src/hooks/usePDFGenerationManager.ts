@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
+import { robustJSONParse } from '../components/ai/RobustParsers';
 
 export interface PDFGenerationRequest {
   title: string;
@@ -41,8 +42,9 @@ export function triggerPDFGeneration(request: PDFGenerationRequest) {
 export function parsePDFCommand(commandString: string): PDFGenerationRequest | null {
   try {
     // Try JSON format first
-    try {
-      const parsed = JSON.parse(commandString);
+    const robustResult = robustJSONParse(commandString);
+    if (robustResult.success) {
+      const parsed = robustResult.data;
       if (parsed.type === 'PDF' || parsed.command === 'GENERATE_PDF') {
         return {
           title: parsed.options?.title || parsed.title || 'Document',
@@ -55,7 +57,7 @@ export function parsePDFCommand(commandString: string): PDFGenerationRequest | n
           slides: parsed.options?.slides,
         };
       }
-    } catch {}
+    }
 
     // Parse tag format: [GENERATE_PDF: title | key:value | key:value | content...]
     const match = commandString.match(/\[GENERATE_PDF\s*:\s*([^\]]+)\]/i);

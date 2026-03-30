@@ -61,6 +61,7 @@ declare global {
             openDevTools: () => void;
             changeZoom: (deltaY: number) => void;
             onAudioStatusChanged: (callback: (isPlaying: boolean) => void) => () => void;
+            onWindowFullscreenChanged: (callback: (isFullscreen: boolean) => void) => () => void;
 
             // Download APIs
             onDownloadStarted: (callback: (filename: string) => void) => () => void;
@@ -117,6 +118,9 @@ declare global {
             // Chat & File Export
             exportChatAsTxt: (messages: ChatMessage[]) => Promise<boolean>;
             exportChatAsPdf: (messages: ChatMessage[]) => Promise<boolean>;
+            generatePPTX: (payload: any) => Promise<{ success: boolean; path?: string; filePath?: string; error?: string }>;
+            generateDOCX: (payload: any) => Promise<{ success: boolean; path?: string; filePath?: string; error?: string }>;
+            checkPythonAvailable: () => Promise<boolean>;
 
             // MCP Support
             mcpCommand: (command: string, data: any) => Promise<any>;
@@ -264,8 +268,11 @@ declare global {
             closePopupWindow: (type: string) => void;
             closeAllPopups: () => void;
             onLoadAuthToken: (callback: (token: string) => void) => () => void;
+            onLoadAuthSession: (callback: (session: any) => void) => () => void;
             saveAuthToken: (args: { token: string }) => void;
+            saveAuthSession: (session: any) => void;
             getAuthToken: () => Promise<string | null>;
+            getAuthSession: () => Promise<any>;
             getUserInfo: () => Promise<any>;
             clearAuth: () => void;
             googleOAuthLogin: () => void;
@@ -278,6 +285,20 @@ declare global {
             onWifiSyncStatus: (callback: (data: { connected: boolean }) => void) => () => void;
             onRemoteAiPrompt: (callback: (data: { prompt: string; commandId: string }) => void) => () => void;
             wifiSyncBroadcast: (data: any) => void;
+
+            // Cloud Sync
+            loginToCloud: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+            logoutFromCloud: () => Promise<void>;
+            saveCloudConfig: (provider: string, config: any) => Promise<{ success: boolean; error?: string }>;
+            getCloudDevices: () => Promise<Array<{ deviceId: string; deviceName: string; deviceType: string; isOnline: boolean }>>;
+            connectToCloudDevice: (deviceId: string) => Promise<{ success: boolean; error?: string }>;
+            disconnectFromCloudDevice: (deviceId: string) => Promise<void>;
+            syncClipboard: (text: string) => Promise<void>;
+            syncHistory: (history: string[]) => Promise<void>;
+            sendDesktopControl: (targetDeviceId: string, action: string, args?: any) => Promise<any>;
+            onCloudSyncStatus: (callback: (data: { connected: boolean; userId?: string }) => void) => () => void;
+            onCloudDeviceConnected: (callback: (data: { deviceId: string }) => void) => () => void;
+            onCloudDeviceDisconnected: (callback: (data: { deviceId: string }) => void) => () => void;
 
             // Missing APIs
             generatePDF: (title: string, content: string) => Promise<{ success: boolean; fileName?: string; filePath?: string; log?: string; error?: string }>;

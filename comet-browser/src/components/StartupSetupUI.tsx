@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/useAppStore';
 import { Cpu, Globe, Key, Settings2, ShieldCheck, ArrowRight, Check, Play, DownloadCloud, Sparkles, ChevronLeft, Terminal, Activity, Zap } from 'lucide-react';
+import { useAppVersion } from '@/lib/useAppVersion';
 
 export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
   const store = useAppStore();
   const [step, setStep] = useState(1);
   const [wantsAI, setWantsAI] = useState<boolean | null>(null);
+  const versionLabel = `v${useAppVersion()}`;
 
   const finishSetup = () => {
     store.setHasCompletedStartupSetup(true);
@@ -175,7 +177,7 @@ export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
                           />
                       </div>
                       <button 
-                        onClick={() => { store.setAIProvider('ollama'); finishSetup(); }}
+                        onClick={() => { store.setAIProvider('ollama'); setStep(3); }}
                         className="px-6 py-3 bg-indigo-500 hover:bg-indigo-400 text-black font-black uppercase tracking-widest text-[10px] rounded-2xl shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
                       >
                         Mount
@@ -213,7 +215,7 @@ export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
                             />
                         </div>
                         <button 
-                          onClick={() => { store.setAIProvider(provider.id); finishSetup(); }}
+                          onClick={() => { store.setAIProvider(provider.id); setStep(3); }}
                           className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl border border-white/10 transition-all active:scale-95"
                         >
                           Link
@@ -234,12 +236,72 @@ export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
                 </div>
               </motion.div>
             )}
+
+            {step === 3 && (
+              <motion.div 
+                key="step3"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-8"
+              >
+                <div className="space-y-3">
+                  <h3 className="text-2xl font-black text-white tracking-tight uppercase italic">Synchronization</h3>
+                  <p className="text-white/40 text-sm leading-relaxed font-medium">
+                    Connect your mobile devices for seamless clipboard sync, remote control, and file sharing.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="p-6 rounded-[2rem] bg-emerald-500/[0.03] border border-emerald-500/10 hover:border-emerald-500/30 transition-all">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                          <Globe size={24} />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-white uppercase italic tracking-tight">WiFi Sync</h4>
+                          <p className="text-[10px] text-emerald-400/60 mt-1 font-black uppercase tracking-widest">Local Network Discovery</p>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-white/40 text-xs">
+                      Pair with mobile app via QR code to enable clipboard sync, remote control, and file transfer.
+                    </p>
+                  </div>
+
+                  <div className="p-6 rounded-[2rem] bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-white/40">
+                          <ShieldCheck size={24} />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-white uppercase italic tracking-tight">Cloud Backup</h4>
+                          <p className="text-[10px] text-white/20 mt-1 font-black uppercase tracking-widest">Optional</p>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-white/20 text-xs">
+                      Sync settings and data to cloud for cross-device continuity.
+                    </p>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={finishSetup}
+                  className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-widest text-sm rounded-2xl shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                >
+                  Complete Setup
+                </button>
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
 
         {/* Footer info */}
         <div className="px-10 py-6 bg-white/[0.01] border-t border-white/5 flex items-center justify-between">
-          <div className="text-[9px] font-black text-white/10 uppercase tracking-[0.4em]">COMET SYSTEM v0.2.5</div>
+          <div className="text-[9px] font-black text-white/10 uppercase tracking-[0.4em]">COMET SYSTEM {versionLabel}</div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1">
               <span className="w-1 h-1 rounded-full bg-sky-500" />
@@ -255,4 +317,3 @@ export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
     </div>
   );
 };
-

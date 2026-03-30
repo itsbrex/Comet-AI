@@ -11,14 +11,30 @@ export class WiFiSyncService extends EventEmitter {
     private discoveryInterval: any = null;
     private clients: Set<WebSocket> = new Set();
     private deviceId: string;
+    private deviceName: string;
     private pairingCode: string;
     private _lastReceivedClipboard: string = '';
+    private clientSockets: Map<string, WebSocket> = new Map();
 
     constructor(port: number = 3004) {
         super();
         this.port = port;
         this.deviceId = `desktop-${os.hostname().substring(0, 8)}`;
+        this.deviceName = os.hostname();
         this.pairingCode = Math.floor(100000 + Math.random() * 900000).toString();
+    }
+
+    public setDeviceId(deviceId: string, deviceName: string): void {
+        this.deviceId = deviceId;
+        this.deviceName = deviceName;
+    }
+
+    public getDeviceId(): string {
+        return this.deviceId;
+    }
+
+    public getDeviceName(): string {
+        return this.deviceName;
     }
 
     public start(): boolean {
@@ -259,6 +275,31 @@ export class WiFiSyncService extends EventEmitter {
                 client.send(data);
             }
         });
+    }
+
+    public broadcastClipboard(text: string): void {
+        this.broadcast({
+            type: 'clipboard-sync',
+            text,
+            timestamp: Date.now()
+        });
+    }
+
+    public async connectToDevice(deviceId: string): Promise<boolean> {
+        console.log('[WiFi-Sync] Attempting to connect to device via cloud relay:', deviceId);
+        return false;
+    }
+
+    public disconnectFromDevice(deviceId: string): void {
+        const socket = this.clientSockets.get(deviceId);
+        if (socket) {
+            socket.close();
+            this.clientSockets.delete(deviceId);
+        }
+    }
+
+    public getConnectedClients(): string[] {
+        return Array.from(this.clientSockets.keys());
     }
 }
 

@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.5--stable-blue)]()
+[![Version](https://img.shields.io/badge/Version-0.2.6--stable-blue)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
 [![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
@@ -35,7 +35,7 @@ Most browsers are built for monetization. Comet is built for **control**.
 
 ---
 
-## ✨ Features (v0.2.5-stable)
+## ✨ Features (v0.2.6-stable)
 
 ### 🤖 AI Agent
 - Multi-step autonomous task execution via chained commands
@@ -221,13 +221,13 @@ flutter run
 
 ## ⬇️ Downloads
 
-**Latest Release: v0.2.5-stable** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
+**Latest Release: v0.2.6-stable** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
 
 | Platform | Download | Status |
 |----------|----------|--------|
-| 🪟 Windows (.exe) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser.Setup.0.2.5.exe) | ✅ Stable |
-| 🍎 macOS (.dmg) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.5-arm64.dmg) | ✅ Stable |
-| 🐧 Linux (.AppImage) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.5.AppImage) | ✅ Stable |
+| 🪟 Windows (.exe) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser.Setup.0.2.6.exe) | ✅ Stable |
+| 🍎 macOS (.dmg) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.6-arm64.dmg) | ✅ Stable |
+| 🐧 Linux (.AppImage) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.6.AppImage) | ✅ Stable |
 | 📱 Android (.apk) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/app-release.apk) | ✅ Stable |
 | 🍎 iOS (.ipa) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet-AI.ipa) | 🧪 Beta |
 
@@ -245,11 +245,10 @@ flutter run
 
 ---
 
-## 📝 v0.2.5 Highlights
-- **macOS-native polish** – Native menu entries (Comet AI, File, Edit, View, Window, Help) and extra spacing/feature descriptions in the top bar, plus a SwiftUI-only translucent AI chat sidebar for the mac build.
-- **Raycast & automation visibility** – Raycast-native hooks let the agent list/remove automations, and low/mid-risk AI commands that aren’t auto-approved now surface the existing QR verification modal instead of being blocked.
-- **Setup guide refresh** – Charm-inspired light theme, automatic timezone detection, and explicit theme selection are part of the welcome/setup flow so it only exits once API keys and steps are resolved.
-- **Panel & automation UX polish** – Download, clipboard, cart, and ecosystem panels close when clicking outside, scheduling modals stay scrollable, and the AI can inspect/remove automations on request without leaving the workflow.
+## 📝 v0.2.6 Highlights
+- **Unified versioning** – Welcome screen, settings, sidebars, mac SwiftUI sheet, and capability panel now pull the version from package.json via `useAppVersion` so 0.2.6 shows everywhere consistently.
+- **Document generation stability** – DOCX generator fixed (headers/footers/table mapping) and PPTX/PDF templating updated (no watermark on thumbnails, custom backgrounds, inline images/tables/styling supported).
+- **Docs & releases** – README downloads/badge updated to 0.2.6 with fresh release notes and changelog entry.
 
 ## 🗺️ Roadmap
 
@@ -268,8 +267,8 @@ flutter run
 **Option 1: Push a Tag**
 ```bash
 # Create and push a version tag
-git tag v0.2.5-stable
-git push origin v0.2.5-stable
+git tag v0.2.6-stable
+git push origin v0.2.6-stable
 ```
 This automatically triggers the `auto-release-tag.yml` workflow which:
 - Builds all platforms (Windows, macOS, Linux, Android, iOS)
@@ -327,6 +326,16 @@ Comet AI Browser is built by a **16-year-old student** from India, preparing for
 ---
 
 ## 📋 Changelog
+
+### v0.2.6 (2026-03-30) - Unified versioning & docx stability
+#### New Features
+- **Runtime versioning everywhere** – All UI surfaces (welcome screen, settings, capability panel, AI sidebars, mac SwiftUI sheet) now read the installed version from `package.json` via `useAppVersion`, eliminating manual string updates.
+- **Branded document outputs** – PPTX thumbnails no longer show watermarks; custom backgrounds/palettes, inline images/tables/styling, and watermark-on-inner-slides defaults were refreshed.
+- **Parser flexibility** – JSON command parser now accepts top-level `commands`, infers `pptx` when `slides` are provided, and supports image slots inside pages/analysis.
+
+#### Bug Fixes
+- **DOCX generation** – Header/footer creation uses proper docx `Header`/`Footer` blocks; table mapping syntax error resolved, preventing `Cannot read properties of undefined (reading 'children')`.
+- **AI file generation** – PDF/PPTX/Docx generators now allow inline images within analysis content and avoid double-watermarking on thumbnails.
 
 ### v0.2.5 (2026-03-26) - Automation, mac polish & schedule UX
 #### New Features

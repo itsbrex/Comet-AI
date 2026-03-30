@@ -68,6 +68,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('tab-loading-status', subscription);
     return () => ipcRenderer.removeListener('tab-loading-status', subscription);
   },
+  onWindowFullscreenChanged: (callback) => {
+    const subscription = (event, isFullscreen) => callback(isFullscreen);
+    ipcRenderer.on('window-fullscreen-changed', subscription);
+    return () => ipcRenderer.removeListener('window-fullscreen-changed', subscription);
+  },
 
   // Download Listeners
   onDownloadStarted: (callback) => {
@@ -158,8 +163,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('load-auth-token', subscription);
     return () => ipcRenderer.removeListener('load-auth-token', subscription);
   },
+  onLoadAuthSession: (callback) => {
+    const subscription = (event, session) => callback(session);
+    ipcRenderer.on('load-auth-session', subscription);
+    return () => ipcRenderer.removeListener('load-auth-session', subscription);
+  },
   saveAuthToken: (args) => ipcRenderer.send('save-auth-token', args),
+  saveAuthSession: (session) => ipcRenderer.send('save-auth-session', session),
   getAuthToken: () => ipcRenderer.invoke('get-auth-token'),
+  getAuthSession: () => ipcRenderer.invoke('get-auth-session'),
   getUserInfo: () => ipcRenderer.invoke('get-user-info'),
   clearAuth: () => ipcRenderer.send('clear-auth'),
 
@@ -182,8 +194,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   capturePageHtml: () => ipcRenderer.invoke('capture-page-html'),
   saveOfflinePage: (data) => ipcRenderer.invoke('save-offline-page', data),
   generatePDF: (title, content) => ipcRenderer.invoke('generate-pdf', title, content),
+  generatePPTX: (payload) => ipcRenderer.invoke('generate-pptx', payload),
+  generateDOCX: (payload) => ipcRenderer.invoke('generate-docx', payload),
   openPDF: (filePath) => ipcRenderer.invoke('open-pdf', filePath),
   openFile: (filePath) => ipcRenderer.invoke('open-file', filePath),
+  checkPythonAvailable: () => ipcRenderer.invoke('check-python-available'),
 
   // Utils
   setUserId: (userId) => ipcRenderer.send('set-user-id', userId),
@@ -422,6 +437,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const subscription = (event, data) => callback(data);
     ipcRenderer.on('remote-ai-prompt', subscription);
     return () => ipcRenderer.removeListener('remote-ai-prompt', subscription);
+  },
+
+  // Cloud Sync
+  loginToCloud: (email, password) => ipcRenderer.invoke('login-to-cloud', email, password),
+  logoutFromCloud: () => ipcRenderer.invoke('logout-from-cloud'),
+  saveCloudConfig: (provider, config) => ipcRenderer.invoke('save-cloud-config', provider, config),
+  getCloudDevices: () => ipcRenderer.invoke('get-cloud-devices'),
+  connectToCloudDevice: (deviceId) => ipcRenderer.invoke('connect-to-cloud-device', deviceId),
+  disconnectFromCloudDevice: (deviceId) => ipcRenderer.invoke('disconnect-from-cloud-device', deviceId),
+  syncClipboard: (text) => ipcRenderer.invoke('sync-clipboard', text),
+  syncHistory: (history) => ipcRenderer.invoke('sync-history', history),
+  sendDesktopControl: (targetDeviceId, action, args) => ipcRenderer.invoke('send-desktop-control', targetDeviceId, action, args),
+  onCloudSyncStatus: (callback) => {
+    const subscription = (event, data) => callback(data);
+    ipcRenderer.on('cloud-sync-status', subscription);
+    return () => ipcRenderer.removeListener('cloud-sync-status', subscription);
+  },
+  onCloudDeviceConnected: (callback) => {
+    const subscription = (event, data) => callback(data);
+    ipcRenderer.on('cloud-device-connected', subscription);
+    return () => ipcRenderer.removeListener('cloud-device-connected', subscription);
+  },
+  onCloudDeviceDisconnected: (callback) => {
+    const subscription = (event, data) => callback(data);
+    ipcRenderer.on('cloud-device-disconnected', subscription);
+    return () => ipcRenderer.removeListener('cloud-device-disconnected', subscription);
   },
   // Generic listener support
   on: (channel, callback) => {

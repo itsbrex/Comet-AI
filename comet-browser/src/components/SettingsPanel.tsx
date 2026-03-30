@@ -27,6 +27,8 @@ import McpSettings from './McpSettings';
 import PermissionSettings from './PermissionSettings';
 import AutomationSettings from './AutomationSettings';
 import UpdatesSettings from './UpdatesSettings';
+import { useAppVersion } from '@/lib/useAppVersion';
+import ThemeSettings from './ThemeSettings';
 
 const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () => void, defaultSection?: string }) => {
     const store = useAppStore();
@@ -38,6 +40,7 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
     const { isGuestMode, setGuestMode } = useAppStore();
     const [showFirebaseConfig, setShowFirebaseConfig] = useState(false);
     const [showMysqlConfig, setShowMysqlConfig] = useState(false);
+    const versionLabel = `v${useAppVersion()}`;
 
     useEffect(() => {
         if (store.settingsSection && store.settingsSection !== activeSection) {
@@ -156,13 +159,24 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
             <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="w-full max-w-6xl h-[85vh] bg-[#020205] border border-white/5 rounded-[2.5rem] overflow-hidden flex shadow-[0_30px_100px_rgba(0,0,0,0.8)] no-drag-region"
+                className="adaptive-theme-surface w-full max-w-6xl h-[85vh] border rounded-[2.5rem] overflow-hidden flex shadow-[0_30px_100px_rgba(0,0,0,0.28)] no-drag-region"
+                style={{
+                    background: 'color-mix(in srgb, var(--primary-bg) 94%, var(--card-bg))',
+                    borderColor: 'var(--border-color)',
+                    color: 'var(--primary-text)',
+                }}
             >
                 {/* Navigation Sidebar */}
-                <div className="w-72 bg-white/[0.01] border-r border-white/5 p-8 flex flex-col gap-2">
+                <div
+                    className="w-72 border-r p-8 flex flex-col gap-2"
+                    style={{
+                        background: 'linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) 88%, transparent), color-mix(in srgb, var(--primary-bg) 96%, transparent))',
+                        borderColor: 'var(--border-color)',
+                    }}
+                >
                     <div className="flex items-center gap-4 px-4 mb-10 drag-region cursor-move" title="Drag to move window">
                         <img src="icon.png" alt="Comet" className="w-10 h-10 object-contain drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]" />
-                        <span className="text-xl font-black tracking-tighter uppercase text-white">COMET</span>
+                        <span className="text-xl font-black tracking-tighter uppercase text-primary-text">COMET</span>
                     </div>
 
                     <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-2">
@@ -197,21 +211,21 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                             Install PWA
                         </button>
                         <div className="p-4 bg-deep-space-accent-neon/5 rounded-2xl border border-deep-space-accent-neon/10 text-[10px] font-medium text-deep-space-accent-neon/60 text-center leading-relaxed">
-                            Version v0.2.0 Stable <br /> (Enhancement Update)
+                            Version {versionLabel} Stable <br /> (Enhancement Update)
                         </div>
                     </div>
                 </div>
 
                 {/* Content Area */}
-                <div className="flex-1 flex flex-col p-12 overflow-y-auto custom-scrollbar bg-black/10">
+                <div className="flex-1 flex flex-col p-12 overflow-y-auto custom-scrollbar" style={{ background: 'color-mix(in srgb, var(--card-bg) 84%, transparent)' }}>
                     <header className="flex items-center justify-between mb-12 no-drag-region">
                         <div>
-                            <h2 className="text-3xl font-black text-white mb-2 uppercase tracking-tight">
+                            <h2 className="text-3xl font-black text-primary-text mb-2 uppercase tracking-tight">
                                 {activeSection.replace('-', ' ')}
                             </h2>
-                            <p className="text-white/30 text-sm">Configure your hardware-accelerated workspace.</p>
+                            <p className="text-secondary-text text-sm">Configure your hardware-accelerated workspace.</p>
                         </div>
-                        <button onClick={onClose} className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all text-sm font-black uppercase tracking-widest border border-white/5 no-drag-region">Close</button>
+                        <button onClick={onClose} className="px-6 py-3 rounded-2xl transition-all text-sm font-black uppercase tracking-widest border no-drag-region text-primary-text" style={{ background: 'color-mix(in srgb, var(--card-bg) 92%, transparent)', borderColor: 'var(--border-color)' }}>Close</button>
                     </header>
 
                     <div className="space-y-12 max-w-3xl">
@@ -302,6 +316,13 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                         {activeSection === 'appearance' && (
                             <div className="space-y-8">
                                 <div className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/5 space-y-8">
+                                    <ThemeSettings
+                                        theme={store.theme}
+                                        setTheme={store.setTheme}
+                                        backgroundImage=""
+                                        setBackgroundImage={() => {}}
+                                        showCanvasOverlay={false}
+                                    />
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <p className="font-bold text-white mb-1">Layout Position</p>
@@ -773,7 +794,7 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                                 </div>
 
                                 <div className="pt-6 border-t border-white/5 max-w-sm mx-auto">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20">Version v0.2.0 Stable</p>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20">Version {versionLabel} Stable</p>
                                     <p className="text-[10px] text-white/20 mt-1">Comet Intelligence System • Enhancement Update</p>
                                 </div>
                             </div>

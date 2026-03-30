@@ -3,8 +3,7 @@ import { persist } from 'zustand/middleware';
 import { Security } from '@/lib/Security';
 import { defaultShortcuts, Shortcut } from '@/lib/constants';
 import firebaseService from '@/lib/FirebaseService';
-import { auth } from '@/lib/firebase';
-import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signInWithCredential } from 'firebase/auth';
+import { GoogleAuthProvider } from 'firebase/auth';
 import { MODEL_REGISTRY } from '@/lib/modelRegistry';
 
 // ... (rest of the interfaces are the same)
@@ -160,8 +159,12 @@ export interface BrowserState {
     setAiSafetyMode: (enabled: boolean) => void;
 
     // Theme settings
-    theme: "system" | "dark" | "light" | "vibrant";
-    setTheme: (theme: "system" | "dark" | "light" | "vibrant") => void;
+    theme: "system" | "dark" | "light" | "vibrant" | "custom";
+    customThemePrimary: string;
+    customThemeSecondary: string;
+    setTheme: (theme: "system" | "dark" | "light" | "vibrant" | "custom") => void;
+    setCustomThemePrimary: (color: string) => void;
+    setCustomThemeSecondary: (color: string) => void;
 
     // Online status
     isOnline: boolean;
@@ -361,6 +364,8 @@ export const useAppStore = create<BrowserState>()(
  
             // Theme settings
             theme: 'system',
+            customThemePrimary: '#ff6b6b',
+            customThemeSecondary: '#22d3ee',
             ambientMusicUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
             enableAmbientMusic: false,
             ambientMusicMode: 'off',
@@ -604,8 +609,7 @@ export const useAppStore = create<BrowserState>()(
             loginWithToken: (token: string) => {
                 set({ authToken: token });
                 const credential = GoogleAuthProvider.credential(token);
-                if (!auth) return;
-                signInWithCredential(auth, credential).catch((error) => {
+                firebaseService.signInWithCredential(credential).catch((error) => {
                     console.error("Token sign-in error:", error);
                 });
             },
@@ -724,7 +728,9 @@ export const useAppStore = create<BrowserState>()(
             setAiSafetyMode: (enabled: boolean) => set({ aiSafetyMode: enabled }),
 
             // Theme settings
-            setTheme: (theme: "light" | "dark" | "system" | "vibrant") => set({ theme }),
+            setTheme: (theme: "light" | "dark" | "system" | "vibrant" | "custom") => set({ theme }),
+            setCustomThemePrimary: (color: string) => set({ customThemePrimary: color }),
+            setCustomThemeSecondary: (color: string) => set({ customThemeSecondary: color }),
 
             // Online status
             setIsOnline: (online: boolean) => set({ isOnline: online }),
@@ -975,7 +981,10 @@ export const useAppStore = create<BrowserState>()(
             setSyncPassphrase: (passphrase: string) => set({ syncPassphrase: passphrase }),
 
             logout: () => {
-                if (window.electronAPI) window.electronAPI.deletePersistentData('user-data');
+                if (window.electronAPI) {
+                    window.electronAPI.deletePersistentData('user-data');
+                    window.electronAPI.clearAuth();
+                }
                 set({
                     user: null,
                     isAdmin: false,
@@ -1002,6 +1011,8 @@ export const useAppStore = create<BrowserState>()(
                 user: state.user,
                 isGuestMode: state.isGuestMode,
                 theme: state.theme,
+                customThemePrimary: state.customThemePrimary,
+                customThemeSecondary: state.customThemeSecondary,
                 sidebarOpen: state.sidebarOpen,
                 sidebarWidth: state.sidebarWidth,
                 sidebarSide: state.sidebarSide,
@@ -1080,8 +1091,7 @@ if (typeof window !== 'undefined' && window.electronAPI) {
         window.electronAPI.updateShortcuts(initialShortcuts);
     }
 
-    if (auth) {
-        onAuthStateChanged(auth, (user) => {
+    firebaseService.onAuthStateChanged(async (user) => {
             const { user: currentUser, defaultUrl, tabs, activeTabId } = useAppStore.getState();
 
             if (user) {
@@ -1094,6 +1104,13 @@ if (typeof window !== 'undefined' && window.electronAPI) {
 
                 // Persist to user data directory
                 window.electronAPI.savePersistentData('user-data', userData);
+                window.electronAPI.saveAuthSession({
+                    user: userData,
+                    token: await user.getIdToken().catch(() => null),
+                    refreshToken: user.refreshToken || null,
+                    provider: 'firebase-session',
+                    savedAt: Date.now(),
+                });
 
                 if (!currentUser || currentUser.uid !== user.uid) {
                     useAppStore.getState().setUser(userData);
@@ -1107,10 +1124,14 @@ if (typeof window !== 'undefined' && window.electronAPI) {
                 }
             } else {
                 if (currentUser) {
+                    const savedSession = await window.electronAPI.getAuthSession().catch(() => null);
+                    if (savedSession?.user?.uid === currentUser.uid) {
+                        console.log('[Auth] Keeping cached secure session while Firebase restores.');
+                        return;
+                    }
                     window.electronAPI.deletePersistentData('user-data');
                     useAppStore.getState().logout();
                 }
             }
         });
-    }
 }
