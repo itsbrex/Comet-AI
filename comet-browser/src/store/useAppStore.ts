@@ -63,6 +63,7 @@ export interface BrowserState {
 
     // User and auth
     user: { uid: string; email: string; displayName: string; photoURL: string; activeTime?: number } | null;
+    userEmail: string;
     isAdmin: boolean;
     localPhotoURL: string | null;
     setUser: (user: { uid: string; email: string; displayName: string; photoURL: string } | null) => void;
@@ -289,6 +290,7 @@ export const useAppStore = create<BrowserState>()(
            clipboard: [] as BrowserState['clipboard'],
             // User and auth
             user: null,
+            userEmail: '',
             isAdmin: false,
             localPhotoURL: null,
             authToken: null,
@@ -603,6 +605,7 @@ export const useAppStore = create<BrowserState>()(
 
             // User and auth
             setUser: (user: any) => set({ user, isAdmin: user?.email === 'preetjgfilj2@gmail.com' }),
+            setUserEmail: (email: string) => set({ userEmail: email }),
             setAdmin: (isAdmin: boolean) => set({ isAdmin }),
             setAuthToken: (token: string | null) => set({ authToken: token }),
             setGithubToken: (token: string | null) => set({ githubToken: token }),
@@ -822,6 +825,7 @@ export const useAppStore = create<BrowserState>()(
                 if (isGuest) {
                     set({
                         user: null,
+                        userEmail: '',
                         history: [],
                         bookmarks: [],
                         passwords: [],
@@ -987,6 +991,7 @@ export const useAppStore = create<BrowserState>()(
                 }
                 set({
                     user: null,
+                    userEmail: '',
                     isAdmin: false,
                     activeView: 'browser',
                     history: [],

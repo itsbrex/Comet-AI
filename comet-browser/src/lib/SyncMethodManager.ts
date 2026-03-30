@@ -189,7 +189,7 @@ export class SyncMethodManager extends EventEmitter {
 
     private async _initCloudSync(): Promise<void> {
         if (!this.cloudSync) {
-            this.cloudSync = new CloudSyncService();
+            this.cloudSync = CloudSyncService.getInstance();
             await this.cloudSync.initialize();
             console.log('[SyncMethodManager] Cloud sync initialized');
         }

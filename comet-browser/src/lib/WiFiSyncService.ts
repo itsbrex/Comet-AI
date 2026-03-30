@@ -210,6 +210,15 @@ export class WiFiSyncService extends EventEmitter {
         });
     }
 
+    public sendDesktopControl(action: string, args?: Record<string, any>) {
+        this.broadcast({
+            type: 'desktop-control',
+            action,
+            args: args || {},
+            timestamp: Date.now()
+        });
+    }
+
     private async _handleDesktopControl(ws: WebSocket, msg: any) {
         const { commandId, action, prompt, promptId, args } = msg;
         console.log(`[WiFi-Sync] Desktop Control: action=${action}`);
