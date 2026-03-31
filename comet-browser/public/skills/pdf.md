@@ -10,41 +10,109 @@ license: Proprietary. LICENSE.txt has complete terms
 
 If `pythonAvailable` flag is true (passed in payload), you may use python/soffice/poppler QA helpers; if false, skip them.
 
-Minimal JSON shape AI should emit (CREATE_FILE_JSON / CREATE_PDF_JSON):
+## PDF Generation Methods in Comet-AI
+
+Comet-AI supports three methods for generating PDFs. Use `CREATE_PDF_JSON` command:
+
 ```json
 {
   "format": "pdf",
+  "method": "html",  // "html" | "pdfmake" | "pdf-lib" (default: "html")
   "title": "Document Title",
+  "content": "Body text...",
   "template": "professional",
   "watermark": "CONFIDENTIAL",
   "bgColor": "#0b1224",
-  "pages": [
-    {"title": "Section", "sections": [{"title": "Topic", "content": "Text"}]}
-  ],
-  "images": [{"type": "url", "src": "https://..."}]
+  "images": [
+    {"type": "url", "src": "https://...", "caption": "Optional"},
+    {"type": "screenshot", "caption": "Current browser view"}
+  ]
 }
 ```
 
-## Overview
+**Attaching screenshots to PDFs:**
+- Use `"type": "screenshot"` in images array to attach the current browser view
+- Works for PDF, DOCX, and PPTX generation
+- Alternative: Use inline tag `[CAPTURE_SCREEN]` or `[CAPTURE_SCREEN|caption:Description]` in content
 
-This guide covers essential PDF processing operations using Python libraries and command-line tools. For advanced features, JavaScript libraries, and detailed examples, see REFERENCE.md. If you need to fill out a PDF form, read FORMS.md and follow its instructions.
+### 1. Electron printToPDF (HTML - Default)
 
-## Quick Start
+Best for: Rich formatting, templates, watermarks, mixed content. Uses HTML/CSS rendering.
 
-```python
-from pypdf import PdfReader, PdfWriter
-
-# Read a PDF
-reader = PdfReader("document.pdf")
-print(f"Pages: {len(reader.pages)}")
-
-# Extract text
-text = ""
-for page in reader.pages:
-    text += page.extract_text()
+```javascript
+// In main.js - default method
+const pdfData = await workerWindow.webContents.printToPDF({
+  printBackground: true,
+  pageSize: 'A4',
+  margins: { top: 0, bottom: 0, left: 0, right: 0 }
+});
 ```
 
-## Python Libraries
+### 2. pdfmake (Declarative JSON)
+
+Best for: Structured reports, tables, repeat layouts. Declarative - you define structure, pdfmake renders.
+
+```javascript
+const pdfMake = require('pdfmake/build/pdfmake');
+const pdfFonts = require('pdfmake/build/vfs_fonts');
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
+
+const docDefinition = {
+  content: [
+    { text: 'Title', style: 'header' },
+    { text: 'Body text', margin: [0, 0, 0, 10] },
+    {
+      table: {
+        headerRows: 1,
+        widths: ['*', 'auto', 'auto'],
+        body: [
+          ['Header 1', 'Header 2', 'Header 3'],
+          ['Cell 1', 'Cell 2', 'Cell 3']
+        ]
+      }
+    }
+  ],
+  styles: {
+    header: { fontSize: 22, bold: true, color: '#0f172a' }
+  }
+};
+
+const pdfDoc = pdfMake.createPdf(docDefinition);
+pdfDoc.getBuffer((buffer) => { /* use buffer */ });
+pdfDoc.getBase64((base64) => { /* use base64 */ });
+```
+
+### 3. pdf-lib (Programmatic)
+
+Best for: Low-level control, modifying existing PDFs, cryptographic operations.
+
+```javascript
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+
+async function createPDF() {
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([595.28, 841.89]); // A4
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  
+  page.drawText('Hello World', {
+    x: 50, y: 750, size: 24, font, color: rgb(0, 0, 0)
+  });
+  
+  // Add more pages, images, etc.
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes);
+}
+```
+
+### Quick Reference
+
+| Method | Best For | Library |
+|--------|----------|---------|
+| HTML | Rich formatting, watermarks | Electron printToPDF |
+| pdfmake | Reports, tables, declarative | pdfmake/build/pdfmake |
+| pdf-lib | Low-level control, modify PDFs | pdf-lib |
+
+## Python Libraries (Extraction & Manipulation)
 
 ### pypdf - Basic Operations
 
@@ -204,6 +272,84 @@ squared = Paragraph("x<super>2</super> + y<super>2</super>", styles['Normal'])
 ```
 
 For canvas-drawn text (not Paragraph objects), manually adjust font the size and position rather than using Unicode subscripts/superscripts.
+
+## PDF Generation Methods in Comet-AI
+
+Comet-AI supports three methods for generating PDFs. Choose based on your needs:
+
+### 1. Electron printToPDF (HTML - Default)
+
+Best for: Rich formatting, templates, watermarks, mixed content
+
+Uses HTML/CSS rendering with Electron's `printToPDF`. Supports all CSS features.
+
+```javascript
+// In main.js or renderer
+const { webContents } = require('electron');
+const pdfData = await webContents.printToPDF({
+  printBackground: true,
+  pageSize: 'A4',
+  margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 }
+});
+```
+
+### 2. pdfmake (Declarative JSON)
+
+Best for: Structured reports, tables, repeat layouts
+
+Uses declarative JSON definitions - you define the structure, pdfmake renders it.
+
+```javascript
+const pdfMake = require('pdfmake/build/pdfmake');
+const pdfFonts = require('pdfmake/build/vfs_fonts');
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
+
+const docDefinition = {
+  content: [
+    { text: 'Title', style: 'header' },
+    { text: 'Body text', margin: [0, 0, 0, 10] },
+    {
+      table: {
+        headerRows: 1,
+        widths: ['*', 'auto', 'auto', 'auto'],
+        body: [
+          ['Header 1', 'Header 2', 'Header 3', 'Header 4'],
+          ['Cell 1', 'Cell 2', 'Cell 3', 'Cell 4']
+        ]
+      }
+    }
+  ],
+  styles: {
+    header: { fontSize: 22, bold: true, color: '#0f172a' }
+  }
+};
+
+const pdfDocGenerator = pdfMake.createPdf(docDefinition);
+pdfDocGenerator.getBuffer((buffer) => { /* use buffer */ });
+```
+
+### 3. pdf-lib (Programmatic)
+
+Best for: Low-level control, modifying existing PDFs, cryptographic operations
+
+Programmatic API - you control every drawing operation.
+
+```javascript
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+
+async function createPDF() {
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([595.28, 841.89]); // A4
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  
+  page.drawText('Hello World', {
+    x: 50, y: 750, size: 24, font, color: rgb(0, 0, 0)
+  });
+  
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes);
+}
+```
 
 ## Command-Line Tools
 

@@ -630,8 +630,9 @@ const resolveCometIcon = () => {
     path.join(resourcesPath, 'app.asar.unpacked', 'assets', iconName),
     path.join(resourcesPath, 'app.asar.unpacked', iconName),
     path.join(resourcesPath, 'assets', iconName),
-    path.join(resourcesPath, 'app', 'assets', iconName),
     path.join(resourcesPath, iconName),
+    path.join(resourcesPath, 'app', 'assets', iconName),
+    path.join(resourcesPath, 'app', iconName),
     path.join(resourcesPath, 'app.asar', 'assets', iconName),
     path.join(resourcesPath, 'app.asar', iconName),
   ];
@@ -649,7 +650,7 @@ const resolveCometIcon = () => {
     try {
       if (fs.existsSync(p) && fs.statSync(p).isFile()) {
         const stat = fs.statSync(p);
-        if (stat.size > 100 && stat.size < 10 * 1024 * 1024) { // 100 bytes to 10MB sanity check
+        if (stat.size > 100 && stat.size < 10 * 1024 * 1024) {
           return p;
         }
       }
@@ -714,7 +715,8 @@ const normalizePages = (payload) => {
 
 // Basic text styling parser for bold/strike/italic; returns array of text runs (for pptx/docx)
 const toStyledRuns = (text, opts = {}) => {
-  if (!text) return [{ text, ...opts }];
+  if (!text || typeof text !== 'string') return [];
+  if (text.trim() === '') return [];
   const runs = [];
   const regex = /(\*\*([^*]+)\*\*|~~([^~]+)~~|\*([^*]+)\*|__([^_]+)__)/g;
   let lastIndex = 0;
@@ -728,7 +730,7 @@ const toStyledRuns = (text, opts = {}) => {
     lastIndex = regex.lastIndex;
   }
   if (lastIndex < text.length) runs.push({ text: text.slice(lastIndex), ...opts });
-  return runs;
+  return runs.length > 0 ? runs : [{ text, ...opts }];
 };
 
 const templatePalette = (name = 'professional') => {
@@ -743,6 +745,17 @@ const templatePalette = (name = 'professional') => {
 const PDF_TEMPLATES = {
   professional: (title, content, iconBase64, metadata = {}) => {
     const { author = '', category = '', tags = [], watermark = '', bgColor = '#ffffff' } = metadata;
+    // Watermark CSS - using tfoot approach for repeating on each page
+    const watermarkCSS = watermark ? `
+      <style>
+        .watermark-page { display: none; }
+        @media print { 
+          .watermark-page { display: block; position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 9999; }
+          .watermark-text { position: absolute; top: 50%; left: 50%; width: 200%; height: 200%; text-align: center; vertical-align: middle; line-height: 200px; transform: translate(-50%, -50%) rotate(-35deg); font-size: 80px; color: rgba(0,0,0,0.035); font-weight: 900; white-space: nowrap; font-family: 'Outfit', sans-serif; }
+        }
+      </style>
+      <div class="watermark-page"><div class="watermark-text">${watermark}</div></div>
+    ` : '';
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -753,30 +766,22 @@ const PDF_TEMPLATES = {
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', sans-serif; line-height: 1.8; color: #111827; background: #f8fafc; padding: 32px 42px; min-height: 100vh; overflow-x: hidden; }
-    /* Watermark that works with Electron printToPDF - positioned to repeat on each page */
-    .watermark-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
-    .watermark { position: absolute; top: 50%; left: 50%; width: 200%; height: 200%; text-align: center; vertical-align: middle; line-height: 200px; transform: translate(-50%, -50%) rotate(-35deg); font-size: 80px; color: rgba(0,0,0,0.035); font-weight: 900; white-space: nowrap; font-family: 'Outfit', sans-serif; pointer-events: none; }
-    @media print { .watermark-container { position: fixed; } }
-    .page-with-watermark { position: relative; overflow: visible; }
-    .cover { position: relative; background: linear-gradient(135deg, ${bgColor} 0%, #0b1224 85%); color: #e5f3ff; border-radius: 24px; padding: 42px 46px 48px; box-shadow: 0 20px 60px rgba(0,0,0,0.22); overflow: hidden; min-height: 88vh; display: flex; flex-direction: column; gap: 20px; page-break-after: always; }
-    .cover::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 25% 25%, rgba(255,255,255,0.08), transparent 45%), radial-gradient(circle at 80% 10%, rgba(56,189,248,0.3), transparent 40%); mix-blend-mode: screen; pointer-events: none; }
-    .cover-top { display: flex; justify-content: space-between; align-items: center; gap: 18px; flex-wrap: wrap; }
-    .brand { display: flex; align-items: center; gap: 14px; z-index: 1; }
-    .brand-name { font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 1.7rem; color: #e5f3ff; letter-spacing: -0.02em; }
+    .cover { position: relative; background: linear-gradient(160deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%); color: #e5f3ff; padding: 60px 50px; box-shadow: 0 20px 60px rgba(0,0,0,0.35); overflow: hidden; min-height: 88vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; page-break-after: always; }
+    .cover::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, rgba(56,189,248,0.25) 0%, transparent 60%); pointer-events: none; }
+    .cover::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 80% 85%, rgba(129,140,248,0.15), transparent 40%); pointer-events: none; }
+    .cover-center { display: flex; flex-direction: column; align-items: center; gap: 16px; z-index: 1; margin-bottom: 40px; }
+    .brand-icon { margin-bottom: 8px; }
+    .brand-name { font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 2.2rem; color: #ffffff; letter-spacing: -0.02em; }
     .brand-name span { color: #38bdf8; }
-    .doc-tag { background: rgba(255,255,255,0.12); color: #e0f2fe; padding: 9px 18px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.18em; border: 1px solid rgba(255,255,255,0.18); }
-    .eyebrow { font-size: 0.8rem; letter-spacing: 0.24em; text-transform: uppercase; color: #a5e7ff; font-weight: 800; margin-bottom: 8px; }
-    h1 { font-family: 'Outfit', sans-serif; color: #e5f3ff; font-size: 2.8rem; font-weight: 900; letter-spacing: -0.035em; line-height: 1.1; margin: 6px 0 12px; word-wrap: break-word; }
-    .subtitle { color: #cce9ff; font-size: 1.05rem; max-width: 70ch; }
-    .cover-meta { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; margin-top: auto; padding-top: 8px; }
-    .meta-pill { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 10px 14px; color: #e0f2fe; font-size: 0.9rem; display: flex; flex-direction: column; gap: 4px; }
-    .meta-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.16em; color: #93c5fd; font-weight: 700; }
-    .page-content { background: #ffffff; border-radius: 20px; padding: 30px 32px; margin-top: 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.08); position: relative; z-index: 1; }
-    .meta-grid { display: flex; flex-wrap: wrap; gap: 18px; margin-bottom: 28px; padding: 16px; background: #f8fafc; border-radius: 14px; border: 1px solid #e2e8f0; }
-    .meta-item { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
-    .meta-label-inline { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.15em; color: #6b7280; font-weight: 700; }
-    .meta-value { font-size: 0.95rem; color: #0f172a; font-weight: 600; word-break: break-word; }
-    .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .brand-tagline { font-size: 0.85rem; letter-spacing: 0.3em; text-transform: uppercase; color: #94a3b8; font-weight: 600; }
+    .cover-title-section { z-index: 1; margin-bottom: 40px; }
+    h1 { font-family: 'Outfit', sans-serif; color: #ffffff; font-size: 2.6rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; margin: 0 0 12px; word-wrap: break-word; }
+    .subtitle { color: #94a3b8; font-size: 1.1rem; font-weight: 500; }
+    .cover-meta { display: flex; gap: 30px; justify-content: center; z-index: 1; flex-wrap: wrap; }
+    .meta-pill { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 12px 20px; color: #e0f2fe; font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+    .meta-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.18em; color: #38bdf8; font-weight: 700; }
+    .page-content { background: #ffffff; padding: 30px 32px; margin-top: 0; position: relative; z-index: 1; }
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; justify-content: center; }
     .tag { background: rgba(56, 189, 248, 0.14); color: #0ea5e9; padding: 5px 12px; border-radius: 18px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
     .content { font-size: 1rem; line-height: 1.82; width: 100%; color: #111827; }
     .content h2 { margin: 32px 0 18px; color: #0f172a; font-family: 'Outfit', sans-serif; font-size: 1.55rem; font-weight: 800; border-left: 6px solid #38bdf8; padding-left: 14px; word-wrap: break-word; }
@@ -807,42 +812,34 @@ const PDF_TEMPLATES = {
   </style>
 </head>
 <body>
-  ${watermark ? `<div class="watermark-container"><div class="watermark">${watermark}</div></div>` : ''}
+  ${watermarkCSS}
   <section class="cover">
-    <div class="cover-top">
-      <div class="brand">
-        ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="Comet" style="width:44px;height:44px;object-fit:contain;filter:drop-shadow(0 6px 20px rgba(56,189,248,0.55));"/>` : '<span style="font-size:1.9rem">🌠</span>'}
-        <span class="brand-name">Comet<span>AI</span></span>
+    <div class="cover-center">
+      <div class="brand-icon">
+        ${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="Comet" style="width:100px;height:100px;object-fit:contain;border-radius:20px;box-shadow:0 12px 40px rgba(56,189,248,0.4);"/>` : '<span style="font-size:4rem">🌠</span>'}
       </div>
-      <div class="doc-tag">${category || 'Intelligence Report'}</div>
+      <div class="brand-name">Comet<span>AI</span></div>
+      <div class="brand-tagline">Premium AI Browser</div>
     </div>
-    <div class="cover-body">
-      <div class="eyebrow">Neural Intelligence Export</div>
+    <div class="cover-title-section">
       <h1>${title || 'Research Document'}</h1>
-      <p class="subtitle">${author ? `Prepared by ${author}` : 'Generated by Comet-AI Automation'}</p>
+      <p class="subtitle">${category || 'Intelligence Report'}</p>
     </div>
     <div class="cover-meta">
       <div class="meta-pill"><span class="meta-label">Generated</span><span>${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>
       <div class="meta-pill"><span class="meta-label">Document ID</span><span>CMT-${Math.random().toString(36).slice(2, 8).toUpperCase()}</span></div>
-      <div class="meta-pill"><span class="meta-label">Engine</span><span>COMET V2.5</span></div>
-      ${tags && tags.length ? `<div class="meta-pill"><span class="meta-label">Tags</span><span>${tags.join(', ')}</span></div>` : ''}
     </div>
   </section>
 
   <div class="page-content">
-    <div class="meta-grid">
-      ${author ? `<div class="meta-item"><span class="meta-label-inline">Author</span><span class="meta-value">${author}</span></div>` : ''}
-      <div class="meta-item"><span class="meta-label-inline">Category</span><span class="meta-value">${category || 'Report'}</span></div>
-      <div class="meta-item"><span class="meta-label-inline">Generated</span><span class="meta-value">${new Date().toLocaleString('en-US')}</span></div>
-    </div>
     ${tags && tags.length ? `<div class="tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` : ''}
     <div class="content">${content}</div>
   </div>
   
   <div class="footer">
-    <div class="footer-left">&copy; ${new Date().getFullYear()} Comet AI Browser • Neural Intelligence Export</div>
-    <div class="footer-center">${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="" style="width:26px;height:26px;object-fit:contain;"/>` : '🌠'}</div>
-    <div class="footer-right">CONFIDENTIAL • AI GENERATED</div>
+    <div class="footer-left">&copy; ${new Date().getFullYear()} Comet AI Browser</div>
+    <div class="footer-center">${iconBase64 ? `<img src="data:${iconMimeType};base64,${iconBase64}" alt="" style="width:24px;height:24px;object-fit:contain;border-radius:4px;"/>` : '🌠'}</div>
+    <div class="footer-right">AI Generated</div>
   </div>
 </body>
 </html>`;
@@ -852,6 +849,16 @@ const PDF_TEMPLATES = {
     const { author = '', department = '', priority = 'normal', watermark = '' } = metadata;
     const priorityColors = { high: '#ef4444', medium: '#f59e0b', normal: '#22c55e' };
     const priorityColor = priorityColors[priority] || priorityColors.normal;
+    // Watermark CSS - using tfoot approach for repeating on each page
+    const watermarkCSS = watermark ? `
+      <style>
+        @media print { 
+          .watermark-page { display: block; position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 9999; }
+          .watermark-text { position: absolute; top: 50%; left: 50%; width: 200%; height: 200%; text-align: center; vertical-align: middle; line-height: 200px; transform: translate(-50%, -50%) rotate(-45deg); font-size: 70px; color: rgba(0,0,0,0.02); font-weight: 900; white-space: nowrap; font-family: 'Playfair Display', serif; }
+        }
+      </style>
+      <div class="watermark-page" style="display:none;"><div class="watermark-text">${watermark}</div></div>
+    ` : '';
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -861,10 +868,6 @@ const PDF_TEMPLATES = {
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', sans-serif; line-height: 1.7; color: #1a1a2e; background: #ffffff; padding: 50px 60px; }
-    /* Watermark that works with Electron printToPDF */
-    .watermark-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
-    .watermark { position: absolute; top: 50%; left: 50%; width: 200%; height: 200%; text-align: center; vertical-align: middle; line-height: 200px; transform: translate(-50%, -50%) rotate(-45deg); font-size: 70px; color: rgba(0,0,0,0.02); font-weight: 900; white-space: nowrap; font-family: 'Playfair Display', serif; pointer-events: none; }
-    @media print { .watermark-container { position: fixed; } }
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 60px; padding-bottom: 30px; border-bottom: 1px solid #e5e7eb; }
     .brand { display: flex; align-items: center; gap: 12px; }
     .brand-text { font-family: 'Playfair Display', serif; font-weight: 900; font-size: 1.6rem; color: #1a1a2e; }
@@ -4767,6 +4770,192 @@ ipcMain.removeHandler('generate-pdf');
 
   // Python availability check (for optional flows; generation does not require it)
   ipcMain.handle('check-python-available', async () => pythonAvailable);
+
+  // PDF Generation with different methods (pdfmake, pdf-lib)
+  ipcMain.handle('generate-pdf-with-method', async (event, { method, options }) => {
+    const logMain = (msg) => console.log(`[PDF-${method.toUpperCase()}] ${msg}`);
+    const logErr = (msg, err) => console.error(`[PDF-${method.toUpperCase()}] ❌ ${msg}`, err);
+
+    try {
+      const { title, content, subtitle, author, template, watermark, bgColor, priority } = options || {};
+      const safeTitle = (title || 'document').replace(/[^a-z0-9]/gi, '_');
+      const downloads = path.join(os.homedir(), 'Downloads');
+      const filename = `${safeTitle}_${Math.floor(Date.now() / 1000)}.pdf`;
+      const fullPath = path.join(downloads, filename);
+
+      let pdfBuffer;
+
+      if (method === 'pdfmake') {
+        logMain('Generating PDF with pdfmake...');
+        const pdfMake = require('pdfmake/build/pdfmake');
+        const pdfFonts = require('pdfmake/build/vfs_fonts');
+        
+        // Handle both export formats
+        if (pdfFonts.pdfMake) {
+          pdfMake.vfs = pdfFonts.pdfMake.vfs;
+        } else if (pdfFonts.vfs) {
+          pdfMake.vfs = pdfFonts.vfs;
+        } else {
+          // Try to extract from the module
+          pdfMake.vfs = pdfFonts;
+        }
+
+        const docDefinition = {
+          pageSize: 'A4',
+          pageMargins: [40, 40, 40, 60],
+          content: buildPdfMakeContent(title, content, options),
+          styles: getPdfMakeStyles(),
+          defaultStyle: { font: 'Roboto', fontSize: 11, lineHeight: 1.5 },
+          footer: (currentPage, pageCount) => ({
+            columns: [
+              { text: `© ${new Date().getFullYear()} Comet AI Browser`, fontSize: 8, color: '#666' },
+              { text: `Page ${currentPage} of ${pageCount}`, fontSize: 8, color: '#666', alignment: 'right' }
+            ],
+            margin: [40, 10, 40, 0]
+          }),
+          header: (currentPage) => currentPage === 1 ? { text: '' } : { text: title, fontSize: 10, color: '#38bdf8', margin: [40, 20, 40, 0] }
+        };
+
+        pdfBuffer = await new Promise((resolve, reject) => {
+          pdfMake.createPdf(docDefinition).getBuffer((buffer) => resolve(buffer));
+        });
+
+      } else if (method === 'pdf-lib') {
+        logMain('Generating PDF with pdf-lib...');
+        const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+
+        const pdfDoc = await PDFDocument.create();
+        const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+        // Cover page
+        let page = pdfDoc.addPage([595.28, 841.89]);
+        drawPdfLibCoverPage(page, title, subtitle || 'Report', helveticaBold, helveticaFont);
+
+        // Content page
+        page = pdfDoc.addPage([595.28, 841.89]);
+        drawPdfLibContentPage(page, content, helveticaFont, helveticaBold);
+
+        pdfBuffer = Buffer.from(await pdfDoc.save());
+
+      } else {
+        throw new Error(`Unknown PDF method: ${method}. Use "html", "pdfmake", or "pdf-lib"`);
+      }
+
+      fs.writeFileSync(fullPath, pdfBuffer);
+      logMain(`PDF saved: ${fullPath}`);
+
+      // Auto-sync to mobile
+      autoSyncFileToMobile(filename, pdfBuffer, 'pdf');
+
+      // Notify frontend
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('download-started', { name: filename, path: fullPath });
+        setTimeout(() => {
+          mainWindow.webContents.send('download-progress', { name: filename, progress: 100 });
+          mainWindow.webContents.send('download-complete', { name: filename, path: fullPath });
+        }, 500);
+      }
+
+      return { success: true, fileName: filename, filePath: fullPath };
+
+    } catch (err) {
+      logErr('PDF generation failed', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  function buildPdfMakeContent(title, content, options) {
+    const blocks = [];
+
+    // Cover page
+    blocks.push({
+      stack: [
+        { text: '', margin: [0, 0, 0, 80] },
+        { text: 'Comet AI', style: 'brandTitle', color: '#38bdf8' },
+        { text: 'Premium AI Browser', fontSize: 10, color: '#94a3b8', margin: [0, 4, 0, 40] },
+        { text: title, style: 'coverTitle', margin: [0, 0, 0, 12] },
+        { text: options?.subtitle || 'Report', style: 'coverSubtitle', margin: [0, 0, 0, 40] },
+        {
+          columns: [
+            { text: `Generated: ${new Date().toLocaleDateString()}`, fontSize: 9, color: '#94a3b8' },
+            { text: `ID: CMT-${Math.random().toString(36).slice(2, 8).toUpperCase()}`, fontSize: 9, color: '#94a3b8', alignment: 'right' }
+          ],
+          margin: [0, 0, 0, 20]
+        }
+      ],
+      pageBreak: 'after'
+    });
+
+    // Content
+    const paragraphs = content.split('\n').filter(p => p.trim());
+    for (const para of paragraphs) {
+      blocks.push({ text: para, margin: [0, 0, 0, 8] });
+    }
+
+    return blocks;
+  }
+
+  function getPdfMakeStyles() {
+    return {
+      brandTitle: { fontSize: 24, bold: true, color: '#38bdf8' },
+      coverTitle: { fontSize: 32, bold: true, color: '#0f172a' },
+      coverSubtitle: { fontSize: 14, color: '#64748b' },
+      header: { fontSize: 14, bold: true, color: '#0f172a' },
+      subheader: { fontSize: 12, bold: true, color: '#1e293b' },
+      body: { fontSize: 11, color: '#334155' }
+    };
+  }
+
+  function drawPdfLibCoverPage(page, title, category, boldFont, regularFont) {
+    const { width, height } = page.getSize();
+
+    page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(0.059, 0.09, 0.165) });
+    page.drawRectangle({ x: 40, y: height - 120, width: width - 80, height: 2, color: rgb(0.22, 0.74, 0.97) });
+    page.drawText(title, { x: 40, y: height - 200, size: 28, font: boldFont, color: rgb(1, 1, 1) });
+    page.drawText(category, { x: 40, y: height - 240, size: 14, font: regularFont, color: rgb(0.58, 0.64, 0.72) });
+    page.drawText(`Generated: ${new Date().toLocaleDateString()}`, { x: 40, y: 80, size: 10, font: regularFont, color: rgb(0.58, 0.64, 0.72) });
+    page.drawText('Comet AI Browser - Premium AI Browser', { x: 40, y: 60, size: 12, font: boldFont, color: rgb(0.22, 0.74, 0.97) });
+  }
+
+  function drawPdfLibContentPage(page, content, regularFont, boldFont) {
+    const { width, height } = page.getSize();
+    const margin = 40;
+    const contentWidth = width - margin * 2;
+    let y = height - margin;
+
+    const paragraphs = content.split('\n\n');
+    for (const para of paragraphs) {
+      const lines = wrapText(para, regularFont, 11, contentWidth);
+      for (const line of lines) {
+        if (y < margin + 20) {
+          page = page.doc.addPage([595.28, 841.89]);
+          y = height - margin;
+        }
+        page.drawText(line, { x: margin, y, size: 11, font: regularFont, color: rgb(0.067, 0.098, 0.153) });
+        y -= 16;
+      }
+      y -= 12;
+    }
+  }
+
+  function wrapText(text, font, fontSize, maxWidth) {
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = '';
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+      if (testWidth > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  }
 
   // PPTX generation (JS-only, .dmg safe)
   ipcMain.handle('generate-pptx', async (event, payload = {}) => {

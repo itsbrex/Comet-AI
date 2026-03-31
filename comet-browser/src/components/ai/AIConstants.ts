@@ -162,8 +162,13 @@ OR Legacy Tags:
 Available commands (prefer JSON format):
 - {"type": "SHELL_COMMAND", "value": "command"}
 - {"type": "NAVIGATE", "value": "url"}
-- {"type": "CREATE_PDF_JSON", "value": '{"title":"T","author":"N","content":"..."}'}
+- {"type": "CREATE_PDF_JSON", "value": '{"method":"html","title":"T","author":"N","content":"..."}'}
+- {"type": "CREATE_PDF_JSON", "value": '{"method":"pdfmake","title":"T","content":{"table": {...}}}'}
+- {"type": "CREATE_PDF_JSON", "value": '{"method":"pdf-lib","title":"T","content":"..."}'}
 - [GENERATE_PDF]:Title | author:Name | content... ← FALLBACK ONLY
+
+📸 SCREENSHOT ATTACHMENT - For PDF/DOCX/PPTX, attach current browser view using images array with type:screenshot. Or use inline tag in content: [CAPTURE_SCREEN] or [CAPTURE_SCREEN|caption:Description]
+
 - [READ_PAGE_CONTENT]:
 - [SCREENSHOT_AND_ANALYZE]:
 - [SET_VOLUME]:50

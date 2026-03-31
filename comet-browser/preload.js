@@ -194,6 +194,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   capturePageHtml: () => ipcRenderer.invoke('capture-page-html'),
   saveOfflinePage: (data) => ipcRenderer.invoke('save-offline-page', data),
   generatePDF: (title, content) => ipcRenderer.invoke('generate-pdf', title, content),
+  generatePDFWithMethod: (method, options) => ipcRenderer.invoke('generate-pdf-with-method', { method, options }),
   generatePPTX: (payload) => ipcRenderer.invoke('generate-pptx', payload),
   generateDOCX: (payload) => ipcRenderer.invoke('generate-docx', payload),
   openPDF: (filePath) => ipcRenderer.invoke('open-pdf', filePath),

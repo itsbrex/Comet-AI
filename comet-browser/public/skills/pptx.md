@@ -19,9 +19,17 @@ Minimal JSON shape AI should emit (CREATE_FILE_JSON):
   "pages": [
     {"title": "Slide 1", "sections": [{"title": "Point", "content": "Bullets or paragraphs"}]}
   ],
-  "images": [{"type": "url", "src": "https://..."}]
+  "images": [
+    {"type": "url", "src": "https://...", "caption": "Optional"},
+    {"type": "screenshot", "caption": "Current browser view"}
+  ]
 }
 ```
+
+**Attaching screenshots to slides:**
+- Use `"type": "screenshot"` in images array to attach the current browser view
+- Works for PDF, DOCX, and PPTX generation
+- Alternative: Use inline tag `[CAPTURE_SCREEN]` in content
 
 ## Quick Reference
 

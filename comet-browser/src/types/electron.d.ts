@@ -303,6 +303,7 @@ declare global {
 
             // Missing APIs
             generatePDF: (title: string, content: string) => Promise<{ success: boolean; fileName?: string; filePath?: string; log?: string; error?: string }>;
+            generatePDFWithMethod: (method: string, options: { title: string; content: string; subtitle?: string; author?: string; template?: string; watermark?: string; bgColor?: string; priority?: string }) => Promise<{ success: boolean; fileName?: string; filePath?: string; error?: string }>;
             openPDF: (filePath: string) => Promise<{ success: boolean; error?: string }>;
             openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
             getClipboardText: () => Promise<string>;

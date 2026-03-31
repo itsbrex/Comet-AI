@@ -48,6 +48,7 @@ import DOMSearchDisplay, { DOMMetaDisplay } from './ai/DOMSearchDisplay';
 import { secureDOMReader, type DOMSearchResult, type FilteredDOMResult, type DOMElement } from './ai/SecureDOMReader';
 import { detectSchedulingIntent, type SchedulingIntent } from './ai/SchedulingIntentDetector';
 import SchedulingModal from './ai/SchedulingModal';
+import MermaidDiagram from './ai/MermaidDiagram';
 
 // Logic & Utils
 import {
@@ -87,6 +88,10 @@ type MediaItem = {
   thumbnailUrl?: string;
   source: 'youtube' | 'other';
   videoId?: string;
+} | {
+  type: 'mermaid';
+  diagramId: string;
+  code: string;
 };
 
 type ExtendedChatMessage = ChatMessage & {
@@ -669,12 +674,12 @@ I couldn't schedule the task. The background service may not be running. Please 
       const format = docFormatMatch[1].toLowerCase();
       const normalizedFormat = format === 'doc' || format === 'docx' ? 'docx' : format === 'ppt' ? 'pptx' : format;
       try {
-        const skillId = addThinkingStep(`Loading ${normalizedFormat.toUpperCase()} skill...`);
+        const skillId = addThinkingStep(`📖 Loading ${normalizedFormat.toUpperCase()} skill guide...`);
         skillContext = await window.electronAPI.loadSkill(normalizedFormat);
-        resolveThinkingStep(skillId, 'done', 'Skill loaded');
-        console.log(`[SkillLoader] Loaded skill for ${normalizedFormat}`);
+        resolveThinkingStep(skillId, 'done', `Loaded ${normalizedFormat.toUpperCase()} formatting guide`);
+        console.log(`[SkillLoader] ✅ Loaded skill for ${normalizedFormat}: ${skillContext.length} chars`);
       } catch (e) {
-        console.warn('[SkillLoader] Failed to load skill:', e);
+        console.warn('[SkillLoader] ❌ Failed to load skill:', e);
       }
     }
 
@@ -1268,6 +1273,33 @@ I couldn't schedule the task. The background service may not be running. Please 
           output = `Switched to ${command.value} view`;
           break;
 
+        // ── GENERATE_DIAGRAM: render Mermaid diagram in chat ────────────────────
+        case 'GENERATE_DIAGRAM': {
+          const mermaidCode = command.value || command.context || '';
+          if (!mermaidCode || mermaidCode.length < 10) {
+            output = 'No valid Mermaid code provided.';
+            break;
+          }
+          const diagramId = `mermaid-${Date.now()}`;
+          setMessages(prev => {
+            if (prev.length === 0) return prev;
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            const existing = last.mediaItems || [];
+            updated[updated.length - 1] = {
+              ...last,
+              mediaItems: [...existing, {
+                type: 'mermaid',
+                diagramId,
+                code: mermaidCode
+              }]
+            };
+            return updated;
+          });
+          output = `Diagram generated successfully`;
+          break;
+        }
+
         case 'SET_VOLUME':
           await window.electronAPI.setVolume(parseInt(command.value));
           output = `System volume adjusted to ${command.value}%`;
@@ -1550,6 +1582,10 @@ I couldn't schedule the task. The background service may not be running. Please 
           let format = (pdfData.format || pdfData.output?.format || '').toLowerCase();
           if (!format && pdfData.slides && !pdfData.pages) format = 'pptx';
           if (!format) format = 'pdf';
+          
+          // Extract method: html (default), pdfmake, or pdf-lib
+          const method = (pdfData.method || pdfData.generationMethod || 'html').toLowerCase();
+          
           const pdfTitle = pdfData.title || 'Document';
           const pdfSubtitle = pdfData.subtitle || '';
           const pdfAuthor = pdfData.author || '';
@@ -1799,6 +1835,7 @@ I couldn't schedule the task. The background service may not be running. Please 
             images: jsonImageResults.length ? jsonImageResults : pdfImagesFromJson,
             content: pdfContent,
             pythonAvailable,
+            method,
           };
 
           setIsGeneratingPDF(true);
@@ -1820,6 +1857,22 @@ I couldn't schedule the task. The background service may not be running. Please 
               output = res?.success
                 ? `✅ **DOCX Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**File:** ${res.filePath || 'Saved to Downloads'}`
                 : `❌ DOCX generation failed: ${res?.error || 'Unknown error'}`;
+            } else if (method === 'pdfmake' || method === 'pdf-lib') {
+              const res = await window.electronAPI.generatePDFWithMethod(method, {
+                title: pdfTitle,
+                content: pdfContent,
+                subtitle: pdfSubtitle,
+                author: pdfAuthor,
+                template,
+                watermark,
+                bgColor,
+                priority
+              }) as any;
+              if (res.success) {
+                output = `✅ **PDF Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**Method:** ${method}\n**File:** ${res.filePath}`;
+              } else {
+                output = `❌ PDF generation failed: ${res.error}`;
+              }
             } else {
               const cleanHTML = generateSmartPDF(pdfContent, iconSource, jsonImageResults);
               const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML) as any;
@@ -3405,23 +3458,6 @@ I've successfully executed the following real tasks:
                         const match = /language-(\w+)/.exec(className || '');
                         const codeContent = String(children).replace(/\n$/, '');
 
-                        // ✨ Special handling for Mermaid diagrams
-                        if (match && match[1] === 'mermaid' && (window as any).mermaid) {
-                          return (
-                            <div className="my-5 rounded-3xl overflow-hidden border border-white/5 bg-slate-900/50 p-6 flex flex-col items-center shadow-2xl">
-                              <div
-                                className="mermaid w-full flex justify-center"
-                                dangerouslySetInnerHTML={{ __html: codeContent }}
-                                ref={(el) => {
-                                  if (el && (window as any).mermaid) {
-                                    (window as any).mermaid.contentLoaded();
-                                  }
-                                }}
-                              />
-                            </div>
-                          );
-                        }
-
                         return match ? (
                           <div className="my-5 rounded-3xl overflow-hidden border border-white/5 shadow-2xl">
                             <SyntaxHighlighter
@@ -3528,6 +3564,11 @@ I've successfully executed the following real tasks:
                                 <p className="text-[9px] text-sky-400/60 mt-2 font-mono truncate">{item.videoUrl}</p>
                               </div>
                             </motion.a>
+                          );
+                        }
+                        if (item.type === 'mermaid') {
+                          return (
+                            <MermaidDiagram key={midx} diagramId={item.diagramId} code={item.code} />
                           );
                         }
                         return null;

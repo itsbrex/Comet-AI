@@ -280,6 +280,14 @@ var WiFiSyncService = /** @class */ (function (_super) {
     WiFiSyncService.prototype.sendDesktopStatus = function (status) {
         this.broadcast(__assign(__assign({ type: 'desktop-status' }, status), { timestamp: Date.now() }));
     };
+    WiFiSyncService.prototype.sendDesktopControl = function (action, args) {
+        this.broadcast({
+            type: 'desktop-control',
+            action: action,
+            args: args || {},
+            timestamp: Date.now()
+        });
+    };
     WiFiSyncService.prototype._handleDesktopControl = function (ws, msg) {
         return __awaiter(this, void 0, void 0, function () {
             var commandId, action, prompt, promptId, args;

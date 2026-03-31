@@ -19,9 +19,17 @@ Minimal JSON shape AI should emit (CREATE_FILE_JSON):
   "pages": [
     {"title": "Section", "sections": [{"title": "Topic", "content": "Body text"}]}
   ],
-  "images": [{"type": "url", "src": "https://..."}]
+  "images": [
+    {"type": "url", "src": "https://...", "caption": "Optional"},
+    {"type": "screenshot", "caption": "Current browser view"}
+  ]
 }
 ```
+
+**Attaching screenshots to documents:**
+- Use `"type": "screenshot"` in images array to attach the current browser view
+- Works for PDF, DOCX, and PPTX generation
+- Alternative: Use inline tag `[CAPURE_SCREEN]` in content
 
 ## Overview
 
