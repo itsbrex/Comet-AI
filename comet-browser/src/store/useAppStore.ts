@@ -56,6 +56,7 @@ export interface BrowserState {
     setHistory: (history: Array<{ url: string; title: string; timestamp: number }>) => void;
     fetchHistory: () => void;
     addToHistory: (entry: { url: string; title: string }) => void;
+    updateHistoryTitle: (url: string, title: string) => void;
     savePageOffline: (url: string, title: string, html: string) => void;
     addToUnifiedCart: (item: any) => void;
     addClipboardItem: (item: string) => void;
@@ -271,7 +272,26 @@ export interface BrowserState {
     enableAdblocker: boolean;
     setEnableAdblocker: (enable: boolean) => void;
 
+    // Top Bar Icon Visibility
+    showDownloadsIcon: boolean;
+    showClipboardIcon: boolean;
+    showCartIcon: boolean;
+    showTranslateIcon: boolean;
+    showExtensionsIcon: boolean;
+    setShowDownloadsIcon: (show: boolean) => void;
+    setShowClipboardIcon: (show: boolean) => void;
+    setShowCartIcon: (show: boolean) => void;
+    setShowTranslateIcon: (show: boolean) => void;
+    setShowExtensionsIcon: (show: boolean) => void;
+
+    // Advanced Theme customization
+    themeOpacity: number;
+    themeBlur: number;
+    setThemeOpacity: (opacity: number) => void;
+    setThemeBlur: (blur: number) => void;
+
     openMcpSettings: () => void;
+    clearHistory: () => void;
 }
 
 export const useAppStore = create<BrowserState>()(
@@ -451,6 +471,24 @@ export const useAppStore = create<BrowserState>()(
                 }
             },
 
+            // Top Bar Icon Visibility
+            showDownloadsIcon: true,
+            showClipboardIcon: true,
+            showCartIcon: true,
+            showTranslateIcon: true,
+            showExtensionsIcon: true,
+            setShowDownloadsIcon: (show: boolean) => set({ showDownloadsIcon: show }),
+            setShowClipboardIcon: (show: boolean) => set({ showClipboardIcon: show }),
+            setShowCartIcon: (show: boolean) => set({ showCartIcon: show }),
+            setShowTranslateIcon: (show: boolean) => set({ showTranslateIcon: show }),
+            setShowExtensionsIcon: (show: boolean) => set({ showExtensionsIcon: show }),
+
+            // Advanced Theme customization
+            themeOpacity: 100,
+            themeBlur: 20,
+            setThemeOpacity: (opacity: number) => set({ themeOpacity: opacity }),
+            setThemeBlur: (blur: number) => set({ themeBlur: blur }),
+
             // Performance Mode
             performanceMode: 'normal',
             performanceModeSettings: {
@@ -591,6 +629,17 @@ export const useAppStore = create<BrowserState>()(
             addToHistory: (entry: any) => set((state: BrowserState) => ({
                 history: [...state.history, { ...entry, timestamp: Date.now() }]
             })),
+            updateHistoryTitle: (url: string, title: string) => set((state: BrowserState) => {
+                const newHistory = [...state.history];
+                // Find the latest entry with this URL and update its title
+                for (let i = newHistory.length - 1; i >= 0; i--) {
+                    if (newHistory[i].url === url) {
+                        newHistory[i].title = title;
+                        break;
+                    }
+                }
+                return { history: newHistory };
+            }),
             savePageOffline: (url: string, title: string, html: string) => {
                 console.log('Saving page offline:', url, title);
             },
@@ -602,6 +651,7 @@ export const useAppStore = create<BrowserState>()(
                 return { clipboard: newClipboard };
             }),
             clearClipboard: () => set({ clipboard: [] }),
+            clearHistory: () => set({ history: [] }),
 
             // User and auth
             setUser: (user: any) => set({ user, isAdmin: user?.email === 'preetjgfilj2@gmail.com' }),
@@ -1028,6 +1078,13 @@ export const useAppStore = create<BrowserState>()(
                 tabs: state.tabs,
                 activeTabId: state.activeTabId,
                 currentUrl: state.currentUrl,
+                showDownloadsIcon: state.showDownloadsIcon,
+                showClipboardIcon: state.showClipboardIcon,
+                showCartIcon: state.showCartIcon,
+                showTranslateIcon: state.showTranslateIcon,
+                showExtensionsIcon: state.showExtensionsIcon,
+                themeOpacity: state.themeOpacity,
+                themeBlur: state.themeBlur,
             }),
             onRehydrateStorage: () => (state) => {
                 if (state) {

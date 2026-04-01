@@ -1,144 +1,372 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, Globe, Lock, AlertTriangle, CheckCircle, Server, Activity, Power, RefreshCw, Zap } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Activity, Globe, Lock, Server, Shield, ShieldAlert } from 'lucide-react';
+
+type FirewallLevel = 'standard' | 'strict' | 'paranoid';
+type ProxyMode = 'system' | 'direct' | 'fixed_servers' | 'auto_detect';
+type DnsProvider = 'cloudflare' | 'google' | 'quad9' | 'custom';
+
+type NetworkSecurityConfig = {
+    firewallLevel: FirewallLevel;
+    proxyMode: ProxyMode;
+    proxyRules: string;
+    proxyBypassRules: string;
+    enableSecureDns: boolean;
+    dnsProvider: DnsProvider;
+    customDnsTemplate: string;
+    blockAds: boolean;
+    blockTrackers: boolean;
+    blockMalware: boolean;
+    upgradeInsecureRequests: boolean;
+    sendDoNotTrack: boolean;
+    preventWebRtcLeaks: boolean;
+    customBlockedDomains: string;
+};
+
+type NetworkToggleKey =
+    | 'blockAds'
+    | 'blockTrackers'
+    | 'blockMalware'
+    | 'upgradeInsecureRequests'
+    | 'sendDoNotTrack'
+    | 'preventWebRtcLeaks';
+
+const DEFAULT_CONFIG: NetworkSecurityConfig = {
+    firewallLevel: 'standard',
+    proxyMode: 'system',
+    proxyRules: '',
+    proxyBypassRules: '<local>;localhost;127.0.0.1;::1',
+    enableSecureDns: false,
+    dnsProvider: 'cloudflare',
+    customDnsTemplate: '',
+    blockAds: true,
+    blockTrackers: true,
+    blockMalware: true,
+    upgradeInsecureRequests: false,
+    sendDoNotTrack: true,
+    preventWebRtcLeaks: true,
+    customBlockedDomains: '',
+};
+
+const DNS_OPTIONS = [
+    { id: 'cloudflare', label: 'Cloudflare', template: 'https://cloudflare-dns.com/dns-query' },
+    { id: 'google', label: 'Google Public DNS', template: 'https://dns.google/dns-query' },
+    { id: 'quad9', label: 'Quad9', template: 'https://dns.quad9.net/dns-query' },
+    { id: 'custom', label: 'Custom Template', template: 'Enter your DoH endpoint below' },
+] as const;
+
+const FIREWALL_LEVELS = [
+    { id: 'standard', label: 'Standard', desc: 'Balanced browser protection with sane defaults.' },
+    { id: 'strict', label: 'Strict', desc: 'Heavier filtering with HTTPS upgrades and stronger privacy.' },
+    { id: 'paranoid', label: 'Paranoid', desc: 'Maximum filtering plus anti-leak settings for sensitive sessions.' },
+] as const;
+
+const TOGGLES: Array<{ key: NetworkToggleKey; label: string; desc: string }> = [
+    { key: 'blockTrackers', label: 'Block trackers', desc: 'Cancel common analytics and beacon hosts before they load.' },
+    { key: 'blockAds', label: 'Block ad networks', desc: 'Drop requests to common ad delivery domains.' },
+    { key: 'blockMalware', label: 'Block known malware hosts', desc: 'Refuse requests to unsafe or cryptomining domains in the built-in list.' },
+    { key: 'upgradeInsecureRequests', label: 'Upgrade HTTP to HTTPS', desc: 'Redirect plain HTTP pages to HTTPS when the target is not local or private.' },
+    { key: 'sendDoNotTrack', label: 'Send privacy headers', desc: 'Attach `DNT: 1` and `Sec-GPC: 1` on outgoing requests.' },
+    { key: 'preventWebRtcLeaks', label: 'Reduce WebRTC IP leaks', desc: 'Applies Chromium leak-reduction switches. Restart may be required.' },
+] as const;
 
 export default function ProxyFirewallManager() {
-    const [proxyEnabled, setProxyEnabled] = useState(false);
-    const [firewallLevel, setFirewallLevel] = useState<'standard' | 'strict' | 'paranoid'>('standard');
-    const [selectedServer, setSelectedServer] = useState('us-east-1');
-    const [isConnecting, setIsConnecting] = useState(false);
+    const [config, setConfig] = useState<NetworkSecurityConfig>(DEFAULT_CONFIG);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [restartFields, setRestartFields] = useState<string[]>([]);
+    const [status, setStatus] = useState<string>('Loading network controls...');
 
-    const servers = [
-        { id: 'us-east-1', name: 'USA - Virginia', ping: '24ms', load: '12%' },
-        { id: 'in-west-1', name: 'India - Mumbai', ping: '5ms', load: '45%' },
-        { id: 'de-frank-1', name: 'Germany - Frankfurt', ping: '110ms', load: '8%' },
-        { id: 'sg-core-1', name: 'Singapore - Azure', ping: '65ms', load: '22%' },
-    ];
-
-    const toggleProxy = () => {
-        setIsConnecting(true);
-        setTimeout(() => {
-            setProxyEnabled(!proxyEnabled);
-            setIsConnecting(false);
-            if (window.electronAPI) {
-                // In a real app, this would call chrome.proxy or electron setProxy
-                window.electronAPI.setProxy(!proxyEnabled ? { mode: 'fixed_servers', proxyServer: 'http://' + selectedServer } : null);
+    useEffect(() => {
+        const loadConfig = async () => {
+            if (!window.electronAPI?.getNetworkSecurityConfig) {
+                setLoading(false);
+                setStatus('Network controls are unavailable in this build.');
+                return;
             }
-        }, 1500);
+
+            try {
+                const result = await window.electronAPI.getNetworkSecurityConfig();
+                if (result.success && result.config) {
+                    setConfig({ ...DEFAULT_CONFIG, ...result.config });
+                    setRestartFields(result.restartRequiredFor || []);
+                    setStatus('Network controls loaded from desktop runtime.');
+                } else {
+                    setStatus('Failed to load network controls.');
+                }
+            } catch (error: unknown) {
+                setStatus(error instanceof Error ? error.message : 'Failed to load network controls.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadConfig();
+    }, []);
+
+    const dnsTemplate = useMemo(() => {
+        if (config.dnsProvider === 'custom') {
+            return config.customDnsTemplate || 'No custom DNS-over-HTTPS template set';
+        }
+
+        return DNS_OPTIONS.find((option) => option.id === config.dnsProvider)?.template || '';
+    }, [config.dnsProvider, config.customDnsTemplate]);
+
+    const applyConfig = async (nextConfig: NetworkSecurityConfig, message: string) => {
+        setConfig(nextConfig);
+        setSaving(true);
+
+        try {
+            const result = await window.electronAPI?.updateNetworkSecurityConfig?.(nextConfig);
+            if (result?.success && result.config) {
+                setConfig({ ...DEFAULT_CONFIG, ...result.config });
+                setRestartFields(result.restartRequiredFor || []);
+                setStatus(message);
+            } else {
+                setStatus(result?.error || 'Failed to apply network controls.');
+            }
+        } catch (error: unknown) {
+            setStatus(error instanceof Error ? error.message : 'Failed to apply network controls.');
+        } finally {
+            setSaving(false);
+        }
     };
 
-    return (
-        <div className="flex flex-col h-full bg-[var(--primary-bg)] text-[var(--primary-text)] p-6 gap-6 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2" />
+    const updateField = <K extends keyof NetworkSecurityConfig>(key: K, value: NetworkSecurityConfig[K]) => {
+        const nextConfig = { ...config, [key]: value };
 
-            <div className="flex items-center justify-between z-10">
+        if (key === 'firewallLevel') {
+            if (value === 'strict') {
+                nextConfig.blockTrackers = true;
+                nextConfig.blockAds = true;
+                nextConfig.upgradeInsecureRequests = true;
+            }
+
+            if (value === 'paranoid') {
+                nextConfig.blockTrackers = true;
+                nextConfig.blockAds = true;
+                nextConfig.blockMalware = true;
+                nextConfig.upgradeInsecureRequests = true;
+                nextConfig.sendDoNotTrack = true;
+                nextConfig.preventWebRtcLeaks = true;
+                nextConfig.enableSecureDns = true;
+            }
+        }
+
+        applyConfig(nextConfig, 'Network controls updated.');
+    };
+
+    const toggleBooleanField = (key: NetworkToggleKey) => {
+        updateField(key, !config[key]);
+    };
+
+    if (loading) {
+        return (
+            <div className="flex h-full items-center justify-center">
+                <div className="h-10 w-10 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex h-full flex-col gap-6 overflow-hidden bg-[var(--primary-bg)] p-6 text-[var(--primary-text)]">
+            <div className="absolute right-0 top-0 h-80 w-80 translate-x-1/3 -translate-y-1/3 rounded-full bg-emerald-500/5 blur-[110px]" />
+
+            <div className="relative z-10 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                    <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3">
                         <Shield className="text-emerald-400" size={24} />
                     </div>
                     <div>
-                        <h2 className="text-xl font-black uppercase tracking-widest italic text-[var(--primary-text)]">Nexus Shield</h2>
-                        <p className="text-[10px] text-[var(--secondary-text)]/50 font-bold tracking-tighter">ADVANCED PROXY & FIREWALL ORCHESTRATOR</p>
+                        <h2 className="text-xl font-black uppercase tracking-widest italic">Nexus Shield</h2>
+                        <p className="text-[10px] font-bold tracking-[0.3em] text-[var(--secondary-text)]/50">PROXY, DNS, AND REQUEST GUARD</p>
                     </div>
                 </div>
-                <div className={`px-4 py-1.5 rounded-full border flex items-center gap-2 transition-all ${proxyEnabled ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border-red-500/30 text-red-500'}`}>
-                    <div className={`w-2 h-2 rounded-full ${proxyEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-red-500'}`} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">{proxyEnabled ? 'Encrypted Tunnel Active' : 'Unprotected Connection'}</span>
+                <div className={`rounded-full border px-4 py-2 text-[10px] font-black uppercase tracking-[0.35em] ${saving ? 'border-sky-500/30 bg-sky-500/10 text-sky-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
+                    {saving ? 'Applying' : 'Live Config'}
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6 flex-1 z-10">
-                {/* Proxy Configuration */}
-                <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl p-6 flex flex-col gap-6 group hover:border-[var(--border-color)] transition-all shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Server size={18} className="text-blue-400" />
-                            <h3 className="text-xs font-black uppercase tracking-widest text-[var(--primary-text)]">Global Relay Network</h3>
-                        </div>
-                        <button onClick={toggleProxy} className={`p-2 rounded-xl transition-all ${proxyEnabled ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'bg-[var(--primary-bg)]/10 text-[var(--secondary-text)]/40'}`}>
-                            {isConnecting ? <RefreshCw className="animate-spin" size={20} /> : <Power size={20} />}
-                        </button>
+            <div className="relative z-10 grid flex-1 grid-cols-2 gap-6 overflow-hidden">
+                <div className="flex flex-col gap-6 overflow-auto rounded-3xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 shadow-sm">
+                    <div className="flex items-center gap-2">
+                        <Server size={18} className="text-sky-400" />
+                        <h3 className="text-xs font-black uppercase tracking-widest">Routing & DNS</h3>
                     </div>
 
-                    <div className="flex-1 overflow-auto custom-scrollbar pr-2">
-                        <div className="grid grid-cols-1 gap-2">
-                            {servers.map((s) => (
-                                <div
-                                    key={s.id}
-                                    onClick={() => setSelectedServer(s.id)}
-                                    className={`p-3 rounded-2xl flex items-center justify-between cursor-pointer border transition-all ${selectedServer === s.id ? 'bg-blue-500/10 border-blue-500/30' : 'bg-[var(--primary-bg)]/5 border-transparent hover:bg-[var(--primary-bg)]/10'}`}
+                    <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--secondary-text)]/50">Firewall Mode</label>
+                        <div className="grid gap-3">
+                            {FIREWALL_LEVELS.map((level) => (
+                                <button
+                                    key={level.id}
+                                    type="button"
+                                    onClick={() => updateField('firewallLevel', level.id)}
+                                    className={`rounded-2xl border px-4 py-3 text-left transition-all ${config.firewallLevel === level.id ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-black/30'}`}
                                 >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-2 h-2 rounded-full ${parseInt(s.ping) < 30 ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                                        <span className="text-sm font-bold text-[var(--primary-text)]">{s.name}</span>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <span className="text-[10px] font-mono text-[var(--secondary-text)]/40">{s.ping}</span>
-                                        <span className="text-[10px] font-black uppercase text-blue-400/60 ">{s.load}</span>
-                                    </div>
-                                </div>
+                                    <div className="text-sm font-black text-[var(--primary-text)]">{level.label}</div>
+                                    <div className="mt-1 text-[11px] text-[var(--secondary-text)]/70">{level.desc}</div>
+                                </button>
                             ))}
                         </div>
                     </div>
 
-                    <div className="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 flex items-center gap-3">
-                        <Activity size={16} className="text-blue-400" />
-                        <div className="flex-1">
-                            <p className="text-[9px] font-black uppercase text-[var(--secondary-text)]/40">Relay Speed</p>
-                            <p className="text-xs font-bold text-blue-400">1.2 Gbps Ultra-Low Latency</p>
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--secondary-text)]/50">Proxy Mode</label>
+                            <select
+                                value={config.proxyMode}
+                                onChange={(e) => updateField('proxyMode', e.target.value as ProxyMode)}
+                                className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-white outline-none"
+                            >
+                                <option value="system">System Proxy</option>
+                                <option value="direct">Direct Connection</option>
+                                <option value="fixed_servers">Fixed Proxy Rules</option>
+                                <option value="auto_detect">Auto Detect (WPAD)</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--secondary-text)]/50">Secure DNS</label>
+                            <button
+                                type="button"
+                                onClick={() => updateField('enableSecureDns', !config.enableSecureDns)}
+                                className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-sm transition-all ${config.enableSecureDns ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-black/20 text-white/60'}`}
+                            >
+                                <span>{config.enableSecureDns ? 'Enabled' : 'Disabled'}</span>
+                                <Globe size={16} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {config.proxyMode === 'fixed_servers' && (
+                        <div className="space-y-4 rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-sky-300">Proxy Rules</label>
+                                <input
+                                    value={config.proxyRules}
+                                    onChange={(e) => setConfig((prev) => ({ ...prev, proxyRules: e.target.value }))}
+                                    onBlur={() => applyConfig(config, 'Proxy routing updated.')}
+                                    placeholder="http=127.0.0.1:8080;https=127.0.0.1:8080;socks5=127.0.0.1:9050"
+                                    className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-white outline-none"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-sky-300">Bypass Rules</label>
+                                <input
+                                    value={config.proxyBypassRules}
+                                    onChange={(e) => setConfig((prev) => ({ ...prev, proxyBypassRules: e.target.value }))}
+                                    onBlur={() => applyConfig(config, 'Proxy bypass list updated.')}
+                                    placeholder="<local>;localhost;127.0.0.1"
+                                    className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-white outline-none"
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-3 rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4">
+                        <label className="text-[10px] font-black uppercase tracking-[0.3em] text-violet-300">DNS Provider</label>
+                        <div className="grid gap-2">
+                            {DNS_OPTIONS.map((option) => (
+                                <button
+                                    key={option.id}
+                                    type="button"
+                                    onClick={() => updateField('dnsProvider', option.id)}
+                                    className={`rounded-xl border px-3 py-3 text-left transition-all ${config.dnsProvider === option.id ? 'border-violet-500/30 bg-violet-500/10' : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-black/30'}`}
+                                >
+                                    <div className="text-sm font-bold text-white">{option.label}</div>
+                                    <div className="mt-1 break-all text-[11px] text-white/50">{option.template}</div>
+                                </button>
+                            ))}
+                        </div>
+
+                        {config.dnsProvider === 'custom' && (
+                            <textarea
+                                value={config.customDnsTemplate}
+                                onChange={(e) => setConfig((prev) => ({ ...prev, customDnsTemplate: e.target.value }))}
+                                onBlur={() => applyConfig(config, 'Custom DNS template updated.')}
+                                rows={3}
+                                placeholder="https://resolver.example/dns-query"
+                                className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-white outline-none"
+                            />
+                        )}
+
+                        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-[11px] text-white/60">
+                            Active template: {dnsTemplate}
                         </div>
                     </div>
                 </div>
 
-                {/* Firewall Configuration */}
-                <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl p-6 flex flex-col gap-6 group hover:border-[var(--border-color)] transition-all shadow-sm">
+                <div className="flex flex-col gap-6 overflow-auto rounded-3xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 shadow-sm">
                     <div className="flex items-center gap-2">
                         <Lock size={18} className="text-emerald-400" />
-                        <h3 className="text-xs font-black uppercase tracking-widest text-[var(--primary-text)]">Protocol Guard</h3>
+                        <h3 className="text-xs font-black uppercase tracking-widest">Request Guard</h3>
                     </div>
 
-                    <div className="flex flex-col gap-3">
-                        {[
-                            { id: 'standard', label: 'Adaptive Intelligence', desc: 'Balanced security with AI threat detection', icon: <Zap size={14} /> },
-                            { id: 'strict', label: 'Heavy Duty encryption', desc: 'Force HTTPS & block all trackers/scripts', icon: <Shield size={14} /> },
-                            { id: 'paranoid', label: 'Dark Mode Protocol', desc: 'No-log, no-cache, random fingerprinting', icon: <AlertTriangle size={14} /> },
-                        ].map((level) => (
-                            <div
-                                key={level.id}
-                                onClick={() => setFirewallLevel(level.id as any)}
-                                className={`p-4 rounded-2xl border cursor-pointer transition-all ${firewallLevel === level.id ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-[var(--primary-bg)]/5 border-transparent hover:bg-[var(--primary-bg)]/10'}`}
+                    <div className="grid gap-3">
+                        {TOGGLES.map((toggle) => (
+                            <button
+                                key={toggle.key}
+                                type="button"
+                                onClick={() => toggleBooleanField(toggle.key)}
+                                className={`rounded-2xl border px-4 py-3 text-left transition-all ${config[toggle.key] ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-black/30'}`}
                             >
-                                <div className="flex items-center gap-3 mb-1">
-                                    <div className={`${firewallLevel === level.id ? 'text-emerald-400' : 'text-[var(--secondary-text)]/40'}`}>{level.icon}</div>
-                                    <span className="text-sm font-black text-[var(--primary-text)]">{level.label}</span>
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <div className="text-sm font-black text-white">{toggle.label}</div>
+                                        <div className="mt-1 text-[11px] text-white/55">{toggle.desc}</div>
+                                    </div>
+                                    <div className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] ${config[toggle.key] ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-white/45'}`}>
+                                        {config[toggle.key] ? 'On' : 'Off'}
+                                    </div>
                                 </div>
-                                <p className="text-[10px] text-[var(--secondary-text)]/50 font-medium ml-6">{level.desc}</p>
-                            </div>
+                            </button>
                         ))}
                     </div>
 
-                    <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 flex items-center gap-3 mt-auto">
-                        <CheckCircle size={16} className="text-emerald-400" />
-                        <div className="flex-1">
-                            <p className="text-[9px] font-black uppercase text-gray-500">Security Index</p>
-                            <div className="flex items-center gap-1 mt-0.5">
-                                {[1, 2, 3, 4, 5].map((i) => (
-                                    <div key={i} className={`h-1 flex-1 rounded-full ${i <= (firewallLevel === 'paranoid' ? 5 : firewallLevel === 'strict' ? 4 : 3) ? 'bg-emerald-400' : 'bg-white/5'}`} />
-                                ))}
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--secondary-text)]/50">Custom Blocked Domains</label>
+                        <textarea
+                            value={config.customBlockedDomains}
+                            onChange={(e) => setConfig((prev) => ({ ...prev, customBlockedDomains: e.target.value }))}
+                            onBlur={() => applyConfig(config, 'Domain blocklist updated.')}
+                            rows={6}
+                            placeholder={'example-tracker.com\nannoying-cdn.net\nads.example.org'}
+                            className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none"
+                        />
+                        <p className="text-[11px] text-white/45">One hostname per line. Subdomains are blocked automatically.</p>
+                    </div>
+
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                        <div className="flex items-center gap-2">
+                            <Activity size={16} className="text-emerald-300" />
+                            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-300">Runtime Summary</div>
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-3 text-[11px] text-white/65">
+                            <div>Firewall level: <span className="font-bold text-white">{config.firewallLevel}</span></div>
+                            <div>Proxy mode: <span className="font-bold text-white">{config.proxyMode}</span></div>
+                            <div>Secure DNS: <span className="font-bold text-white">{config.enableSecureDns ? config.dnsProvider : 'off'}</span></div>
+                            <div>Privacy headers: <span className="font-bold text-white">{config.sendDoNotTrack ? 'on' : 'off'}</span></div>
+                        </div>
+                    </div>
+
+                    <div className={`rounded-2xl border p-4 ${restartFields.length ? 'border-amber-500/20 bg-amber-500/5' : 'border-emerald-500/20 bg-emerald-500/5'}`}>
+                        <div className="flex items-center gap-2">
+                            {restartFields.length ? <ShieldAlert size={16} className="text-amber-300" /> : <Shield size={16} className="text-emerald-300" />}
+                            <div className={`text-[10px] font-black uppercase tracking-[0.3em] ${restartFields.length ? 'text-amber-300' : 'text-emerald-300'}`}>
+                                {restartFields.length ? 'Restart Recommended' : 'Applied Live'}
                             </div>
                         </div>
+                        <p className="mt-2 text-[11px] leading-relaxed text-white/60">
+                            {restartFields.length
+                                ? 'Secure DNS and WebRTC leak-reduction switches are persisted immediately, but Chromium may need a desktop restart before every tab fully picks them up.'
+                                : 'Proxy and request-filter changes are active for new requests right away.'}
+                        </p>
                     </div>
                 </div>
             </div>
 
-            <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl flex items-center gap-4 z-10">
-                <div className="p-2 bg-amber-500/10 rounded-xl text-amber-500">
-                    <AlertTriangle size={20} />
-                </div>
-                <div className="flex-1">
-                    <p className="text-[10px] font-black uppercase text-amber-500/80">Regional Policy Detected</p>
-                    <p className="text-xs text-[var(--secondary-text)]/60 font-medium">Auto-routing through India/Mumbai node for optimized regional access</p>
-                </div>
-                <button className="text-[10px] font-black uppercase text-amber-500 hover:text-amber-600 transition-colors">Adjust Rules</button>
+            <div className="relative z-10 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/65">
+                {status}
             </div>
         </div>
     );

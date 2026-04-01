@@ -22,6 +22,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:app_links/app_links.dart';
 import 'sync_service.dart';
+import 'auth_service.dart';
 
 import 'browser.dart';
 import 'pages/comet_home_page.dart';
@@ -35,6 +36,7 @@ import 'pages/desktop_control_page.dart';
 import 'pages/automation_page.dart';
 import 'pages/remote_settings_page.dart';
 import 'pages/pdf_viewer_page.dart';
+import 'pages/auth_page.dart';
 
 // ignore: non_constant_identifier_names
 late final String WEB_ARCHIVE_DIR;
@@ -182,8 +184,12 @@ void main(List<String> args) async {
 
   try {
     await Firebase.initializeApp();
-    await SyncService().initialize('comet-default-user');
-    SyncService().tryAutoReconnect();
+    await AuthService().initialize();
+    await SyncService().initialize(AuthService().userId ?? 'comet-guest');
+
+    if (AuthService().isAuthenticated) {
+      SyncService().tryAutoReconnect();
+    }
 
     Timer.periodic(const Duration(seconds: 3), (timer) async {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
@@ -274,6 +280,19 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
           navigatorKey.currentState?.pushNamed('/connect-desktop',
               arguments: {'qrData': uri.toString()});
         });
+      } else if (uri.host == 'auth') {
+        // Auth deep link - redirect to auth page
+        Future.delayed(const Duration(milliseconds: 500), () {
+          navigatorKey.currentState
+              ?.pushNamedAndRemoveUntil('/auth', (route) => false);
+        });
+      } else if (uri.host == 'chat') {
+        // Handle chat deep link - extract message from path/query
+        final message = uri.queryParameters['message'] ?? 'Hello';
+        Future.delayed(const Duration(milliseconds: 500), () {
+          navigatorKey.currentState?.pushNamed('/ai-chat',
+              arguments: {'initialMessage': Uri.decodeComponent(message)});
+        });
       }
     }
   }
@@ -327,6 +346,16 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
       initialRoute: '/',
       routes: {
         '/': (context) => const SplashScreen(),
+        '/auth': (context) => AuthPage(
+              onAuthComplete: () {
+                navigatorKey.currentState
+                    ?.pushNamedAndRemoveUntil('/home', (route) => false);
+              },
+              onGuestMode: () {
+                navigatorKey.currentState
+                    ?.pushNamedAndRemoveUntil('/home', (route) => false);
+              },
+            ),
         '/home': (context) => const CometHomePage(),
         '/connect-desktop': (context) => const ConnectDesktopPage(),
         '/browser': (context) => const Browser(),

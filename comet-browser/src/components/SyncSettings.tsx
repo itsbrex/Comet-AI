@@ -26,7 +26,9 @@ const SyncSettings: React.FC = () => {
     const [syncMode, setSyncMode] = useState<SyncMode>('local');
     const [cloudProvider, setCloudProvider] = useState<CloudProvider>('firebase');
     const [wifiSyncQr, setWifiSyncQr] = useState<string | null>(null);
+    const [wifiSyncInfo, setWifiSyncInfo] = useState<{deviceName: string; pairingCode: string; ip: string; port: number} | null>(null);
     const [wifiConnected, setWifiConnected] = useState(false);
+    const [qrMode, setQrMode] = useState<'local' | 'cloud'>('local');
     const [cloudConnected, setCloudConnected] = useState(false);
     const [localDeviceId, setLocalDeviceId] = useState('');
     const [encryptionKey, setEncryptionKey] = useState(store.syncPassphrase || '');
@@ -58,7 +60,10 @@ const SyncSettings: React.FC = () => {
     useEffect(() => {
         if (!window.electronAPI) return;
 
-        window.electronAPI.getWifiSyncQr().then(qr => setWifiSyncQr(qr));
+        window.electronAPI.getWifiSyncQr(qrMode === 'cloud').then(qr => setWifiSyncQr(qr));
+        window.electronAPI.getWifiSyncInfo().then(info => {
+            if (info) setWifiSyncInfo(info);
+        });
         
         const cleanupWifiStatus = window.electronAPI.onWifiSyncStatus((data) => {
             setWifiConnected(data.connected);
@@ -76,7 +81,15 @@ const SyncSettings: React.FC = () => {
             cleanupWifiStatus();
             cleanupCloudStatus();
         };
-    }, []);
+    }, [qrMode]);
+
+    const handleQrModeChange = async (mode: 'local' | 'cloud') => {
+        setQrMode(mode);
+        if (window.electronAPI) {
+            const qr = await window.electronAPI.getWifiSyncQr(mode === 'cloud');
+            setWifiSyncQr(qr);
+        }
+    };
 
     const handleModeChange = (mode: SyncMode) => {
         setSyncMode(mode);
@@ -379,15 +392,46 @@ const SyncSettings: React.FC = () => {
             {/* WiFi Sync Section */}
             {(syncMode === 'local' || syncMode === 'local_cloud') && (
                 <div className="p-6 rounded-3xl bg-white/[0.03] border border-white/5">
-                    <h3 className="text-sm font-bold text-white/60 uppercase tracking-wider mb-4 flex items-center gap-2">
-                        <Wifi size={16} /> Local WiFi Sync
-                    </h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
+                            <Wifi size={16} /> QR Sync
+                        </h3>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => handleQrModeChange('local')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                    qrMode === 'local' 
+                                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' 
+                                        : 'bg-white/5 text-white/40 border border-white/10'
+                                }`}
+                            >
+                                Local
+                            </button>
+                            <button
+                                onClick={() => handleQrModeChange('cloud')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                    qrMode === 'cloud' 
+                                        ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' 
+                                        : 'bg-white/5 text-white/40 border border-white/10'
+                                }`}
+                            >
+                                Cloud
+                            </button>
+                        </div>
+                    </div>
                     
                     {!wifiConnected ? (
                         <div className="flex items-center gap-8">
-                            <div className="p-4 bg-white rounded-2xl">
+                            <div className="p-4 bg-white rounded-2xl relative">
                                 {wifiSyncQr ? (
-                                    <img src={wifiSyncQr} alt="WiFi QR" className="w-40 h-40" />
+                                    <>
+                                        <img src={wifiSyncQr} alt="WiFi QR" className="w-40 h-40" />
+                                        {qrMode === 'cloud' && (
+                                            <div className="absolute -top-2 -right-2 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center">
+                                                <Cloud size={14} className="text-white" />
+                                            </div>
+                                        )}
+                                    </>
                                 ) : (
                                     <div className="w-40 h-40 flex items-center justify-center">
                                         <RefreshCw className="animate-spin text-cyan-400" size={32} />
@@ -395,13 +439,36 @@ const SyncSettings: React.FC = () => {
                                 )}
                             </div>
                             <div className="flex-1 space-y-3">
-                                <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
-                                    <span className="text-white/60 text-sm">Pairing Code</span>
-                                    <span className="text-cyan-400 font-black text-2xl tracking-widest">------</span>
-                                </div>
-                                <p className="text-white/30 text-xs">
-                                    Scan QR code or use pairing code from mobile app
-                                </p>
+                                {qrMode === 'local' ? (
+                                    <>
+                                        <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                                            <span className="text-white/60 text-sm">Pairing Code</span>
+                                            <span className="text-cyan-400 font-black text-2xl tracking-widest">
+                                                {wifiSyncInfo?.pairingCode || '------'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-4 text-xs text-white/40">
+                                            <span>IP: {wifiSyncInfo?.ip || '...'}</span>
+                                            <span>Port: {wifiSyncInfo?.port || '3004'}</span>
+                                        </div>
+                                        <p className="text-white/30 text-xs">
+                                            Scan QR code or use pairing code from mobile app
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center gap-3 p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                                            <Cloud size={20} className="text-purple-400" />
+                                            <div>
+                                                <span className="text-white/60 text-sm">Cloud Sync</span>
+                                                <p className="text-white/30 text-xs">Sync via your account across any network</p>
+                                            </div>
+                                        </div>
+                                        <p className="text-white/30 text-xs">
+                                            Scan QR with Comet AI mobile app logged into same account
+                                        </p>
+                                    </>
+                                )}
                             </div>
                         </div>
                     ) : (

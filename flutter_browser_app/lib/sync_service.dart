@@ -199,6 +199,8 @@ class SyncService {
   bool _isReconnecting = false;
   Timer? _reconnectTimer;
   static const String _lastDeviceKey = 'last_connected_device';
+  String _desktopConnectionMode = 'none';
+  String? _connectedDesktopLabel;
 
   // UDP Discovery
   RawDatagramSocket? _discoverySocket;
@@ -229,6 +231,9 @@ class SyncService {
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get onDesktopControl =>
       _desktopControlController.stream;
+  final Map<String, dynamic> _cloudDeviceCache = {};
+  StreamSubscription<DatabaseEvent>? _cloudDevicesSubscription;
+  StreamSubscription<DatabaseEvent>? _cloudAIResponsesSubscription;
 
   Future<void> startDiscovery() async {
     _discoveredDeviceIds.clear();
@@ -329,6 +334,8 @@ class SyncService {
       await completer.future.timeout(const Duration(seconds: 10));
 
       isConnectedToDesktop = true;
+      _desktopConnectionMode = 'local';
+      _connectedDesktopLabel = ip;
       _isReconnecting = false;
       _reconnectTimer?.cancel();
       _saveDeviceLocally(ip, port, deviceId);
@@ -483,11 +490,16 @@ class SyncService {
 
   /// Disconnect from desktop
   void disconnectFromDesktop() {
-    _desktopSocket?.close();
+    if (_desktopConnectionMode == 'local') {
+      _desktopSocket?.close();
+    }
     _desktopSocket = null;
     isConnectedToDesktop = false;
     _desktopIp = null;
     _desktopPort = null;
+    _desktopConnectionMode = 'none';
+    _connectedDesktopLabel = null;
+    remoteDeviceId = null;
     stopDiscovery();
     print('[Sync] Disconnected from desktop');
   }
@@ -499,6 +511,8 @@ class SyncService {
       'desktopIp': _desktopIp,
       'desktopPort': _desktopPort,
       'remoteDeviceId': remoteDeviceId,
+      'mode': _desktopConnectionMode,
+      'label': _connectedDesktopLabel,
     };
   }
 
@@ -509,6 +523,52 @@ class SyncService {
     Map<String, dynamic>? args,
     String? promptId,
   }) async {
+    if (_desktopConnectionMode == 'cloud') {
+      if (remoteDeviceId == null) {
+        throw Exception('No cloud desktop selected');
+      }
+
+      final activePromptId = promptId ?? const Uuid().v4();
+
+      if (action == 'send-prompt') {
+        if (prompt == null || prompt.trim().isEmpty) {
+          return {'success': false, 'error': 'Prompt is required'};
+        }
+        sendPromptToCloudDevice(
+          remoteDeviceId!,
+          prompt,
+          promptId: activePromptId,
+        );
+        return {
+          'success': true,
+          'promptId': activePromptId,
+          'commandId': activePromptId,
+          'mode': 'cloud',
+        };
+      }
+
+      if (action == 'get-status') {
+        final device =
+            _cloudDeviceCache[remoteDeviceId] as Map<String, dynamic>? ?? {};
+        return {
+          'success': true,
+          'desktopName': device['deviceName'] ?? _connectedDesktopLabel ?? 'Cloud Desktop',
+          'platform': device['platform'] ?? 'cloud',
+          'connectionMode': 'cloud',
+          'online': device['online'] ?? true,
+          'activeApp': 'Remote Comet Desktop',
+          'screenOn': true,
+        };
+      }
+
+      return {
+        'success': false,
+        'error':
+            'This desktop control action is only available on local network right now. Cloud mode currently supports AI sidebar prompts.',
+        'mode': 'cloud',
+      };
+    }
+
     if (!isConnectedToDesktop || _desktopSocket == null) {
       throw Exception('Not connected to desktop');
     }
@@ -605,6 +665,7 @@ class SyncService {
 
   Future<void> initializeCloud(String userId, {String? deviceId}) async {
     _cloudUserId = userId;
+    _cloudConnected = true;
     if (deviceId != null) {
       _cloudDeviceId = deviceId;
     } else {
@@ -624,16 +685,46 @@ class SyncService {
     }
     print('[CloudSync] Initialized for user: $userId, device: $_cloudDeviceId');
     _startCloudDeviceListener();
+    _startCloudAIResponseListener();
   }
 
   void _startCloudDeviceListener() {
     if (_cloudUserId == null) return;
 
     _cloudDevicesRef = FirebaseDatabase.instance.ref('devices/$_cloudUserId');
-    _cloudDevicesRef!.onValue.listen((event) {
+    _cloudDevicesSubscription?.cancel();
+    _cloudDevicesSubscription = _cloudDevicesRef!.onValue.listen((event) {
       if (event.snapshot.value != null) {
         final Map<dynamic, dynamic> data = event.snapshot.value as Map;
+        _cloudDeviceCache
+          ..clear()
+          ..addAll(
+            data.map((key, value) => MapEntry(
+                  key.toString(),
+                  Map<String, dynamic>.from(value as Map),
+                )),
+          );
         _cloudDevicesController.add(Map<String, dynamic>.from(data));
+      }
+    });
+  }
+
+  void _startCloudAIResponseListener() {
+    if (_cloudUserId == null || _cloudDeviceId == null) return;
+
+    _cloudAIResponsesSubscription?.cancel();
+    final responsesRef =
+        FirebaseDatabase.instance.ref('aiResponses/$_cloudUserId/$_cloudDeviceId');
+
+    _cloudAIResponsesSubscription = responsesRef.onValue.listen((event) {
+      final data = event.snapshot.value;
+      if (data is Map && data['response'] != null) {
+        _aiStreamController.add({
+          'promptId': data['promptId'],
+          'response': data['response'],
+          'isStreaming': data['isStreaming'] ?? false,
+          'mode': 'cloud',
+        });
       }
     });
   }
@@ -665,7 +756,20 @@ class SyncService {
         }
       });
 
-      return completer.future.timeout(const Duration(seconds: 30));
+      final connected =
+          await completer.future.timeout(const Duration(seconds: 30));
+      if (connected) {
+        remoteDeviceId = targetDeviceId;
+        isConnectedToDesktop = true;
+        _desktopConnectionMode = 'cloud';
+        final device =
+            _cloudDeviceCache[targetDeviceId] as Map<String, dynamic>?;
+        _connectedDesktopLabel =
+            device?['deviceName']?.toString() ?? 'Cloud Desktop';
+        _desktopIp = null;
+        _desktopPort = null;
+      }
+      return connected;
     } catch (e) {
       print('[CloudSync] Connection failed: $e');
       return false;
@@ -675,6 +779,12 @@ class SyncService {
   void disconnectFromCloudDevice(String targetDeviceId) {
     if (_cloudUserId == null || _cloudDeviceId == null) return;
     _cloudDevicesRef?.child(targetDeviceId).update({'online': false});
+    if (remoteDeviceId == targetDeviceId) {
+      isConnectedToDesktop = false;
+      _desktopConnectionMode = 'none';
+      _connectedDesktopLabel = null;
+      remoteDeviceId = null;
+    }
   }
 
   Future<void> syncClipboardToCloud(String text) async {
@@ -727,4 +837,7 @@ class SyncService {
   }
 
   bool get isCloudConnected => _cloudConnected;
+  bool get isCloudDesktopSession => _desktopConnectionMode == 'cloud';
+  String get desktopConnectionMode => _desktopConnectionMode;
+  String? get connectedDesktopLabel => _connectedDesktopLabel;
 }

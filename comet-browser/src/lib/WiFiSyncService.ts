@@ -257,6 +257,10 @@ export class WiFiSyncService extends EventEmitter {
         return `comet-ai://connect?ip=${this.getLocalIp()}&port=${this.port}&device=${this.deviceId}`;
     }
 
+    public getCloudConnectUri(cloudDeviceId: string): string {
+        return `comet-ai://cloud-connect?cloudId=${cloudDeviceId}&device=${this.deviceId}&name=${encodeURIComponent(this.deviceName)}`;
+    }
+
     public stop() {
         if (this.wss) {
             this.wss.close();

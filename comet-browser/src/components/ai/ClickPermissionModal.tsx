@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { MousePointerClick, Zap, Eye, Brain, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Zap } from 'lucide-react';
 
 interface ClickPermissionModalProps {
   context: {
@@ -11,9 +11,11 @@ interface ClickPermissionModalProps {
     actionType?: string;
     what?: string;
     highRiskQr?: string | null;  // Now expects a JSON string with {qrImage, pin, token}
+    requiresDeviceUnlock?: boolean;
   };
   onAllow: (alwaysAllow?: boolean) => void;
   onDeny: () => void;
+  highRiskApproved?: boolean;
 }
 
 const RISK_CONFIG = {
@@ -22,8 +24,9 @@ const RISK_CONFIG = {
   high: { color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20', label: 'High Risk', icon: '🔴' },
 };
 
-const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAllow, onDeny }: ClickPermissionModalProps) {
+const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAllow, onDeny, highRiskApproved = false }: ClickPermissionModalProps) {
   const [alwaysAllow, setAlwaysAllow] = React.useState(false);
+  const [pinInput, setPinInput] = React.useState('');
   const riskKey = context.risk || 'medium';
   const risk = RISK_CONFIG[riskKey] ?? RISK_CONFIG.medium;
 
@@ -31,10 +34,23 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
   if (context.highRiskQr) {
     try {
       qrData = JSON.parse(context.highRiskQr);
-    } catch (_) {
+    } catch {
       qrData = { qrImage: context.highRiskQr, pin: '' };
     }
   }
+
+  const expectedPin = typeof qrData?.pin === 'string' ? qrData.pin : '';
+  const normalizedPin = pinInput.replace(/\D/g, '');
+  const requiresHighRiskVerification = context.risk === 'high';
+  const isPinReady = !expectedPin || (normalizedPin.length === expectedPin.length && normalizedPin === expectedPin);
+  const canAllow = requiresHighRiskVerification ? highRiskApproved && isPinReady : true;
+  const allowLabel = !requiresHighRiskVerification
+    ? '✓ Allow'
+    : !highRiskApproved
+      ? 'Awaiting Mobile Approval'
+      : !isPinReady
+        ? 'Enter Matching PIN'
+        : 'Approve Action';
 
   return (
     <motion.div
@@ -86,6 +102,17 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
           </div>
         )}
 
+        {context.requiresDeviceUnlock && context.risk !== 'high' && (
+          <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-3">
+            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-sky-300">
+              Native Device Unlock Required
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed text-white/60">
+              After approval, Comet will open the OS verification prompt before this command runs.
+            </p>
+          </div>
+        )}
+
         {context.risk === 'high' && qrData?.qrImage && (
           <div className="pt-2 border-t border-red-500/10 flex flex-col items-center">
             <div className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-3 animate-pulse">
@@ -100,6 +127,33 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
                 <span className="text-xl font-mono font-black tracking-[0.4em] text-white mt-1 bg-white/5 py-1 px-4 rounded-lg border border-white/10">{qrData.pin}</span>
               </div>
             )}
+            <div className={`mt-4 w-full rounded-xl border px-3 py-3 ${highRiskApproved ? 'border-green-500/30 bg-green-500/10' : 'border-amber-500/20 bg-amber-500/10'}`}>
+              <div className={`text-[10px] font-black uppercase tracking-[0.3em] ${highRiskApproved ? 'text-green-300' : 'text-amber-300'}`}>
+                {highRiskApproved ? 'Mobile Approval Received' : 'Waiting For Mobile Approval'}
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-white/60">
+                {highRiskApproved
+                  ? 'Enter the displayed PIN below to finish the approval on desktop.'
+                  : 'This action stays locked until Comet Mobile scans the QR code and confirms the request.'}
+              </p>
+            </div>
+            <div className="mt-4 w-full">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-2 block">
+                Confirm PIN To Unlock
+              </label>
+              <input
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0, expectedPin.length || 6))}
+                inputMode="numeric"
+                maxLength={expectedPin.length || 6}
+                placeholder="Enter PIN"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center font-mono text-lg tracking-[0.4em] text-white outline-none transition-all focus:border-sky-400/50 focus:bg-white/10 disabled:opacity-50"
+                disabled={!highRiskApproved}
+              />
+              {highRiskApproved && expectedPin && normalizedPin.length > 0 && normalizedPin !== expectedPin && (
+                <p className="mt-2 text-[11px] text-red-300">PIN does not match the approval code.</p>
+              )}
+            </div>
             <p className="text-[10px] text-white/30 text-center mt-3 leading-relaxed">
               Scanning opens **Comet Mobile** <br/> to safely verify this action.
             </p>
@@ -135,14 +189,15 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
           ✕ Deny
         </button>
         <button
-          onClick={() => onAllow(alwaysAllow)}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg ${
+          onClick={() => canAllow && onAllow(alwaysAllow)}
+          disabled={!canAllow}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg disabled:cursor-not-allowed disabled:opacity-50 ${
             context.risk === 'high' ? 'bg-red-500/80 hover:bg-red-500 text-white' :
             context.risk === 'medium' ? 'bg-amber-500/80 hover:bg-amber-500 text-white' :
             'bg-sky-500/80 hover:bg-sky-500 text-white'
           }`}
         >
-          ✓ Allow
+          {allowLabel}
         </button>
       </div>
 
@@ -156,7 +211,9 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
           <kbd className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[9px] font-mono text-white/30">
             Tab
           </kbd>
-          <span className="text-[9px] text-white/20 uppercase tracking-widest">to quick-allow</span>
+          <span className="text-[9px] text-white/20 uppercase tracking-widest">
+            {context.requiresDeviceUnlock ? 'to approve, then unlock device' : 'to quick-allow'}
+          </span>
         </div>
       )}
     </motion.div>

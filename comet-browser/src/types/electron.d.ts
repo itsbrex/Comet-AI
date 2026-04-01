@@ -56,6 +56,9 @@ declare global {
             saveOfflinePage: (data: { url: string; title: string, html: string }) => Promise<boolean>;
             setUserAgent: (userAgent: string) => Promise<boolean>;
             setProxy: (config: any) => Promise<boolean>;
+            setNativeThemeSource: (source: 'system' | 'light' | 'dark') => Promise<{ success: boolean; themeSource: 'system' | 'light' | 'dark' }>;
+            getNetworkSecurityConfig: () => Promise<{ success: boolean; config: any; restartRequiredFor: string[] }>;
+            updateNetworkSecurityConfig: (config: any) => Promise<{ success: boolean; config: any; restartRequiredFor: string[]; error?: string }>;
             capturePage: () => Promise<string>;
             sendInputEvent: (input: any) => Promise<void>;
             openDevTools: () => void;
@@ -162,6 +165,11 @@ declare global {
             saveVectorStore: (data: any[]) => Promise<boolean>;
             loadVectorStore: () => Promise<any[]>;
             webSearchRag: (query: string) => Promise<string[]>;
+            vaultListEntries: () => Promise<{ success: boolean; entries: Array<{ id: string; site: string; username: string; created?: string | null; hasPassword: boolean; passwordMasked: string }>; error?: string }>;
+            vaultSaveEntry: (entry: { id?: string; site: string; username?: string; password: string; created?: string }) => Promise<{ success: boolean; entries?: Array<{ id: string; site: string; username: string; created?: string | null; hasPassword: boolean; passwordMasked: string }>; error?: string }>;
+            vaultDeleteEntry: (entryId: string) => Promise<{ success: boolean; entries?: Array<{ id: string; site: string; username: string; created?: string | null; hasPassword: boolean; passwordMasked: string }>; error?: string }>;
+            vaultReadSecret: (entryId: string) => Promise<{ success: boolean; password?: string; error?: string }>;
+            vaultCopySecret: (entryId: string) => Promise<{ success: boolean; error?: string }>;
             getPasswordsForSite: (domain: string) => Promise<any[]>;
             proposePasswordSave: (data: { domain: string; username?: string; password?: string }) => void;
             getOllamaModels: () => Promise<{ name: string; modified_at: string }[]>;
@@ -246,7 +254,7 @@ declare global {
             onAiChatInputText: (callback: (text: string) => void) => () => void;
             translateWebsite: (args: { targetLanguage: string; method?: 'google' | 'chrome-ai' }) => Promise<{ success?: boolean; error?: string }>;
             onTriggerTranslationDialog: (callback: () => void) => () => void;
-            onAutomationShellApproval: (callback: (payload: { requestId: string; command: string; risk: string; reason?: string; highRiskQr?: string }) => void) => () => void;
+            onAutomationShellApproval: (callback: (payload: { requestId: string; command: string; risk: string; reason?: string; highRiskQr?: string; requiresDeviceUnlock?: boolean }) => void) => () => void;
             respondAutomationShellApproval: (response: { requestId: string; allowed: boolean }) => void;
             toggleAdblocker: (enable: boolean) => void;
             translateText: (args: { text: string; to: string; from?: string }) => Promise<{ success: boolean; translated?: string; error?: string }>;
@@ -281,7 +289,7 @@ declare global {
             onSetSettingsSection: (callback: (section: string) => void) => () => void;
 
             getWifiSyncUri: () => Promise<string | null>;
-            getWifiSyncQr: () => Promise<string | null>;
+            getWifiSyncQr: (cloudMode?: boolean) => Promise<string | null>;
             getWifiSyncInfo: () => Promise<{ deviceName: string, pairingCode: string, ip: string, port: number }>;
             onWifiSyncStatus: (callback: (data: { connected: boolean }) => void) => () => void;
             onRemoteAiPrompt: (callback: (data: { prompt: string; commandId: string }) => void) => () => void;
@@ -321,8 +329,8 @@ declare global {
             permCheck: (key: string) => Promise<{ granted: boolean }>;
             permList: () => Promise<Array<{ key: string; level: string; granted_at: number; expires_at: number | null; description: string }>>;
             permAuditLog: (limit?: number) => Promise<Array<{ entry: string; timestamp: number }>>;
-            getSecuritySettings: () => Promise<{ autoApproveLowRisk: boolean; autoApproveMidRisk: boolean; autoApprovedCommands: string[] }>;
-            updateSecuritySettings: (settings: { autoApproveLowRisk?: boolean; autoApproveMidRisk?: boolean }) => Promise<{ success: boolean; settings: { autoApproveLowRisk: boolean; autoApproveMidRisk: boolean; autoApprovedCommands: string[] } }>;
+            getSecuritySettings: () => Promise<{ autoApproveLowRisk: boolean; autoApproveMidRisk: boolean; requireDeviceUnlockForManualApproval: boolean; requireDeviceUnlockForVaultAccess: boolean; autoApprovedCommands: string[] }>;
+            updateSecuritySettings: (settings: { autoApproveLowRisk?: boolean; autoApproveMidRisk?: boolean; requireDeviceUnlockForManualApproval?: boolean; requireDeviceUnlockForVaultAccess?: boolean }) => Promise<{ success: boolean; settings: { autoApproveLowRisk: boolean; autoApproveMidRisk: boolean; requireDeviceUnlockForManualApproval: boolean; requireDeviceUnlockForVaultAccess: boolean; autoApprovedCommands: string[] } }>;
             setAutoApprovalCommand: (payload: { command: string; enabled: boolean }) => Promise<{ success: boolean; commands: string[] }>;
             getAutoApprovedCommands: () => Promise<{ commands: string[] }>;
 

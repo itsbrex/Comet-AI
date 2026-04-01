@@ -1,59 +1,129 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useAppStore } from '@/store/useAppStore';
 import { Lock, Eye, EyeOff, Search, Plus, Trash2, Key, Globe, User, ShieldCheck, Copy, Check } from 'lucide-react';
 
+type VaultEntry = {
+    id: string;
+    site: string;
+    username: string;
+    created?: string | null;
+    hasPassword: boolean;
+    passwordMasked: string;
+};
+
 export default function PasswordManager() {
-    const [passwords, setPasswords] = useState<any[]>([]);
+    const [passwords, setPasswords] = useState<VaultEntry[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [showPlain, setShowPlain] = useState<Record<string, boolean>>({});
+    const [revealedPasswords, setRevealedPasswords] = useState<Record<string, string>>({});
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [isAdding, setIsAdding] = useState(false);
+    const [vaultStatus, setVaultStatus] = useState<string | null>(null);
 
     // New Password State
     const [newPass, setNewPass] = useState({ site: '', username: '', password: '' });
 
     useEffect(() => {
-        if (window.electronAPI) {
-            window.electronAPI.loadPersistentData('user-passwords').then((result: any) => {
-                if (result.success && result.data) setPasswords(result.data);
-            });
-        }
+        const loadVaultEntries = async () => {
+            if (!window.electronAPI?.vaultListEntries) {
+                return;
+            }
+
+            const result = await window.electronAPI.vaultListEntries();
+            if (result.success && result.entries) {
+                setPasswords(result.entries);
+            }
+        };
+
+        loadVaultEntries();
     }, []);
 
-    const savePasswords = (updated: any[]) => {
-        setPasswords(updated);
-        if (window.electronAPI) {
-            window.electronAPI.savePersistentData('user-passwords', updated);
+    const pushVaultStatus = (message: string | null) => {
+        setVaultStatus(message);
+        if (message) {
+            window.setTimeout(() => setVaultStatus(null), 4000);
         }
     };
 
-    const handleAdd = () => {
+    const handleAdd = async () => {
         if (!newPass.site || !newPass.password) return;
-        const entry = {
-            id: Date.now().toString(),
-            site: newPass.site.replace('https://', '').replace('http://', '').split('/')[0],
+        if (!window.electronAPI?.vaultSaveEntry) {
+            return;
+        }
+
+        const result = await window.electronAPI.vaultSaveEntry({
+            site: newPass.site,
             username: newPass.username,
             password: newPass.password,
-            created: new Date().toISOString()
-        };
-        savePasswords([...passwords, entry]);
+        });
+
+        if (!result.success || !result.entries) {
+            pushVaultStatus(result.error || 'Failed to save vault entry.');
+            return;
+        }
+
+        setPasswords(result.entries);
         setIsAdding(false);
         setNewPass({ site: '', username: '', password: '' });
+        pushVaultStatus('Credential saved to Neural Vault.');
     };
 
-    const handleDelete = (id: string) => {
-        savePasswords(passwords.filter(p => p.id !== id));
+    const handleDelete = async (id: string) => {
+        if (!window.electronAPI?.vaultDeleteEntry) {
+            return;
+        }
+
+        const result = await window.electronAPI.vaultDeleteEntry(id);
+        if (!result.success || !result.entries) {
+            pushVaultStatus(result.error || 'Failed to delete vault entry.');
+            return;
+        }
+
+        setPasswords(result.entries);
+        setShowPlain(prev => ({ ...prev, [id]: false }));
+        setRevealedPasswords(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        pushVaultStatus('Vault entry removed.');
     };
 
-    const togglePassword = (id: string) => {
-        setShowPlain(prev => ({ ...prev, [id]: !prev[id] }));
+    const togglePassword = async (id: string) => {
+        if (showPlain[id]) {
+            setShowPlain(prev => ({ ...prev, [id]: false }));
+            return;
+        }
+
+        if (!window.electronAPI?.vaultReadSecret) {
+            return;
+        }
+
+        const result = await window.electronAPI.vaultReadSecret(id);
+        if (!result.success || !result.password) {
+            pushVaultStatus(result.error || 'Vault unlock was denied.');
+            return;
+        }
+
+        setRevealedPasswords(prev => ({ ...prev, [id]: result.password || '' }));
+        setShowPlain(prev => ({ ...prev, [id]: true }));
+        pushVaultStatus('Native unlock approved for this vault session.');
     };
 
-    const handleCopy = (text: string, id: string) => {
-        navigator.clipboard.writeText(text);
+    const handleCopy = async (id: string) => {
+        if (!window.electronAPI?.vaultCopySecret) {
+            return;
+        }
+
+        const result = await window.electronAPI.vaultCopySecret(id);
+        if (!result.success) {
+            pushVaultStatus(result.error || 'Failed to copy password.');
+            return;
+        }
+
         setCopiedId(id);
+        pushVaultStatus('Password copied after native unlock.');
         setTimeout(() => setCopiedId(null), 2000);
     };
 
@@ -165,7 +235,7 @@ export default function PasswordManager() {
                                 <div className="flex flex-col items-end gap-2 pr-6">
                                     <div className="flex items-center gap-2 bg-[var(--primary-bg)]/40 px-3 py-1.5 rounded-lg border border-[var(--border-color)]">
                                         <span className="text-xs font-mono tracking-wider tabular-nums text-[var(--primary-text)]">
-                                            {showPlain[item.id] ? item.password : '••••••••••••'}
+                                            {showPlain[item.id] ? (revealedPasswords[item.id] || item.passwordMasked) : item.passwordMasked}
                                         </span>
                                         <button
                                             type="button"
@@ -182,7 +252,7 @@ export default function PasswordManager() {
                                     <button
                                         type="button"
                                         title="Copy Password"
-                                        onClick={() => handleCopy(item.password, item.id)}
+                                        onClick={() => handleCopy(item.id)}
                                         className={`p-2 rounded-lg transition-all ${copiedId === item.id ? 'bg-emerald-500/20 text-emerald-400' : 'bg-[var(--primary-bg)]/5 hover:bg-[var(--primary-bg)]/10 text-[var(--secondary-text)]/40 hover:text-[var(--primary-text)]'}`}
                                     >
                                         {copiedId === item.id ? <Check size={16} /> : <Copy size={16} />}
@@ -208,7 +278,9 @@ export default function PasswordManager() {
                 </div>
                 <div className="flex-1">
                     <p className="text-[10px] font-black uppercase text-emerald-400/80">Active Protection Module</p>
-                    <p className="text-xs text-gray-400 font-medium">Auto-fill is monitoring 4 active login sessions</p>
+                    <p className="text-xs text-gray-400 font-medium">
+                        {vaultStatus || 'Login autofill and secret reveal now require native OS approval when vault protection is enabled.'}
+                    </p>
                 </div>
                 <div className="flex items-center gap-1.5">
                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

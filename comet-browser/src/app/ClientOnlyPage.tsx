@@ -91,11 +91,10 @@ function ThemeIcon({ theme }: { theme: AppTheme }) {
 const SidebarIcon = ({ icon, label, active, onClick, collapsed }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, collapsed: boolean }) => (
   <button
     onClick={onClick}
-    className={`group relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-500 focus:outline-none ${
-      active
-        ? 'bg-accent/10 text-accent'
-        : 'text-secondary-text hover:bg-accent/5 hover:text-accent hover:scale-105 active:scale-95'
-    }`}
+    className={`group relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-500 focus:outline-none ${active
+      ? 'bg-accent/10 text-accent'
+      : 'text-secondary-text hover:bg-accent/5 hover:text-accent hover:scale-105 active:scale-95'
+      }`}
   >
     <div className="relative z-10 transition-transform duration-300 group-hover:scale-110">
       {icon}
@@ -674,15 +673,32 @@ export default function Home() {
       statusMessage: 'Gathering context…',
     });
 
-    const contextItems = await BrowserAI.retrieveContext(query);
-    setAiOverview(prev => prev ? { ...prev, statusMessage: `${contextItems.length} context items ready` } : prev);
+    const [contextItems, webSearchResults] = await Promise.all([
+      BrowserAI.retrieveContext(query),
+      window.electronAPI.webSearchRag(query).catch(() => []) as Promise<string[]>
+    ]);
 
-    const contextString = contextItems.map((c) => c.text).join('\n\n');
+    setAiOverview(prev => prev ? { 
+      ...prev, 
+      statusMessage: `${contextItems.length} local memories + ${webSearchResults.length} live results ready` 
+    } : prev);
+
+    const contextString = [
+      "--- LOCAL MEMORIES ---",
+      contextItems.map((c) => c.text).join('\n\n'),
+      "--- LIVE WEB RESULTS ---",
+      webSearchResults.join('\n\n')
+    ].join('\n\n');
+
     const prompt = `Synthesize a comprehensive, Perplexity-style answer for: "${query}". 
-    Include:
-    1. A clear direct answer (2 paragraphs max).
-    2. 3 deep insights.
-    3. Contextual relevance to the user's local data.
+    
+    CRITICAL INSTRUCTIONS:
+    1. Use the [LIVE WEB RESULTS] for primary factual information.
+    2. ALWAYS cite the source using the exact Markdown format provided [Title](URL) whenever you state a fact or insight from that source.
+    3. Include a clear direct answer (2 paragraphs max).
+    4. Provide 3 deep insights.
+    5. Mention contextual relevance to the user's local data (from LOCAL MEMORIES).
+    
     Format with HTML bolding and clear sections.`;
 
     const startTime = Date.now();
@@ -760,6 +776,17 @@ export default function Home() {
 
     // Apply the resolved class
     root.classList.add(resolved);
+
+    const browserThemeSource =
+      store.theme === 'system'
+        ? 'system'
+        : resolved === 'light'
+          ? 'light'
+          : 'dark';
+
+    window.electronAPI?.setNativeThemeSource?.(browserThemeSource).catch((error: unknown) => {
+      console.warn('[Theme] Failed to sync native theme source:', error instanceof Error ? error.message : error);
+    });
   }, [store.theme, store.customThemePrimary, store.customThemeSecondary]);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -962,6 +989,7 @@ export default function Home() {
           case 'toggle-spotlight': setShowSpotlightSearch(prev => !prev); break;
           case 'cycle-theme': cycleTheme(); break;
           case 'open-history': store.setSettingsSection('history'); setShowSettings(true); break;
+          case 'clear-history': store.clearHistory(); break;
           case 'open-downloads': setShowDownloads(true); break;
           case 'open-extensions': store.setSettingsSection('extensions'); setShowSettings(true); break;
           case 'open-bookmarks': store.setSettingsSection('vault'); setShowSettings(true); break;
@@ -1183,7 +1211,7 @@ export default function Home() {
       window.electronAPI.setBrowserViewBounds(bounds);
     }
     window.addEventListener('resize', calculateBounds);
-    
+
     let cleanupFullscreen: (() => void) | undefined;
     if (window.electronAPI?.onWindowFullscreenChanged) {
       cleanupFullscreen = window.electronAPI.onWindowFullscreenChanged(() => {
@@ -1195,7 +1223,7 @@ export default function Home() {
         });
       });
     }
-    
+
     return () => {
       window.removeEventListener('resize', calculateBounds);
       cleanupFullscreen?.();
@@ -1270,6 +1298,9 @@ export default function Home() {
       const cleanTitle = window.electronAPI.onBrowserViewTitleChanged(({ tabId, title }) => {
         if (store.tabs.find(t => t.id === tabId)) {
           store.updateTab(tabId, { title });
+          if (tabId === store.activeTabId && store.currentUrl) {
+            store.updateHistoryTitle(store.currentUrl, title);
+          }
         }
       });
 
@@ -1597,10 +1628,11 @@ export default function Home() {
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: 70, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
-              className="flex flex-col items-center py-6 gap-5 z-[100] backdrop-blur-3xl shadow-[20px_0_60px_rgba(0,0,0,0.15)] border-r no-drag-region"
+              className="flex flex-col items-center py-6 gap-5 z-[100] backdrop-blur-3xl shadow-[20px_0_60px_rgba(0,0,0,0.15)] border-r no-drag-region outline-none ring-0"
               style={{
-                background: 'linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) 95%, transparent), color-mix(in srgb, var(--primary-bg) 85%, transparent), color-mix(in srgb, var(--primary-bg) 98%, transparent))',
+                background: `linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) ${store.themeOpacity}%, transparent), color-mix(in srgb, var(--primary-bg) ${Math.max(0, store.themeOpacity - 10)}%, transparent), color-mix(in srgb, var(--primary-bg) ${Math.max(0, store.themeOpacity - 2)}%, transparent))`,
                 borderColor: 'color-mix(in srgb, var(--border-color) 35%, transparent)',
+                backdropFilter: `blur(${store.themeBlur}px)`,
               }}
             >
               {sidebarItems.map((item, idx) => (
@@ -1636,10 +1668,10 @@ export default function Home() {
               animate={{ width: store.isSidebarCollapsed ? 70 : store.sidebarWidth, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
-              className={`relative h-full border-r border-border-color cursor-grab active:cursor-grabbing ${store.sidebarSide === 'left' ? 'order-first' : 'order-last'} no-drag-region`}
+              className={`relative h-full cursor-grab active:cursor-grabbing ${store.sidebarSide === 'left' ? 'order-first border-r border-border-color' : 'order-last border-l border-border-color'} no-drag-region outline-none ring-0`}
               style={{
-                background: 'linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) 92%, transparent), color-mix(in srgb, var(--primary-bg) 88%, transparent), color-mix(in srgb, var(--primary-bg) 98%, transparent))',
-                borderColor: 'color-mix(in srgb, var(--border-color) 40%, transparent)',
+                background: `linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) ${store.themeOpacity - 3}%, transparent), color-mix(in srgb, var(--primary-bg) ${Math.max(0, store.themeOpacity - 7)}%, transparent), color-mix(in srgb, var(--primary-bg) ${Math.max(0, store.themeOpacity - 2)}%, transparent))`,
+                backdropFilter: `blur(${store.themeBlur}px)`,
               }}
               onUpdate={() => {
                 if (window.electronAPI) window.dispatchEvent(new Event('resize'));
@@ -1705,10 +1737,11 @@ export default function Home() {
         <main className="flex-1 flex flex-col relative overflow-hidden min-w-0" style={{ background: 'color-mix(in srgb, var(--primary-bg) 92%, var(--card-bg))' }}>
           {store.activeView === 'browser' && (
             <header
-              className="h-[76px] flex-shrink-0 flex items-center px-6 gap-6 border-b backdrop-blur-3xl z-40 no-drag-region transition-all duration-500"
+              className="h-[76px] flex-shrink-0 flex items-center px-6 gap-6 border-b backdrop-blur-3xl z-40 no-drag-region transition-all duration-500 outline-none ring-0"
               style={{
-                background: 'var(--navbar-bg)',
+                background: `color-mix(in srgb, var(--navbar-bg) ${store.themeOpacity}%, transparent)`,
                 borderColor: 'var(--border-color)',
+                backdropFilter: `blur(${store.themeBlur}px)`,
               }}
             >
               <div className="flex items-center gap-1">
@@ -1775,7 +1808,7 @@ export default function Home() {
                       }
                     }}
                     placeholder={`Search with ${store.selectedEngine} or enter URL...`}
-                    className="w-full bg-white/[0.03] border border-border-color/30 rounded-2xl py-2 pl-11 pr-60 text-xs text-primary-text placeholder:text-secondary-text focus:outline-none focus:bg-white/[0.07] transition-all font-medium backdrop-blur-md relative z-10"
+                    className="w-full bg-white/[0.03] border border-border-color/30 rounded-2xl py-2.5 pl-12 pr-[230px] text-[13px] text-primary-text placeholder:text-secondary-text focus:outline-none focus:ring-1 focus:ring-accent/30 focus:bg-white/[0.07] transition-all font-medium backdrop-blur-md relative z-10"
                   />
                   {urlPrediction && isTyping && (
                     <div className="absolute inset-y-0 left-11 right-4 flex items-center pointer-events-none text-xs text-white/20 font-medium z-0">
@@ -1794,31 +1827,41 @@ export default function Home() {
                     </div>
                   )}
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 no-drag-region z-20 flex items-center gap-1.5">
-                    <button
-                      onClick={() => setShowDownloads(!showDownloads)}
-                      className={`p-1.5 rounded-lg transition-all 
-                                   ${isDownloading ? 'text-accent animate-pulse' : ''}
-                                   ${downloadStatus === 'completed' ? 'text-green-400' : ''}
-                                   ${downloadStatus === 'failed' ? 'text-red-400' : ''}
-                                   ${downloadStatus === 'idle' ? 'text-secondary-text hover:text-sky-400' : ''}
-                                   ${showDownloads ? 'bg-sky-500/10 text-sky-400' : ''}
-                                   hover:bg-white/5`}
-                      title="Downloads"
-                    >
-                      <DownloadCloud size={14} />
-                    </button>
-                    <button onClick={() => setShowClipboard(!showClipboard)} className={`p-1.5 rounded-lg transition-all ${showClipboard ? 'text-accent bg-sky-500/10' : 'text-secondary-text hover:text-sky-400'} hover:bg-white/5`} title="Clipboard">
-                      <CopyIcon size={14} />
-                    </button>
-                    <button onClick={() => setShowCart(!showCart)} className={`p-1.5 rounded-lg transition-all ${showCart ? 'text-accent bg-sky-500/10' : 'text-secondary-text hover:text-sky-400'} hover:bg-white/5`} title="Unified Cart">
-                      <ShoppingCart size={14} />
-                    </button>
-                    <button onClick={() => setShowTranslateDialog(true)} className={`p-1.5 rounded-lg transition-all ${showTranslateDialog ? 'text-accent bg-sky-500/10' : 'text-secondary-text hover:text-sky-400'} hover:bg-white/5`} title="Translate Page">
-                      <Languages size={14} />
-                    </button>
-                    <button onClick={() => setShowExtensionsPopup(!showExtensionsPopup)} className={`p-1.5 rounded-lg transition-all ${showExtensionsPopup ? 'text-accent bg-sky-500/10' : 'text-secondary-text hover:text-sky-400'} hover:bg-white/5`} title="Extensions">
-                      <Puzzle size={14} />
-                    </button>
+                    {store.showDownloadsIcon && (
+                      <button
+                        onClick={() => setShowDownloads(!showDownloads)}
+                        className={`p-1.5 rounded-lg transition-all 
+                                     ${isDownloading ? 'text-accent animate-pulse' : ''}
+                                     ${downloadStatus === 'completed' ? 'text-green-400' : ''}
+                                     ${downloadStatus === 'failed' ? 'text-red-400' : ''}
+                                     ${downloadStatus === 'idle' ? 'text-secondary-text hover:text-sky-400' : ''}
+                                     ${showDownloads ? 'bg-sky-500/10 text-sky-400' : ''}
+                                     hover:bg-white/5`}
+                        title="Downloads"
+                      >
+                        <DownloadCloud size={14} />
+                      </button>
+                    )}
+                    {store.showClipboardIcon && (
+                      <button onClick={() => setShowClipboard(!showClipboard)} className={`p-1.5 rounded-lg transition-all ${showClipboard ? 'text-accent bg-sky-500/10' : 'text-secondary-text hover:text-sky-400'} hover:bg-white/5`} title="Clipboard">
+                        <CopyIcon size={14} />
+                      </button>
+                    )}
+                    {store.showCartIcon && (
+                      <button onClick={() => setShowCart(!showCart)} className={`p-1.5 rounded-lg transition-all ${showCart ? 'text-accent bg-sky-500/10' : 'text-secondary-text hover:text-sky-400'} hover:bg-white/5`} title="Unified Cart">
+                        <ShoppingCart size={14} />
+                      </button>
+                    )}
+                    {store.showTranslateIcon && (
+                      <button onClick={() => setShowTranslateDialog(true)} className={`p-1.5 rounded-lg transition-all ${showTranslateDialog ? 'text-accent bg-sky-500/10' : 'text-secondary-text hover:text-sky-400'} hover:bg-white/5`} title="Translate Page">
+                        <Languages size={14} />
+                      </button>
+                    )}
+                    {store.showExtensionsIcon && (
+                      <button onClick={() => setShowExtensionsPopup(!showExtensionsPopup)} className={`p-1.5 rounded-lg transition-all ${showExtensionsPopup ? 'text-accent bg-sky-500/10' : 'text-secondary-text hover:text-sky-400'} hover:bg-white/5`} title="Extensions">
+                        <Puzzle size={14} />
+                      </button>
+                    )}
                     <div className="w-[1px] h-3 bg-white/10 mx-0.5" />
                     <button onClick={handlePopSearch} className="p-1.5 rounded-lg hover:bg-white/10 text-white/20 hover:text-sky-400 transition-all" title="Quick Search">
                       <Search size={12} />
@@ -1902,95 +1945,95 @@ export default function Home() {
 
           {/* ── VIEWS (all unchanged) ── */}
           <div className="flex-1 relative z-50">
-              {/* View container remains for browser and landing page */}
-              {store.activeView === 'landing-page' && (
-                <div key="landing-page" className="absolute inset-0 z-50 bg-[var(--primary-bg)] overflow-auto custom-scrollbar">
-                  <LandingPage />
-                </div>
-              )}
-               {store.activeView === 'browser' && (
-                <div className={`h-full flex ${store.studentMode ? 'p-4 gap-4' : 'p-2'}`}>
-                  <div className={`flex-[3] relative bg-[var(--primary-bg)] ${store.studentMode ? 'rounded-3xl' : 'rounded-2xl'} overflow-hidden border border-[var(--border-color)]`} style={{ boxShadow: '0 8px 32px var(--shadow-color)' }}>
-                    {!store.isOnline && (
-                      <div className="absolute inset-0 z-[100] bg-[var(--primary-bg)]">
-                        <NoNetworkGame />
-                      </div>
-                    )}
-                    {isBrowserDisabled && (
-                      <div className="absolute inset-0 z-[90] backdrop-blur-sm flex items-center justify-center transition-all duration-500" style={{ background: 'var(--overlay-bg)' }}>
-                        <div className="text-center">
-                          <Sparkles size={48} className="mx-auto mb-4 text-deep-space-accent-neon animate-pulse" />
-                          <p className="text-white text-lg font-bold">Automation in Progress</p>
-                          <p className="text-white/50 text-sm mt-2">Browser is paused while task is being configured</p>
-                        </div>
-                      </div>
-                    )}
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-transparent pointer-events-none" />
-                  </div>
-                  {store.studentMode && (
-                    <div className="flex-1 glass-vibrant shadow-3xl rounded-3xl p-6 flex flex-col border border-border-color bg-primary-bg/5">
-                      <div className="flex items-center gap-3 mb-6">
-                        <Sparkles size={20} className="text-accent" />
-                        <h3 className="text-[11px] font-black uppercase tracking-[0.3em] text-secondary-text">Context Intelligence</h3>
-                      </div>
-                      <textarea
-                        className="flex-1 bg-transparent text-primary-text text-sm leading-relaxed resize-none focus:outline-none placeholder:text-secondary-text custom-scrollbar font-medium"
-                        placeholder="Insights reflect current tab content..."
-                      />
+            {/* View container remains for browser and landing page */}
+            {store.activeView === 'landing-page' && (
+              <div key="landing-page" className="absolute inset-0 z-50 bg-[var(--primary-bg)] overflow-auto custom-scrollbar">
+                <LandingPage />
+              </div>
+            )}
+            {store.activeView === 'browser' && (
+              <div className={`h-full flex ${store.studentMode ? 'p-4 gap-4' : 'p-2'}`}>
+                <div className={`flex-[3] relative bg-[var(--primary-bg)] ${store.studentMode ? 'rounded-3xl' : 'rounded-2xl'} overflow-hidden border border-[var(--border-color)]`} style={{ boxShadow: '0 8px 32px var(--shadow-color)' }}>
+                  {!store.isOnline && (
+                    <div className="absolute inset-0 z-[100] bg-[var(--primary-bg)]">
+                      <NoNetworkGame />
                     </div>
                   )}
+                  {isBrowserDisabled && (
+                    <div className="absolute inset-0 z-[90] backdrop-blur-sm flex items-center justify-center transition-all duration-500" style={{ background: 'var(--overlay-bg)' }}>
+                      <div className="text-center">
+                        <Sparkles size={48} className="mx-auto mb-4 text-deep-space-accent-neon animate-pulse" />
+                        <p className="text-white text-lg font-bold">Automation in Progress</p>
+                        <p className="text-white/50 text-sm mt-2">Browser is paused while task is being configured</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-transparent pointer-events-none" />
                 </div>
-              )}
-              {store.activeView === 'webstore' && (
-                <div key="webstore" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full">
-                  <WebStore onClose={() => store.setActiveView('browser')} />
-                </div>
-              )}
-              {store.activeView === 'workspace' && (
-                <div key="workspace" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full">
-                  <WorkspaceDashboard />
-                </div>
-              )}
-              {store.activeView === 'pdf' && (
-                <div key="pdf" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full">
-                  <PDFWorkspace />
-                </div>
-              )}
-              {store.activeView === 'coding' && (
-                <div key="coding" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full">
-                  <CodingDashboard />
-                </div>
-              )}
-              {store.activeView === 'media' && (
-                <div key="media" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full">
-                  <MediaStudio />
-                </div>
-              )}
-              {store.activeView === 'documentation' && (
-                <div key="documentation" className="absolute inset-0 z-50 bg-[var(--primary-bg)] overflow-auto custom-scrollbar">
-                  <Documentation />
-                </div>
-              )}
-              {store.activeView === 'presenton' && (
-                <div key="presenton" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full">
-                  <PresentonStudio />
-                </div>
-              )}
-              {store.activeView === 'passwords' && (
-                <div key="passwords" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full overflow-auto custom-scrollbar pt-6">
-                  <PasswordManager />
-                </div>
-              )}
-              {store.activeView === 'firewall' && (
-                <div key="firewall" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full overflow-auto custom-scrollbar pt-6">
-                  <ProxyFirewallManager />
-                </div>
-              )}
-              {store.activeView === 'p2psync' && (
-                <div key="p2psync" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full overflow-auto custom-scrollbar pt-6">
-                  <P2PSyncManager />
-                </div>
-              )}
+                {store.studentMode && (
+                  <div className="flex-1 glass-vibrant shadow-3xl rounded-3xl p-6 flex flex-col border border-border-color bg-primary-bg/5">
+                    <div className="flex items-center gap-3 mb-6">
+                      <Sparkles size={20} className="text-accent" />
+                      <h3 className="text-[11px] font-black uppercase tracking-[0.3em] text-secondary-text">Context Intelligence</h3>
+                    </div>
+                    <textarea
+                      className="flex-1 bg-transparent text-primary-text text-sm leading-relaxed resize-none focus:outline-none placeholder:text-secondary-text custom-scrollbar font-medium"
+                      placeholder="Insights reflect current tab content..."
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            {store.activeView === 'webstore' && (
+              <div key="webstore" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full">
+                <WebStore onClose={() => store.setActiveView('browser')} />
+              </div>
+            )}
+            {store.activeView === 'workspace' && (
+              <div key="workspace" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full">
+                <WorkspaceDashboard />
+              </div>
+            )}
+            {store.activeView === 'pdf' && (
+              <div key="pdf" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full">
+                <PDFWorkspace />
+              </div>
+            )}
+            {store.activeView === 'coding' && (
+              <div key="coding" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full">
+                <CodingDashboard />
+              </div>
+            )}
+            {store.activeView === 'media' && (
+              <div key="media" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full">
+                <MediaStudio />
+              </div>
+            )}
+            {store.activeView === 'documentation' && (
+              <div key="documentation" className="absolute inset-0 z-50 bg-[var(--primary-bg)] overflow-auto custom-scrollbar">
+                <Documentation />
+              </div>
+            )}
+            {store.activeView === 'presenton' && (
+              <div key="presenton" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full">
+                <PresentonStudio />
+              </div>
+            )}
+            {store.activeView === 'passwords' && (
+              <div key="passwords" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full overflow-auto custom-scrollbar pt-6">
+                <PasswordManager />
+              </div>
+            )}
+            {store.activeView === 'firewall' && (
+              <div key="firewall" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full overflow-auto custom-scrollbar pt-6">
+                <ProxyFirewallManager />
+              </div>
+            )}
+            {store.activeView === 'p2psync' && (
+              <div key="p2psync" className="absolute inset-0 z-50 bg-[var(--primary-bg)] h-full w-full overflow-auto custom-scrollbar pt-6">
+                <P2PSyncManager />
+              </div>
+            )}
 
             {/* Feature Overlays (all unchanged) */}
             <AnimatePresence>

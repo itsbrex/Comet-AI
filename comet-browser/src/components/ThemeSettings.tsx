@@ -207,6 +207,47 @@ const ThemeSettings: React.FC<ThemeSettingsProps> = ({
           />
         </div>
       )}
+
+      {/* Advanced Customization (Opacity/Blur) */}
+      <div className="space-y-4 pt-4 border-t border-white/10">
+        <label className="block text-[10px] uppercase font-bold tracking-widest text-secondary-text">
+          Advanced Appearance
+        </label>
+        
+        <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-white/50">Interface Opacity</label>
+              <span className="text-[10px] font-black text-accent">{useAppStore.getState().themeOpacity}%</span>
+            </div>
+            <input 
+              type="range" 
+              min="20" 
+              max="100" 
+              step="1"
+              value={useAppStore.getState().themeOpacity}
+              onChange={(e) => useAppStore.getState().setThemeOpacity(parseInt(e.target.value))}
+              className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-white/50">Backdrop Blur</label>
+              <span className="text-[10px] font-black text-accent">{useAppStore.getState().themeBlur}px</span>
+            </div>
+            <input 
+              type="range" 
+              min="0" 
+              max="60" 
+              step="1"
+              value={useAppStore.getState().themeBlur}
+              onChange={(e) => useAppStore.getState().setThemeBlur(parseInt(e.target.value))}
+              className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent"
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

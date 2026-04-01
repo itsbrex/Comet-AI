@@ -13,6 +13,8 @@ class PermissionStore {
     this.settings = {
       autoApproveLowRisk: false,
       autoApproveMidRisk: false,
+      requireDeviceUnlockForManualApproval: true,
+      requireDeviceUnlockForVaultAccess: true,
       autoApprovedCommands: [],
     };
     this.autoApprovedCommands = new Set();

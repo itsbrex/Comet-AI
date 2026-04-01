@@ -20,6 +20,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
   bool showScanner = false;
   bool isCloudMode = false;
   String? desktopIp;
+  String? desktopLabel;
   String? errorMessage;
   final List<Map<String, dynamic>> _discoveredDevices = [];
   final List<Map<String, dynamic>> _cloudDevices = [];
@@ -32,6 +33,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
     isConnected = SyncService().isConnectedToDesktop;
     if (isConnected) {
       desktopIp = SyncService().getConnectionInfo()['desktopIp'];
+      desktopLabel = SyncService().getConnectionInfo()['label'] as String?;
     }
     _startDiscovery();
   }
@@ -187,6 +189,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
         setState(() {
           isConnected = true;
           desktopIp = ip;
+          desktopLabel = ip;
           isConnecting = false;
         });
 
@@ -209,8 +212,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
     }
   }
 
-  Future<void> _approveRiskAction(
-      String id, String pin, String deviceId) async {
+  Future<void> _approveRiskAction(String id, String pin) async {
     try {
       final result =
           await SyncService().executeOnDesktop('approve-high-risk', args: {
@@ -243,6 +245,121 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
     }
   }
 
+  Future<bool> _confirmRiskApprovalPin(String expectedPin) async {
+    final controller = TextEditingController();
+    String? errorText;
+
+    final approved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            backgroundColor: const Color(0xFF151515),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Text(
+              'Confirm High-Risk Approval',
+              style: TextStyle(color: Colors.white),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Scan complete. Enter the PIN shown on your desktop to approve this high-risk action.',
+                  style: TextStyle(color: Colors.white70, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  maxLength: expectedPin.length,
+                  autofocus: true,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'monospace',
+                    letterSpacing: 6,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Desktop PIN',
+                    labelStyle: const TextStyle(color: Colors.white54),
+                    hintText: 'Enter PIN',
+                    hintStyle: const TextStyle(color: Colors.white24),
+                    errorText: errorText,
+                    filled: true,
+                    fillColor: Colors.white10,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    counterStyle: const TextStyle(color: Colors.white38),
+                  ),
+                  onChanged: (value) {
+                    final digitsOnly = value.replaceAll(RegExp(r'\D'), '');
+                    if (digitsOnly != value) {
+                      controller.value = TextEditingValue(
+                        text: digitsOnly,
+                        selection: TextSelection.collapsed(
+                            offset: digitsOnly.length),
+                      );
+                    }
+                    if (errorText != null) {
+                      setDialogState(() => errorText = null);
+                    }
+                  },
+                  onSubmitted: (_) {
+                    final enteredPin =
+                        controller.text.replaceAll(RegExp(r'\D'), '');
+                    if (enteredPin == expectedPin) {
+                      Navigator.of(dialogContext).pop(true);
+                    } else {
+                      setDialogState(() {
+                        errorText = 'PIN does not match the desktop code.';
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.white54),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final enteredPin =
+                      controller.text.replaceAll(RegExp(r'\D'), '');
+                  if (enteredPin == expectedPin) {
+                    Navigator.of(dialogContext).pop(true);
+                  } else {
+                    setDialogState(() {
+                      errorText = 'PIN does not match the desktop code.';
+                    });
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00E676),
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text('Approve'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    controller.dispose();
+    return approved == true;
+  }
+
   Future<void> _scanQRCode(String qrData) async {
     try {
       final uri = Uri.parse(qrData);
@@ -267,7 +384,11 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
               throw Exception(
                   'Must be connected and authenticated to desktop to approve actions.');
             }
-            await _approveRiskAction(id, pin, deviceId);
+            final approved = await _confirmRiskApprovalPin(pin);
+            if (!approved) {
+              return;
+            }
+            await _approveRiskAction(id, pin);
           } else {
             throw Exception('Invalid approve QR code data');
           }
@@ -496,6 +617,9 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                                     isConnecting = false;
                                     if (success) {
                                       isConnected = true;
+                                      desktopLabel =
+                                          device['deviceName'] as String?;
+                                      desktopIp = null;
                                     } else {
                                       errorMessage = 'Connection failed';
                                     }
@@ -703,7 +827,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
             ),
             SizedBox(height: 10),
             Text(
-              'Desktop: $desktopIp',
+              'Desktop: ${desktopLabel ?? desktopIp ?? (isCloudMode ? 'Cloud Desktop' : 'Local Desktop')}',
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.white70,
@@ -755,6 +879,22 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
             ),
             SizedBox(height: 30),
             ElevatedButton.icon(
+              icon: Icon(Icons.desktop_windows),
+              label: Text('Open Desktop Control'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor:
+                    isCloudMode ? Color(0xFF9C27B0) : Color(0xFF00E676),
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                Navigator.pushNamed(context, '/desktop-control');
+              },
+            ),
+            SizedBox(height: 14),
+            ElevatedButton.icon(
               icon: Icon(Icons.qr_code_scanner),
               label: Text('Scan Action QR'),
               style: ElevatedButton.styleFrom(
@@ -778,6 +918,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
                 setState(() {
                   isConnected = false;
                   desktopIp = null;
+                  desktopLabel = null;
                 });
                 _startDiscovery(); // Restart discovery
               },

@@ -109,80 +109,114 @@ class TesseractOcrService {
     const scaleY = capture.screenHeight / capture.captureHeight;
     const preprocessScale = sharp ? 3840 / capture.captureWidth : 1;
 
+    const transformBbox = (bbox) => ({
+      x0: Math.round((bbox.x0 / preprocessScale) * scaleX),
+      y0: Math.round((bbox.y0 / preprocessScale) * scaleY),
+      x1: Math.round((bbox.x1 / preprocessScale) * scaleX),
+      y1: Math.round((bbox.y1 / preprocessScale) * scaleY),
+    });
+
+    const getCenter = (bbox) => ({
+      x: Math.round(((bbox.x0 + bbox.x1) / 2 / preprocessScale) * scaleX),
+      y: Math.round(((bbox.y0 + bbox.y1) / 2 / preprocessScale) * scaleY),
+    });
+
     const words = (data.words || [])
       .filter(w => w.confidence > 60 && (w.text || '').trim().length > 0)
       .map(w => {
-        const bbox = w.bbox;
-        const rawCenterX = (bbox.x0 + bbox.x1) / 2;
-        const rawCenterY = (bbox.y0 + bbox.y1) / 2;
-
-        const centerX = Math.round((rawCenterX / preprocessScale) * scaleX);
-        const centerY = Math.round((rawCenterY / preprocessScale) * scaleY);
-
+        const center = getCenter(w.bbox);
         return {
           text: w.text.trim(),
           confidence: w.confidence,
-          bbox: {
-            x0: Math.round((bbox.x0 / preprocessScale) * scaleX),
-            y0: Math.round((bbox.y0 / preprocessScale) * scaleY),
-            x1: Math.round((bbox.x1 / preprocessScale) * scaleX),
-            y1: Math.round((bbox.y1 / preprocessScale) * scaleY),
-          },
-          centerX,
-          centerY,
+          bbox: transformBbox(w.bbox),
+          centerX: center.x,
+          centerY: center.y,
         };
       });
 
-    return words;
+    const lines = (data.lines || [])
+      .filter(l => l.confidence > 50 && (l.text || '').trim().length > 0)
+      .map(l => {
+        const center = getCenter(l.bbox);
+        return {
+          text: l.text.trim(),
+          confidence: l.confidence,
+          bbox: transformBbox(l.bbox),
+          centerX: center.x,
+          centerY: center.y,
+        };
+      });
+
+    return { words, lines };
   }
 
   async ocrClick(targetDescription, aiEngine, robotService, permissionStore) {
-    const words = await this.captureAndOcr();
+    const { words, lines } = await this.captureAndOcr();
 
-    if (words.length === 0) {
+    if (words.length === 0 && lines.length === 0) {
       return { success: false, error: 'No text found on screen' };
     }
 
-    const searchLower = targetDescription.toLowerCase();
-    const directMatch = words.find(w =>
+    const searchLower = targetDescription.toLowerCase().trim();
+
+    // 1. First try direct matching on reconstructed lines (ideal for multi-word phrases)
+    const lineMatch = lines.find(l =>
+      l.text.toLowerCase().includes(searchLower) ||
+      searchLower.includes(l.text.toLowerCase())
+    );
+
+    if (lineMatch) {
+      // If we found a line match, we should try to find where IN the line the text is
+      // but clicking the line center is usually a good enough approximation for a button.
+      await robotService.execute({
+        type: 'click',
+        x: lineMatch.centerX,
+        y: lineMatch.centerY,
+        reason: `OCR line match: "${lineMatch.text}" (target: "${targetDescription}")`,
+      });
+      return { success: true, clickedText: lineMatch.text, method: 'line-match' };
+    }
+
+    // 2. Fallback to word-level matching
+    const wordMatch = words.find(w =>
       w.text.toLowerCase().includes(searchLower) ||
       searchLower.includes(w.text.toLowerCase())
     );
 
-    if (directMatch) {
+    if (wordMatch) {
       await robotService.execute({
         type: 'click',
-        x: directMatch.centerX,
-        y: directMatch.centerY,
-        reason: `OCR direct click: "${directMatch.text}"`,
+        x: wordMatch.centerX,
+        y: wordMatch.centerY,
+        reason: `OCR word match: "${wordMatch.text}" (target: "${targetDescription}")`,
       });
-      return { success: true, clickedText: directMatch.text, method: 'direct' };
+      return { success: true, clickedText: wordMatch.text, method: 'word-match' };
     }
 
     if (!aiEngine) {
       return { success: false, error: `Text "${targetDescription}" not found on screen (no AI fallback)` };
     }
 
-    const wordList = words
-      .slice(0, 100)
-      .map((w, i) => `[${i}] "${w.text}" at (${w.centerX}, ${w.centerY})`)
+    const lineList = lines
+      .slice(0, 80)
+      .map((l, i) => `[${i}] "${l.text}" at (${l.centerX}, ${l.centerY})`)
       .join('\n');
 
     try {
       const response = await aiEngine.chat({
         model: 'llama-3.1-8b-instant',
-        systemPrompt: 'You resolve UI click targets from OCR data. Respond with ONLY a JSON object: {"index": N, "text": "matched text"} or {"index": -1} if not found. No other text.',
-        message: `Target: "${targetDescription}"\n\nOCR words:\n${wordList}`,
+        systemPrompt: 'You resolve UI click targets from OCR data. Focus on multi-word matches if the target has spaces. Respond with ONLY a JSON object: {"index": N, "text": "matched text"} or {"index": -1} if not found. No other text.',
+        message: `Target: "${targetDescription}"\n\nOCR lines:\n${lineList}`,
       });
 
       const cleaned = response.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
       const result = JSON.parse(cleaned);
 
-      if (result.index < 0 || result.index >= words.length) {
+      if (result.index < 0 || result.index >= lines.length) {
         return { success: false, error: `AI could not find "${targetDescription}" on screen` };
       }
 
-      const target = words[result.index];
+      const target = lines[result.index];
       await robotService.execute({
         type: 'click',
         x: target.centerX,
@@ -197,8 +231,8 @@ class TesseractOcrService {
   }
 
   async getScreenText(displayId) {
-    const words = await this.captureAndOcr(displayId);
-    return words.map(w => w.text).join(' ');
+    const { lines } = await this.captureAndOcr(displayId);
+    return lines.map(l => l.text).join('\n');
   }
 }
 

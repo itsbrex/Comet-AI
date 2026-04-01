@@ -326,6 +326,9 @@ var WiFiSyncService = /** @class */ (function (_super) {
     WiFiSyncService.prototype.getConnectUri = function () {
         return "comet-ai://connect?ip=".concat(this.getLocalIp(), "&port=").concat(this.port, "&device=").concat(this.deviceId);
     };
+    WiFiSyncService.prototype.getCloudConnectUri = function (cloudDeviceId) {
+        return "comet-ai://cloud-connect?cloudId=".concat(cloudDeviceId, "&device=").concat(this.deviceId, "&name=").concat(encodeURIComponent(this.deviceName));
+    };
     WiFiSyncService.prototype.stop = function () {
         if (this.wss) {
             this.wss.close();

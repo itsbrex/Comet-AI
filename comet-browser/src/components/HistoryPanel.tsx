@@ -6,10 +6,21 @@ import { History as HistoryIcon, Globe } from 'lucide-react';
 
 const HistoryPanel = () => {
     const history = useAppStore((state) => state.history);
+    const clearHistory = useAppStore((state) => state.clearHistory);
 
     return (
         <div className="space-y-4">
-            <h3 className="text-xl font-bold text-white">Browsing History</h3>
+            <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Browsing History</h3>
+                {history.length > 0 && (
+                    <button 
+                        onClick={clearHistory}
+                        className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
+                    >
+                        Clear Browsing Data
+                    </button>
+                )}
+            </div>
             {history.length === 0 ? (
                 <p className="text-white/50">No browsing history yet.</p>
             ) : (

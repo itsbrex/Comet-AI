@@ -27,6 +27,8 @@ class _DesktopControlPageState extends State<DesktopControlPage>
   StreamSubscription? _desktopControlActionSubscription;
   String? _currentPromptId;
   final List<String> _actionLogs = [];
+  String _connectionMode = 'none';
+  String? _connectionLabel;
 
   late TabController _tabController;
 
@@ -34,7 +36,10 @@ class _DesktopControlPageState extends State<DesktopControlPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    final connectionInfo = SyncService().getConnectionInfo();
     _isConnected = SyncService().isConnectedToDesktop;
+    _connectionMode = connectionInfo['mode'] as String? ?? 'none';
+    _connectionLabel = connectionInfo['label'] as String?;
     _listenToStreams();
     _fetchDesktopStatus();
   }
@@ -98,9 +103,14 @@ class _DesktopControlPageState extends State<DesktopControlPage>
     if (!_isConnected) return;
     try {
       final status = await SyncService().getDesktopStatus();
+      final connectionInfo = SyncService().getConnectionInfo();
       if (mounted && status != null) {
         setState(() {
           _desktopStatus = Map<String, dynamic>.from(status);
+          _connectionMode =
+              connectionInfo['mode'] as String? ?? _connectionMode;
+          _connectionLabel =
+              connectionInfo['label'] as String? ?? _connectionLabel;
         });
       }
     } catch (e) {
@@ -343,12 +353,17 @@ class _DesktopControlPageState extends State<DesktopControlPage>
             Container(
               width: 10,
               height: 10,
-              decoration: const BoxDecoration(
-                  shape: BoxShape.circle, color: Colors.green),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color:
+                    _isCloudMode ? const Color(0xFF9C27B0) : Colors.green,
+              ),
             ),
             const SizedBox(width: 10),
-            const Text('Desktop Control',
-                style: TextStyle(color: Colors.white)),
+            Text(
+              _isCloudMode ? 'Cloud Desktop Control' : 'Desktop Control',
+              style: const TextStyle(color: Colors.white),
+            ),
           ],
         ),
         actions: [
@@ -390,6 +405,7 @@ class _DesktopControlPageState extends State<DesktopControlPage>
   Widget _buildAIChatTab() {
     return Column(
       children: [
+        _buildConnectionBanner(),
         Expanded(
           child: _messages.isEmpty
               ? Center(
@@ -399,13 +415,19 @@ class _DesktopControlPageState extends State<DesktopControlPage>
                       const Icon(Icons.smart_toy,
                           size: 60, color: Colors.white12),
                       const SizedBox(height: 15),
-                      const Text('AI Chat via Desktop',
-                          style:
-                              TextStyle(color: Colors.white38, fontSize: 16)),
+                      Text(
+                          _isCloudMode
+                              ? 'AI Chat via Cloud Desktop'
+                              : 'AI Chat via Desktop',
+                          style: const TextStyle(
+                              color: Colors.white38, fontSize: 16)),
                       const SizedBox(height: 5),
-                      Text('Messages are processed on your desktop GPU',
-                          style:
-                              TextStyle(color: Colors.white24, fontSize: 12)),
+                      Text(
+                          _isCloudMode
+                              ? 'Messages are routed through your signed-in desktop over Firebase.'
+                              : 'Messages are processed on your desktop GPU',
+                          style: const TextStyle(
+                              color: Colors.white24, fontSize: 12)),
                     ],
                   ),
                 )
@@ -420,6 +442,40 @@ class _DesktopControlPageState extends State<DesktopControlPage>
         if (_actionLogs.isNotEmpty) _buildActionLogPanel(),
         _buildPromptInput(),
       ],
+    );
+  }
+
+  Widget _buildConnectionBanner() {
+    final accent =
+        _isCloudMode ? const Color(0xFF9C27B0) : const Color(0xFF00E5FF);
+    final label =
+        _connectionLabel ?? (_isCloudMode ? 'Cloud Desktop' : 'Local Desktop');
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: accent.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withOpacity(0.28)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _isCloudMode ? Icons.cloud_done : Icons.wifi,
+            color: accent,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _isCloudMode
+                  ? 'Connected to $label through your same-account cloud session. AI chat is available here; direct shell and desktop control remain local-only for safety.'
+                  : 'Connected to $label on your local network with full remote desktop controls available.',
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -556,10 +612,26 @@ class _DesktopControlPageState extends State<DesktopControlPage>
   }
 
   Widget _buildShellTab() {
+    if (_isCloudMode) {
+      return _buildCloudLimitedPanel(
+        icon: Icons.terminal,
+        title: 'Shell Control Stays Local',
+        description:
+            'High-risk shell commands are available only on a local desktop session. Cloud mode currently supports AI sidebar prompts.',
+      );
+    }
     return _ShellCommandPanel(isConnected: _isConnected);
   }
 
   Widget _buildControlTab() {
+    if (_isCloudMode) {
+      return _buildCloudLimitedPanel(
+        icon: Icons.touch_app,
+        title: 'Direct Control Stays Local',
+        description:
+            'Mouse, keyboard, browser, and automation controls are enabled only when your phone is connected to the desktop on the local network.',
+      );
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -583,6 +655,48 @@ class _DesktopControlPageState extends State<DesktopControlPage>
           const SizedBox(height: 15),
           _buildBrowserControls(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCloudLimitedPanel({
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 42, color: const Color(0xFF9C27B0)),
+              const SizedBox(height: 14),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                description,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white60, height: 1.5),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -616,7 +730,8 @@ class _DesktopControlPageState extends State<DesktopControlPage>
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.bold)),
-                Text('Platform: ${_desktopStatus?['platform'] ?? 'Unknown'}',
+                Text(
+                    'Platform: ${_desktopStatus?['platform'] ?? 'Unknown'} • ${_isCloudMode ? 'Cloud' : 'Local'}',
                     style:
                         const TextStyle(color: Colors.white54, fontSize: 12)),
               ],
@@ -862,6 +977,8 @@ class _DesktopControlPageState extends State<DesktopControlPage>
   Future<void> _sendCommand(String action) async {
     await SyncService().executeDesktopControl(action);
   }
+
+  bool get _isCloudMode => _connectionMode == 'cloud';
 }
 
 class _ShellCommandPanel extends StatefulWidget {

@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.6--patch-blue)]()
+[![Version](https://img.shields.io/badge/Version-0.2.6-blue)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
 [![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
@@ -35,7 +35,7 @@ Most browsers are built for monetization. Comet is built for **control**.
 
 ---
 
-## ✨ Features (v0.2.6-patch)
+## ✨ Features (v0.2.6)
 
 ### 🤖 AI Agent
 - Multi-step autonomous task execution via chained commands
@@ -94,6 +94,8 @@ Most browsers are built for monetization. Comet is built for **control**.
 - **Push Notifications** — Get task completion alerts on mobile
 - **PDF Viewer** — View generated PDFs on mobile
 - **Automation Dashboard** — Manage scheduled tasks from mobile
+- **Native Google Sign-In** — Fast, secure authentication via `google_sign_in` + Firebase Auth
+- **Cloud Sync** — Authenticated sessions sync across mobile and desktop via Firebase
 
 ### 🛡️ Security Model
 - **Triple-Lock Architecture** (see [Security](#-security) section)
@@ -221,7 +223,7 @@ flutter run
 
 ## ⬇️ Downloads
 
-**Latest Release: v0.2.6-patch** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
+**Latest Release: v0.2.6** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
 
 | Platform | Download | Status |
 |----------|----------|--------|
@@ -244,6 +246,12 @@ flutter run
 | iOS | 🧪 Testing Phase |
 
 ---
+
+## 📝 v0.2.6 Highlights
+- **Native Google Sign-In** – Replaced web OAuth with native `google_sign_in` package for faster, more reliable authentication
+- **Firebase Auth Integration** – Unified user identity across mobile and desktop via Firebase Authentication
+- **Secure Token Storage** – Auth tokens stored in Android Keystore / iOS Keychain using `FlutterSecureStorage`
+- **Cloud Sync Ready** – Mobile sign-in enables cross-device features via shared Firebase UID
 
 ## 📝 v0.2.6-patch Highlights
 - **Hardened Mobile Sync** – Implemented reliable auto-reconnection for mobile devices using `shared_preferences`. The mobile app now remembers the last connected desktop and recovers connections automatically.
@@ -328,7 +336,20 @@ Comet AI Browser is built by a **16-year-old student** from India, preparing for
 
 ## 📋 Changelog
 
-### v0.2.6 (2026-03-30) - Sync Hardening & Branded Outputs
+### v0.2.6 (2026-03-30) - Native Google Sign-In & Sync Hardening
+#### New Features
+- **Native Google Sign-In** - Uses `google_sign_in` package instead of web OAuth redirect
+- **Firebase Auth Integration** - Unified identity across mobile and desktop
+- **Secure Token Storage** - Android Keystore / iOS Keychain via `FlutterSecureStorage`
+- **Cloud Sync Ready** - Mobile auth enables cross-device features
+- **Hardened Mobile Sync** – Reliable auto-reconnection for mobile devices
+- **Auto-Relay for Generated Files** – Instant file sync to mobile
+
+#### Technical Changes
+- `auth_service.dart` - Complete rewrite with native sign-in + Firebase Auth
+- `auth_page.dart` - Simplified to use `AuthService().signInWithGoogle()`
+- `main.dart` - Simplified auth deep link handling
+- `AndroidManifest.xml` - Added Google Sign-In metadata
 #### New Features
 - **Reliable Mobile Reconnect** – Integrated `shared_preferences` into the Flutter client. Mobile devices now persist pair data and auto-reconnect to the desktop shell upon app launch or connection loss.
 - **Instant Result Relay** – Desktop-generated files are now automatically mirrored to the `Comet-AI/public` sync path. Mobile clients receive instant notifications via `file-generated` events to view results immediately.

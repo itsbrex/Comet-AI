@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Shield, Terminal, Lock, Unlock, AlertTriangle, CheckCircle, XCircle, ChevronDown, ChevronUp, Zap, Settings2, Monitor } from 'lucide-react';
+import { Shield, Terminal, Lock, AlertTriangle, CheckCircle, XCircle, ChevronDown, ChevronUp, Zap, Settings2, Monitor } from 'lucide-react';
 
 const SAFE_COMMANDS = [
   { cmd: 'ls', desc: 'Lists directory contents', category: 'Navigation' },
@@ -57,6 +57,8 @@ const PermissionSettings = () => {
   const [settings, setSettings] = useState({
     autoApproveLowRisk: false,
     autoApproveMidRisk: false,
+    requireDeviceUnlockForManualApproval: true,
+    requireDeviceUnlockForVaultAccess: true,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -81,6 +83,10 @@ const PermissionSettings = () => {
         setSettings({
           autoApproveLowRisk: result.autoApproveLowRisk || false,
           autoApproveMidRisk: result.autoApproveMidRisk || false,
+          requireDeviceUnlockForManualApproval:
+            result.requireDeviceUnlockForManualApproval !== false,
+          requireDeviceUnlockForVaultAccess:
+            result.requireDeviceUnlockForVaultAccess !== false,
         });
         const list = Array.isArray(result.autoApprovedCommands) ? result.autoApprovedCommands : [];
         setAutoCommands(list.map((cmd: string) => normalizeCommandKey(cmd)));
@@ -239,6 +245,58 @@ const PermissionSettings = () => {
               <h5 className="text-white font-bold">High Risk Commands</h5>
               <p className="text-white/50 text-xs">Always requires confirmation (sudo, rm, shutdown, etc.)</p>
             </div>
+          </div>
+        </div>
+
+        <div className="p-4 bg-sky-500/5 rounded-2xl border border-sky-500/20 mt-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-sky-500/20 flex items-center justify-center">
+                <Lock size={20} className="text-sky-400" />
+              </div>
+              <div>
+                <h5 className="text-white font-bold">Device Unlock For Manual Approval</h5>
+                <p className="text-white/50 text-xs">When a shell command is not auto-approved, require a native OS unlock prompt before it runs.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => updateSetting('requireDeviceUnlockForManualApproval', !settings.requireDeviceUnlockForManualApproval)}
+              className={`relative w-14 h-8 rounded-full transition-all duration-300 ${
+                settings.requireDeviceUnlockForManualApproval ? 'bg-sky-500' : 'bg-white/10'
+              }`}
+            >
+              <div
+                className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-lg transition-all duration-300 ${
+                  settings.requireDeviceUnlockForManualApproval ? 'left-7' : 'left-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 bg-violet-500/5 rounded-2xl border border-violet-500/20 mt-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center">
+                <Lock size={20} className="text-violet-400" />
+              </div>
+              <div>
+                <h5 className="text-white font-bold">Device Unlock For Neural Vault</h5>
+                <p className="text-white/50 text-xs">Require a native OS unlock prompt before revealing, copying, or autofilling saved login credentials.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => updateSetting('requireDeviceUnlockForVaultAccess', !settings.requireDeviceUnlockForVaultAccess)}
+              className={`relative w-14 h-8 rounded-full transition-all duration-300 ${
+                settings.requireDeviceUnlockForVaultAccess ? 'bg-violet-500' : 'bg-white/10'
+              }`}
+            >
+              <div
+                className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-lg transition-all duration-300 ${
+                  settings.requireDeviceUnlockForVaultAccess ? 'left-7' : 'left-1'
+                }`}
+              />
+            </button>
           </div>
         </div>
       </div>
@@ -406,6 +464,7 @@ const PermissionSettings = () => {
               <li>• <strong>Low Risk:</strong> Read-only commands (viewing files, navigation) - safe to auto-run</li>
               <li>• <strong>Medium Risk:</strong> Commands that affect processes/network - enable if you trust the AI</li>
               <li>• <strong>High Risk:</strong> Dangerous commands (delete, shutdown) - always require confirmation</li>
+              <li>• <strong>Manual Approvals:</strong> When device unlock is enabled, approved shell commands also trigger a native OS verification prompt before execution</li>
             </ul>
           </div>
         </div>

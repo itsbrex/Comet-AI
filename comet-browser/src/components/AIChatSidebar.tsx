@@ -239,7 +239,6 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [currentCommandIndex, setCurrentCommandIndex] = useState(0);
   const processingQueueRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const chainApprovedRef = useRef(false);
 
   // Reasoning steps
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
@@ -393,6 +392,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
         resolve: (allowed: boolean) => {
           window.electronAPI.respondAutomationShellApproval({ requestId: payload.requestId, allowed });
         },
+        mobileApproved: false,
         context: {
           action: payload.command || 'Shell command',
           what: payload.command,
@@ -401,6 +401,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
           actionType: 'SHELL_COMMAND',
           target: payload.command,
           highRiskQr: payload.highRiskQr,
+          requiresDeviceUnlock: !!payload.requiresDeviceUnlock,
         },
       });
     });
@@ -458,7 +459,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
       highRiskQr = await window.electronAPI.generateHighRiskQr(Math.random().toString(36).substring(7));
     }
     return new Promise((resolve) => {
-      setPermissionPending({ resolve, context: { actionType, action, target, what, reason, risk, highRiskQr } });
+      setPermissionPending({ resolve, mobileApproved: false, context: { actionType, action, target, what, reason, risk, highRiskQr } });
     });
   }, []);
 
@@ -650,7 +651,6 @@ I couldn't schedule the task. The background service may not be running. Please 
     setThinkingSteps([]);
     setThinkingText('');
     setError(null);
-    chainApprovedRef.current = false;
 
     // Security Checks
     const threatCheck = checkThreat(rawContent);
@@ -1047,101 +1047,6 @@ I couldn't schedule the task. The background service may not be running. Please 
           break;
         }
 
-        case 'CLICK_ELEMENT': {
-          const selector = command.value.split('|')[0].trim();
-          const clickStepId = addThinkingStep(`Clicking element: ${selector}...`);
-          try {
-            const res = await window.electronAPI.clickElement(selector);
-            if (res.success) {
-              output = `Successfully clicked element: ${selector}`;
-              resolveThinkingStep(clickStepId, 'done', 'Element clicked');
-            } else {
-              output = `Failed to click element: ${res.error}`;
-              resolveThinkingStep(clickStepId, 'error', res.error);
-            }
-          } catch (e: any) {
-            output = `Click error: ${e.message}`;
-            resolveThinkingStep(clickStepId, 'error', e.message);
-          }
-          break;
-        }
-
-        case 'CLICK_AT': {
-          const coords = command.value.split('|')[0].trim();
-          const [x, y] = coords.split(',').map(s => parseInt(s.trim()));
-          const clickAtStepId = addThinkingStep(`Clicking at (${x}, ${y})...`);
-          try {
-            const res = await window.electronAPI.performClick({ x, y });
-            if (res.success) {
-              output = `Clicked at coordinates (${x}, ${y})`;
-              resolveThinkingStep(clickAtStepId, 'done', 'Clicked at coords');
-            } else {
-              output = `Failed to click at coords: ${res.error}`;
-              resolveThinkingStep(clickAtStepId, 'error', res.error);
-            }
-          } catch (e: any) {
-            output = `Click error: ${e.message}`;
-            resolveThinkingStep(clickAtStepId, 'error', e.message);
-          }
-          break;
-        }
-
-        case 'FIND_AND_CLICK': {
-          const textToFind = command.value.split('|')[0].trim();
-          const findClickStepId = addThinkingStep(`Finding and clicking: "${textToFind}"...`);
-          try {
-            const res = await window.electronAPI.findAndClickText(textToFind);
-            if (res.success) {
-              output = `Found and clicked text: "${textToFind}"`;
-              resolveThinkingStep(findClickStepId, 'done', 'Text found and clicked');
-            } else {
-              output = `Could not find text: "${textToFind}"`;
-              resolveThinkingStep(findClickStepId, 'error', 'Text not found');
-            }
-          } catch (e: any) {
-            output = `Find and click error: ${e.message}`;
-            resolveThinkingStep(findClickStepId, 'error', e.message);
-          }
-          break;
-        }
-
-        case 'FILL_FORM': {
-          const parts = command.value.split('|').map(s => s.trim());
-          const selector = parts[0];
-          const value = parts[1];
-          const fillStepId = addThinkingStep(`Filling form element ${selector}...`);
-          try {
-            const res = await window.electronAPI.typeText(selector, value);
-            if (res.success) {
-              output = `Filled ${selector} with value: ${value}`;
-              resolveThinkingStep(fillStepId, 'done', 'Form field filled');
-            } else {
-              output = `Failed to fill form: ${res.error}`;
-              resolveThinkingStep(fillStepId, 'error', res.error);
-            }
-          } catch (e: any) {
-            output = `Fill error: ${e.message}`;
-            resolveThinkingStep(fillStepId, 'error', e.message);
-          }
-          break;
-        }
-
-        case 'SCROLL_TO': {
-          const parts = command.value.split('|').map(s => s.trim());
-          const selector = parts[0];
-          const scrollStepId = addThinkingStep(`Scrolling to ${selector}...`);
-          try {
-            const code = `document.querySelector('${selector}')?.scrollIntoView({ behavior: 'smooth' })`;
-            await window.electronAPI.executeJavaScript(code);
-            output = `Scrolled to element: ${selector}`;
-            resolveThinkingStep(scrollStepId, 'done', 'Scrolled to element');
-          } catch (e: any) {
-            output = `Scroll error: ${e.message}`;
-            resolveThinkingStep(scrollStepId, 'error', e.message);
-          }
-          break;
-        }
-
         // ✅ FIXED: WEB_SEARCH now stores real results in BrowserAI memory
         // so the LLM's next synthesis turn gets real data, not hallucination
         case 'SEARCH':
@@ -1311,34 +1216,22 @@ I couldn't schedule the task. The background service may not be running. Please 
           break;
 
         case 'SHELL_COMMAND': {
-          let confirmed = chainApprovedRef.current;
-          let preApproved = false;
-          if (!confirmed) {
-            setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'awaiting_permission' } : cmd));
-            confirmed = await requestActionPermission(
-              'SHELL_COMMAND', 'Execute Shell Command', 'Terminal', command.value,
-              'The AI needs to run this command to complete your task.', 'low'
-            );
-            preApproved = confirmed;
-            if (confirmed) chainApprovedRef.current = true;
-          }
           setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
           const logId = `term-${Date.now()}-${terminalLogIdCounter.current++}`;
           const logEntry = { id: logId, command: command.value, output: '', success: false, timestamp: Date.now() };
-          if (confirmed) {
-            setShowTerminal(true);
-            setTerminalLogs(prev => [...prev, { ...logEntry, output: '⏳ Running...' }]);
-            const res = await window.electronAPI.executeShellCommand(command.value, preApproved);
-            const cmdOutput = res.success ? (res.output || '(no output)') : `Error: ${res.error}`;
-            setTerminalLogs(prev => prev.map(l => l.id === logId
-              ? { ...l, output: cmdOutput, success: !!res.success }
-              : l
-            ));
-            output = `$ ${command.value}\n${cmdOutput}`;
-          } else {
-            setTerminalLogs(prev => [...prev, { ...logEntry, output: '⛔ Denied by user.', success: false }]);
-            output = 'Command execution denied by user.';
-          }
+          setShowTerminal(true);
+          setTerminalLogs(prev => [...prev, { ...logEntry, output: '⏳ Running...' }]);
+          const res = await window.electronAPI.executeShellCommand(command.value);
+          const cmdOutput = res.success ? (res.output || '(no output)') : `Error: ${res.error}`;
+          setTerminalLogs(prev => prev.map(l => l.id === logId
+            ? { ...l, output: cmdOutput, success: !!res.success }
+            : l
+          ));
+          output = res.success
+            ? `$ ${command.value}\n${cmdOutput}`
+            : res.error === 'User blocked the command.'
+              ? 'Command execution denied by user.'
+              : `$ ${command.value}\n${cmdOutput}`;
           break;
         }
 
@@ -3004,7 +2897,7 @@ I've successfully executed the following real tasks:
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.shiftKey && e.key === 'Tab' && permissionPending) {
+      if (e.shiftKey && e.key === 'Tab' && permissionPending && permissionPending.context?.risk !== 'high') {
         e.preventDefault();
         setShiftTabGlow(true);
         setTimeout(() => setShiftTabGlow(false), 900);
@@ -3047,8 +2940,7 @@ I've successfully executed the following real tasks:
             try {
               const qrData = JSON.parse(currentPending.context.highRiskQr || '{}');
               if (qrData.pin === data.pin && qrData.token === data.id) {
-                currentPending.resolve(true);
-                return null;
+                return { ...currentPending, mobileApproved: true };
               }
             } catch (e) {
               console.error("Failed to parse high risk QR data", e);
@@ -3086,6 +2978,41 @@ I've successfully executed the following real tasks:
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [terminalLogs]);
+
+  // Remote Prompt Listening (from mobile via cloud sync)
+  useEffect(() => {
+    let remoteCleanup: (() => void) | undefined;
+    if (window.electronAPI?.onRemoteAiPrompt) {
+      remoteCleanup = window.electronAPI.onRemoteAiPrompt((data: { 
+        prompt: string; 
+        promptId?: string; 
+        fromDeviceId?: string;
+        streamToMobile?: boolean;
+      }) => {
+        console.log('[Remote-Prompt] Received from mobile:', data.prompt);
+        handleSendMessage(data.prompt);
+      });
+    }
+    return () => {
+      if (remoteCleanup) remoteCleanup();
+    };
+  }, [handleSendMessage]);
+
+  // Remote Approval Listener (from mobile)
+  useEffect(() => {
+    let approveCleanup: (() => void) | undefined;
+    if (window.electronAPI?.onMobileApproveHighRisk) {
+      approveCleanup = window.electronAPI.onMobileApproveHighRisk((data: { pin: string; id: string }) => {
+        console.log('[Remote-Approval] Received for', data.id);
+        if (permissionPending) {
+          permissionPending.resolve(true);
+        }
+      });
+    }
+    return () => {
+      if (approveCleanup) approveCleanup();
+    };
+  }, [permissionPending]);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -3293,12 +3220,13 @@ I've successfully executed the following real tasks:
           <div className="absolute inset-0 z-[10001] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
             <ClickPermissionModal
               context={permissionPending.context}
+              highRiskApproved={!!permissionPending.mobileApproved}
               onAllow={async (alwaysAllow) => {
                 const ctx = permissionPending.context;
                 if (alwaysAllow && window.electronAPI?.permGrant) {
                   const permKey = `${ctx.actionType}:${ctx.target || ctx.what}`;
                   await window.electronAPI.permGrant(permKey, 'execute', ctx.action, false);
-                  if (ctx.risk !== 'high' && window.electronAPI?.setAutoApprovalCommand) {
+                  if (ctx.actionType === 'SHELL_COMMAND' && ctx.risk !== 'high' && window.electronAPI?.setAutoApprovalCommand) {
                     const autoCommand = ctx.target || ctx.what || ctx.action;
                     await window.electronAPI.setAutoApprovalCommand({ command: autoCommand, enabled: true });
                   }
@@ -3724,7 +3652,7 @@ I've successfully executed the following real tasks:
             </button>
           </div>
         </div>
-        <p className="text-[8px] text-center text-secondary-text mt-5 uppercase tracking-[0.5em] font-black opacity-60">Neural Engine Active • {versionLabel} Patched</p>
+        <p className="text-[8px] text-center text-secondary-text mt-5 uppercase tracking-[0.5em] font-black opacity-60">Neural Engine Active • {versionLabel}</p>
       </footer>
 
       <input type="file" ref={fileInputRef} className="hidden" multiple onChange={(e) => { }} />

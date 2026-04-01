@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, BrowserView, session, shell, clipboard, dialog, globalShortcut, Menu, protocol, desktopCapturer, screen, nativeImage, net, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, BrowserView, session, shell, clipboard, dialog, globalShortcut, Menu, protocol, desktopCapturer, screen, nativeImage, net, safeStorage, nativeTheme } = require('electron');
 const QRCode = require('qrcode');
 const contextMenuRaw = require('electron-context-menu');
 const contextMenu = contextMenuRaw.default || contextMenuRaw;
@@ -184,6 +184,7 @@ let cloudSyncService = null; // Declare cloudSyncService here
 
 // Desktop Automation Services (Comet-AI Guide v2)
 const { PermissionStore } = require('./src/lib/permission-store.js');
+const { hasNativeDeviceUnlockSupport, verifyNativeDeviceAccess, verifyNativeCommandApproval } = require('./src/lib/native-os-verifier.js');
 const { RobotService } = require('./src/lib/robot-service.js');
 const { TesseractOcrService } = require('./src/lib/tesseract-service.js');
 const { CometAiEngine } = require('./src/lib/ai-engine.js');
@@ -195,13 +196,213 @@ const { VoiceService } = require('./src/lib/voice-service.js');
 const { WorkflowRecorder } = require('./src/lib/workflow-recorder.js');
 const { PopSearchService, popSearchService } = require('./src/lib/pop-search-service.js');
 const { getRecommendedGeminiModel } = require('./src/lib/modelRegistry.js');
-const { mcpManager } = require('./src/lib/mcp-server-registry.js');
+const { WebSearchProvider } = require('./src/lib/web-search-service.js');
+const webSearchProvider = new WebSearchProvider();
 
 
 const permissionStore = new PermissionStore();
 let cometAiEngine = null;
 let robotService = null;
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const DEFAULT_NETWORK_SECURITY_CONFIG = {
+  firewallLevel: 'standard',
+  proxyMode: 'system',
+  proxyRules: '',
+  proxyBypassRules: '<local>;localhost;127.0.0.1;::1;*.ponsrischool.in;ponsrischool.in',
+  enableSecureDns: false,
+  dnsProvider: 'cloudflare',
+  customDnsTemplate: '',
+  blockAds: true,
+  blockTrackers: true,
+  blockMalware: true,
+  upgradeInsecureRequests: false,
+  sendDoNotTrack: true,
+  preventWebRtcLeaks: true,
+  customBlockedDomains: '',
+};
+
+const DNS_PROVIDER_TEMPLATES = {
+  cloudflare: 'https://cloudflare-dns.com/dns-query',
+  google: 'https://dns.google/dns-query',
+  quad9: 'https://dns.quad9.net/dns-query',
+};
+
+const TRACKER_HOSTS = [
+  'google-analytics.com',
+  'googletagmanager.com',
+  'doubleclick.net',
+  'facebook.net',
+  'hotjar.com',
+  'segment.io',
+  'mixpanel.com',
+  'amplitude.com',
+];
+
+const AD_HOSTS = [
+  'doubleclick.net',
+  'googlesyndication.com',
+  'adservice.google.com',
+  'ads.yahoo.com',
+  'taboola.com',
+  'outbrain.com',
+];
+
+const MALWARE_HOSTS = [
+  'coinhive.com',
+  'cryptoloot.pro',
+  'coinimp.com',
+  'webmine.cz',
+];
+
+let networkSecurityConfig = normalizeNetworkSecurityConfig(store.get('networkSecurityConfig'));
+
+function normalizeNetworkSecurityConfig(config = {}) {
+  const merged = {
+    ...DEFAULT_NETWORK_SECURITY_CONFIG,
+    ...(config && typeof config === 'object' ? config : {}),
+  };
+
+  return {
+    ...merged,
+    firewallLevel: ['standard', 'strict', 'paranoid'].includes(merged.firewallLevel) ? merged.firewallLevel : 'standard',
+    proxyMode: ['system', 'direct', 'fixed_servers', 'auto_detect'].includes(merged.proxyMode) ? merged.proxyMode : 'system',
+    dnsProvider: ['cloudflare', 'google', 'quad9', 'custom'].includes(merged.dnsProvider) ? merged.dnsProvider : 'cloudflare',
+    proxyRules: `${merged.proxyRules || ''}`.trim(),
+    proxyBypassRules: `${merged.proxyBypassRules || ''}`.trim(),
+    customDnsTemplate: `${merged.customDnsTemplate || ''}`.trim(),
+    customBlockedDomains: `${merged.customBlockedDomains || ''}`.trim(),
+    enableSecureDns: !!merged.enableSecureDns,
+    blockAds: !!merged.blockAds,
+    blockTrackers: !!merged.blockTrackers,
+    blockMalware: !!merged.blockMalware,
+    upgradeInsecureRequests: !!merged.upgradeInsecureRequests,
+    sendDoNotTrack: !!merged.sendDoNotTrack,
+    preventWebRtcLeaks: merged.preventWebRtcLeaks !== false,
+  };
+}
+
+function getSecureDnsTemplate(config = networkSecurityConfig) {
+  if (!config.enableSecureDns) {
+    return '';
+  }
+
+  if (config.dnsProvider === 'custom') {
+    return config.customDnsTemplate;
+  }
+
+  return DNS_PROVIDER_TEMPLATES[config.dnsProvider] || '';
+}
+
+function applyStartupNetworkSecuritySwitches(config = networkSecurityConfig) {
+  const dnsTemplate = getSecureDnsTemplate(config);
+  if (dnsTemplate) {
+    app.commandLine.appendSwitch('dns-over-https-mode', 'secure');
+    app.commandLine.appendSwitch('dns-over-https-templates', dnsTemplate);
+  }
+
+  if (config.preventWebRtcLeaks) {
+    app.commandLine.appendSwitch('force-webrtc-ip-handling-policy', 'disable_non_proxied_udp');
+    app.commandLine.appendSwitch('enforce-webrtc-ip-permission-check');
+  }
+}
+
+function matchesBlockedHost(hostname, patterns = []) {
+  const host = `${hostname || ''}`.toLowerCase();
+  return patterns.some((pattern) => host === pattern || host.endsWith(`.${pattern}`));
+}
+
+function getCustomBlockedDomains(config = networkSecurityConfig) {
+  return `${config.customBlockedDomains || ''}`
+    .split(/[\n,\s]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isPrivateHostname(hostname = '') {
+  const host = `${hostname || ''}`.toLowerCase();
+  return (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '::1' ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+  );
+}
+
+function shouldUpgradeRequestToHttps(targetUrl, config = networkSecurityConfig) {
+  if (!config.upgradeInsecureRequests) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(targetUrl);
+    return parsed.protocol === 'http:' && !isPrivateHostname(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function buildProxyConfig(config = networkSecurityConfig) {
+  if (config.proxyMode === 'fixed_servers' && config.proxyRules) {
+    return {
+      mode: 'fixed_servers',
+      proxyRules: config.proxyRules,
+      proxyBypassRules: config.proxyBypassRules || DEFAULT_NETWORK_SECURITY_CONFIG.proxyBypassRules,
+    };
+  }
+
+  if (config.proxyMode === 'direct') {
+    return { mode: 'direct' };
+  }
+
+  if (config.proxyMode === 'auto_detect') {
+    return { mode: 'auto_detect' };
+  }
+
+  return { mode: 'system' };
+}
+
+async function applyProxyConfigToSession(targetSession) {
+  if (!targetSession || typeof targetSession.setProxy !== 'function') {
+    return;
+  }
+
+  try {
+    await targetSession.setProxy(buildProxyConfig(networkSecurityConfig));
+    if (typeof targetSession.closeAllConnections === 'function') {
+      targetSession.closeAllConnections().catch(() => {});
+    }
+  } catch (error) {
+    console.warn('[NetworkSecurity] Failed to apply proxy config:', error.message);
+  }
+}
+
+async function applyNetworkSecurityConfig(nextConfig = {}) {
+  networkSecurityConfig = normalizeNetworkSecurityConfig({
+    ...networkSecurityConfig,
+    ...nextConfig,
+  });
+
+  store.set('networkSecurityConfig', networkSecurityConfig);
+
+  if (!app.isReady()) {
+    return networkSecurityConfig;
+  }
+
+  const uniqueSessions = new Set([session.defaultSession]);
+  for (const view of tabViews.values()) {
+    if (view?.webContents?.session) {
+      uniqueSessions.add(view.webContents.session);
+    }
+  }
+
+  await Promise.all([...uniqueSessions].map((targetSession) => applyProxyConfigToSession(targetSession)));
+  return networkSecurityConfig;
+}
+
+applyStartupNetworkSecuritySwitches(networkSecurityConfig);
 
 const performRobotClick = async ({ x, y, button = 'left', doubleClick = false }) => {
   if (robotService) {
@@ -479,7 +680,7 @@ const buildApplicationMenu = () => {
         { type: 'separator' },
         { label: 'Recently Closed', role: 'recentDocuments' },
         { type: 'separator' },
-        { label: 'Clear Browsing Data...', click: () => openSettingsSection('privacy') }
+        { label: 'Delete All History', click: () => triggerShortcut('clear-history') }
       ]
     },
     {
@@ -2083,6 +2284,42 @@ async function createWindow() {
     }
   });
 
+  session.defaultSession.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, callback) => {
+    try {
+      const parsed = new URL(details.url);
+      const hostname = parsed.hostname.toLowerCase();
+      const customDomains = getCustomBlockedDomains();
+      const shouldBlock =
+        (networkSecurityConfig.blockTrackers && matchesBlockedHost(hostname, TRACKER_HOSTS)) ||
+        (networkSecurityConfig.blockAds && matchesBlockedHost(hostname, AD_HOSTS)) ||
+        (networkSecurityConfig.blockMalware && matchesBlockedHost(hostname, MALWARE_HOSTS)) ||
+        matchesBlockedHost(hostname, customDomains);
+
+      if (shouldBlock) {
+        return callback({ cancel: true });
+      }
+
+      if (shouldUpgradeRequestToHttps(details.url)) {
+        parsed.protocol = 'https:';
+        return callback({ redirectURL: parsed.toString() });
+      }
+    } catch {
+      // ignore malformed URLs
+    }
+
+    callback({ cancel: false });
+  });
+
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['*://*/*'] }, (details, callback) => {
+    const requestHeaders = { ...(details.requestHeaders || {}) };
+    if (networkSecurityConfig.sendDoNotTrack) {
+      requestHeaders.DNT = '1';
+      requestHeaders['Sec-GPC'] = '1';
+    }
+
+    callback({ requestHeaders });
+  });
+
   // Header stripping for embedding and Google Workspace compatibility
   session.defaultSession.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, callback) => {
     const { responseHeaders } = details;
@@ -2094,9 +2331,7 @@ async function createWindow() {
       if (
         lowerKey !== 'x-frame-options' &&
         lowerKey !== 'content-security-policy' &&
-        lowerKey !== 'content-security-policy-report-only' &&
-        lowerKey !== 'cross-origin-resource-policy' &&
-        lowerKey !== 'cross-origin-opener-policy'
+        lowerKey !== 'content-security-policy-report-only'
       ) {
         acc[key] = responseHeaders[key];
       }
@@ -2364,8 +2599,154 @@ if (!fs.existsSync(persistentDataPath)) {
   fs.mkdirSync(persistentDataPath, { recursive: true });
 }
 
+const VAULT_FILE_NAME = 'user-passwords.json';
+const VAULT_UNLOCK_TTL_MS = 5 * 60 * 1000;
+let vaultUnlockExpiresAt = 0;
+
+function getVaultFilePath() {
+  return path.join(persistentDataPath, VAULT_FILE_NAME);
+}
+
+function normalizeVaultSite(site = '') {
+  return `${site || ''}`
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .split('/')[0]
+    .toLowerCase();
+}
+
+function readVaultEntries() {
+  const filePath = getVaultFilePath();
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    return Array.isArray(raw) ? raw : [];
+  } catch (error) {
+    console.warn('[Vault] Failed to read entries:', error.message);
+    return [];
+  }
+}
+
+function writeVaultEntries(entries) {
+  fs.writeFileSync(getVaultFilePath(), JSON.stringify(entries, null, 2), 'utf-8');
+}
+
+function maskVaultEntry(entry = {}) {
+  return {
+    id: entry.id,
+    site: entry.site || '',
+    username: entry.username || '',
+    created: entry.created || null,
+    hasPassword: !!entry.password,
+    passwordMasked: entry.password ? '••••••••••••' : '',
+  };
+}
+
+function getVaultEntryLabel(entry = {}) {
+  return [entry.site, entry.username].filter(Boolean).join(' • ') || 'saved credential';
+}
+
+function isVaultUnlockStillValid() {
+  return vaultUnlockExpiresAt > Date.now();
+}
+
+function rememberVaultUnlock() {
+  vaultUnlockExpiresAt = Date.now() + VAULT_UNLOCK_TTL_MS;
+}
+
+function clearVaultUnlock() {
+  vaultUnlockExpiresAt = 0;
+}
+
+function selectorLooksSensitive(selector = '') {
+  return /(password|passwd|pwd|passcode|pin|otp|username|user(name)?|email|login|sign[\s-_]?in|credential|secret)/i.test(`${selector || ''}`);
+}
+
+function valueMatchesVaultCredential(value) {
+  const normalized = `${value ?? ''}`.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  return readVaultEntries().some((entry) =>
+    entry.password === normalized || `${entry.username || ''}`.trim() === normalized
+  );
+}
+
+function formNeedsVaultApproval(formData = {}) {
+  return Object.entries(formData).some(([selector, value]) =>
+    selectorLooksSensitive(selector) || valueMatchesVaultCredential(value)
+  );
+}
+
+async function verifyVaultAccess({ reason, actionText }) {
+  const settings = permissionStore.getSettings();
+  if (settings.requireDeviceUnlockForVaultAccess === false) {
+    return { success: true, mode: 'vault-device-unlock-disabled' };
+  }
+
+  if (isVaultUnlockStillValid()) {
+    return { success: true, mode: 'vault-device-unlock-cached' };
+  }
+
+  if (!hasNativeDeviceUnlockSupport()) {
+    return {
+      success: false,
+      error: 'Native device unlock is required for Neural Vault access on this build.',
+    };
+  }
+
+  const nativeVerification = await verifyNativeDeviceAccess({
+    reason: reason || 'Unlock Neural Vault to use saved credentials in Comet-AI.',
+    actionText: actionText || 'Neural Vault credential access',
+    riskLevel: 'high',
+  });
+
+  if (!nativeVerification.supported) {
+    return {
+      success: false,
+      error: nativeVerification.error || 'Native device unlock is unavailable for Neural Vault access.',
+    };
+  }
+
+  if (!nativeVerification.approved) {
+    return {
+      success: false,
+      error: nativeVerification.error || 'Neural Vault access was denied.',
+    };
+  }
+
+  rememberVaultUnlock();
+  permissionStore.logAudit(`vault.unlock: ${actionText || 'credential access'} (${nativeVerification.mode})`);
+  return { success: true, mode: nativeVerification.mode };
+}
+
+async function ensureVaultApprovalForFormFill(formData = {}) {
+  if (!formNeedsVaultApproval(formData)) {
+    return { success: true, protected: false };
+  }
+
+  const fieldList = Object.keys(formData).slice(0, 3).join(', ');
+  const verification = await verifyVaultAccess({
+    reason: 'Unlock Neural Vault to fill saved login or form credentials.',
+    actionText: `Credential autofill for ${fieldList || 'secure fields'}`,
+  });
+
+  if (!verification.success) {
+    return { success: false, error: verification.error };
+  }
+
+  return { success: true, protected: true, mode: verification.mode };
+}
+
 ipcMain.handle('save-persistent-data', async (event, { key, data }) => {
   try {
+    if (key === 'user-passwords') {
+      return { success: false, error: 'Neural Vault entries must be saved through secure vault APIs.' };
+    }
     const filePath = path.join(persistentDataPath, `${key}.json`);
     fs.writeFileSync(filePath, JSON.stringify(data), 'utf-8');
     return { success: true };
@@ -2377,6 +2758,9 @@ ipcMain.handle('save-persistent-data', async (event, { key, data }) => {
 
 ipcMain.handle('load-persistent-data', async (event, key) => {
   try {
+    if (key === 'user-passwords') {
+      return { success: false, error: 'Neural Vault entries are no longer exposed through generic storage APIs.' };
+    }
     const filePath = path.join(persistentDataPath, `${key}.json`);
     if (fs.existsSync(filePath)) {
       const data = fs.readFileSync(filePath, 'utf-8');
@@ -2391,6 +2775,9 @@ ipcMain.handle('load-persistent-data', async (event, key) => {
 
 ipcMain.handle('delete-persistent-data', async (event, key) => {
   try {
+    if (key === 'user-passwords') {
+      return { success: false, error: 'Neural Vault entries must be deleted through secure vault APIs.' };
+    }
     const filePath = path.join(persistentDataPath, `${key}.json`);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
@@ -2461,14 +2848,118 @@ ipcMain.on('clear-auth', () => {
 
 // Password Manager Logic
 ipcMain.handle('get-passwords-for-site', async (event, domain) => {
-  const filePath = path.join(persistentDataPath, 'user-passwords.json');
-  if (fs.existsSync(filePath)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      return data.filter(p => p.site.includes(domain));
-    } catch (e) { return []; }
+  const normalizedDomain = normalizeVaultSite(domain);
+  const entries = readVaultEntries().filter((entry) =>
+    normalizedDomain ? `${entry.site || ''}`.includes(normalizedDomain) : true
+  );
+
+  if (entries.length === 0) {
+    return [];
   }
-  return [];
+
+  const verification = await verifyVaultAccess({
+    reason: 'Unlock Neural Vault to retrieve saved credentials for this site.',
+    actionText: `Site credential access for ${normalizedDomain || domain || 'current site'}`,
+  });
+
+  if (!verification.success) {
+    return [];
+  }
+
+  return entries;
+});
+
+ipcMain.handle('vault-list-entries', async () => {
+  return {
+    success: true,
+    entries: readVaultEntries().map(maskVaultEntry),
+  };
+});
+
+ipcMain.handle('vault-save-entry', async (event, payload = {}) => {
+  const entries = readVaultEntries();
+  const site = normalizeVaultSite(payload.site);
+  const username = `${payload.username || ''}`.trim();
+  const password = `${payload.password || ''}`;
+
+  if (!site || !password) {
+    return { success: false, error: 'Site and password are required.' };
+  }
+
+  const incomingId = `${payload.id || ''}`.trim();
+  const nextEntry = {
+    id: incomingId || Date.now().toString(),
+    site,
+    username,
+    password,
+    created: payload.created || new Date().toISOString(),
+  };
+
+  const existingIndex = entries.findIndex((entry) => entry.id === nextEntry.id);
+  if (existingIndex >= 0) {
+    entries[existingIndex] = { ...entries[existingIndex], ...nextEntry };
+  } else if (!entries.some((entry) => entry.site === site && entry.username === username && entry.password === password)) {
+    entries.push(nextEntry);
+  }
+
+  writeVaultEntries(entries);
+  clearVaultUnlock();
+
+  return {
+    success: true,
+    entries: entries.map(maskVaultEntry),
+  };
+});
+
+ipcMain.handle('vault-delete-entry', async (event, entryId) => {
+  const entries = readVaultEntries();
+  const remainingEntries = entries.filter((entry) => entry.id !== entryId);
+  writeVaultEntries(remainingEntries);
+  clearVaultUnlock();
+  return {
+    success: true,
+    entries: remainingEntries.map(maskVaultEntry),
+  };
+});
+
+ipcMain.handle('vault-read-secret', async (event, entryId) => {
+  const entry = readVaultEntries().find((item) => item.id === entryId);
+  if (!entry) {
+    return { success: false, error: 'Vault entry not found.' };
+  }
+
+  const verification = await verifyVaultAccess({
+    reason: 'Unlock Neural Vault to reveal a saved password.',
+    actionText: `Reveal password for ${getVaultEntryLabel(entry)}`,
+  });
+
+  if (!verification.success) {
+    return { success: false, error: verification.error };
+  }
+
+  return {
+    success: true,
+    password: entry.password,
+  };
+});
+
+ipcMain.handle('vault-copy-secret', async (event, entryId) => {
+  const entry = readVaultEntries().find((item) => item.id === entryId);
+  if (!entry) {
+    return { success: false, error: 'Vault entry not found.' };
+  }
+
+  const verification = await verifyVaultAccess({
+    reason: 'Unlock Neural Vault to copy a saved password.',
+    actionText: `Copy password for ${getVaultEntryLabel(entry)}`,
+  });
+
+  if (!verification.success) {
+    return { success: false, error: verification.error };
+  }
+
+  clipboard.writeText(entry.password || '');
+  return { success: true };
 });
 
 ipcMain.on('propose-password-save', (event, { domain, username, password }) => {
@@ -2482,16 +2973,14 @@ ipcMain.on('propose-password-save', (event, { domain, username, password }) => {
     detail: `User: ${username}`
   }).then(result => {
     if (result.response === 0) {
-      const filePath = path.join(persistentDataPath, 'user-passwords.json');
-      let passwords = [];
-      if (fs.existsSync(filePath)) {
-        try { passwords = JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch (e) { }
-      }
+      const passwords = readVaultEntries();
+      const normalizedDomain = normalizeVaultSite(domain);
       // Avoid duplicates
-      if (!passwords.some(p => p.site === domain && p.username === username && p.password === password)) {
-        passwords.push({ id: Date.now().toString(), site: domain, username, password, created: new Date().toISOString() });
-        fs.writeFileSync(filePath, JSON.stringify(passwords), 'utf-8');
-        console.log(`[Vault] Saved password for ${domain}`);
+      if (!passwords.some(p => p.site === normalizedDomain && p.username === username && p.password === password)) {
+        passwords.push({ id: Date.now().toString(), site: normalizedDomain, username, password, created: new Date().toISOString() });
+        writeVaultEntries(passwords);
+        clearVaultUnlock();
+        console.log(`[Vault] Saved password for ${normalizedDomain}`);
       }
     }
   });
@@ -2663,6 +3152,7 @@ ipcMain.on('create-view', (event, { tabId, url }) => {
     },
   });
   newView.webContents.setUserAgent(chromeUserAgent);
+  applyProxyConfigToSession(newView.webContents.session);
   newView.webContents.loadURL(url);
 
   // Intercept new window requests and open them as new tabs
@@ -2700,6 +3190,7 @@ ipcMain.on('create-view', (event, { tabId, url }) => {
   });
 
   newView.webContents.on('did-finish-load', () => {
+    syncGoogleSearchThemeForContents(newView.webContents);
     mainWindow.webContents.send('on-tab-loaded', { tabId, url: newView.webContents.getURL() });
   });
 
@@ -2728,6 +3219,7 @@ ipcMain.on('create-view', (event, { tabId, url }) => {
   });
 
   newView.webContents.on('did-navigate', (event, navUrl) => {
+    syncGoogleSearchThemeForContents(newView.webContents);
     mainWindow.webContents.send('browser-view-url-changed', { tabId, url: navUrl });
     if (navUrl.includes('/search?') || navUrl.includes('?q=')) {
       try {
@@ -3781,7 +4273,7 @@ async function generateShellApprovalQR(command) {
   }
 }
 
-async function requestShellApproval(command, riskLevel, reason) {
+async function requestShellApproval(command, riskLevel, reason, options = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
   const requestId = `shell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const qrPayload = await generateShellApprovalQR(command);
@@ -3791,6 +4283,7 @@ async function requestShellApproval(command, riskLevel, reason) {
     risk: riskLevel || 'medium',
     reason: reason || 'A scheduled automation needs your approval.',
     highRiskQr: JSON.stringify(qrPayload),
+    requiresDeviceUnlock: !!options.requiresDeviceUnlock,
   };
   try {
     mainWindow.webContents.send('automation-shell-approval', payload);
@@ -3831,15 +4324,56 @@ async function checkShellPermission(command) {
   }
 
   const analysis = analyzeCommandRisk(command);
+  const autoApprovalRiskLevel = analysis.harmLevel === 'safe'
+    ? (analysis.isWhitelisted ? 'low' : null)
+    : analysis.harmLevel;
+  const approvalRiskLevel = autoApprovalRiskLevel === 'critical'
+    ? 'high'
+    : (autoApprovalRiskLevel || 'medium');
+  const settings = permissionStore.getSettings();
+  const requiresDeviceUnlock =
+    settings.requireDeviceUnlockForManualApproval !== false &&
+    hasNativeDeviceUnlockSupport();
 
   // Use auto-approve settings from permission store
-  if (permissionStore.canAutoExecute(command, analysis.harmLevel)) {
-    console.log(`[Shell] Auto-approved (${analysis.harmLevel}): ${command}`);
+  if (autoApprovalRiskLevel && permissionStore.canAutoExecute(command, autoApprovalRiskLevel)) {
+    console.log(`[Shell] Auto-approved (${autoApprovalRiskLevel}): ${command}`);
     return true;
   }
 
-  console.log(`[Shell] Requesting approval (${analysis.harmLevel}): ${command}`);
-  return await requestShellApproval(command, analysis.harmLevel, 'Automation requested this shell action.');
+  console.log(`[Shell] Requesting approval (${approvalRiskLevel}): ${command}`);
+  const allowed = await requestShellApproval(
+    command,
+    approvalRiskLevel,
+    'Automation requested this shell action.',
+    { requiresDeviceUnlock }
+  );
+
+  if (!allowed) {
+    return false;
+  }
+
+  if (!requiresDeviceUnlock) {
+    return true;
+  }
+
+  const nativeVerification = await verifyNativeCommandApproval({
+    command,
+    riskLevel: approvalRiskLevel,
+  });
+
+  if (!nativeVerification.supported) {
+    console.warn('[Shell] Native device unlock requested but unavailable:', nativeVerification.error);
+    return true;
+  }
+
+  if (!nativeVerification.approved) {
+    console.warn('[Shell] Native device unlock verification denied:', nativeVerification.error || 'User denied verification');
+    return false;
+  }
+
+  console.log(`[Shell] Native device unlock approved via ${nativeVerification.mode}`);
+  return true;
 }
 
 /**
@@ -3851,20 +4385,22 @@ function validateCommand(command) {
     throw new Error('Invalid command format');
   }
 
-  // Dangerous command patterns
-  const forbidden = [
-    'rm ', 'sudo ', 'shutdown ', 'mkfs ', 'format ', 'dd ',
-    'char ', '> /', ':(){ :|:& };:', 'mv /', 'poweroff', 'reboot'
-  ];
-
-  const isDangerous = forbidden.some(f => command.toLowerCase().includes(f));
-  if (isDangerous) {
-    console.warn(`[Security] Blocked dangerous command execution attempt: ${command}`);
-    throw new Error(`Security Exception: Blocked dangerous command: ${command}`);
+  const trimmed = command.trim();
+  if (!trimmed) {
+    throw new Error('Command cannot be empty');
   }
 
-  // Sanitize input (basic)
-  return command.trim().slice(0, 1000); // Limit size
+  const exploitPatterns = [
+    /\u0000/,
+    /:\(\)\s*\{\s*:\|:&\s*\};:/,
+  ];
+
+  if (exploitPatterns.some((pattern) => pattern.test(trimmed))) {
+    console.warn(`[Security] Blocked exploit-style command execution attempt: ${trimmed}`);
+    throw new Error('Security Exception: blocked malformed shell payload.');
+  }
+
+  return trimmed.slice(0, 1000);
 }
 
 ipcMain.handle('execute-shell-command', async (event, { rawCommand, preApproved }) => {
@@ -4245,9 +4781,109 @@ function handleDeepLink(url) {
   }
 }
 
+function getEffectiveThemeSource() {
+  if (nativeTheme.themeSource === 'light' || nativeTheme.themeSource === 'dark') {
+    return nativeTheme.themeSource;
+  }
+
+  return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+}
+
+function isGoogleSearchUrl(rawUrl = '') {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.hostname.startsWith('www.google.') && parsed.pathname === '/search';
+  } catch {
+    return false;
+  }
+}
+
+async function syncGoogleSearchThemeForContents(contents, options = {}) {
+  if (!contents || contents.isDestroyed()) {
+    return;
+  }
+
+  const currentUrl = contents.getURL();
+  if (!isGoogleSearchUrl(currentUrl)) {
+    return;
+  }
+
+  const themeSource = getEffectiveThemeSource();
+
+  try {
+    await contents.executeJavaScript(`
+      (() => {
+        const isDark = ${themeSource === 'dark'};
+        // Force the color-scheme preference
+        document.documentElement.style.setProperty('color-scheme', isDark ? 'dark' : 'light');
+        if (document.body) {
+          document.body.classList.toggle('dark-theme', isDark);
+          document.body.style.backgroundColor = isDark ? '#202124' : '#fff';
+          document.body.style.color = isDark ? '#bdc1c6' : '#202124';
+        }
+        return true;
+      })();
+    `, true);
+
+    if (options.reload === true) {
+      contents.reload();
+    }
+  } catch (error) {
+    console.warn('[Theme] Failed to sync Google Search theme:', error.message);
+  }
+}
+
+async function updateGoogleSearchTheme(options = {}) {
+  const views = [...tabViews.values()];
+  await Promise.all(views.map((view) => syncGoogleSearchThemeForContents(view?.webContents, options)));
+}
+
+  // Security Settings (Registered before app is ready to avoid missing handler)
+  ipcMain.handle('security-settings-get', async () => {
+    return permissionStore.getSettings();
+  });
+
+  ipcMain.handle('security-settings-update', async (event, settings) => {
+    permissionStore.updateSettings(settings);
+    return { success: true, settings: permissionStore.getSettings() };
+  });
+
+  ipcMain.handle('set-native-theme-source', async (_event, source) => {
+    const nextSource = ['system', 'light', 'dark'].includes(source) ? source : 'system';
+    nativeTheme.themeSource = nextSource;
+    // We register this as an async handler, but the theme sync will wait for views
+    updateGoogleSearchTheme({ reload: true }).catch(err => console.warn('[Theme] Early sync failed:', err));
+    return { success: true, themeSource: nativeTheme.themeSource };
+  });
+
+  ipcMain.handle('network-security-get', async () => {
+    return {
+      success: true,
+      config: networkSecurityConfig,
+      restartRequiredFor: ['enableSecureDns', 'dnsProvider', 'customDnsTemplate', 'preventWebRtcLeaks'],
+    };
+  });
+
+  ipcMain.handle('network-security-update', async (_event, updates) => {
+    try {
+      const config = await applyNetworkSecurityConfig(updates || {});
+      return {
+        success: true,
+        config,
+        restartRequiredFor: ['enableSecureDns', 'dnsProvider', 'customDnsTemplate', 'preventWebRtcLeaks'],
+      };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
 app.whenReady().then(async () => {
+  nativeTheme.on('updated', () => {
+    updateGoogleSearchTheme();
+  });
   registerAppFileProtocol();
   buildApplicationMenu();
+  await applyNetworkSecurityConfig(networkSecurityConfig);
   
   // Auto-update setup (only in production)
   if (!require('electron-is-dev')) {
@@ -6130,9 +6766,14 @@ ipcMain.removeHandler('generate-pdf');
     return { success: true };
   });
 
-  ipcMain.handle('get-wifi-sync-qr', async () => {
+  ipcMain.handle('get-wifi-sync-qr', async (event, cloudMode = false) => {
     if (!wifiSyncService) return null;
-    const uri = wifiSyncService.getConnectUri();
+    let uri;
+    if (cloudMode && cloudSyncService && cloudSyncService.isConnected()) {
+      uri = wifiSyncService.getCloudConnectUri(cloudSyncService.getDeviceId() || 'unknown');
+    } else {
+      uri = wifiSyncService.getConnectUri();
+    }
     try {
       return await QRCode.toDataURL(uri);
     } catch (err) {
@@ -6646,75 +7287,13 @@ ipcMain.removeHandler('generate-pdf');
 
       console.log(`[RAG] Performing web search for: ${query}`);
 
-      // Use web scraper for search results
-      const searchEngines = [
-        {
-          name: 'Google',
-          url: `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=en`,
-          selectors: [
-              /<div[^>]+class="VwiC3b[^>]*>([\s\S]*?)<\/div>/g,
-              /<div[^>]+class="BNeawe s3v9rd AP7Wnd"[^>]*>([\s\S]*?)<\/div>/g,
-              /<span[^>]+class="hgKElc"[^>]*>([\s\S]*?)<\/span>/g,
-              /<div[^>]+class="yY967"[^>]*>([\s\S]*?)<\/div>/g,
-              /<div[^>]+class="MUFw9c[^>]*>([\s\S]*?)<\/div>/g
-            ]
-          },
-          {
-            name: 'DuckDuckGo',
-            url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
-            selectors: [
-              /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g,
-              /<div[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/div>/g
-            ]
-          }
-        ];
-
-        let searchResults = [];
-
-        for (const engine of searchEngines) {
-          try {
-            console.log(`[RAG] Attempting search with ${engine.name}...`);
-            const response = await fetch(engine.url, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
-              }
-            });
-
-            if (!response.ok) continue;
-
-            const html = await response.text();
-            const snippets = [];
-
-            for (const regex of engine.selectors) {
-              let match;
-              regex.lastIndex = 0;
-              while ((match = regex.exec(html)) !== null && snippets.length < 5) {
-                let cleanSnippet = match[1]
-                  .replace(/<[^>]*>/g, '') // Remove HTML tags
-                  .replace(/&amp;/g, '&')
-                  .replace(/&quot;/g, '"')
-                  .replace(/&#39;/g, "'")
-                  .replace(/\s+/g, ' ')
-                  .trim();
-
-                if (cleanSnippet && cleanSnippet.length > 20 && !snippets.includes(cleanSnippet)) {
-                  snippets.push(cleanSnippet);
-                }
-              }
-              if (snippets.length >= 3) break;
-            }
-
-            if (snippets.length > 0) {
-              console.log(`[RAG] ${engine.name} search retrieved ${snippets.length} snippets`);
-              searchResults = snippets;
-              break;
-            }
-          } catch (e) {
-            console.warn(`[RAG] ${engine.name} search failed:`, e.message);
-          }
-        }
+      let searchResults = [];
+      try {
+        const results = await webSearchProvider.search(query, 'duckduckgo', 6);
+        searchResults = results.map(r => `[${r.title}](${r.url})\n${r.snippet}`);
+      } catch (e) {
+        console.warn(`[RAG] Deep search failed for ${query}`);
+      }
 
       if (searchResults.length > 0) {
         searchCache.set(normalizedQuery, {
@@ -7064,7 +7643,11 @@ ipcMain.removeHandler('generate-pdf');
        const MobileNotifier = require('./src/service/mobile-notifier.js');
 
        const StorageManagerClass = Storage.StorageManager;
-       storageManager = new StorageManagerClass();
+       const automationDataPath = path.join(app.getPath('userData'), 'automation');
+       if (!fs.existsSync(automationDataPath)) {
+         fs.mkdirSync(automationDataPath, { recursive: true });
+       }
+       storageManager = new StorageManagerClass(automationDataPath);
        await storageManager.initialize();
 
        taskQueue = new TaskQueue(storageManager);
@@ -7482,12 +8065,19 @@ ipcMain.removeHandler('generate-pdf');
     const view = tabViews.get(activeTabId);
     if (!view) return { success: false, error: 'No active view' };
     try {
+      const vaultApproval = await ensureVaultApprovalForFormFill({ [selector]: text });
+      if (!vaultApproval.success) {
+        return { success: false, error: vaultApproval.error };
+      }
+
       await view.webContents.executeJavaScript(`
       (() => {
-        const el = document.querySelector('${selector}');
+        const selector = ${JSON.stringify(selector)};
+        const value = ${JSON.stringify(text ?? '')};
+        const el = document.querySelector(selector);
         if (el) {
           el.focus();
-          el.value = '${text.replace(/'/g, "\\'")}';
+          el.value = value;
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
           return true;
@@ -7505,6 +8095,11 @@ ipcMain.removeHandler('generate-pdf');
     const view = tabViews.get(activeTabId);
     if (!view) return { success: false, error: 'No active view' };
     try {
+      const vaultApproval = await ensureVaultApprovalForFormFill(formData);
+      if (!vaultApproval.success) {
+        return { success: false, error: vaultApproval.error };
+      }
+
       await view.webContents.executeJavaScript(`
       (() => {
         const data = ${JSON.stringify(formData)};
@@ -7866,14 +8461,22 @@ ipcMain.removeHandler('generate-pdf');
     return permissionStore.getAuditLog(limit || 100);
   });
 
-  // Security Settings
-  ipcMain.handle('security-settings-get', async () => {
-    return permissionStore.getSettings();
-  });
 
-  ipcMain.handle('security-settings-update', async (event, settings) => {
-    permissionStore.updateSettings(settings);
-    return { success: true, settings: permissionStore.getSettings() };
+
+  ipcMain.handle('set-proxy', async (_event, config) => {
+    const updates = config
+      ? {
+          proxyMode: config.mode || 'fixed_servers',
+          proxyRules: config.proxyRules || config.rules || config.proxyServer || '',
+          proxyBypassRules: config.proxyBypassRules || networkSecurityConfig.proxyBypassRules,
+        }
+      : {
+          proxyMode: 'direct',
+          proxyRules: '',
+        };
+
+    await applyNetworkSecurityConfig(updates);
+    return true;
   });
 
   ipcMain.handle('permission-auto-command', async (event, { command, enabled }) => {

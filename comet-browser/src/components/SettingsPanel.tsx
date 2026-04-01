@@ -353,6 +353,31 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                                             aria-label="Panel Width"
                                         />
                                     </div>
+                                    <div className="pt-6 border-t border-white/5 space-y-4">
+                                        <div>
+                                            <h3 className="font-bold text-white mb-1">Top Bar Icons</h3>
+                                            <p className="text-xs text-white/30">Select which quick-action icons appear in your address bar.</p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 mt-4">
+                                            {[
+                                                { id: 'downloads', label: 'Downloads', state: store.showDownloadsIcon, setter: store.setShowDownloadsIcon },
+                                                { id: 'clipboard', label: 'Clipboard', state: store.showClipboardIcon, setter: store.setShowClipboardIcon },
+                                                { id: 'cart', label: 'Shopping Cart', state: store.showCartIcon, setter: store.setShowCartIcon },
+                                                { id: 'translate', label: 'Translate', state: store.showTranslateIcon, setter: store.setShowTranslateIcon },
+                                                { id: 'extensions', label: 'Extensions', state: store.showExtensionsIcon, setter: store.setShowExtensionsIcon },
+                                            ].map((icon) => (
+                                                <div key={icon.id} className="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-white/5">
+                                                    <span className="text-xs text-white/70">{icon.label}</span>
+                                                    <button
+                                                        onClick={() => icon.setter(!icon.state)}
+                                                        className={`relative w-10 h-5 rounded-full border transition-all ${icon.state ? 'bg-deep-space-accent-neon/20 border-deep-space-accent-neon shadow-[0_0_10px_rgba(56,189,248,0.3)]' : 'bg-white/5 border-white/10'}`}
+                                                    >
+                                                        <span className={`absolute top-[1px] left-[2px] w-[16px] h-[16px] rounded-full bg-white transition-transform ${icon.state ? 'translate-x-[18px] bg-deep-space-accent-neon text-black' : 'translate-x-0'}`} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}

@@ -107,6 +107,10 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <meta-data
+            android:name="com.google.android.gms.signin.client_webview_client_id"
+            android:value="507073680966.apps.googleusercontent.com" />
+
         <receiver android:name=".SearchWidget" android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
