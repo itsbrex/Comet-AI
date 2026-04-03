@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, X } from 'lucide-react';
-import path from 'path'; // Import path for path.basename
-import { BrowserAI } from '@/lib/BrowserAI'; // Import BrowserAI
-import { useAppStore } from '@/store/useAppStore'; // Import useAppStore
+import { Search, X, Calculator, Bell, Globe, Command, ArrowRight } from 'lucide-react';
+import { BrowserAI } from '@/lib/BrowserAI';
+import { useAppStore } from '@/store/useAppStore';
+import { searchEngines } from './SearchEngineSettings';
 
 interface SpotlightSearchOverlayProps {
     show: boolean;
@@ -13,140 +13,138 @@ interface SpotlightSearchOverlayProps {
 }
 
 const SpotlightSearchOverlay: React.FC<SpotlightSearchOverlayProps> = ({ show, onClose }) => {
-    const store = useAppStore(); // Get store at top level
+    const store = useAppStore();
     const [searchTerm, setSearchTerm] = useState('');
-    const [calculationResult, setCalculationResult] = useState<string | null>(null); // New state for calculation result
-    const [appSearchResults, setAppSearchResults] = useState<any[]>([]); // New state for app search results
-    const [alarmMessage, setAlarmMessage] = useState<string | null>(null); // New state for alarm messages
-    const [urlPrediction, setUrlPrediction] = useState<string | null>(null); // New state for URL prediction
-    const [urlPredictions, setUrlPredictions] = useState<string[]>([]); // Store multiple predictions
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const [calculationResult, setCalculationResult] = useState<string | null>(null);
+    const [appSearchResults, setAppSearchResults] = useState<any[]>([]);
+    const [alarmMessage, setAlarmMessage] = useState<string | null>(null);
+    const [urlPrediction, setUrlPrediction] = useState<string | null>(null);
+    const [isSearching, setIsSearching] = useState(false);
+    
     const inputRef = useRef<HTMLInputElement>(null);
+    const resultsRef = useRef<HTMLDivElement>(null);
+
+    // Categories of items in the list
+    const getFlattenedResults = () => {
+        const results: any[] = [];
+        
+        if (calculationResult) {
+            results.push({ type: 'calc', value: calculationResult });
+        }
+        
+        appSearchResults.forEach(app => {
+            results.push({ type: 'app', ...app });
+        });
+        
+        if (searchTerm.trim().length > 0) {
+            results.push({ type: 'web', query: searchTerm.trim() });
+        }
+        
+        return results;
+    };
+
+    const flattenedResults = getFlattenedResults();
 
     useEffect(() => {
         if (show) {
-            // Focus the input when the overlay opens
             const timer = setTimeout(() => {
                 inputRef.current?.focus();
-            }, 100); // Small delay to ensure modal is rendered
+            }, 100);
             return () => clearTimeout(timer);
         } else {
-            setSearchTerm(''); // Clear search term when closed
+            setSearchTerm('');
+            setSelectedIndex(0);
+            setAppSearchResults([]);
+            setCalculationResult(null);
+            setAlarmMessage(null);
         }
     }, [show]);
 
-    // Close on Escape key
+    // Keyboard navigation
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 onClose();
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSelectedIndex(prev => (prev + 1) % flattenedResults.length);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSelectedIndex(prev => (prev - 1 + flattenedResults.length) % flattenedResults.length);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [onClose]);
+    }, [onClose, flattenedResults.length]);
 
-    // Debounced Predictor for URL
+    // Automatic search as you type
     useEffect(() => {
         const timer = setTimeout(async () => {
-            const trimmedSearchTerm = searchTerm.trim();
-            if (trimmedSearchTerm.length > 2 && !calculationResult && appSearchResults.length === 0 && !alarmMessage) {
-                const preds = await BrowserAI.predictUrl(trimmedSearchTerm, store.history.map(h => h.url));
+            const trimmed = searchTerm.trim();
+            if (!trimmed) {
+                setAppSearchResults([]);
+                setCalculationResult(null);
+                setAlarmMessage(null);
+                return;
+            }
+
+            // Calculation
+            if (/^[\d\s+\-*/().]+$/.test(trimmed)) {
+                try {
+                    const result = eval(trimmed);
+                    setCalculationResult(`${trimmed} = ${result}`);
+                } catch {
+                    setCalculationResult(null);
+                }
+            } else {
+                setCalculationResult(null);
+            }
+
+            // App Search
+            if (trimmed.length > 0 && window.electronAPI) {
+                setIsSearching(true);
+                const res = await window.electronAPI.searchApplications(trimmed);
+                if (res.success) {
+                    // Fetch icons for the apps
+                    const appsWithIcons = await Promise.all(res.results.slice(0, 5).map(async (app: any) => {
+                        const icon = await window.electronAPI.getAppIcon(app.path);
+                        return { ...app, icon };
+                    }));
+                    setAppSearchResults(appsWithIcons);
+                }
+                setIsSearching(false);
+            }
+
+            // URL Prediction
+            if (trimmed.length > 2) {
+                const preds = await BrowserAI.predictUrl(trimmed, store.history.map(h => h.url));
                 setUrlPrediction(preds[0] || null);
             } else {
                 setUrlPrediction(null);
             }
-        }, 150); // Debounce time
+        }, 100);
+
         return () => clearTimeout(timer);
-    }, [searchTerm, calculationResult, appSearchResults, alarmMessage, store.history]);
+    }, [searchTerm, store.history]);
 
-    const handleSearch = async () => {
-        setCalculationResult(null); // Clear previous calculation
-        const trimmedSearchTerm = searchTerm.trim();
+    const handleAction = async (item: any) => {
+        if (!item) return;
 
-        // Basic calculation logic
-        if (/^[\d\s+\-*/().]+$/.test(trimmedSearchTerm)) {
-            try {
-                // Using eval is generally unsafe, but for a local calculator with trusted input, it's acceptable.
-                // In a production environment with untrusted input, a safer math expression parser would be used.
-                const result = eval(trimmedSearchTerm);
-                setCalculationResult(`${trimmedSearchTerm} = ${result}`);
-            } catch (e) {
-                setCalculationResult('Invalid expression');
+        if (item.type === 'calc') {
+            // Maybe copy to clipboard?
+            onClose();
+        } else if (item.type === 'app') {
+            if (window.electronAPI && item.path) {
+                await window.electronAPI.openExternalApp(item.path);
+                onClose();
             }
-        } else if (trimmedSearchTerm.toLowerCase().startsWith('set alarm for') || trimmedSearchTerm.toLowerCase().startsWith('alarm at')) {
-            setAppSearchResults([]); // Clear app search results
-            setAlarmMessage(null); // Clear previous alarm message
-            if (window.electronAPI) {
-                const alarmMatch = trimmedSearchTerm.match(/(set alarm for|alarm at)\s+(.*)/i);
-                if (alarmMatch && alarmMatch[2]) {
-                    const timeString = alarmMatch[2].trim();
-                    let alarmTime: Date | null = null;
-                    let message = 'Comet Alarm!';
-
-                    // Simple time parsing (e.g., "5 minutes", "10:30", "tomorrow 8am")
-                    if (timeString.includes('minutes')) {
-                        const minutes = parseInt(timeString.split(' ')[0], 10);
-                        if (!isNaN(minutes)) {
-                            alarmTime = new Date(Date.now() + minutes * 60 * 1000);
-                            message = `Alarm for ${minutes} minutes: ${trimmedSearchTerm.replace(alarmMatch[1], '').trim()}`;
-                        }
-                    } else if (timeString.includes('hours')) {
-                        const hours = parseInt(timeString.split(' ')[0], 10);
-                        if (!isNaN(hours)) {
-                            alarmTime = new Date(Date.now() + hours * 60 * 60 * 1000);
-                            message = `Alarm for ${hours} hours: ${trimmedSearchTerm.replace(alarmMatch[1], '').trim()}`;
-                        }
-                    } else if (timeString.match(/\d{1,2}:\d{2}/)) { // HH:MM format
-                        const [h, m] = timeString.match(/(\d{1,2}):(\d{2})/i)!.slice(1).map(Number);
-                        alarmTime = new Date();
-                        alarmTime.setHours(h);
-                        alarmTime.setMinutes(m);
-                        alarmTime.setSeconds(0);
-                        if (alarmTime.getTime() < Date.now()) { // If time is in the past, set for next day
-                            alarmTime.setDate(alarmTime.getDate() + 1);
-                        }
-                        message = `Alarm at ${timeString}: ${trimmedSearchTerm.replace(alarmMatch[1], '').trim()}`;
-                    } else { // Fallback, let main process try to parse complex natural language
-                        // For more complex natural language, main process would need a more advanced parser.
-                        // For now, if no simple match, we default to a basic parsing attempt.
-                        alarmTime = new Date(timeString);
-                        message = `Alarm: ${trimmedSearchTerm.replace(alarmMatch[1], '').trim()}`;
-                    }
-
-
-                    if (alarmTime && !isNaN(alarmTime.getTime())) {
-                        const res = await window.electronAPI.setAlarm(alarmTime.toISOString(), message);
-                        if (res.success) {
-                            setAlarmMessage(`✅ Alarm set for ${alarmTime.toLocaleTimeString()} (${alarmTime.toLocaleDateString()}).`);
-                            onClose(); // Close on successful alarm set
-                        } else {
-                            setAlarmMessage(`❌ Failed to set alarm: ${res.error}`);
-                        }
-                    } else {
-                        setAlarmMessage(`❌ Could not understand alarm time: "${timeString}". Please use "HH:MM", "X minutes", or "X hours".`);
-                    }
-                } else {
-                    setAlarmMessage(`❌ Invalid alarm command format.`);
-                }
-            } else {
-                setAlarmMessage('⚠️ Alarm setting not available in this environment.');
-            }
-        } else {
-            setAppSearchResults([]); // Clear previous app search results
-            if (window.electronAPI) {
-                // First, try app search
-                const appSearchRes = await window.electronAPI.searchApplications(trimmedSearchTerm);
-                if (appSearchRes.success && appSearchRes.results.length > 0) {
-                    setAppSearchResults(appSearchRes.results);
-                } else {
-                    // If no app results, perform web search
-                    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(trimmedSearchTerm)}`;
-                    window.electronAPI.addNewTab(searchUrl); // Use existing IPC to open new tab
-                    onClose(); // Close the spotlight search overlay after initiating search
-                }
-            } else {
-                console.warn('Search functionality not available: Not in Electron environment.');
-            }
+        } else if (item.type === 'web') {
+            const engineKey = store.selectedEngine as keyof typeof searchEngines;
+            const engine = searchEngines[engineKey] || searchEngines.google;
+            const searchUrl = `${engine.url}${encodeURIComponent(item.query)}`;
+            window.electronAPI.addNewTab(searchUrl);
+            onClose();
         }
     };
 
@@ -159,87 +157,141 @@ const SpotlightSearchOverlay: React.FC<SpotlightSearchOverlayProps> = ({ show, o
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black/80 backdrop-blur-lg z-[9999] flex items-start justify-center p-4 md:p-8"
-                    onClick={onClose} // Close when clicking outside the modal content
+                    className="fixed inset-0 bg-[#020205]/80 backdrop-blur-2xl z-[9999] flex items-start justify-center p-4 md:p-20"
+                    onClick={onClose}
                 >
                     <motion.div
-                        initial={{ y: -50, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: -50, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="w-full max-w-2xl bg-[#0a0a0f] border border-white/10 rounded-2xl shadow-3xl overflow-hidden"
-                        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside the modal content
+                        initial={{ y: -20, scale: 0.95, opacity: 0 }}
+                        animate={{ y: 0, scale: 1, opacity: 1 }}
+                        exit={{ y: -20, scale: 0.95, opacity: 0 }}
+                        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                        className="w-full max-w-2xl bg-[#0a0a0f]/90 border border-white/10 rounded-3xl shadow-[0_32px_64px_rgba(0,0,0,0.5)] overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="flex items-center p-4 border-b border-white/10">
-                            <Search size={18} className="text-secondary-text mr-3" />
-                            <input
-                                ref={inputRef}
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => { setSearchTerm(e.target.value); setCalculationResult(null); }} // Clear result on new input
-                                onKeyDown={async (e) => {
-                                    if (e.key === 'Enter') {
-                                        if (urlPrediction) { // If there's a prediction, use it for navigation
-                                            if (window.electronAPI) {
+                        {/* Search Bar */}
+                        <div className="relative flex items-center p-6 border-b border-white/5">
+                            <Search size={22} className="text-white/20 mr-4" />
+                            <div className="relative flex-1">
+                                <input
+                                    ref={inputRef}
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            if (urlPrediction && !flattenedResults[selectedIndex]) {
                                                 window.electronAPI.addNewTab(urlPrediction);
                                                 onClose();
+                                            } else {
+                                                handleAction(flattenedResults[selectedIndex]);
                                             }
-                                        } else { // Otherwise, perform the regular search
-                                            handleSearch();
                                         }
-                                    }
-                                }}
-                                placeholder="Search apps, web, alarms, calculations..."
-                                className="flex-1 bg-transparent text-primary-text placeholder:text-secondary-text focus:outline-none text-base"
-                            />
-                            <button onClick={onClose} className="ml-3 p-1 rounded-full hover:bg-white/10 text-white/60 hover:text-white transition-colors">
-                                <X size={16} />
-                            </button>
-                        </div>
-                        {urlPrediction && searchTerm.length > 0 && (
-                            <div className="absolute inset-y-0 left-16 right-16 flex items-center pointer-events-none text-base text-white/20 font-medium z-10">
-                                <span>{searchTerm}</span>
-                                <span className="opacity-100">{urlPrediction.substring(searchTerm.length)}</span>
+                                    }}
+                                    placeholder="Search apps, history, and the web..."
+                                    className="w-full bg-transparent text-xl font-medium text-white placeholder:text-white/10 focus:outline-none"
+                                />
+                                {urlPrediction && searchTerm.length > 0 && (
+                                    <div className="absolute inset-0 flex items-center pointer-events-none text-xl font-medium text-white/10">
+                                        <span>{searchTerm}</span>
+                                        <span>{urlPrediction.substring(searchTerm.length)}</span>
+                                    </div>
+                                )}
                             </div>
-                        )}
-                        {/* Search results will go here */}
-                        <div className="p-4 text-secondary-text text-sm">
-                            {calculationResult && (
-                                <div className="mb-2 text-primary-text font-medium">
-                                    {calculationResult}
-                                </div>
+                            {isSearching && (
+                                <motion.div 
+                                    animate={{ rotate: 360 }}
+                                    transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                                    className="w-4 h-4 border-2 border-sky-500 border-t-transparent rounded-full ml-4"
+                                />
                             )}
+                        </div>
 
-                            {appSearchResults.length > 0 && (
-                                <div className="mb-2">
-                                    <h3 className="text-xs font-bold uppercase tracking-widest text-white/60 mb-2">Applications</h3>
-                                    {appSearchResults.map((app, index) => (
-                                        <div
-                                            key={index}
-                                            className="cursor-pointer p-2 rounded-lg hover:bg-white/5 flex items-center gap-2"
-                                            onClick={async () => {
-                                                if (window.electronAPI && app.path) {
-                                                    await window.electronAPI.openExternalApp(app.path);
-                                                    onClose();
-                                                }
-                                            }}
-                                        >
-                                            <Search size={14} className="text-secondary-text" />
-                                            <span className="text-primary-text">{app.name}</span>
-                                            <span className="text-secondary-text text-xs ml-auto">{app.path ? path.basename(app.path) : ''}</span>
-                                        </div>
-                                    ))}
+                        {/* Results list */}
+                        <div ref={resultsRef} className="max-h-[min(500px,60vh)] overflow-y-auto py-2 custom-scrollbar">
+                            {flattenedResults.length === 0 ? (
+                                <div className="px-6 py-12 flex flex-col items-center justify-center text-center">
+                                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                                        <Command size={24} className="text-white/20" />
+                                    </div>
+                                    <p className="text-white/40 text-sm font-medium">Type to search for apps, history, and more</p>
+                                    <div className="mt-6 flex gap-2">
+                                        <span className="px-2 py-1 rounded bg-white/5 text-[10px] text-white/30 font-bold uppercase tracking-widest border border-white/5">Esc to close</span>
+                                        <span className="px-2 py-1 rounded bg-white/5 text-[10px] text-white/30 font-bold uppercase tracking-widest border border-white/5">↵ to execute</span>
+                                    </div>
                                 </div>
-                            )}
+                            ) : (
+                                <>
+                                    {flattenedResults.map((item, index) => {
+                                        const isSelected = index === selectedIndex;
+                                        
+                                        return (
+                                            <div
+                                                key={item.type === 'app' ? item.path : index}
+                                                className={`mx-3 px-4 py-3 rounded-2xl flex items-center gap-4 cursor-pointer transition-all ${
+                                                    isSelected ? 'bg-sky-500/20 shadow-[inset_0_0_20px_rgba(56,189,248,0.1)] border border-sky-500/20' : 'hover:bg-white/[0.03] border border-transparent'
+                                                }`}
+                                                onMouseEnter={() => setSelectedIndex(index)}
+                                                onClick={() => handleAction(item)}
+                                            >
+                                                {/* Icon Container */}
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                                    isSelected ? 'bg-sky-500 text-white' : 'bg-white/5 text-white/60'
+                                                }`}>
+                                                    {item.type === 'calc' && <Calculator size={20} />}
+                                                    {item.type === 'app' && (
+                                                        item.icon ? (
+                                                            <img src={item.icon} alt={item.name} className="w-6 h-6 object-contain" />
+                                                        ) : (
+                                                            <Command size={20} />
+                                                        )
+                                                    )}
+                                                    {item.type === 'web' && <Globe size={20} />}
+                                                </div>
 
-                            {alarmMessage && (
-                                <div className={`mb-2 text-primary-text font-medium ${alarmMessage.startsWith('❌') ? 'text-red-400' : 'text-green-400'}`}>
-                                    {alarmMessage}
-                                </div>
+                                                {/* Content */}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`font-bold text-sm truncate ${isSelected ? 'text-white' : 'text-white/70'}`}>
+                                                            {item.type === 'calc' ? item.value : (item.type === 'web' ? `Search for "${item.query}"` : item.name)}
+                                                        </span>
+                                                        {item.type === 'app' && (
+                                                            <span className="px-1.5 py-0.5 rounded-md bg-white/5 text-[9px] font-black uppercase tracking-wider text-white/20">Application</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-[11px] text-white/30 truncate font-medium">
+                                                        {item.type === 'web' && <span>Search with your default engine</span>}
+                                                        {item.type === 'app' && <span>{item.path}</span>}
+                                                        {item.type === 'calc' && <span>Mathematical result</span>}
+                                                    </div>
+                                                </div>
+
+                                                {isSelected && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, x: -10 }}
+                                                        animate={{ opacity: 1, x: 0 }}
+                                                        className="text-sky-400 flex items-center gap-2"
+                                                    >
+                                                        <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Enter to launch</span>
+                                                        <ArrowRight size={14} />
+                                                    </motion.div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </>
                             )}
-                            {searchTerm.length === 0 && !calculationResult && appSearchResults.length === 0 && !alarmMessage && (
-                                <div>Type to search...</div>
-                            )}
+                        </div>
+
+                        {/* Footer visibility/hint */}
+                        <div className="px-6 py-4 bg-white/[0.02] border-t border-white/5 flex items-center justify-between text-[10px] font-bold text-white/10 uppercase tracking-[0.2em]">
+                            <div className="flex gap-4">
+                                <span>Navigate <span className="text-white/20 px-1 font-sans">↑↓</span></span>
+                                <span>Select <span className="text-white/20 px-1 font-sans">↵</span></span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <span className="text-sky-500/40">Comet Brain</span>
+                                <span className="text-white/5">v0.2.8</span>
+                            </div>
                         </div>
                     </motion.div>
                 </motion.div>

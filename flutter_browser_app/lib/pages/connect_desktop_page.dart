@@ -19,6 +19,7 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
   bool isConnected = false;
   bool showScanner = false;
   bool isCloudMode = false;
+  bool _isProcessingQR = false; // Guard flag
   String? desktopIp;
   String? desktopLabel;
   String? errorMessage;
@@ -361,6 +362,12 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
   }
 
   Future<void> _scanQRCode(String qrData) async {
+    if (_isProcessingQR) return;
+    _isProcessingQR = true;
+
+    // Pause camera while processing to prevent multiple scans
+    controller?.pauseCamera();
+
     try {
       final uri = Uri.parse(qrData);
       if (uri.scheme == 'comet-ai') {
@@ -399,9 +406,17 @@ class _ConnectDesktopPageState extends State<ConnectDesktopPage> {
         throw Exception('Not a Comet-AI QR code');
       }
     } catch (e) {
-      setState(() {
-        errorMessage = e.toString();
-      });
+      if (mounted) {
+        setState(() {
+          errorMessage = e.toString();
+        });
+      }
+    } finally {
+      _isProcessingQR = false;
+      // Resume camera after processing (unless we navigated away or showScanner is false)
+      if (mounted && (showScanner || !isConnected)) {
+        controller?.resumeCamera();
+      }
     }
   }
 

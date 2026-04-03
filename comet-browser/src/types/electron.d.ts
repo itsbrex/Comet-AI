@@ -165,9 +165,9 @@ declare global {
             saveVectorStore: (data: any[]) => Promise<boolean>;
             loadVectorStore: () => Promise<any[]>;
             webSearchRag: (query: string) => Promise<string[]>;
-            vaultListEntries: () => Promise<{ success: boolean; entries: Array<{ id: string; site: string; username: string; created?: string | null; hasPassword: boolean; passwordMasked: string }>; error?: string }>;
-            vaultSaveEntry: (entry: { id?: string; site: string; username?: string; password: string; created?: string }) => Promise<{ success: boolean; entries?: Array<{ id: string; site: string; username: string; created?: string | null; hasPassword: boolean; passwordMasked: string }>; error?: string }>;
-            vaultDeleteEntry: (entryId: string) => Promise<{ success: boolean; entries?: Array<{ id: string; site: string; username: string; created?: string | null; hasPassword: boolean; passwordMasked: string }>; error?: string }>;
+            vaultListEntries: () => Promise<{ success: boolean; entries: Array<{ id: string; site: string; username: string; created?: string | null; hasPassword: boolean; passwordMasked: string; type?: 'login' | 'form' | 'note'; title?: string; formData?: any[] }>; error?: string }>;
+            vaultSaveEntry: (entry: { id?: string; site: string; username?: string; password: string; type?: 'login' | 'form' | 'note'; title?: string; formData?: any[]; created?: string }) => Promise<{ success: boolean; entries?: Array<{ id: string; site: string; username: string; created?: string | null; hasPassword: boolean; passwordMasked: string; type?: 'login' | 'form' | 'note'; title?: string; formData?: any[] }>; error?: string }>;
+            vaultDeleteEntry: (entryId: string) => Promise<{ success: boolean; entries?: Array<{ id: string; site: string; username: string; created?: string | null; hasPassword: boolean; passwordMasked: string; type?: 'login' | 'form' | 'note'; title?: string; formData?: any[] }>; error?: string }>;
             vaultReadSecret: (entryId: string) => Promise<{ success: boolean; password?: string; error?: string }>;
             vaultCopySecret: (entryId: string) => Promise<{ success: boolean; error?: string }>;
             getPasswordsForSite: (domain: string) => Promise<any[]>;
@@ -188,7 +188,7 @@ declare global {
             addNewTab: (url: string) => void;
 
             // Shell Commands
-            executeShellCommand: (command: string, preApproved?: boolean) => Promise<{ success: boolean; output?: string; error?: string }>;
+            executeShellCommand: (args: string | { rawCommand: string, preApproved?: boolean, reason?: string, riskLevel?: string }) => Promise<{ success: boolean; output?: string; error?: string }>;
 
             // Cross-App Control APIs
             captureScreenRegion: (coords: { x: number; y: number; width: number; height: number }) => Promise<{ success: boolean; image?: string; error?: string }>;
@@ -417,24 +417,33 @@ declare global {
             workflowStatus: () => Promise<{ success: boolean; isRecording?: boolean; stepCount?: number }>;
             generateHighRiskQr: (actionId: string) => Promise<string | null>;
             onMobileApproveHighRisk: (callback: (data: { pin: string; id: string }) => void) => () => void;
-            getAppIcon: () => Promise<string | null>;
+            getAppIcon: (path: string) => Promise<string | null>;
+            classifyTabsAi: (args: { tabs: Array<{ id: string; title: string; url: string }> }) => Promise<{ success: boolean; classifications?: Record<string, string>; error?: string }>;
             organizeFolder: (path: string) => Promise<{ success: boolean; count?: number; summary?: string; path?: string; error?: string }>;
 
             // Automation & Scheduling
             scheduleTask: (taskData: {
                 name: string;
-                type: 'ai-prompt' | 'web-scrape' | 'pdf-generate' | 'workflow' | 'daily-brief' | 'shell';
+                description?: string;
+                type: 'ai-prompt' | 'web-scrape' | 'pdf-generate' | 'workflow' | 'daily-brief' | 'shell' | string;
                 cronExpression?: string;
+                schedule?: string;
                 prompt?: string;
                 url?: string;
                 action?: string;
                 outputPath?: string;
+                model?: string;
+                provider?: string;
+                notification?: any;
                 enabled?: boolean;
             }) => Promise<{ success: boolean; taskId?: string; error?: string }>;
-            getScheduledTasks: () => Promise<{ success: boolean; tasks?: any[]; error?: string }>;
+            updateScheduledTask: (taskId: string, updates: any) => Promise<{ success: boolean; error?: string }>;
+            getScheduledTasks: () => Promise<any[]>;
             toggleScheduledTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
             runScheduledTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
             deleteScheduledTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
+            onAutomationShellApproval: (callback: (payload: { requestId: string, command: string, risk: string, reason: string, highRiskQr?: string, requiresDeviceUnlock?: boolean }) => void) => () => void;
+            submitShellApprovalResponse: (requestId: string, allowed: boolean) => void;
 
             // Auto-update APIs
             checkForUpdates: () => Promise<{ updateAvailable?: boolean; updateInfo?: any }>;

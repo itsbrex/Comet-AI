@@ -1737,7 +1737,7 @@ export default function Home() {
         <main className="flex-1 flex flex-col relative overflow-hidden min-w-0" style={{ background: 'color-mix(in srgb, var(--primary-bg) 92%, var(--card-bg))' }}>
           {store.activeView === 'browser' && (
             <header
-              className="h-[76px] flex-shrink-0 flex items-center px-6 gap-6 border-b backdrop-blur-3xl z-40 no-drag-region transition-all duration-500 outline-none ring-0"
+              className="h-[76px] flex-shrink-0 flex items-center px-6 gap-6 border-b backdrop-blur-3xl z-40 no-drag-region transition-all duration-500 outline-none ring-0 pb-3"
               style={{
                 background: `color-mix(in srgb, var(--navbar-bg) ${store.themeOpacity}%, transparent)`,
                 borderColor: 'var(--border-color)',

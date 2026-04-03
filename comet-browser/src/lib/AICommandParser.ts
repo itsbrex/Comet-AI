@@ -11,6 +11,8 @@ export interface ParsedCommand {
     originalMatch: string;
     index: number;
     category?: string;
+    reason?: string;
+    risk?: 'low' | 'medium' | 'high';
 }
 
 export interface CommandParseResult {
@@ -54,6 +56,8 @@ export const COMMAND_REGISTRY = {
     DELETE_AUTOMATION: { desc: 'Delete an automation using its ID', example: '[DELETE_AUTOMATION: task-123]' },
     OPEN_SCHEDULING_MODAL: { desc: 'Open scheduling modal with optional data (JSON or pipe-separated)', example: '[OPEN_SCHEDULING_MODAL: 0 8 * * *|pdf-generate|Daily Report|Generate PDF]' },
     SCHEDULE_TASK: { desc: 'Schedule a recurring automation task (JSON format)', example: '[SCHEDULE_TASK: {"schedule": "0 8 * * *", "type": "pdf-generate", "name": "Daily Report"}]' },
+    ORGANIZE_TABS: { desc: 'Use AI to intelligently group all open tabs', example: '[ORGANIZE_TABS]' },
+    CLOSE_TAB: { desc: 'Close a specific tab by ID', example: '[CLOSE_TAB: tab-123]' },
 } as const;
 
 export const SUPPORTED_COMMANDS = Object.keys(COMMAND_REGISTRY) as Array<keyof typeof COMMAND_REGISTRY>;
@@ -79,6 +83,7 @@ function getCategoryForType(type: string): string {
         GMAIL_AUTHORIZE: 'gmail', GMAIL_LIST_MESSAGES: 'gmail', GMAIL_GET_MESSAGE: 'gmail',
         GMAIL_SEND_MESSAGE: 'gmail', GMAIL_ADD_LABEL: 'gmail',
         THINK: 'meta', PLAN: 'meta', EXPLAIN_CAPABILITIES: 'meta',
+        ORGANIZE_TABS: 'automation', CLOSE_TAB: 'browser',
     };
     return catMap[type] || 'utility';
 }
@@ -112,6 +117,8 @@ function extractJSONCommands(content: string): ParsedCommand[] {
                             commands.push({
                                 type: cmdType,
                                 value: typeof cmdValue === 'string' ? cmdValue : JSON.stringify(cmdValue),
+                                reason: cmd.reason || '',
+                                risk: (['low', 'medium', 'high'].includes(cmd.risk) ? cmd.risk : 'medium') as any,
                                 originalMatch: match![0],
                                 index: match!.index,
                             });
@@ -307,14 +314,20 @@ export function parseAICommands(content: string): CommandParseResult {
         if (metaCommandsSet.has(type as any)) continue;
 
         // Clean up command value: trim and strip surrounding quotes
-        let value = (match[2] || '').trim();
-        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-            value = value.substring(1, value.length - 1).trim();
+        let rawValue = (match[2] || '').trim();
+        if ((rawValue.startsWith('"') && rawValue.endsWith('"')) || (rawValue.startsWith("'") && rawValue.endsWith("'"))) {
+            rawValue = rawValue.substring(1, rawValue.length - 1).trim();
         }
+
+        // For most commands, split by | to get value and reason.
+        // For PDF/File commands, keep the raw value as it contains structured data with pipes.
+        const shouldStoreRawValue = ['GENERATE_PDF', 'CREATE_PDF_JSON', 'CREATE_FILE_JSON', 'SCHEDULE_TASK', 'OPEN_SCHEDULING_MODAL'].includes(type);
 
         addUniqueCommand({
             type,
-            value,
+            value: shouldStoreRawValue ? rawValue : rawValue.split('|')[0].trim(),
+            reason: rawValue.split('|').find(p => p.trim().toLowerCase().startsWith('reason:'))?.split(':').slice(1).join(':').trim() || (rawValue.split('|')[1] || '').trim(),
+            risk: (rawValue.split('|').find(p => p.trim().toLowerCase().startsWith('risk:'))?.split(':').slice(1).join(':').trim().toLowerCase() as any) || 'medium',
             originalMatch: content.substring(match.index, match.index + fullMatch.length),
             index: match.index,
         });

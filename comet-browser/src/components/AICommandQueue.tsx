@@ -20,6 +20,7 @@ export interface AICommand {
     timestamp: number;
     category?: string;
     riskLevel?: 'low' | 'medium' | 'high' | 'critical';
+    reason?: string;
     jsonFormat?: object;
 }
 

@@ -7,6 +7,7 @@ export type Action =
     | 'open-settings'
     | 'new-incognito-tab'
     | 'zoom-in'
+    | 'zoom-in-plus'
     | 'zoom-out'
     | 'zoom-reset'
     | 'toggle-spotlight'
@@ -28,7 +29,7 @@ export const defaultShortcuts: Shortcut[] = [
     { accelerator: 'CommandOrControl+,', action: 'open-settings' },
     { accelerator: 'CommandOrControl+Shift+N', action: 'new-incognito-tab' },
     { accelerator: 'CommandOrControl+=', action: 'zoom-in' },
-    { accelerator: 'CommandOrControl+Plus', action: 'zoom-in' }, // Add this for completeness, although '=' usually covers it
+    { accelerator: 'CommandOrControl+Plus', action: 'zoom-in-plus' },
     { accelerator: 'CommandOrControl+-', action: 'zoom-out' },
     { accelerator: 'CommandOrControl+0', action: 'zoom-reset' },
     { accelerator: 'Alt+Space', action: 'spotlight-search' },

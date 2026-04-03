@@ -205,7 +205,7 @@ export default function WelcomeScreen() {
     return (
         <div
             ref={containerRef}
-            className="fixed inset-0 z-[200] overflow-hidden bg-[#020208] pt-10"
+            className="fixed inset-0 z-[20000] overflow-hidden bg-[#020208] pt-10"
             style={{ fontFamily: "'Syne', 'DM Sans', system-ui, sans-serif" }}
         >
             {/* ── Layered Background ── */}
@@ -281,6 +281,16 @@ export default function WelcomeScreen() {
                                 <span>{item.label}</span>
                             </div>
                         ))}
+                        
+                        <motion.button
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 1 }}
+                            onClick={() => setHasSeenWelcomePage(true)}
+                            className="p-2 h-8 w-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors text-white/40 hover:text-white"
+                        >
+                            <X size={14} />
+                        </motion.button>
                     </div>
                 </motion.div>
 

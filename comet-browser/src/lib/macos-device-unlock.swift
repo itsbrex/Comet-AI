@@ -10,11 +10,15 @@ func argumentValue(_ flag: String) -> String? {
 }
 
 func emit(_ payload: [String: Any]) {
-    if let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
-       let json = String(data: data, encoding: .utf8) {
-        FileHandle.standardOutput.write(Data(json.utf8))
-    } else {
-        FileHandle.standardOutput.write(Data("{\"supported\":false,\"approved\":false,\"error\":\"serialization_failed\"}".utf8))
+    do {
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+        if let json = String(data: data, encoding: .utf8) {
+            print(json)
+            fflush(stdout)
+        }
+    } catch {
+        print("{\"supported\":false,\"approved\":false,\"error\":\"serialization_failed\"}")
+        fflush(stdout)
     }
 }
 
@@ -23,15 +27,16 @@ let risk = argumentValue("--risk") ?? "medium"
 
 let context = LAContext()
 context.localizedCancelTitle = "Deny"
-context.localizedFallbackTitle = "Use Password"
+// Note: We use deviceOwnerAuthentication to allow fallback to password automatically
+let policy = LAPolicy.deviceOwnerAuthentication
 
 var authError: NSError?
-guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &authError) else {
+guard context.canEvaluatePolicy(policy, error: &authError) else {
     emit([
         "supported": false,
         "approved": false,
         "mode": "macos-device-owner-auth",
-        "error": authError?.localizedDescription ?? "Device owner authentication is unavailable."
+        "error": authError?.localizedDescription ?? "Device owner authentication is unavailable on this Mac."
     ])
     exit(0)
 }
@@ -44,24 +49,15 @@ var payload: [String: Any] = [
 ]
 
 let localizedReason = "\(reason) Confirm with Touch ID or your Mac password."
-context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: localizedReason) { success, error in
+context.evaluatePolicy(policy, localizedReason: localizedReason) { success, error in
     payload["approved"] = success
     payload["risk"] = risk
-    if let error {
+    if let error = error as NSError? {
         payload["error"] = error.localizedDescription
     }
     semaphore.signal()
 }
 
-let timeoutResult = semaphore.wait(timeout: .now() + .seconds(90))
-if timeoutResult == .timedOut {
-    emit([
-        "supported": true,
-        "approved": false,
-        "mode": "macos-device-owner-auth",
-        "error": "Timed out waiting for device unlock verification."
-    ])
-    exit(0)
-}
-
+_ = semaphore.wait(timeout: .now() + .seconds(120))
 emit(payload)
+exit(0)

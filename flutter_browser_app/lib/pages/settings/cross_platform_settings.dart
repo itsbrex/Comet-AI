@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import '../../models/window_model.dart';
 import '../../webview_tab.dart';
 import '../../sync_service.dart';
+import '../../auth_service.dart';
 import 'package:flutter_font_icons/flutter_font_icons.dart';
 
 class CrossPlatformSettings extends StatefulWidget {
@@ -56,7 +57,39 @@ class _CrossPlatformSettingsState extends State<CrossPlatformSettings> {
     final settings = browserModel.getSettings();
 
     var widgets = <Widget>[
-      const ListTile(title: Text("General Settings"), enabled: false),
+      const ListTile(title: Text("Connectivity & Cloud Sync"), enabled: false),
+      ListTile(
+        title: const Text("Google Cloud Sync"),
+        subtitle: Text(AuthService().isAuthenticated
+            ? "Signed in as ${AuthService().userEmail}"
+            : "Sign in to enable cross-device cloud sync"),
+        leading: Icon(
+          Icons.cloud_done,
+          color: AuthService().isAuthenticated ? Colors.blue : Colors.grey,
+        ),
+        trailing: AuthService().isAuthenticated
+            ? TextButton(
+                onPressed: () async {
+                  await AuthService().signOut();
+                  setState(() {});
+                },
+                child: const Text("Sign Out", style: TextStyle(color: Colors.red)),
+              )
+            : ElevatedButton(
+                onPressed: () async {
+                  final success = await AuthService().signInWithGoogle();
+                  if (success) {
+                    setState(() {});
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00E5FF),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                ),
+                child: const Text("Sign In"),
+              ),
+      ),
       ListTile(
         title: const Text("Cross-Device P2P Sync"),
         subtitle: Text(

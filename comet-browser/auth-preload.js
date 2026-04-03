@@ -86,13 +86,55 @@ const createDragOverlay = () => {
     }
 
     if (!document.getElementById('comet-auth-traffic')) {
-      const traffic = createTrafficLights();
-      body.appendChild(traffic);
+      // Only show custom traffic lights if we don't have native ones (not macOS and not Windows with overlay)
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isWin = navigator.platform.toUpperCase().indexOf('WIN') >= 0;
+      
+      if (!isMac && !isWin) {
+        const traffic = createTrafficLights();
+        body.appendChild(traffic);
+      }
     }
 
     if (!document.getElementById('comet-auth-title')) {
-      const title = createAuthTitle();
-      body.appendChild(title);
+      body.appendChild(createAuthTitle());
+    }
+
+    if (!document.getElementById('comet-auth-close-btn')) {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isWin = navigator.platform.toUpperCase().indexOf('WIN') >= 0;
+
+      // Only show manual button if native ones are likely missing or preferred for simplicity
+      // But avoid showing it if it would overlap with Win/Mac native controls we just fixed
+      if (!isWin && !isMac) {
+        const closeBtn = document.createElement('div');
+        closeBtn.id = 'comet-auth-close-btn';
+        closeBtn.innerHTML = '✕';
+        closeBtn.title = 'Close Window';
+        Object.assign(closeBtn.style, {
+          position: 'fixed',
+          top: '12px',
+          right: '18px',
+          width: '24px',
+          height: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(255, 255, 255, 0.05)',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          zIndex: '10000001',
+          WebkitAppRegion: 'no-drag',
+          color: '#ffffff',
+          fontSize: '14px',
+          transition: 'all 0.2s ease',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+        });
+        closeBtn.onmouseenter = () => closeBtn.style.background = 'rgba(255, 0, 0, 0.2)';
+        closeBtn.onmouseleave = () => closeBtn.style.background = 'rgba(255, 255, 255, 0.05)';
+        closeBtn.onclick = () => ipcRenderer.send('close-auth-window');
+        body.appendChild(closeBtn);
+      }
     }
 
   window.addEventListener('keyup', (event) => {

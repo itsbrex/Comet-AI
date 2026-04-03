@@ -62,18 +62,18 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
       {/* Header */}
       <div className={`flex items-center gap-3 px-5 py-4 border-b border-white/5 ${risk.bg}`}>
         <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${risk.bg} border ${risk.border}`}>
-           {context.actionType === 'CLICK_ELEMENT' ? '🖱️' :
+          {context.actionType === 'CLICK_ELEMENT' ? '🖱️' :
             context.actionType === 'FIND_AND_CLICK' ? '🔍' :
-            context.actionType === 'FILL_FORM' ? '✏️' :
-            context.actionType === 'OPEN_APP' ? '🚀' :
-            context.actionType === 'READ_PAGE_CONTENT' ? '📖' : '⚡'}
+              context.actionType === 'FILL_FORM' ? '✏️' :
+                context.actionType === 'OPEN_APP' ? '🚀' :
+                  context.actionType === 'READ_PAGE_CONTENT' ? '📖' : '⚡'}
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-xs font-black uppercase tracking-widest text-white/40">AI wants to interact</div>
           <div className="text-sm font-bold text-white truncate mt-0.5">{context.action}</div>
         </div>
         <div className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider flex-shrink-0 ${risk.bg} ${risk.color} border ${risk.border}`}>
-           {risk.label}
+          {risk.label}
         </div>
       </div>
 
@@ -97,7 +97,7 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
           <div>
             <div className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-1">Target</div>
             <div className="text-[11px] font-mono text-sky-300/80 bg-sky-500/5 border border-sky-500/10 rounded-lg px-3 py-2 break-all">
-               {context.target.length > 120 ? context.target.substring(0, 120) + '...' : context.target}
+              {context.target.length > 120 ? context.target.substring(0, 120) + '...' : context.target}
             </div>
           </div>
         )}
@@ -119,7 +119,7 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
               🚨 High Risk: Scan to Authorize on Mobile
             </div>
             <div className="p-3 bg-white rounded-xl shadow-2xl">
-               <img src={qrData.qrImage} alt="Authorize" className="w-32 h-32" />
+              <img src={qrData.qrImage} alt="Authorize" className="w-32 h-32" />
             </div>
             {qrData.pin && (
               <div className="mt-4 flex flex-col items-center">
@@ -155,7 +155,7 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
               )}
             </div>
             <p className="text-[10px] text-white/30 text-center mt-3 leading-relaxed">
-              Scanning opens **Comet Mobile** <br/> to safely verify this action.
+              Scanning opens **Comet Mobile** <br /> to safely verify this action.
             </p>
           </div>
         )}
@@ -164,18 +164,18 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
       {/* "Remember Choice" for non-high risk */}
       {context.risk !== 'high' && (
         <label className="px-5 py-2 flex items-center gap-3 cursor-pointer group">
-          <div 
+          <div
             onClick={() => setAlwaysAllow(!alwaysAllow)}
             className={`w-5 h-5 rounded-md border transition-all flex items-center justify-center ${alwaysAllow ? 'bg-sky-500 border-sky-500 text-white' : 'border-white/10 bg-white/5 group-hover:border-white/20'}`}
           >
             {alwaysAllow && <Zap size={12} fill="currentColor" />}
           </div>
           <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest group-hover:text-white/60 transition-colors">Remember my choice for this action</span>
-          <input 
-            type="checkbox" 
-            className="hidden" 
-            checked={alwaysAllow} 
-            onChange={(e) => setAlwaysAllow(e.target.checked)} 
+          <input
+            type="checkbox"
+            className="hidden"
+            checked={alwaysAllow}
+            onChange={(e) => setAlwaysAllow(e.target.checked)}
           />
         </label>
       )}
@@ -191,11 +191,10 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
         <button
           onClick={() => canAllow && onAllow(alwaysAllow)}
           disabled={!canAllow}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg disabled:cursor-not-allowed disabled:opacity-50 ${
-            context.risk === 'high' ? 'bg-red-500/80 hover:bg-red-500 text-white' :
-            context.risk === 'medium' ? 'bg-amber-500/80 hover:bg-amber-500 text-white' :
-            'bg-sky-500/80 hover:bg-sky-500 text-white'
-          }`}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg disabled:cursor-not-allowed disabled:opacity-50 ${context.risk === 'high' ? 'bg-red-500/80 hover:bg-red-500 text-white' :
+              context.risk === 'medium' ? 'bg-amber-500/80 hover:bg-amber-500 text-white' :
+                'bg-sky-500/80 hover:bg-sky-500 text-white'
+            }`}
         >
           {allowLabel}
         </button>

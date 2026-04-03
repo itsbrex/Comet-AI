@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, BrowserView, session, shell, clipboard, dialog, globalShortcut, Menu, protocol, desktopCapturer, screen, nativeImage, net, safeStorage, nativeTheme } = require('electron');
+const { mcpManager } = require('./src/lib/mcp-server-registry.js');
 const QRCode = require('qrcode');
 const contextMenuRaw = require('electron-context-menu');
 const contextMenu = contextMenuRaw.default || contextMenuRaw;
@@ -199,6 +200,24 @@ const { getRecommendedGeminiModel } = require('./src/lib/modelRegistry.js');
 const { WebSearchProvider } = require('./src/lib/web-search-service.js');
 const webSearchProvider = new WebSearchProvider();
 
+// ✅ NEW: Relocate essential system IPC handlers to the top to prevent "no handler registered" errors
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion() || '1.0.0';
+});
+
+ipcMain.handle('get-platform', () => {
+   return process.platform;
+});
+
+ipcMain.handle('get-app-icon', async (event, appPath) => {
+  try {
+    const icon = await app.getFileIcon(appPath, { size: 'normal' });
+    return icon.toDataURL();
+  } catch (e) {
+    return null;
+  }
+});
+
 
 const permissionStore = new PermissionStore();
 let cometAiEngine = null;
@@ -372,7 +391,7 @@ async function applyProxyConfigToSession(targetSession) {
   try {
     await targetSession.setProxy(buildProxyConfig(networkSecurityConfig));
     if (typeof targetSession.closeAllConnections === 'function') {
-      targetSession.closeAllConnections().catch(() => {});
+      targetSession.closeAllConnections().catch(() => { });
     }
   } catch (error) {
     console.warn('[NetworkSecurity] Failed to apply proxy config:', error.message);
@@ -812,11 +831,11 @@ const iconMimeType = 'image/png';
 const resolveCometIcon = () => {
   const iconName = 'icon.png';
   const isDev = !app.isPackaged;
-  const resourcesPath = app.isPackaged 
+  const resourcesPath = app.isPackaged
     ? (process.resourcesPath || path.join(app.getAppPath(), '..', '..', 'Resources'))
     : path.join(__dirname, 'assets');
   const appPath = app.getAppPath();
-  
+
   const candidates = isDev ? [
     // Development paths (relative to main.js location)
     path.join(__dirname, 'assets', iconName),
@@ -836,6 +855,8 @@ const resolveCometIcon = () => {
     path.join(resourcesPath, 'app', iconName),
     path.join(resourcesPath, 'app.asar', 'assets', iconName),
     path.join(resourcesPath, 'app.asar', iconName),
+    path.join(__dirname, 'assets', iconName), // Add this as fallback even in packaged mode
+    path.join(__dirname, iconName),
   ];
 
   // Add extra emergency fallbacks
@@ -987,24 +1008,24 @@ const PDF_TEMPLATES = {
     .content { font-size: 1rem; line-height: 1.82; width: 100%; color: #111827; }
     .content h2 { margin: 32px 0 18px; color: #0f172a; font-family: 'Outfit', sans-serif; font-size: 1.55rem; font-weight: 800; border-left: 6px solid #38bdf8; padding-left: 14px; word-wrap: break-word; }
     .content h3 { margin: 26px 0 14px; color: #1f2937; font-family: 'Outfit', sans-serif; font-size: 1.18rem; font-weight: 700; }
-    .content p { margin-bottom: 18px; text-align: left; word-wrap: break-word; }
-    .content ul, .content ol { margin: 12px 0 18px 24px; }
-    .content li { margin-bottom: 8px; }
-    .table-wrapper { width: 100%; overflow-x: auto; margin: 26px 0; border-radius: 14px; box-shadow: 0 6px 22px rgba(0,0,0,0.08); page-break-inside: avoid; }
-    table { width: 100%; min-width: 520px; border-collapse: collapse; background: white; page-break-inside: auto; }
-    thead { display: table-header-group; }
+    .content p { margin-bottom: 22px; text-align: left; word-wrap: break-word; font-size: 1.05rem; }
+    .content ul, .content ol { margin: 12px 0 22px 28px; }
+    .content li { margin-bottom: 12px; }
+    .table-wrapper { width: 100%; overflow: hidden; margin: 26px 0; border-radius: 14px; box-shadow: 0 6px 22px rgba(0,0,0,0.08); border: 1px solid #e5e7eb; }
+    table { width: 100%; border-collapse: collapse; background: white; table-layout: auto; }
+    thead { display: table-header-group; background: #0f172a; }
     tbody { display: table-row-group; }
-    tr { display: table-row; page-break-inside: avoid; break-inside: avoid; }
-    th { background: #0f172a; color: white; padding: 15px 17px; text-align: left; font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; display: table-cell; }
-    td { padding: 13px 17px; border-bottom: 1px solid #e5e7eb; font-size: 0.92rem; display: table-cell; word-break: break-word; page-break-inside: avoid; break-inside: avoid; }
+    tr { display: table-row; }
+    th { color: white; padding: 18px 20px; text-align: left; font-weight: 700; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #334155; }
+    td { padding: 16px 20px; border-bottom: 1px solid #e5e7eb; font-size: 0.95rem; word-break: break-word; }
     tr:last-child td { border-bottom: none; }
-    tr:nth-child(even) td { background: #f8fafc; }
-    hr { border: none; height: 2.5px; background: linear-gradient(to right, #38bdf8, transparent); margin: 34px 0; border-radius: 3px; }
-    pre { background: #0f172a; color: #e2e8f0; padding: 22px; border-radius: 14px; font-family: 'JetBrains Mono', monospace; overflow-x: auto; margin: 22px 0; font-size: 0.9rem; line-height: 1.6; border: 1px solid #1e293b; word-wrap: break-word; white-space: pre-wrap; page-break-inside: avoid; }
-    code { background: #f1f5f9; padding: 2px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.85em; color: #0ea5e9; word-break: break-all; }
+    tr:nth-child(even) td { background: #fcfdfe; }
+    hr { border: none; height: 3px; background: linear-gradient(to right, #38bdf8, transparent); margin: 40px 0; border-radius: 4px; }
+    pre { background: #0f172a; color: #e2e8f0; padding: 24px; border-radius: 14px; font-family: 'JetBrains Mono', monospace; overflow-x: auto; margin: 24px 0; font-size: 0.95rem; line-height: 1.7; border: 1px solid #1e293b; word-wrap: break-word; white-space: pre-wrap; page-break-inside: avoid; }
+    code { background: #f1f5f9; padding: 2px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.88em; color: #0ea5e9; word-break: break-all; }
     pre code { background: none; padding: 0; color: inherit; }
-    blockquote { border-left: 6px solid #38bdf8; padding: 18px 22px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 0 14px 14px 0; color: #0f172a; margin: 22px 0; font-style: italic; font-size: 1rem; page-break-inside: avoid; }
-    figure, img { max-width: 100%; border-radius: 14px; margin: 22px 0; box-shadow: 0 8px 28px rgba(0,0,0,0.12); page-break-inside: avoid; break-inside: avoid; }
+    blockquote { border-left: 8px solid #38bdf8; padding: 22px 28px; background: linear-gradient(135deg, #f0f9ff 0%, #e1effe 100%); border-radius: 0 16px 16px 0; color: #1e293b; margin: 26px 0; font-style: italic; font-size: 1.05rem; }
+    figure, img { max-width: 100%; border-radius: 16px; margin: 26px 0; box-shadow: 0 12px 36px rgba(0,0,0,0.15); page-break-inside: avoid; display: block; margin-left: auto; margin-right: auto; }
     .footer { margin-top: 46px; padding-top: 22px; border-top: 2px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
     .footer-left { font-size: 0.78rem; color: #6b7280; }
     .footer-center { text-align: center; }
@@ -1082,17 +1103,18 @@ const PDF_TEMPLATES = {
     .content { font-size: 1.05rem; line-height: 1.9; width: 100%; }
     .content h2 { margin: 40px 0 20px; font-family: 'Playfair Display', serif; font-size: 1.4rem; font-weight: 700; color: #4f46e5; }
     .content h3 { margin: 30px 0 15px; font-size: 1.2rem; font-weight: 700; color: #1a1a2e; }
-    .content p { margin-bottom: 20px; word-wrap: break-word; }
-    .table-wrapper { width: 100%; overflow-x: auto; margin: 30px 0; }
-    table { width: 100%; min-width: 400px; border-collapse: collapse; }
-    th { background: #4f46e5; color: white; padding: 14px 18px; text-align: left; font-weight: 600; font-size: 0.85rem; }
-    td { padding: 12px 18px; border-bottom: 1px solid #e5e7eb; font-size: 0.9rem; word-break: break-word; }
-    tr:nth-child(even) td { background: #f9fafb; }
-    blockquote { border-left: 4px solid #4f46e5; padding: 20px 25px; background: #f9fafb; margin: 25px 0; font-style: italic; }
+    .content p { margin-bottom: 22px; word-wrap: break-word; font-size: 1.05rem; }
+    .table-wrapper { width: 100%; overflow: hidden; margin: 30px 0; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    table { width: 100%; border-collapse: collapse; background: white; table-layout: auto; }
+    thead { display: table-header-group; background: #4f46e5; }
+    th { color: white; padding: 16px 20px; text-align: left; font-weight: 600; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { padding: 14px 20px; border-bottom: 1px solid #e5e7eb; font-size: 0.95rem; word-break: break-word; }
+    tr:nth-child(even) td { background: #fcfdfe; }
+    blockquote { border-left: 6px solid #4f46e5; padding: 22px 28px; background: #f9fafb; margin: 26px 0; font-style: italic; border-radius: 0 12px 12px 0; }
     .footer { margin-top: 60px; padding-top: 25px; border-top: 2px solid #1a1a2e; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
     .footer-text { font-size: 0.75rem; color: #6b7280; }
     .confidential { font-size: 0.8rem; font-weight: 700; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.1em; }
-    @page { margin: 0; }
+    @page { margin: 12mm; size: A4; }
   </style>
 </head>
 <body>
@@ -1152,19 +1174,20 @@ const PDF_TEMPLATES = {
     .content { font-size: 1rem; text-align: left; width: 100%; }
     .content h2 { margin: 40px 0 20px; font-family: 'Merriweather', serif; font-size: 1.4rem; font-weight: 700; color: #1a1a1a; border-bottom: 2px solid #333; padding-bottom: 8px; }
     .content h3 { margin: 30px 0 12px; font-size: 1.1rem; font-weight: 700; color: #333; }
-    .content p { margin-bottom: 18px; word-wrap: break-word; }
-    .content ol, .content ul { margin: 15px 0 20px 30px; }
-    .content li { margin-bottom: 8px; }
-    .table-wrapper { width: 100%; overflow-x: auto; margin: 25px 0; }
-    table { width: 100%; min-width: 400px; border-collapse: collapse; }
-    th { background: #333; color: white; padding: 12px 16px; text-align: left; font-weight: 600; font-size: 0.85rem; }
-    td { padding: 10px 16px; border: 1px solid #ddd; font-size: 0.9rem; word-break: break-word; }
-    tr:nth-child(even) td { background: #f9f9f9; }
+    .content p { margin-bottom: 22px; word-wrap: break-word; font-size: 1.05rem; }
+    .content ol, .content ul { margin: 15px 0 22px 32px; }
+    .content li { margin-bottom: 10px; }
+    .table-wrapper { width: 100%; overflow: hidden; margin: 25px 0; border: 1.5px solid #333; }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; }
+    thead { display: table-header-group; background: #333; }
+    th { color: white; padding: 14px 18px; text-align: left; font-weight: 600; font-size: 0.85rem; border: 1px solid #333; }
+    td { padding: 12px 18px; border: 1px solid #ddd; font-size: 0.92rem; word-break: break-word; }
+    tr:nth-child(even) td { background: #fcfcfc; }
     .references { margin-top: 50px; padding-top: 25px; border-top: 2px solid #333; }
     .references h2 { border: none; margin-bottom: 25px; }
     .ref-item { margin-bottom: 12px; font-size: 0.9rem; text-indent: -30px; padding-left: 30px; }
     .footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; font-size: 0.8rem; color: #666; }
-    @page { margin: 0; }
+    @page { margin: 15mm; size: A4; }
   </style>
 </head>
 <body>
@@ -1217,16 +1240,17 @@ const PDF_TEMPLATES = {
     .content { font-size: 1rem; width: 100%; }
     .content h2 { font-size: 1.4rem; font-weight: 700; margin: 40px 0 20px; }
     .content h3 { font-size: 1.2rem; font-weight: 700; margin: 30px 0 15px; }
-    .content p { margin-bottom: 20px; word-wrap: break-word; }
-    .content ul, .content ol { margin: 15px 0 20px 25px; }
-    .content li { margin-bottom: 10px; }
-    .table-wrapper { width: 100%; overflow-x: auto; margin: 25px 0; }
-    table { width: 100%; min-width: 300px; border-collapse: collapse; }
-    th { background: #111; color: white; padding: 12px 15px; text-align: left; font-weight: 600; font-size: 0.85rem; }
-    td { padding: 10px 15px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+    .content p { margin-bottom: 22px; word-wrap: break-word; font-size: 1.05rem; }
+    .content ul, .content ol { margin: 15px 0 22px 28px; }
+    .content li { margin-bottom: 12px; }
+    .table-wrapper { width: 100%; overflow: hidden; margin: 25px 0; border: 1px solid #eee; }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; }
+    thead { display: table-header-group; background: #111; }
+    th { color: white; padding: 14px 18px; text-align: left; font-weight: 600; font-size: 0.85rem; }
+    td { padding: 12px 18px; border-bottom: 1px solid #eee; font-size: 0.92rem; }
     blockquote { border-left: 3px solid #111; padding-left: 20px; margin: 25px 0; font-style: italic; opacity: 0.8; }
     .footer { margin-top: 60px; padding-top: 25px; border-top: 1px solid #eee; font-size: 0.75rem; opacity: 0.5; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-    @page { margin: 0; }
+    @page { margin: 15mm; size: A4; }
   </style>
 </head>
 <body>
@@ -1273,19 +1297,20 @@ const PDF_TEMPLATES = {
     .content { font-size: 1rem; width: 100%; }
     .content h2 { margin: 40px 0 20px; color: #22d3ee; font-size: 1.4rem; font-weight: 700; border-left: 4px solid #22d3ee; padding-left: 15px; }
     .content h3 { margin: 30px 0 15px; color: #22d3ee; font-size: 1.1rem; font-weight: 700; }
-    .content p { margin-bottom: 20px; word-wrap: break-word; }
-    .content ul, .content ol { margin: 15px 0 20px 25px; }
-    .content li { margin-bottom: 10px; }
-    .table-wrapper { width: 100%; overflow-x: auto; margin: 25px 0; }
-    table { width: 100%; min-width: 400px; border-collapse: collapse; }
-    th { background: linear-gradient(135deg, #22d3ee 0%, #6366f1 100%); color: #000; padding: 14px 18px; text-align: left; font-weight: 700; font-size: 0.85rem; }
-    td { padding: 12px 18px; border-bottom: 1px solid #333; font-size: 0.9rem; word-break: break-word; }
-    tr:nth-child(even) td { background: #1a1a1a; }
+    .content p { margin-bottom: 24px; word-wrap: break-word; font-size: 1.05rem; }
+    .content ul, .content ol { margin: 15px 0 24px 28px; }
+    .content li { margin-bottom: 14px; }
+    .table-wrapper { width: 100%; overflow: hidden; margin: 30px 0; border-radius: 12px; border: 1px solid #333; background: #161616; }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; }
+    thead { display: table-header-group; background: #22d3ee; }
+    th { color: #000; padding: 16px 20px; text-align: left; font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em; }
+    td { padding: 14px 20px; border-bottom: 1px solid #333; font-size: 0.95rem; word-break: break-word; }
+    tr:nth-child(even) td { background: #1e1e1e; }
     blockquote { border-left: 4px solid #22d3ee; padding: 18px 25px; background: #1a1a1a; margin: 25px 0; color: #22d3ee; }
     .accent { background: linear-gradient(135deg, #22d3ee20 0%, #6366f120 100%); padding: 20px; border-radius: 12px; border: 1px solid #22d3ee30; margin: 25px 0; }
     .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #333; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #666; flex-wrap: wrap; gap: 15px; }
     .cyber-badge { color: #22d3ee; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
-    @page { margin: 0; background: #0f0f0f; }
+    @page { margin: 15mm; size: A4; }
   </style>
 </head>
 <body>
@@ -1348,10 +1373,10 @@ function parseMarkdownTables(content) {
   const tableRegex = /\|(.+)\|\n\|[-:\s|]+\|\n((?:\|.+\|\n?)+)/g;
   return content.replace(tableRegex, (match, headerRow, bodyRows) => {
     const headers = headerRow.split('|').map(h => h.trim()).filter(h => h);
-    const rows = bodyRows.trim().split('\n').map(row => 
+    const rows = bodyRows.trim().split('\n').map(row =>
       row.split('|').map(cell => cell.trim()).filter(c => c)
     );
-    
+
     let html = '<div class="table-wrapper"><table><thead><tr>';
     headers.forEach(h => { html += `<th>${h}</th>`; });
     html += '</tr></thead><tbody>';
@@ -1367,32 +1392,32 @@ function parseMarkdownTables(content) {
 
 function parseMarkdownToHTML(content) {
   let html = content;
-  
+
   // Headers
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-  
+
   // Bold and italic
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  
+
   // Inline code
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  
+
   // Blockquotes
   html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
-  
+
   // Horizontal rules
   html = html.replace(/^---$/gm, '<hr/>');
-  
+
   // Unordered lists
   html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-  
+
   // Ordered lists
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-  
+
   // Paragraphs - wrap lines not already in tags
   const lines = html.split('\n');
   html = lines.map(line => {
@@ -1401,7 +1426,7 @@ function parseMarkdownToHTML(content) {
     if (line.startsWith('<')) return line;
     return `<p>${line}</p>`;
   }).join('\n');
-  
+
   return html;
 }
 
@@ -1517,11 +1542,11 @@ app.on('open-url', async (event, url) => {
 const checkNetworkStatus = () => {
   require('dns').lookup('google.com', (err) => {
     const online = !err || err.code === 'ENOTFOUND';
-  if (online !== isOnline) {
-    isOnline = online;
-    const target = getTopWindow();
-    if (target) target.webContents.send('network-status-changed', isOnline);
-  }
+    if (online !== isOnline) {
+      isOnline = online;
+      const target = getTopWindow();
+      if (target) target.webContents.send('network-status-changed', isOnline);
+    }
   });
 };
 
@@ -2095,7 +2120,7 @@ async function createWindow() {
   }
 
   const isMacPlatform = process.platform === 'darwin';
-  
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -2265,7 +2290,7 @@ async function createWindow() {
     } else {
       // Don't block - just warn and allow for better UX
       console.warn('[SSL] Allowing certificate error for:', url);
-      callback(true); 
+      callback(true);
     }
   });
 
@@ -2642,6 +2667,9 @@ function maskVaultEntry(entry = {}) {
     created: entry.created || null,
     hasPassword: !!entry.password,
     passwordMasked: entry.password ? '••••••••••••' : '',
+    type: entry.type || 'login',
+    title: entry.title || '',
+    formData: entry.formData || undefined,
   };
 }
 
@@ -2877,6 +2905,16 @@ ipcMain.handle('vault-list-entries', async () => {
 });
 
 ipcMain.handle('vault-save-entry', async (event, payload = {}) => {
+  // REQUIRE native lock for SAVING to vault too, for maximum security as requested
+  const verification = await verifyVaultAccess({
+    reason: 'Unlock Neural Vault to save a new credential.',
+    actionText: `Save credential for ${payload.site || 'new site'}`,
+  });
+
+  if (!verification.success) {
+    return { success: false, error: verification.error };
+  }
+
   const entries = readVaultEntries();
   const site = normalizeVaultSite(payload.site);
   const username = `${payload.username || ''}`.trim();
@@ -2962,7 +3000,23 @@ ipcMain.handle('vault-copy-secret', async (event, entryId) => {
   return { success: true };
 });
 
-ipcMain.on('propose-password-save', (event, { domain, username, password }) => {
+ipcMain.on('propose-password-save', (event, { domain, username, password, type }) => {
+  const passwords = readVaultEntries();
+  const normalizedDomain = normalizeVaultSite(domain);
+
+  // PRE-CHECK: Avoid opening dialog if identical entry exists
+  const isDuplicate = passwords.some(p => 
+    p.site === normalizedDomain && 
+    p.username === username && 
+    p.password === password &&
+    (p.type === type || (!p.type && type === 'login'))
+  );
+
+  if (isDuplicate) {
+    console.log(`[Vault] Suppression: Credential for ${normalizedDomain} already exists.`);
+    return;
+  }
+
   // Automatically show a dialog to save password
   dialog.showMessageBox(mainWindow, {
     type: 'question',
@@ -2971,17 +3025,77 @@ ipcMain.on('propose-password-save', (event, { domain, username, password }) => {
     title: 'Comet Vault',
     message: `Do you want to save the password for ${domain}?`,
     detail: `User: ${username}`
-  }).then(result => {
+  }).then(async (result) => {
     if (result.response === 0) {
+      // Require native unlock before saving auto-captured password
+      const verification = await verifyVaultAccess({
+        reason: 'Unlock Neural Vault to save this captured password.',
+        actionText: `Save captured password for ${domain}`,
+      });
+
+      if (!verification.success) {
+        console.warn('[Vault] Auto-save denied by user during native unlock.');
+        return;
+      }
+
       const passwords = readVaultEntries();
       const normalizedDomain = normalizeVaultSite(domain);
-      // Avoid duplicates
-      if (!passwords.some(p => p.site === normalizedDomain && p.username === username && p.password === password)) {
-        passwords.push({ id: Date.now().toString(), site: normalizedDomain, username, password, created: new Date().toISOString() });
-        writeVaultEntries(passwords);
-        clearVaultUnlock();
-        console.log(`[Vault] Saved password for ${normalizedDomain}`);
-      }
+      
+      passwords.push({ 
+        id: Date.now().toString(), 
+        site: normalizedDomain, 
+        username, 
+        password, 
+        type: type || 'login',
+        created: new Date().toISOString() 
+      });
+      writeVaultEntries(passwords);
+      clearVaultUnlock();
+      console.log(`[Vault] Saved password for ${normalizedDomain}`);
+    }
+  });
+});
+
+ipcMain.on('propose-form-collection-save', (event, { domain, title, data, type }) => {
+  const entries = readVaultEntries();
+  const normalizedDomain = normalizeVaultSite(domain);
+
+  // PRE-CHECK: If we already have this exact form-data for this site, skip.
+  const isDuplicate = entries.some(e => 
+    e.site === normalizedDomain && 
+    e.type === 'form' && 
+    JSON.stringify(e.formData) === JSON.stringify(data)
+  );
+
+  if (isDuplicate) return;
+
+  dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Save Collection', 'Ignore'],
+    defaultId: 0,
+    title: 'Neural Vault — Collect Data',
+    message: `Securely save this form collection from ${domain}?`,
+    detail: `Captured ${data.length} fields from: ${title}`
+  }).then(async (result) => {
+    if (result.response === 0) {
+      const verification = await verifyVaultAccess({
+        reason: 'Unlock Neural Vault to save this form collection.',
+        actionText: `Save form collection for ${domain}`,
+      });
+
+      if (!verification.success) return;
+
+      const entries = readVaultEntries();
+      entries.push({ 
+        id: Date.now().toString(), 
+        site: normalizeVaultSite(domain), 
+        title,
+        formData: data, 
+        type: 'form',
+        created: new Date().toISOString() 
+      });
+      writeVaultEntries(entries);
+      console.log(`[Vault] Saved form collection for ${domain}`);
     }
   });
 });
@@ -3020,26 +3134,33 @@ ipcMain.on('open-auth-window', (event, authUrl) => {
 
     const authPreloadPath = path.join(__dirname, 'auth-preload.js');
     const isMacPlatform = process.platform === 'darwin';
-    
+    const isWinPlatform = process.platform === 'win32';
+
     authWindow = new BrowserWindow({
       width: 540,
       height: 780,
-      frame: isMacPlatform,
-      transparent: !isMacPlatform && !isMacPlatform,
+      frame: isMacPlatform ? true : false, // frame must be true on Mac for titleBarStyle: 'hidden' to show traffic lights
+      transparent: false,
       backgroundColor: '#02030a',
       hasShadow: true,
       resizable: true,
       parent: mainWindow,
-      modal: true,
+      modal: isMacPlatform ? false : true, // On Mac, modal: true makes it a sheet which hides traffic lights
       show: false,
-      titleBarStyle: isMacPlatform ? 'hiddenInset' : 'hidden',
+      titleBarStyle: 'hidden',
+      trafficLightPosition: isMacPlatform ? { x: 18, y: 18 } : undefined,
+      titleBarOverlay: isWinPlatform ? {
+        color: '#02030a',
+        symbolColor: '#ffffff',
+        height: 32
+      } : false,
       webPreferences: {
-        preload: isMacPlatform ? path.join(__dirname, 'preload.js') : authPreloadPath,
+        preload: authPreloadPath, // Always use auth-preload to handle drag and custom close if needed
         nodeIntegration: false,
         contextIsolation: true,
       },
     });
-    
+
     if (!isMacPlatform) {
       authWindow.setMenuBarVisibility(false);
     }
@@ -3053,14 +3174,35 @@ ipcMain.on('open-auth-window', (event, authUrl) => {
       authWindow.show();
     });
 
+    const handleAuthRedirect = (url) => {
+      // Proactive check for success markers in URL or deep link protocol
+      const isCometDeepLink = url.startsWith('comet-browser://');
+      const isAuthSuccess = url.includes('auth_status=success') || url.includes('uid=') || url.includes('token=');
+
+      if (isCometDeepLink || isAuthSuccess) {
+        console.log('[Auth] Success detected, processing callback:', url);
+        if (mainWindow) {
+          // If it's not a deep link yet, normalize it
+          const finalUrl = isCometDeepLink ? url : `comet-browser://auth${new URL(url).search}`;
+          mainWindow.webContents.send('auth-callback', finalUrl);
+        }
+        
+        // Use a slight delay before closing to ensure message is sent
+        setTimeout(() => {
+          if (authWindow && !authWindow.isDestroyed()) {
+             authWindow.close();
+             authWindow = null;
+          }
+        }, 100);
+        return true;
+      }
+      return false;
+    };
+
     // Listen for navigation to callback URL
     authWindow.webContents.on('will-redirect', (event, url) => {
-      if (url.startsWith('comet-browser://') || url.includes('__/auth/handler')) {
+      if (handleAuthRedirect(url)) {
         event.preventDefault();
-        if (mainWindow) {
-          mainWindow.webContents.send('auth-callback', url);
-        }
-        authWindow.close();
       } else if (url.startsWith('http://localhost') && url.includes('code=')) {
         event.preventDefault();
         const urlParams = new URLSearchParams(new URL(url).search);
@@ -3069,48 +3211,99 @@ ipcMain.on('open-auth-window', (event, authUrl) => {
           ipcMain.emit('gmail-oauth-code', null, code);
           authWindow.close();
         }
+      }
+    });
+
+    authWindow.webContents.on('will-navigate', (event, url) => {
+      if (handleAuthRedirect(url)) {
+        event.preventDefault();
       }
     });
 
     authWindow.webContents.on('did-navigate', (event, url) => {
-      if (url.startsWith('comet-browser://') || url.includes('__/auth/handler')) {
-        if (mainWindow) {
-          mainWindow.webContents.send('auth-callback', url);
-        }
-        authWindow.close();
-      } else if (url.startsWith('http://localhost') && url.includes('code=')) {
-        const urlParams = new URLSearchParams(new URL(url).search);
-        const code = urlParams.get('code');
-        if (code) {
-          ipcMain.emit('gmail-oauth-code', null, code);
-          authWindow.close();
-        }
-      }
+      handleAuthRedirect(url);
     });
+
+    // Catch Next.js client-side navigations (pushState)
+    authWindow.webContents.on('did-navigate-in-page', (event, url) => {
+      handleAuthRedirect(url);
+    });
+
+    // Fail-safe poller: Check URL every 500ms
+    const poller = setInterval(() => {
+      if (authWindow && !authWindow.isDestroyed()) {
+        try {
+          const currentUrl = authWindow.webContents.getURL();
+          if (handleAuthRedirect(currentUrl)) {
+            clearInterval(poller);
+          }
+        } catch (e) {
+          clearInterval(poller);
+        }
+      } else {
+        clearInterval(poller);
+      }
+    }, 500);
+
+    authWindow.on('closed', () => {
+      clearInterval(poller);
+      authWindow = null;
+    });
+
+
 
     // Listen for postMessage from Ponsri Ponsri auth page for auth success
     authWindow.webContents.on('console-message', (event, level, message) => {
       try {
-        const data = JSON.parse(message);
-        if (data.type === 'comet-auth-success' && data.data) {
-          if (mainWindow) {
-            const authParams = new URLSearchParams({
-              auth_status: 'success',
-              uid: data.data.uid || '',
-              email: data.data.email || '',
-            });
-
-            if (data.data.name) authParams.set('name', data.data.name);
-            if (data.data.photo) authParams.set('photo', data.data.photo);
-            if (data.data.id_token) authParams.set('id_token', data.data.id_token);
-            if (data.data.token) authParams.set('token', data.data.token);
-            if (data.data.firebase_config) authParams.set('firebase_config', data.data.firebase_config);
-
-            mainWindow.webContents.send('auth-callback', `comet-browser://auth?${authParams.toString()}`);
+        // Robust check for various auth success markers
+        if (message.includes('comet-auth-success') || message.includes('auth_success_callback')) {
+          let data = {};
+          try {
+            data = JSON.parse(message);
+          } catch (e) {
+            // If it's not JSON but contains the marker, try to extract from URL if possible
+            const currentUrl = authWindow.webContents.getURL();
+            if (currentUrl.includes('uid=') || currentUrl.includes('token=')) {
+              mainWindow.webContents.send('auth-callback', `comet-browser://auth?${new URL(currentUrl).search}`);
+              authWindow.close();
+              return;
+            }
           }
-          authWindow.close();
+
+          if (data.type === 'comet-auth-success' && data.data) {
+            if (mainWindow) {
+              const authParams = new URLSearchParams({
+                auth_status: 'success',
+                uid: data.data.uid || '',
+                email: data.data.email || '',
+              });
+
+              if (data.data.name) authParams.set('name', data.data.name);
+              if (data.data.photo) authParams.set('photo', data.data.photo);
+              if (data.data.id_token) authParams.set('id_token', data.data.id_token);
+              if (data.data.token) authParams.set('token', data.data.token);
+              if (data.data.firebase_config) authParams.set('firebase_config', data.data.firebase_config);
+
+              mainWindow.webContents.send('auth-callback', `comet-browser://auth?${authParams.toString()}`);
+            }
+            authWindow.close();
+          }
         }
-      } catch (e) {}
+      } catch (e) { }
+    });
+
+    // Fallback: Detect success via URL change to ponsrischool home or success page
+    authWindow.webContents.on('did-navigate', (event, url) => {
+      if (url.includes('browser.ponsrischool.in') && (url.includes('success') || url.includes('callback') || url.includes('profile'))) {
+        // Extract params if they exist
+        try {
+          const parsedUrl = new URL(url);
+          if (parsedUrl.searchParams.has('uid') || parsedUrl.searchParams.has('token')) {
+            mainWindow.webContents.send('auth-callback', `comet-browser://auth?${parsedUrl.search}`);
+            authWindow.close();
+          }
+        } catch (e) { }
+      }
     });
 
     authWindow.on('closed', () => {
@@ -3378,11 +3571,11 @@ ipcMain.on('set-browser-view-bounds', (event, bounds) => {
 ipcMain.on('navigate-browser-view', async (event, { tabId, url }) => {
   const view = tabViews.get(tabId || activeTabId);
   if (!view) return;
-  
+
   // ERROR-PROOFING: Add retry logic for navigation
   const maxRetries = 2;
   let lastError = null;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       await view.webContents.loadURL(url);
@@ -3396,7 +3589,7 @@ ipcMain.on('navigate-browser-view', async (event, { tabId, url }) => {
       }
     }
   }
-  
+
   // All retries failed - try loading a fallback/error page
   console.error(`[BrowserView] Navigation failed after ${maxRetries} attempts: ${url}`);
   try {
@@ -3478,21 +3671,21 @@ ipcMain.handle('capture-browser-view-screenshot', async () => {
     console.warn('[Screenshot] No active tab found');
     return null;
   }
-  
+
   // ERROR-PROOFING: Retry logic for screenshot capture
   const maxRetries = 3;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       // Wait for page to be ready and rendering to complete
       await new Promise(resolve => setTimeout(resolve, 200 * attempt));
-      
+
       const image = await view.webContents.capturePage();
       if (!image || image.isEmpty()) {
         console.warn(`[Screenshot] Attempt ${attempt}: Image is empty, retrying...`);
         if (attempt < maxRetries) await new Promise(r => setTimeout(r, 300));
         continue;
       }
-      
+
       // Convert NativeImage to PNG buffer then to base64 data URL
       const pngBuffer = image.toPNG();
       if (!pngBuffer || pngBuffer.length === 0) {
@@ -3500,7 +3693,7 @@ ipcMain.handle('capture-browser-view-screenshot', async () => {
         if (attempt < maxRetries) await new Promise(r => setTimeout(r, 300));
         continue;
       }
-      
+
       const base64 = pngBuffer.toString('base64');
       const dataUrl = `data:image/png;base64,${base64}`;
       console.log(`[Screenshot] Success on attempt ${attempt}, size: ${pngBuffer.length} bytes`);
@@ -3510,9 +3703,9 @@ ipcMain.handle('capture-browser-view-screenshot', async () => {
       if (attempt < maxRetries) await new Promise(r => setTimeout(r, 300));
     }
   }
-  
+
   console.error('[Screenshot] All capture attempts failed');
-  
+
   // Fallback: Try to get screenshot via JPEG which is sometimes more reliable
   try {
     const image = await view.webContents.capturePage();
@@ -3525,7 +3718,7 @@ ipcMain.handle('capture-browser-view-screenshot', async () => {
   } catch (e2) {
     console.error('[Screenshot] JPEG fallback also failed:', e2.message);
   }
-  
+
   return null;
 });
 
@@ -3659,14 +3852,14 @@ ipcMain.handle('find-and-click-text', async (event, targetText) => {
       return { success: false, error: 'Find & Click requires robotjs. Run: npm install robotjs, then electron-rebuild.' };
     }
 
-      try {
-        await performRobotClick({ x: centerX, y: centerY });
-        console.log(`[Main] Find-and-click: clicked at (${centerX}, ${centerY}) for "${targetText}" with robust helper`);
-        return { success: true, x: centerX, y: centerY };
-      } catch (robotErr) {
-        console.error('[Main] robotjs error (may need Accessibility permission on macOS):', robotErr);
-        return { success: false, error: `Could not simulate click. ${process.platform === 'darwin' ? 'Ensure Accessibility permission is granted.' : robotErr.message}` };
-      }
+    try {
+      await performRobotClick({ x: centerX, y: centerY });
+      console.log(`[Main] Find-and-click: clicked at (${centerX}, ${centerY}) for "${targetText}" with robust helper`);
+      return { success: true, x: centerX, y: centerY };
+    } catch (robotErr) {
+      console.error('[Main] robotjs error (may need Accessibility permission on macOS):', robotErr);
+      return { success: false, error: `Could not simulate click. ${process.platform === 'darwin' ? 'Ensure Accessibility permission is granted.' : robotErr.message}` };
+    }
   } catch (error) {
     console.error('[Main] find-and-click-text failed:', error);
     return { success: false, error: error.message };
@@ -4307,7 +4500,7 @@ async function requestShellApproval(command, riskLevel, reason, options = {}) {
   });
 }
 
-async function checkShellPermission(command) {
+async function checkShellPermission(command, reason, riskLevel) {
   if (!mainWindow) return false;
 
   const cmdName = command.trim().split(' ')[0];
@@ -4345,7 +4538,7 @@ async function checkShellPermission(command) {
   const allowed = await requestShellApproval(
     command,
     approvalRiskLevel,
-    'Automation requested this shell action.',
+    reason || 'Automation requested this shell action.',
     { requiresDeviceUnlock }
   );
 
@@ -4385,7 +4578,14 @@ function validateCommand(command) {
     throw new Error('Invalid command format');
   }
 
-  const trimmed = command.trim();
+  // Support home directory expansion
+  let trimmed = command.trim();
+  if (trimmed.startsWith('~/')) {
+    trimmed = trimmed.replace('~/', os.homedir() + '/');
+  } else if (trimmed === '~') {
+    trimmed = os.homedir();
+  }
+
   if (!trimmed) {
     throw new Error('Command cannot be empty');
   }
@@ -4403,7 +4603,7 @@ function validateCommand(command) {
   return trimmed.slice(0, 1000);
 }
 
-ipcMain.handle('execute-shell-command', async (event, { rawCommand, preApproved }) => {
+ipcMain.handle('execute-shell-command', async (event, { rawCommand, preApproved, reason, riskLevel }) => {
   // Check if already granted permission (skip the blocking dialog - let user configure in Settings)
   // Permission dialog removed - user can configure in Settings panel
 
@@ -4415,7 +4615,7 @@ ipcMain.handle('execute-shell-command', async (event, { rawCommand, preApproved 
   }
 
   if (!preApproved) {
-    const authorized = await checkShellPermission(command);
+    const authorized = await checkShellPermission(command, reason, riskLevel);
     if (!authorized) {
       return { success: false, error: 'User blocked the command.' };
     }
@@ -4423,7 +4623,7 @@ ipcMain.handle('execute-shell-command', async (event, { rawCommand, preApproved 
 
   return new Promise((resolve) => {
     const execOptions = { timeout: 30000 };
-    
+
     exec(command, execOptions, (error, stdout, stderr) => {
       if (process.platform === 'darwin' && !error) {
         const macosPermKey = 'MACOS_TERMINAL_PERMISSION';
@@ -4431,7 +4631,7 @@ ipcMain.handle('execute-shell-command', async (event, { rawCommand, preApproved 
           permissionStore.grant(macosPermKey, 'execute', 'macOS Shell access', false);
         }
       }
-      
+
       if (error) {
         if (error.message.includes('Operation not permitted')) {
           resolve({ success: false, error: 'Permission denied! Please go to Settings > Permissions in Comet-AI to configure macOS system permissions.', output: stderr });
@@ -4838,44 +5038,44 @@ async function updateGoogleSearchTheme(options = {}) {
   await Promise.all(views.map((view) => syncGoogleSearchThemeForContents(view?.webContents, options)));
 }
 
-  // Security Settings (Registered before app is ready to avoid missing handler)
-  ipcMain.handle('security-settings-get', async () => {
-    return permissionStore.getSettings();
-  });
+// Security Settings (Registered before app is ready to avoid missing handler)
+ipcMain.handle('security-settings-get', async () => {
+  return permissionStore.getSettings();
+});
 
-  ipcMain.handle('security-settings-update', async (event, settings) => {
-    permissionStore.updateSettings(settings);
-    return { success: true, settings: permissionStore.getSettings() };
-  });
+ipcMain.handle('security-settings-update', async (event, settings) => {
+  permissionStore.updateSettings(settings);
+  return { success: true, settings: permissionStore.getSettings() };
+});
 
-  ipcMain.handle('set-native-theme-source', async (_event, source) => {
-    const nextSource = ['system', 'light', 'dark'].includes(source) ? source : 'system';
-    nativeTheme.themeSource = nextSource;
-    // We register this as an async handler, but the theme sync will wait for views
-    updateGoogleSearchTheme({ reload: true }).catch(err => console.warn('[Theme] Early sync failed:', err));
-    return { success: true, themeSource: nativeTheme.themeSource };
-  });
+ipcMain.handle('set-native-theme-source', async (_event, source) => {
+  const nextSource = ['system', 'light', 'dark'].includes(source) ? source : 'system';
+  nativeTheme.themeSource = nextSource;
+  // We register this as an async handler, but the theme sync will wait for views
+  updateGoogleSearchTheme({ reload: true }).catch(err => console.warn('[Theme] Early sync failed:', err));
+  return { success: true, themeSource: nativeTheme.themeSource };
+});
 
-  ipcMain.handle('network-security-get', async () => {
+ipcMain.handle('network-security-get', async () => {
+  return {
+    success: true,
+    config: networkSecurityConfig,
+    restartRequiredFor: ['enableSecureDns', 'dnsProvider', 'customDnsTemplate', 'preventWebRtcLeaks'],
+  };
+});
+
+ipcMain.handle('network-security-update', async (_event, updates) => {
+  try {
+    const config = await applyNetworkSecurityConfig(updates || {});
     return {
       success: true,
-      config: networkSecurityConfig,
+      config,
       restartRequiredFor: ['enableSecureDns', 'dnsProvider', 'customDnsTemplate', 'preventWebRtcLeaks'],
     };
-  });
-
-  ipcMain.handle('network-security-update', async (_event, updates) => {
-    try {
-      const config = await applyNetworkSecurityConfig(updates || {});
-      return {
-        success: true,
-        config,
-        restartRequiredFor: ['enableSecureDns', 'dnsProvider', 'customDnsTemplate', 'preventWebRtcLeaks'],
-      };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
-  });
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
 
 app.whenReady().then(async () => {
   nativeTheme.on('updated', () => {
@@ -4884,19 +5084,19 @@ app.whenReady().then(async () => {
   registerAppFileProtocol();
   buildApplicationMenu();
   await applyNetworkSecurityConfig(networkSecurityConfig);
-  
+
   // Auto-update setup (only in production)
   if (!require('electron-is-dev')) {
     const { autoUpdater } = require('electron-updater');
-    
+
     // Check for updates at startup
     autoUpdater.checkForUpdatesAndNotify();
-    
+
     // Auto check for updates every hour
     setInterval(() => {
       autoUpdater.checkForUpdates();
     }, 1000 * 60 * 60); // 1 hour
-    
+
     // Handle auto updater events
     autoUpdater.on('checking-for-update', () => {
       logMain('Checking for update...');
@@ -4904,35 +5104,35 @@ app.whenReady().then(async () => {
         mainWindow.webContents.send('update-status', { checking: true });
       }
     });
-    
+
     autoUpdater.on('update-available', (info) => {
       logMain('Update available:', info);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-available', info);
       }
     });
-    
+
     autoUpdater.on('update-not-available', (info) => {
       logMain('Update not available:', info);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-not-available', info);
       }
     });
-    
+
     autoUpdater.on('error', (err) => {
       logErr('Error in auto-updater:', err);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-error', err.toString());
       }
     });
-    
+
     autoUpdater.on('download-progress', (progressObj) => {
       logMain(`Download progress: ${progressObj.percent}%`);
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('download-progress', progressObj);
       }
     });
-    
+
     autoUpdater.on('update-downloaded', (info) => {
       logMain('Update downloaded:', info);
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -4979,7 +5179,7 @@ app.whenReady().then(async () => {
       try {
         fs.writeFileSync(filePath, content);
         console.log('[Export] TXT saved to:', filePath);
-        
+
         // Notify frontend so it shows in the downloads panel
         const finalName = path.basename(filePath);
         mainWindow.webContents.send('download-started', { name: finalName, path: filePath });
@@ -5002,7 +5202,7 @@ app.whenReady().then(async () => {
   ipcMain.removeHandler('export-chat-pdf');
   ipcMain.handle('export-chat-pdf', async (event, messages) => {
     console.log('[Export-PDF] PDF export requested. Messages:', messages?.length || 0);
-    
+
     const logMain = (msg) => console.log(`[Export-PDF] ${msg}`);
     const logErr = (msg, err) => console.error(`[Export-PDF] ❌ ${msg}`, err);
 
@@ -5010,7 +5210,7 @@ app.whenReady().then(async () => {
       // Build chat content from messages
       let chatContent = '';
       let chatTitle = 'Chat Session Export';
-      
+
       if (Array.isArray(messages)) {
         for (const msg of messages) {
           const role = msg.role === 'user' ? 'You' : (msg.role === 'assistant' ? 'Comet AI' : msg.role);
@@ -5048,11 +5248,11 @@ app.whenReady().then(async () => {
         // Use PDF generation logic
         let workerWindow = null;
         let tempHtmlPath = '';
-        
+
         try {
           const tempDir = os.tmpdir();
           tempHtmlPath = path.join(tempDir, `comet_export_${Date.now()}.html`);
-          
+
           // Write HTML file
           fs.writeFileSync(tempHtmlPath, pdfHtml, 'utf8');
           logMain(`Temp HTML written: ${tempHtmlPath}`);
@@ -5118,7 +5318,7 @@ app.whenReady().then(async () => {
             workerWindow.destroy();
           }
           if (tempHtmlPath && fs.existsSync(tempHtmlPath)) {
-            try { fs.unlinkSync(tempHtmlPath); } catch (e) {}
+            try { fs.unlinkSync(tempHtmlPath); } catch (e) { }
           }
         }
       }
@@ -5131,33 +5331,33 @@ app.whenReady().then(async () => {
     }
   });
 
-function autoSyncFileToMobile(filename, buffer, fileType) {
-  try {
-    const publicDir = path.join(app.getPath('documents'), 'Comet-AI', 'public');
-    if (!fs.existsSync(publicDir)) {
-      fs.mkdirSync(publicDir, { recursive: true });
-    }
-    const publicPath = path.join(publicDir, filename);
-    fs.writeFileSync(publicPath, buffer);
-    console.log(`[Auto-Sync] Saved to public directory: ${publicPath}`);
+  function autoSyncFileToMobile(filename, buffer, fileType) {
+    try {
+      const publicDir = path.join(app.getPath('documents'), 'Comet-AI', 'public');
+      if (!fs.existsSync(publicDir)) {
+        fs.mkdirSync(publicDir, { recursive: true });
+      }
+      const publicPath = path.join(publicDir, filename);
+      fs.writeFileSync(publicPath, buffer);
+      console.log(`[Auto-Sync] Saved to public directory: ${publicPath}`);
 
-    if (typeof wifiSyncService !== 'undefined' && wifiSyncService) {
-      const fileUrl = `http://${wifiSyncService.getLocalIp()}:3999/${encodeURIComponent(filename)}`;
-      wifiSyncService.sendToMobile({
-        action: 'file-generated',
-        name: filename,
-        url: fileUrl,
-        type: fileType
-      });
-      console.log(`[Auto-Sync] Sent notification to mobile: ${fileUrl}`);
+      if (typeof wifiSyncService !== 'undefined' && wifiSyncService) {
+        const fileUrl = `http://${wifiSyncService.getLocalIp()}:3999/${encodeURIComponent(filename)}`;
+        wifiSyncService.sendToMobile({
+          action: 'file-generated',
+          name: filename,
+          url: fileUrl,
+          type: fileType
+        });
+        console.log(`[Auto-Sync] Sent notification to mobile: ${fileUrl}`);
+      }
+    } catch (err) {
+      console.error(`[Auto-Sync] Failed to sync ${filename} to mobile:`, err);
     }
-  } catch (err) {
-    console.error(`[Auto-Sync] Failed to sync ${filename} to mobile:`, err);
   }
-}
 
-// Recreated PDF Generation Protocol (Branded & Robust)
-ipcMain.removeHandler('generate-pdf');
+  // Recreated PDF Generation Protocol (Branded & Robust)
+  ipcMain.removeHandler('generate-pdf');
 
   ipcMain.handle('generate-pdf', async (event, title, content) => {
     const logMain = (msg) => {
@@ -5166,14 +5366,14 @@ ipcMain.removeHandler('generate-pdf');
     const logErr = (msg, err) => {
       console.error(`[PDF-CORE] ❌ ${new Date().toLocaleTimeString()} - ${msg}`, err);
     };
-    const notifyAI = (msg) => { 
+    const notifyAI = (msg) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('pdf-generation-log', msg); 
+        mainWindow.webContents.send('pdf-generation-log', msg);
       }
     };
-    const updateProgress = (progress, stage) => { 
+    const updateProgress = (progress, stage) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('pdf-generation-progress', progress); 
+        mainWindow.webContents.send('pdf-generation-progress', progress);
         if (stage) mainWindow.webContents.send('pdf-generation-stage', stage);
       }
     };
@@ -5204,11 +5404,11 @@ ipcMain.removeHandler('generate-pdf');
       // 0. Pre-process content for Images (Convert URLs to Base64 + markdown → HTML)
       logMain('Scanning for remote images to embed...');
       let processedContent = content;
-      
+
       // Collect all remote image URLs from both <img src> and markdown ![alt](url)
       const imageUrlRegex = /<img[^>]+src="([^">]+)"/g;
       const markdownImageRegex = /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
-      
+
       const remoteImages = [];
       let match;
       while ((match = imageUrlRegex.exec(content)) !== null) {
@@ -5238,7 +5438,7 @@ ipcMain.removeHandler('generate-pdf');
             );
             // Also replace raw URL in existing <img> tags
             processedContent = processedContent.split(url).join(dataUrl);
-            logMain(`Fetched image ${i+1}/${remoteImages.length}: ${url}`);
+            logMain(`Fetched image ${i + 1}/${remoteImages.length}: ${url}`);
           } catch (err) {
             logErr(`Failed to fetch image: ${url}`, err);
             // Convert failed markdown images to a broken-image placeholder
@@ -5250,20 +5450,20 @@ ipcMain.removeHandler('generate-pdf');
           updateProgress(10 + Math.floor(((i + 1) / remoteImages.length) * 20), 'preparing');
         }
       }
-      
+
       // Convert any remaining markdown image syntax (local paths / data URIs) → <img> HTML tags
       processedContent = processedContent.replace(
         /!\[([^\]]*)\]\(([^)]+)\)/g,
         (_, alt, src) => `<figure style="text-align:center;margin:24px 0"><img src="${src}" alt="${alt}" style="max-width:100%;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,0.12)"/>${alt ? `<figcaption style="font-size:0.8rem;color:#64748b;margin-top:8px">${alt}</figcaption>` : ''}</figure>`
       );
-      
+
       updateProgress(30, 'preparing');
 
       // 1. Setup Worker Environment
       logMain('Creating hidden worker window...');
       workerWindow = new BrowserWindow({
         show: false,
-        webPreferences: { 
+        webPreferences: {
           offscreen: true,
           contextIsolation: true,
           nodeIntegration: false,
@@ -5286,7 +5486,7 @@ ipcMain.removeHandler('generate-pdf');
           logErr('Rendering timeout reached.');
           reject(new Error('Rendering Timeout: Check content structure or complexity.'));
         }, 45000);
-        
+
         workerWindow.webContents.on('did-finish-load', () => {
           clearTimeout(timeout);
           logMain('Renderer confirmed: Page loaded successfully.');
@@ -5301,7 +5501,7 @@ ipcMain.removeHandler('generate-pdf');
       });
 
       notifyAI('⏳ Rendering branded content to print buffer...');
-      
+
       // For large content, use temp file instead of data URL (data URLs have ~2MB limit in Electron)
       if (html.length > 500000) {
         logMain(`Content too large for data URL (${html.length} chars). Using temp file...`);
@@ -5311,7 +5511,7 @@ ipcMain.removeHandler('generate-pdf');
       } else {
         await workerWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
       }
-      
+
       updateProgress(60, 'rendering');
       await loadTask;
       updateProgress(80, 'generating');
@@ -5336,10 +5536,10 @@ ipcMain.removeHandler('generate-pdf');
 
       fs.writeFileSync(fullPath, pdfBuffer);
       logMain(`PDF saved successfully: ${fullPath}`);
-      
+
       // Auto-sync to mobile
       autoSyncFileToMobile(filename, pdfBuffer, 'pdf');
-      
+
       // 7. Cleanup & Notify UI
       if (mainWindow && !mainWindow.isDestroyed()) {
         logMain('Notifying frontend of new download...');
@@ -5357,27 +5557,27 @@ ipcMain.removeHandler('generate-pdf');
         logMain('Notifying frontend of new download...');
         // Start simulated progress for the system downloads panel
         mainWindow.webContents.send('download-started', { name: filename, path: fullPath });
-        
+
         let p = 0;
         const interval = setInterval(() => {
-            p += 10;
+          p += 10;
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('download-progress', { name: filename, progress: p });
+          }
+          if (p >= 100) {
+            clearInterval(interval);
             if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.send('download-progress', { name: filename, progress: p });
+              mainWindow.webContents.send('download-complete', { name: filename, path: fullPath });
+              logMain('Download lifecycle complete.');
             }
-            if (p >= 100) {
-                clearInterval(interval);
-                if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.webContents.send('download-complete', { name: filename, path: fullPath });
-                    logMain('Download lifecycle complete.');
-                }
-            }
+          }
         }, 100);
       }
 
-      return { 
-        success: true, 
-        fileName: filename, 
-        filePath: fullPath, 
+      return {
+        success: true,
+        fileName: filename,
+        filePath: fullPath,
         log: `Verified PDF export completed. Location: ${fullPath}`
       };
 
@@ -5385,14 +5585,14 @@ ipcMain.removeHandler('generate-pdf');
       logErr('PDF generation aborted', err);
       const aiMessage = `❌ CRITICAL ERROR: ${err.message}`;
       notifyAI(aiMessage);
-      
+
       // Cleanup temp file on error
-      try { if (tempHtmlPath && fs.existsSync(tempHtmlPath)) fs.unlinkSync(tempHtmlPath); } catch(e) {}
-      
-      return { 
-        success: false, 
-        error: err.message, 
-        context: 'Generation failed in the Electron main process. Please check logs for memory or rendering issues.' 
+      try { if (tempHtmlPath && fs.existsSync(tempHtmlPath)) fs.unlinkSync(tempHtmlPath); } catch (e) { }
+
+      return {
+        success: false,
+        error: err.message,
+        context: 'Generation failed in the Electron main process. Please check logs for memory or rendering issues.'
       };
     } finally {
       if (workerWindow && !workerWindow.isDestroyed()) {
@@ -5400,7 +5600,7 @@ ipcMain.removeHandler('generate-pdf');
         logMain('Worker environment cleanup complete.');
       }
       // Cleanup temp file
-      try { if (tempHtmlPath && fs.existsSync(tempHtmlPath)) fs.unlinkSync(tempHtmlPath); } catch(e) {}
+      try { if (tempHtmlPath && fs.existsSync(tempHtmlPath)) fs.unlinkSync(tempHtmlPath); } catch (e) { }
     }
   });
 
@@ -5425,7 +5625,7 @@ ipcMain.removeHandler('generate-pdf');
         logMain('Generating PDF with pdfmake...');
         const pdfMake = require('pdfmake/build/pdfmake');
         const pdfFonts = require('pdfmake/build/vfs_fonts');
-        
+
         // Handle both export formats
         if (pdfFonts.pdfMake) {
           pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -6571,15 +6771,15 @@ ipcMain.removeHandler('generate-pdf');
         const action = args.action;
         const prompt = args.prompt;
         const promptId = args.promptId || commandId;
-        
+
         console.log(`[WiFi-Sync] Desktop Control: action=${action}, promptId=${promptId}`);
-        
+
         if (action === 'send-prompt') {
           if (mainWindow) {
-            mainWindow.webContents.send('remote-ai-prompt', { 
-              prompt, 
+            mainWindow.webContents.send('remote-ai-prompt', {
+              prompt,
               commandId: promptId,
-              streamToMobile: true 
+              streamToMobile: true
             });
           }
 
@@ -6596,8 +6796,8 @@ ipcMain.removeHandler('generate-pdf');
           }
         } else if (action === 'get-status') {
           const { screen } = require('electron');
-          sendResponse({ 
-            success: true, 
+          sendResponse({
+            success: true,
             screenOn: !screen.isScreenCaptured?.() ?? true,
             activeApp: 'Comet-AI',
             desktopName: os.hostname(),
@@ -6613,7 +6813,7 @@ ipcMain.removeHandler('generate-pdf');
         } else if (action === 'shell-command') {
           const shellCmd = args.command;
           const requireApproval = args.requireApproval ?? true;
-          
+
           // Check if this is a high-risk command that needs QR approval on Mac
           if (os.platform() === 'darwin' && requireApproval) {
             const dangerous = /sudo|rm\s+-rf|shutdown|reboot|kill\s+-9|diskutil|dd\s+if/i.test(shellCmd);
@@ -6627,15 +6827,15 @@ ipcMain.removeHandler('generate-pdf');
                 command: shellCmd,
                 qrData: qrImage,
               });
-              sendResponse({ 
-                success: true, 
+              sendResponse({
+                success: true,
                 requiresApproval: true,
                 approvalQRShown: true,
               });
               return;
             }
           }
-          
+
           // Execute shell command
           const { exec } = require('child_process');
           exec(shellCmd, { timeout: 30000 }, (err, stdout, stderr) => {
@@ -6667,12 +6867,66 @@ ipcMain.removeHandler('generate-pdf');
             sendResponse({ success: false, error: 'Desktop window not available' });
           }
         } else if (action === 'click') {
-        try {
-          await performRobotClick({ x: args.x, y: args.y });
-          sendResponse({ success: true, output: `Clicked at (${args.x}, ${args.y})` });
-        } catch (err) {
-          sendResponse({ success: false, error: err.message });
-        }
+          try {
+            await performRobotClick({ x: args.x, y: args.y });
+            sendResponse({ success: true, output: `Clicked at (${args.x}, ${args.y})` });
+          } catch (err) {
+            sendResponse({ success: false, error: err.message });
+          }
+        } else if (action === 'get-settings') {
+          // Send all app settings to mobile
+          const currentSettings = {
+            llm_provider: store.get('ai_provider') || 'google',
+            llm_model: store.get('gemini_model') || 'gemini-2.0-flash',
+            ollama_url: store.get('ollama_base_url') || 'http://localhost:11434',
+            temperature: store.get('llm_temperature') || 0.7,
+            theme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
+            auto_approve_low: store.get('auto_approve_low_risk') || true,
+            auto_approve_mid: store.get('auto_approve_mid_risk') || false,
+            run_in_background: store.get('run_in_background_automation') || true,
+            notifications_enabled: store.get('desktop_notifications') || true,
+            sync_mode: 'local_cloud', 
+          };
+          sendResponse({ success: true, settings: currentSettings });
+        } else if (action === 'update-setting') {
+          const { key, value } = args;
+          console.log(`[WiFi-Sync] Updating setting: ${key} = ${value}`);
+          
+          if (key === 'theme') {
+            nativeTheme.themeSource = value;
+          } else {
+            // Map mobile setting keys to desktop store keys
+            const keyMap = {
+              'llm_provider': 'ai_provider',
+              'llm_model': 'gemini_model', // Dynamic pick later
+              'temperature': 'llm_temperature',
+              'auto_approve_low': 'auto_approve_low_risk',
+              'auto_approve_mid': 'auto_approve_mid_risk',
+            };
+            const storeKey = keyMap[key] || key;
+            store.set(storeKey, value);
+          }
+          sendResponse({ success: true });
+        } else if (action === 'sync-tasks') {
+          try {
+            const automationManager = require('./src/lib/automation-manager.js');
+            const tasks = automationManager.getAllTasks();
+            sendResponse({ success: true, tasks: tasks || [] });
+          } catch (err) {
+            sendResponse({ success: false, error: 'Automation manager unavailable' });
+          }
+        } else if (action === 'toggle-task') {
+           const { taskId } = args;
+           ipcMain.emit('automation:toggle-task', { sender: { send: () => {} } }, taskId);
+           sendResponse({ success: true });
+        } else if (action === 'run-task') {
+           const { taskId } = args;
+           ipcMain.emit('automation:run-task', { sender: { send: () => {} } }, taskId);
+           sendResponse({ success: true });
+        } else if (action === 'delete-task') {
+           const { taskId } = args;
+           ipcMain.emit('automation:delete-task', { sender: { send: () => {} } }, taskId);
+           sendResponse({ success: true });
         } else {
           sendResponse({ success: false, error: `Unknown action: ${action}` });
         }
@@ -6706,7 +6960,7 @@ ipcMain.removeHandler('generate-pdf');
     // Listen for prompts from mobile via cloud
     cloudSyncService.on('cloud-prompt', async ({ prompt, promptId, fromDeviceId }) => {
       console.log(`[CloudSync] Received prompt from mobile: "${prompt.substring(0, 50)}..."`);
-      
+
       if (mainWindow) {
         mainWindow.webContents.send('remote-ai-prompt', { prompt, promptId, fromDeviceId });
       }
@@ -6715,7 +6969,7 @@ ipcMain.removeHandler('generate-pdf');
       try {
         const targetModel = store.get('ollama_model') || 'deepseek-r1:8b';
         const provider = (targetModel.includes('gemini') || targetModel.includes('google')) ? 'google-flash' : 'ollama';
-        
+
         const streamEvent = {
           sender: {
             isDestroyed: () => false,
@@ -6745,7 +6999,7 @@ ipcMain.removeHandler('generate-pdf');
     // Listen for file sync requests
     cloudSyncService.on('cloud-file-sync', async ({ files, fromDeviceId }) => {
       console.log(`[CloudSync] Receiving files from mobile: ${files.length} files`);
-      
+
       if (mainWindow) {
         mainWindow.webContents.send('cloud-files-received', { files, fromDeviceId });
       }
@@ -6805,7 +7059,7 @@ ipcMain.removeHandler('generate-pdf');
     const token = Math.random().toString(36).substring(2, 10);
     const pin = Math.floor(100000 + Math.random() * 900000).toString();
     const deepLinkUrl = `comet-ai://shell-approve?id=${token}&deviceId=${encodeURIComponent(deviceId)}&pin=${pin}&cmd=${encodeURIComponent(command)}`;
-    
+
     try {
       const qrImage = await QRCode.toDataURL(deepLinkUrl);
       return { qrImage, pin, token };
@@ -7132,7 +7386,7 @@ ipcMain.removeHandler('generate-pdf');
         path.join(__dirname, 'assets', 'icon.png'),
         path.join(appPath, 'assets', 'icon.png'),
       ];
-      
+
       for (const iconPath of candidates) {
         try {
           if (fs.existsSync(iconPath)) {
@@ -7186,6 +7440,16 @@ ipcMain.removeHandler('generate-pdf');
     // Unregister all existing shortcuts to prevent conflicts
     globalShortcut.unregisterAll();
 
+    // Only register these actions as GLOBAL shortcuts (intercepting in other apps)
+    const GLOBAL_SAFE_ACTIONS = [
+      'spotlight-search',
+      'pop-search',
+      'global-search',
+      'kill-switch',
+      'emergency-kill',
+      'toggle-spotlight'
+    ];
+
     shortcuts.forEach(s => {
       try {
         if (s.accelerator) {
@@ -7195,25 +7459,41 @@ ipcMain.removeHandler('generate-pdf');
             return;
           }
 
+          // ONLY register globally if it's a "global-safe" action
+          if (!GLOBAL_SAFE_ACTIONS.includes(s.action)) {
+            // Standard shortcuts (like Cmd+W, Cmd+T) should NOT be registered as globalShortcut
+            // because they intercept keys when OTHER apps are active.
+            // We'll let the Menu handle them locally.
+            return;
+          }
+
           globalShortcut.register(s.accelerator, () => {
+            console.log(`[Hotkey] GLOBAL Triggered: ${s.action} (${s.accelerator})`);
             if (mainWindow) {
               if (mainWindow.isMinimized()) mainWindow.restore();
+              if (!mainWindow.isVisible()) mainWindow.show();
               mainWindow.focus();
 
-              // Handle zoom actions directly in main process for better responsiveness
-              if (s.action === 'zoom-in') {
-                const view = tabViews.get(activeTabId);
-                if (view) view.webContents.setZoomFactor(view.webContents.getZoomFactor() + 0.1);
-              } else if (s.action === 'zoom-out') {
-                const view = tabViews.get(activeTabId);
-                if (view) view.webContents.setZoomFactor(view.webContents.getZoomFactor() - 0.1);
-              } else if (s.action === 'zoom-reset') {
-                const view = tabViews.get(activeTabId);
-                if (view) view.webContents.setZoomFactor(1.0);
-              } else {
-                // Send other shortcut actions to the renderer
-                mainWindow.webContents.send('execute-shortcut', s.action);
-              }
+          // Handle specific actions
+          if (s.action === 'spotlight-search' || s.action === 'global-search' || s.action === 'toggle-spotlight') {
+            mainWindow.webContents.send('open-unified-search');
+          } else if (s.action === 'pop-search') {
+            if (popSearch) popSearch.showPopupWithText('');
+          } else if (s.action === 'kill-switch' || s.action === 'emergency-kill') {
+            if (robotService) robotService.kill();
+            mainWindow.webContents.send('robot-killed');
+          } else if (s.action === 'zoom-in' || s.action === 'zoom-in-plus') {
+            const view = tabViews.get(activeTabId);
+            if (view) view.webContents.setZoomFactor(view.webContents.getZoomFactor() + 0.1);
+          } else if (s.action === 'zoom-out') {
+            const view = tabViews.get(activeTabId);
+            if (view) view.webContents.setZoomFactor(view.webContents.getZoomFactor() - 0.1);
+          } else if (s.action === 'zoom-reset') {
+            const view = tabViews.get(activeTabId);
+            if (view) view.webContents.setZoomFactor(1.0);
+          } else {
+            mainWindow.webContents.send('execute-shortcut', s.action);
+          }
             }
           });
         }
@@ -7628,7 +7908,7 @@ ipcMain.removeHandler('generate-pdf');
       // Check if modules exist
       const path = require('path');
       const fs = require('fs');
-      
+
       // Only initialize if service files exist
       const servicePath = path.join(__dirname, 'src', 'service');
       if (!fs.existsSync(servicePath)) {
@@ -7636,27 +7916,27 @@ ipcMain.removeHandler('generate-pdf');
         return;
       }
 
-       const IPCService = require('./src/service/ipc-service.js');
-       const Scheduler = require('./src/service/scheduler.js');
-       const TaskQueue = require('./src/service/task-queue.js');
-       const Storage = require('./src/service/storage.js');
-       const MobileNotifier = require('./src/service/mobile-notifier.js');
+      const { IPCHandler } = require('./src/service/ipc-service.js');
+      const { TaskScheduler } = require('./src/service/scheduler.js');
+      const { TaskQueue } = require('./src/service/task-queue.js');
+      const Storage = require('./src/service/storage.js');
+      const { MobileNotifier } = require('./src/service/mobile-notifier.js');
 
-       const StorageManagerClass = Storage.StorageManager;
-       const automationDataPath = path.join(app.getPath('userData'), 'automation');
-       if (!fs.existsSync(automationDataPath)) {
-         fs.mkdirSync(automationDataPath, { recursive: true });
-       }
-       storageManager = new StorageManagerClass(automationDataPath);
-       await storageManager.initialize();
+      const StorageManagerClass = Storage.StorageManager;
+      const automationDataPath = path.join(app.getPath('userData'), 'automation');
+      if (!fs.existsSync(automationDataPath)) {
+        fs.mkdirSync(automationDataPath, { recursive: true });
+      }
+      storageManager = new StorageManagerClass(automationDataPath);
+      await storageManager.initialize();
 
-       taskQueue = new TaskQueue(storageManager);
-       taskScheduler = new Scheduler(taskQueue, storageManager);
+      taskQueue = new TaskQueue(storageManager);
+      taskScheduler = new TaskScheduler(taskQueue, storageManager);
 
       mobileNotifier = new MobileNotifier();
       await mobileNotifier.initialize();
 
-      ipcService = new IPCService(taskScheduler, taskQueue, storageManager, mobileNotifier);
+      ipcService = new IPCHandler(taskScheduler, taskQueue, storageManager, mobileNotifier);
       ipcService.initialize();
 
       console.log('[Main] Automation service initialized');
@@ -7665,142 +7945,10 @@ ipcMain.removeHandler('generate-pdf');
     }
   }
 
-  ipcMain.handle('automation:create-task', async (event, taskData) => {
-    if (!ipcService) {
-      await initializeAutomationService();
-    }
-    const task = {
-      id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      ...taskData,
-      enabled: true,
-      runCount: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
 
-    try {
-      await storageManager.saveTask(task);
-      await taskScheduler.scheduleTask(task);
-      console.log('[Main] Task scheduled:', task.name);
-      return { success: true, task };
-    } catch (error) {
-      console.error('[Main] Failed to create task:', error);
-      return { success: false, error: error.message };
-    }
-  });
+  // Automation handlers are managed by IPCHandler in src/service/ipc-service.js
 
-  ipcMain.handle('automation:get-tasks', async () => {
-    try {
-      if (!storageManager) {
-        console.log('[Main] Storage not initialized, initializing now...');
-        await initializeAutomationService();
-      }
-      if (!storageManager || !storageManager.getAllTasks) {
-        console.log('[Main] Storage not available, returning empty array');
-        return [];
-      }
-      return await storageManager.getAllTasks();
-    } catch (error) {
-      console.error('[Main] Error getting tasks:', error);
-      return [];
-    }
-  });
 
-  ipcMain.handle('automation:get-task', async (event, taskId) => {
-    if (!storageManager) {
-      await initializeAutomationService();
-    }
-    return await storageManager.getTask(taskId);
-  });
-
-  ipcMain.handle('automation:update-task', async (event, taskId, updates) => {
-    if (!storageManager) {
-      await initializeAutomationService();
-    }
-    const task = await storageManager.getTask(taskId);
-    if (!task) {
-      return { success: false, error: 'Task not found' };
-    }
-
-    const updatedTask = { ...task, ...updates, updatedAt: new Date().toISOString() };
-    await storageManager.saveTask(updatedTask);
-
-    if (updates.trigger || updates.enabled !== undefined) {
-      if (updatedTask.enabled) {
-        await taskScheduler.scheduleTask(updatedTask);
-      } else {
-        await taskScheduler.unscheduleTask(taskId);
-      }
-    }
-
-    return { success: true, task: updatedTask };
-  });
-
-  ipcMain.handle('automation:delete-task', async (event, taskId) => {
-    if (!taskScheduler) {
-      await initializeAutomationService();
-    }
-    try {
-      await taskScheduler.unscheduleTask(taskId);
-      await storageManager.deleteTask(taskId);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle('automation:toggle-task', async (event, taskId) => {
-    if (!taskScheduler || !storageManager) {
-      await initializeAutomationService();
-    }
-    const task = await storageManager.getTask(taskId);
-    if (!task) {
-      return { success: false, error: 'Task not found' };
-    }
-
-    task.enabled = !task.enabled;
-    task.updatedAt = new Date().toISOString();
-    await storageManager.saveTask(task);
-
-    if (task.enabled) {
-      await taskScheduler.scheduleTask(task);
-    } else {
-      await taskScheduler.unscheduleTask(taskId);
-    }
-
-    return { success: true, task };
-  });
-
-  ipcMain.handle('automation:run-task', async (event, taskId) => {
-    if (!taskScheduler || !storageManager) {
-      await initializeAutomationService();
-    }
-    const task = await storageManager.getTask(taskId);
-    if (!task) {
-      return { success: false, error: 'Task not found' };
-    }
-
-    try {
-      await taskScheduler.executeTask(task, { force: true });
-      return { success: true, taskId };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle('automation:get-logs', async (event, date) => {
-    if (!storageManager) {
-      await initializeAutomationService();
-    }
-    return await storageManager.getLogs(date);
-  });
-
-  ipcMain.handle('automation:get-results', async (event, taskId) => {
-    if (!storageManager) {
-      await initializeAutomationService();
-    }
-    return await storageManager.getResults(taskId);
-  });
 
   initializeAutomationService();
 
@@ -7824,7 +7972,7 @@ ipcMain.removeHandler('generate-pdf');
     }
 
     const isMacPlatform = process.platform === 'darwin';
-    
+
     const defaultOptions = {
       width: 1000,
       height: 700,
@@ -8466,14 +8614,14 @@ ipcMain.removeHandler('generate-pdf');
   ipcMain.handle('set-proxy', async (_event, config) => {
     const updates = config
       ? {
-          proxyMode: config.mode || 'fixed_servers',
-          proxyRules: config.proxyRules || config.rules || config.proxyServer || '',
-          proxyBypassRules: config.proxyBypassRules || networkSecurityConfig.proxyBypassRules,
-        }
+        proxyMode: config.mode || 'fixed_servers',
+        proxyRules: config.proxyRules || config.rules || config.proxyServer || '',
+        proxyBypassRules: config.proxyBypassRules || networkSecurityConfig.proxyBypassRules,
+      }
       : {
-          proxyMode: 'direct',
-          proxyRules: '',
-        };
+        proxyMode: 'direct',
+        proxyRules: '',
+      };
 
     await applyNetworkSecurityConfig(updates);
     return true;
@@ -8564,7 +8712,7 @@ ipcMain.removeHandler('generate-pdf');
   ipcMain.handle('dom-click-element', async (event, { tabId, selector, text, index, waitFor }) => {
     const targetTabId = tabId || activeTabId;
     const view = tabViews.get(targetTabId);
-    
+
     if (!view || !view.webContents) {
       return { success: false, error: 'Browser view not found' };
     }
@@ -8658,7 +8806,7 @@ ipcMain.removeHandler('generate-pdf');
           return await clickElement(${JSON.stringify(selector)}, ${JSON.stringify(waitFor)}, 0);
         })()
       `;
-      
+
       const result = await view.webContents.executeJavaScript(clickCode);
       return result;
     } catch (e) {
@@ -8670,7 +8818,7 @@ ipcMain.removeHandler('generate-pdf');
   ipcMain.handle('dom-find-element', async (event, { tabId, selector, text }) => {
     const targetTabId = tabId || activeTabId;
     const view = tabViews.get(targetTabId);
-    
+
     if (!view || !view.webContents) {
       return { success: false, error: 'Browser view not found' };
     }
@@ -8711,7 +8859,7 @@ ipcMain.removeHandler('generate-pdf');
           });
         })()
       `;
-      
+
       const elements = await view.webContents.executeJavaScript(findCode);
       return { success: true, elements };
     } catch (e) {
@@ -8722,7 +8870,7 @@ ipcMain.removeHandler('generate-pdf');
   ipcMain.handle('dom-get-page-info', async (event, { tabId }) => {
     const targetTabId = tabId || activeTabId;
     const view = tabViews.get(targetTabId);
-    
+
     if (!view || !view.webContents) {
       return { success: false, error: 'Browser view not found' };
     }
@@ -8817,6 +8965,38 @@ ipcMain.removeHandler('generate-pdf');
     if (keys.OPENAI_API_KEY) store.set('openai_api_key', keys.OPENAI_API_KEY);
     if (keys.ANTHROPIC_API_KEY) store.set('anthropic_api_key', keys.ANTHROPIC_API_KEY);
     return { success: true };
+  });
+
+  ipcMain.handle('classify-tabs-ai', async (event, { tabs }) => {
+    if (!cometAiEngine) return { success: false, error: 'AI engine not initialized' };
+    try {
+      const tabData = tabs.map(t => `- [${t.id}] ${t.title} (${t.url})`).join('\n');
+      const prompt = `Classify the following browser tabs into logical groups.
+Each group should have a clear, concise name (2-3 words max, e.g., "Research", "Development", "Social Media", "Shopping").
+Respond ONLY with a JSON object where keys are tab IDs and values are group names.
+
+Example:
+{
+  "tab-1": "Research",
+  "tab-2": "Social Media"
+}
+
+Tabs to classify:
+${tabData}`;
+
+      const response = await cometAiEngine.chat({
+        message: prompt,
+        systemPrompt: "You are an expert browser organizer. Respond only with valid JSON."
+      });
+
+      // Cleanup response (sometimes LLMs wrap JSON in ```json blocks)
+      const cleanJson = response.replace(/```json/g, '').replace(/```/g, '').trim();
+      const classifications = JSON.parse(cleanJson);
+      return { success: true, classifications };
+    } catch (e) {
+      console.error('[AI Tab Organizer] Error:', e);
+      return { success: false, error: e.message };
+    }
   });
 
   // ============================================================================
@@ -9190,10 +9370,22 @@ ipcMain.removeHandler('generate-pdf');
       try {
         if (!s.accelerator) return;
 
-        globalShortcut.register(s.accelerator, () => {
-          console.log(`[Hotkey] Triggered: ${s.action} (${s.accelerator})`);
+        // Same check for startup registration
+        const GLOBAL_SAFE_ACTIONS = [
+          'spotlight-search',
+          'pop-search',
+          'global-search',
+          'kill-switch',
+          'emergency-kill',
+          'toggle-spotlight'
+        ];
 
-          if (s.action === 'spotlight-search' || s.action === 'global-search') {
+        if (!GLOBAL_SAFE_ACTIONS.includes(s.action)) return;
+
+        globalShortcut.register(s.accelerator, () => {
+          console.log(`[Hotkey] GLOBAL Triggered: ${s.action} (${s.accelerator})`);
+
+          if (s.action === 'spotlight-search' || s.action === 'global-search' || s.action === 'toggle-spotlight') {
             if (mainWindow) {
               if (mainWindow.isMinimized()) mainWindow.restore();
               if (!mainWindow.isVisible()) mainWindow.show();
@@ -9242,7 +9434,7 @@ ipcMain.removeHandler('generate-pdf');
   const mcpServers = store.get('mcp_servers');
   if (mcpServers && mcpServers.length > 0) {
     // Filter out servers with known issues
-    const validServers = mcpServers.filter(s => 
+    const validServers = mcpServers.filter(s =>
       !s.url?.includes('google') && !s.name?.toLowerCase().includes('google')
     );
     if (validServers.length > 0) {
@@ -9266,121 +9458,116 @@ ipcMain.removeHandler('generate-pdf');
   }
 
 
-   ipcMain.on('update-shortcuts', (event, shortcuts) => {
-     console.log('[Main] Updating global shortcuts');
-     store.set('shortcuts', shortcuts);
-     registerGlobalShortcuts(shortcuts);
-   });
+  ipcMain.on('update-shortcuts', (event, shortcuts) => {
+    console.log('[Main] Updating global shortcuts');
+    store.set('shortcuts', shortcuts);
+    registerGlobalShortcuts(shortcuts);
+  });
 
-   // Auto-update IPC handlers
-   ipcMain.handle('check-for-updates', () => {
-     if (!require('electron-is-dev')) {
-       const { autoUpdater } = require('electron-updater');
-       return autoUpdater.checkForUpdatesAndNotify();
-     }
-     return Promise.resolve({ updateAvailable: false });
-   });
+  // Auto-update IPC handlers
+  ipcMain.handle('check-for-updates', () => {
+    if (!require('electron-is-dev')) {
+      const { autoUpdater } = require('electron-updater');
+      return autoUpdater.checkForUpdatesAndNotify();
+    }
+    return Promise.resolve({ updateAvailable: false });
+  });
 
-   ipcMain.handle('quit-and-install', () => {
-     if (!require('electron-is-dev')) {
-       const { autoUpdater } = require('electron-updater');
-       autoUpdater.quitAndInstall();
-     }
-   });
+  ipcMain.handle('quit-and-install', () => {
+    if (!require('electron-is-dev')) {
+      const { autoUpdater } = require('electron-updater');
+      autoUpdater.quitAndInstall();
+    }
+  });
 
-   ipcMain.handle('get-app-version', () => {
-     return app.getVersion();
-   });
 
-   ipcMain.handle('get-platform', () => {
-     return process.platform;
-   });
 
-   ipcMain.handle('open-external-url', async (event, url) => {
-     try {
-       await shell.openExternal(url);
-       return { success: true };
-     } catch (error) {
-       console.error('[Main] Failed to open external URL:', error);
-       return { success: false, error: error.message };
-     }
-   });
 
-   ipcMain.handle('open-external-app', async (event, app_name_or_path) => {
-     if (!app_name_or_path || typeof app_name_or_path !== 'string') {
-       return { success: false, error: 'Invalid app path' };
-     }
+  ipcMain.handle('open-external-url', async (event, url) => {
+    try {
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (error) {
+      console.error('[Main] Failed to open external URL:', error);
+      return { success: false, error: error.message };
+    }
+  });
 
-     // Basic sanitization
-     app_name_or_path = app_name_or_path.trim().slice(0, 500);
+  ipcMain.handle('open-external-app', async (event, app_name_or_path) => {
+    if (!app_name_or_path || typeof app_name_or_path !== 'string') {
+      return { success: false, error: 'Invalid app path' };
+    }
 
-     try {
-       console.log('[Main] Opening external app:', app_name_or_path);
+    // Basic sanitization
+    app_name_or_path = app_name_or_path.trim().slice(0, 500);
 
-       // First try as a direct absolute path
-       if (path.isAbsolute(app_name_or_path) && fs.existsSync(app_name_or_path)) {
-         const result = await shell.openPath(app_name_or_path);
-         if (!result) return { success: true };
-       }
+    try {
+      console.log('[Main] Opening external app:', app_name_or_path);
 
-       const lowerName = (app_name_or_path || '').toLowerCase().trim();
+      // First try as a direct absolute path
+      if (path.isAbsolute(app_name_or_path) && fs.existsSync(app_name_or_path)) {
+        const result = await shell.openPath(app_name_or_path);
+        if (!result) return { success: true };
+      }
 
-       if (process.platform === 'win32') {
-         // Look up well-known app name (handles UWP shell: paths and simple exe names)
-         const winCmd = WINDOWS_APP_MAP[lowerName];
+      const lowerName = (app_name_or_path || '').toLowerCase().trim();
 
-         return new Promise((resolve) => {
-           let cmdToRun;
+      if (process.platform === 'win32') {
+        // Look up well-known app name (handles UWP shell: paths and simple exe names)
+        const winCmd = WINDOWS_APP_MAP[lowerName];
 
-           if (winCmd) {
-             // Known app — use mapped command directly
-             if (winCmd.startsWith('explorer.exe shell:') || winCmd.startsWith('ms-settings:')) {
-               // UWP / settings URI — pass to cmd start without extra quotes
-               cmdToRun = `start "" "${winCmd}"`;
-             } else {
-               cmdToRun = winCmd;
-             }
-           } else {
-             // Assume it's an executable name or path
-             cmdToRun = `"${app_name_or_path}"`;
-           }
+        return new Promise((resolve) => {
+          let cmdToRun;
 
-           exec(cmdToRun, (error, stdout, stderr) => {
-             if (error) {
-               console.error('[Main] Failed to open external app:', error);
-               resolve({ success: false, error: error.message });
-             } else {
-               resolve({ success: true });
-             }
-           });
-         });
-       } else if (process.platform === 'darwin') {
-         exec(`open "${app_name_or_path}"`, (error) => {
-           if (error) {
-             console.error('[Main] Failed to open external app:', error);
-             resolve({ success: false, error: error.message });
-           } else {
-             resolve({ success: true });
-           }
-         });
-       } else {
-         // Linux
-         exec(`xdg-open "${app_name_or_path}"`, (error) => {
-           if (error) {
-             console.error('[Main] Failed to open external app:', error);
-             resolve({ success: false, error: error.message });
-           } else {
-             resolve({ success: true });
-           }
-         });
-       }
-     } catch (error) {
-       console.error('[Main] Error opening external app:', error);
-       return { success: false, error: error.message };
-     }
-   });
+          if (winCmd) {
+            // Known app — use mapped command directly
+            if (winCmd.startsWith('explorer.exe shell:') || winCmd.startsWith('ms-settings:')) {
+              // UWP / settings URI — pass to cmd start without extra quotes
+              cmdToRun = `start "" "${winCmd}"`;
+            } else {
+              cmdToRun = winCmd;
+            }
+          } else {
+            // Assume it's an executable name or path
+            cmdToRun = `"${app_name_or_path}"`;
+          }
 
-   app.on('will-quit', () => {
+          exec(cmdToRun, (error, stdout, stderr) => {
+            if (error) {
+              console.error('[Main] Failed to open external app:', error);
+              resolve({ success: false, error: error.message });
+            } else {
+              resolve({ success: true });
+            }
+          });
+        });
+      } else if (process.platform === 'darwin') {
+        exec(`open "${app_name_or_path}"`, (error) => {
+          if (error) {
+            console.error('[Main] Failed to open external app:', error);
+            resolve({ success: false, error: error.message });
+          } else {
+            resolve({ success: true });
+          }
+        });
+      } else {
+        // Linux
+        exec(`xdg-open "${app_name_or_path}"`, (error) => {
+          if (error) {
+            console.error('[Main] Failed to open external app:', error);
+            resolve({ success: false, error: error.message });
+          } else {
+            resolve({ success: true });
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[Main] Error opening external app:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  app.on('will-quit', () => {
     // Clear persistent intervals
     if (networkCheckInterval) clearInterval(networkCheckInterval);
     if (clipboardCheckInterval) clearInterval(clipboardCheckInterval);

@@ -76,21 +76,29 @@ const CRON_PRESETS = [
   { label: 'First day of month at 8:00 AM', value: '0 8 1 * *' },
 ];
 
+import { useAppStore } from '@/store/useAppStore';
+
 export default function SchedulingModal({
   isOpen,
   onClose,
   onConfirm,
   taskDetails,
 }: SchedulingModalProps) {
+  const store = useAppStore();
   const resolvedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  
   const [config, setConfig] = useState<ScheduleConfig>({
     schedule: taskDetails.schedule || '0 8 * * *',
     scheduleType: 'cron',
     timezone: resolvedTimezone,
     outputPath: '~/Documents/Comet-AI',
     model: {
-      provider: 'gemini',
-      model: 'gemini-2.0-flash',
+      provider: store.aiProvider || 'gemini',
+      model: store.aiProvider === 'google' ? store.geminiModel :
+             store.aiProvider === 'ollama' ? store.ollamaModel :
+             store.aiProvider === 'openai' ? store.openaiModel :
+             store.aiProvider === 'anthropic' ? store.anthropicModel :
+             store.aiProvider === 'groq' ? store.groqModel : 'gemini-2.0-flash',
     },
     notification: {
       onStart: false,
@@ -140,7 +148,27 @@ export default function SchedulingModal({
     setShowOutputPicker(false);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    try {
+      if (window.electronAPI?.scheduleTask) {
+        await window.electronAPI.scheduleTask({
+          name: taskDetails.taskName,
+          description: taskDetails.description || '',
+          type: taskDetails.taskType,
+          schedule: config.schedule,
+          cronExpression: config.schedule,
+          outputPath: config.outputPath,
+          model: config.model.model,
+          provider: config.model.provider,
+          notification: config.notification,
+          enabled: config.enabled,
+        });
+        // Signal AutomationSettings to reload
+        window.dispatchEvent(new CustomEvent('automation-task-created'));
+      }
+    } catch (err) {
+      console.error('[SchedulingModal] Failed to save task:', err);
+    }
     onConfirm(config);
     onClose();
   };

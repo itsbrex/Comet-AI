@@ -107,6 +107,15 @@ class _RemoteSettingsPageState extends State<RemoteSettingsPage> {
       }
     });
 
+    SyncService().onDesktopControl.listen((msg) {
+      if (msg['action'] == 'get-settings' && msg['success'] == true) {
+        setState(() {
+          _settings = Map<String, dynamic>.from(msg['settings']);
+          _isLoading = false;
+        });
+      }
+    });
+
     SyncService().onClipboardSynced.listen((text) {
       setState(() {
         _clipboardHistory.insert(0, text);
@@ -127,35 +136,7 @@ class _RemoteSettingsPageState extends State<RemoteSettingsPage> {
 
     try {
       await SyncService().executeDesktopControl('get-settings');
-      // Wait for response
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      // Mock settings for demo
-      setState(() {
-        _settings = {
-          'llm_provider': 'gemini',
-          'llm_model': 'gemini-2.0-flash',
-          'ollama_url': 'http://localhost:11434',
-          'temperature': 0.7,
-          'max_tokens': 4096,
-          'auto_approve_low': true,
-          'auto_approve_mid': false,
-          'shell_approval_qr': true,
-          'theme': 'dark',
-          'font_size': 14,
-          'homepage': 'https://google.com',
-          'search_engine': 'google',
-          'run_in_background': true,
-          'notifications_enabled': true,
-          'sync_mode': 'local_cloud',
-          'auto_reconnect': true,
-          'temp_storage': true,
-          'clipboard_sync_enabled': true,
-          'clipboard_history': true,
-          'clipboard_interval': '2',
-        };
-        _isLoading = false;
-      });
+      // The listener will update the state when response arrives
     } catch (e) {
       setState(() {
         _isLoading = false;

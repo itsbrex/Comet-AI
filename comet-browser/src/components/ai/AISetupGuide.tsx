@@ -52,6 +52,7 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
     geminiApiKey,
     anthropicApiKey,
     groqApiKey,
+    xaiApiKey,
     ollamaBaseUrl,
   } = useAppStore();
 
@@ -67,10 +68,17 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
   }, []);
 
   const isAiConfigured = useMemo(() => {
-    if (aiProvider === 'ollama' && ollamaBaseUrl) return true;
-    if (openaiApiKey || geminiApiKey || anthropicApiKey || groqApiKey) return true;
-    return false;
-  }, [aiProvider, openaiApiKey, geminiApiKey, anthropicApiKey, groqApiKey, ollamaBaseUrl]);
+    // Check if the SPECIFICALLY SELECTED provider is actually configured
+    if (aiProvider === 'ollama') return !!ollamaBaseUrl;
+    if (aiProvider === 'openai') return !!openaiApiKey && openaiApiKey.length > 5;
+    if (aiProvider === 'google' || aiProvider === 'gemini') return !!geminiApiKey && geminiApiKey.length > 5;
+    if (aiProvider === 'anthropic') return !!anthropicApiKey && anthropicApiKey.length > 5;
+    if (aiProvider === 'groq') return !!groqApiKey && groqApiKey.length > 5;
+    if (aiProvider === 'xai') return !!xaiApiKey && xaiApiKey.length > 5;
+    
+    // Fallback: is anything at all configured?
+    return !!(openaiApiKey || geminiApiKey || anthropicApiKey || groqApiKey || xaiApiKey || ollamaBaseUrl);
+  }, [aiProvider, openaiApiKey, geminiApiKey, anthropicApiKey, groqApiKey, xaiApiKey, ollamaBaseUrl]);
 
   const loadAutomationTasks = useCallback(async () => {
     if (!window.electronAPI?.getScheduledTasks) return;
@@ -120,7 +128,7 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
   const handleComplete = () => {
     if (!isAiConfigured) {
       goToStep(3);
-      setSetupWarning('Complete at least one AI key or local Ollama node before waking the agent.');
+      setSetupWarning(`Please configure your ${aiProvider} API key correctly so the AI has a brain before waking the agent.`);
       return;
     }
     setSetupWarning(null);

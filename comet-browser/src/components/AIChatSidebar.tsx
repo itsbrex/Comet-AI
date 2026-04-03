@@ -439,7 +439,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
   const requestActionPermission = useCallback(async (
     actionType: string, action: string, target: string, what: string, reason: string,
-    risk: 'low' | 'medium' | 'high' = 'low'
+    risk: 'low' | 'medium' | 'high' | 'critical' = 'low'
   ): Promise<boolean> => {
     // 1. If low risk, auto-approve
     if (risk === 'low') return true;
@@ -1168,6 +1168,41 @@ I couldn't schedule the task. The background service may not be running. Please 
           break;
         }
 
+        case 'ORGANIZE_TABS': {
+          const organizeStepId = addThinkingStep('AI is Classifying Tabs...');
+          try {
+            const tabsToClassify = store.tabs.map(t => ({ id: t.id, title: t.title, url: t.url || '' }));
+            const result = await (window as any).electronAPI.classifyTabsAi({ tabs: tabsToClassify });
+            if (result.success && result.classifications) {
+              const classifications = result.classifications;
+              Object.entries(classifications).forEach(([tabId, groupName]) => {
+                store.groupTabs([tabId], groupName as string);
+              });
+              const uniqueGroups = new Set(Object.values(classifications)).size;
+              output = `Successfully organized ${tabsToClassify.length} tabs into ${uniqueGroups} groups.`;
+              resolveThinkingStep(organizeStepId, 'done', 'Tabs organized');
+            } else {
+              output = `Organization failed: ${result.error}`;
+              resolveThinkingStep(organizeStepId, 'error', result.error);
+            }
+          } catch (e: any) {
+            output = `Internal error organizing tabs: ${e.message}`;
+            resolveThinkingStep(organizeStepId, 'error', e.message);
+          }
+          break;
+        }
+
+        case 'CLOSE_TAB': {
+          const tabId = command.value.trim();
+          if (!tabId) {
+            output = 'Invalid tab ID to close.';
+          } else {
+            store.removeTab(tabId);
+            output = `Closed tab: ${tabId}`;
+          }
+          break;
+        }
+
         case 'SET_THEME':
           storeSetTheme(command.value as any);
           output = `Theme set to ${command.value}`;
@@ -1221,7 +1256,11 @@ I couldn't schedule the task. The background service may not be running. Please 
           const logEntry = { id: logId, command: command.value, output: '', success: false, timestamp: Date.now() };
           setShowTerminal(true);
           setTerminalLogs(prev => [...prev, { ...logEntry, output: '⏳ Running...' }]);
-          const res = await window.electronAPI.executeShellCommand(command.value);
+          const res = await window.electronAPI.executeShellCommand({
+            rawCommand: command.value,
+            reason: command.reason,
+            riskLevel: command.riskLevel || 'medium'
+          });
           const cmdOutput = res.success ? (res.output || '(no output)') : `Error: ${res.error}`;
           setTerminalLogs(prev => prev.map(l => l.id === logId
             ? { ...l, output: cmdOutput, success: !!res.success }
@@ -1252,12 +1291,12 @@ I couldn't schedule the task. The background service may not be running. Please 
         }
 
         case 'LIST_AUTOMATIONS': {
-          const result = window.electronAPI?.getScheduledTasks ? await window.electronAPI.getScheduledTasks() : [];
-          const tasks = Array.isArray(result) ? result : (Array.isArray(result?.tasks) ? result.tasks : []);
+          const result = (window.electronAPI?.getScheduledTasks ? await window.electronAPI.getScheduledTasks() : []) as any;
+          const tasks: any[] = Array.isArray(result) ? result : (Array.isArray(result?.tasks) ? result.tasks : []);
           if (!tasks.length) {
             output = 'No automation tasks are currently scheduled.';
           } else {
-            output = tasks.map((task, idx) => {
+            output = tasks.map((task: any, idx: number) => {
               const label = task.name || `Task ${idx + 1}`;
               const schedule = task.schedule || 'custom';
               const status = task.enabled ? 'Active' : 'Paused';
@@ -1475,10 +1514,10 @@ I couldn't schedule the task. The background service may not be running. Please 
           let format = (pdfData.format || pdfData.output?.format || '').toLowerCase();
           if (!format && pdfData.slides && !pdfData.pages) format = 'pptx';
           if (!format) format = 'pdf';
-          
+
           // Extract method: html (default), pdfmake, or pdf-lib
           const method = (pdfData.method || pdfData.generationMethod || 'html').toLowerCase();
-          
+
           const pdfTitle = pdfData.title || 'Document';
           const pdfSubtitle = pdfData.subtitle || '';
           const pdfAuthor = pdfData.author || '';
@@ -1656,14 +1695,14 @@ I couldn't schedule the task. The background service may not be running. Please 
             const raw = imageUrlMatch[0];
             const payload = (imageUrlMatch[1] || '').trim();
             if (!payload) continue;
-            
+
             const segments = payload.split('|').map(segment => segment.trim()).filter(Boolean);
             if (segments.length === 0) continue;
-            
+
             const rawUrl = segments.shift() || '';
             const url = rawUrl.replace(/\s+/g, '');
             if (!url) continue;
-            
+
             let cap: string | undefined;
             segments.forEach(segment => {
               const [key, ...valueParts] = segment.split(':');
@@ -1677,7 +1716,7 @@ I couldn't schedule the task. The background service may not be running. Please 
               const normalized = url.startsWith('http') ? url : `https://${url}`;
               console.log(`[PDF-LOG] Fetching inline [IMAGE_URL]: ${normalized}`);
               if (isDevMode) appendTerminalLog('Image Fetch', `📸 Fetching inline asset: ${normalized}`);
-              
+
               const imgRes = await fetch(normalized);
               if (imgRes.ok) {
                 const blob = await imgRes.blob();
@@ -2983,9 +3022,9 @@ I've successfully executed the following real tasks:
   useEffect(() => {
     let remoteCleanup: (() => void) | undefined;
     if (window.electronAPI?.onRemoteAiPrompt) {
-      remoteCleanup = window.electronAPI.onRemoteAiPrompt((data: { 
-        prompt: string; 
-        promptId?: string; 
+      remoteCleanup = window.electronAPI.onRemoteAiPrompt((data: {
+        prompt: string;
+        promptId?: string;
         fromDeviceId?: string;
         streamToMobile?: boolean;
       }) => {
@@ -2999,6 +3038,30 @@ I've successfully executed the following real tasks:
   }, [handleSendMessage]);
 
   // Remote Approval Listener (from mobile)
+  useEffect(() => {
+    if (!window.electronAPI?.onAutomationShellApproval) return;
+    const cleanup = window.electronAPI.onAutomationShellApproval((payload: any) => {
+      console.log('[AI] Automation Shell Approval required:', payload);
+      setPermissionPending({
+        resolve: (allowed: boolean) => {
+          window.electronAPI.submitShellApprovalResponse(payload.requestId, allowed);
+        },
+        mobileApproved: false,
+        context: {
+          actionType: 'SHELL_COMMAND',
+          action: 'Shell Command Approval',
+          target: payload.command,
+          what: payload.command,
+          reason: payload.reason || 'An automated task needs to execute this shell command.',
+          risk: (payload.risk as any) || 'medium',
+          highRiskQr: payload.highRiskQr,
+          requiresDeviceUnlock: payload.requiresDeviceUnlock
+        }
+      });
+    });
+    return cleanup;
+  }, []);
+
   useEffect(() => {
     let approveCleanup: (() => void) | undefined;
     if (window.electronAPI?.onMobileApproveHighRisk) {
@@ -3643,8 +3706,8 @@ I've successfully executed the following real tasks:
               style={{
                 background: props.theme === 'custom' ? 'var(--custom-btn-bg)' : 'var(--accent)',
                 color: props.theme === 'custom' ? 'var(--custom-btn-text)' : 'white',
-                boxShadow: isLightTheme 
-                  ? '0 4px 12px var(--shadow-color)' 
+                boxShadow: isLightTheme
+                  ? '0 4px 12px var(--shadow-color)'
                   : '0 4px 15px var(--shadow-color)'
               }}
             >

@@ -39,6 +39,8 @@ export interface BrowserState {
     setCurrentUrl: (url: string) => void;
     setActiveTabId: (id: string) => void;
     setActiveTab: (id: string) => void; // Alias for setActiveTabId
+    reorderTabs: (startIndex: number, endIndex: number) => void;
+    groupTabs: (tabIds: string[], groupName: string) => void;
 
     // Performance Mode
     performanceMode: 'normal' | 'performance';
@@ -320,18 +322,27 @@ export const useAppStore = create<BrowserState>()(
             clientSecret: '',
             redirectUri: '',
             fetchAppConfig: async () => {
+                // Initialize with safe defaults immediately in case fetch fails
+                const defaults = {
+                    clientId: '601898745585-8g9t0k72gq4q1a4s1o4d1t6t7e5v4c4g.apps.googleusercontent.com',
+                    clientSecret: '',
+                    redirectUri: 'https://browser.ponsrischool.in/oauth2callback'
+                };
+                
                 try {
                     const res = await fetch('https://browser.ponsrischool.in/api/config', {
                         headers: {
                             'X-Comet-App-Token': 'comet-secure-v1' // Same token as landing page
-                        }
+                        },
+                        signal: AbortSignal.timeout(5000) // Don't hang forever
                     });
+                    
                     if (res.ok) {
                         const config = await res.json();
                         const update = {
-                            clientId: config.googleClientId || '601898745585-8g9t0k72gq4q1a4s1o4d1t6t7e5v4c4g.apps.googleusercontent.com',
-                            clientSecret: config.googleClientSecret || '',
-                            redirectUri: config.googleRedirectUri || 'https://browser.ponsrischool.in/oauth2callback'
+                            clientId: config.googleClientId || defaults.clientId,
+                            clientSecret: config.googleClientSecret || defaults.clientSecret,
+                            redirectUri: config.googleRedirectUri || defaults.redirectUri
                         };
                         set({
                             ...update,
@@ -339,9 +350,14 @@ export const useAppStore = create<BrowserState>()(
                         });
                         if (window.electronAPI) window.electronAPI.saveGoogleConfig(update);
                         console.log('App config synced and persisted:', config);
+                    } else {
+                        // Fallback to local persistence if server is reachable but errors
+                        set(defaults);
                     }
                 } catch (e) {
-                    console.error('Failed to sync app config:', e);
+                    console.warn('Network sync for app config failed, using secure defaults:', e);
+                    // Critical: ensures no crash on network failure
+                    set(defaults);
                 }
             },
 
@@ -610,6 +626,17 @@ export const useAppStore = create<BrowserState>()(
             resumeTab: (id: string) => set((state: BrowserState) => ({
                 tabs: state.tabs.map(tab =>
                     tab.id === id ? { ...tab, isSuspended: false } : tab
+                )
+            })),
+            reorderTabs: (startIndex: number, endIndex: number) => set((state: BrowserState) => {
+                const newTabs = [...state.tabs];
+                const [removed] = newTabs.splice(startIndex, 1);
+                newTabs.splice(endIndex, 0, removed);
+                return { tabs: newTabs };
+            }),
+            groupTabs: (tabIds: string[], groupName: string) => set((state: BrowserState) => ({
+                tabs: state.tabs.map(tab =>
+                    tabIds.includes(tab.id) ? { ...tab, groupId: groupName } : tab
                 )
             })),
             setTabs: (tabs: BrowserState['tabs']) => set({ tabs }),

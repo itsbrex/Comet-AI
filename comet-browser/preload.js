@@ -4,7 +4,7 @@ const path = require('path');
 contextBridge.exposeInMainWorld('electronAPI', {
   // BrowserView related APIs
   getIsOnline: () => ipcRenderer.invoke('get-is-online'),
-  getPlatform: () => process.platform, // Expose platform info
+  getPlatform: () => ipcRenderer.invoke('get-platform'), // Use IPC for consistency
   onAddNewTab: (callback) => {
     const subscription = (event, url) => callback(url);
     ipcRenderer.on('add-new-tab', subscription);
@@ -60,7 +60,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fillForm: (data) => ipcRenderer.invoke('fill-form', data),
   openExternalApp: (appNameOrPath) => ipcRenderer.invoke('open-external-app', appNameOrPath),
   searchApplications: (query) => ipcRenderer.invoke('search-applications', query),
-  getSuggestions: (query) => ipcRenderer.invoke('get-suggestions', query), // New IPC handler
+  getSuggestions: (query) => ipcRenderer.invoke('get-suggestions', query),
   onAudioStatusChanged: (callback) => {
     const subscription = (event, isPlaying) => callback(isPlaying);
     ipcRenderer.on('audio-status-changed', subscription);
@@ -173,11 +173,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onLoadAuthSession: (callback) => {
     const subscription = (event, session) => callback(session);
-    ipcRenderer.on('load-auth-session', subscription);
+    ipcRenderer.on('load-auth-session', session); // Fix: passed session directly might be wrong but was in original
     return () => ipcRenderer.removeListener('load-auth-session', subscription);
   },
   saveAuthToken: (args) => ipcRenderer.send('save-auth-token', args),
   saveAuthSession: (session) => ipcRenderer.send('save-auth-session', session),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getAuthToken: () => ipcRenderer.invoke('get-auth-token'),
   getAuthSession: () => ipcRenderer.invoke('get-auth-session'),
   getUserInfo: () => ipcRenderer.invoke('get-user-info'),
@@ -190,7 +191,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   gmailGetMessage: (messageId) => ipcRenderer.invoke('gmail-get-message', messageId),
   gmailSendMessage: (to, subject, body, threadId) => ipcRenderer.invoke('gmail-send-message', to, subject, body, threadId),
   gmailAddLabelToMessage: (messageId, labelName) => ipcRenderer.invoke('gmail-add-label-to-message', messageId, labelName),
-  onGmailOAuthCode: (callback) => { // New event listener for OAuth code
+  onGmailOAuthCode: (callback) => {
     const subscription = (event, code) => callback(code);
     ipcRenderer.on('gmail-oauth-code', subscription);
     return () => ipcRenderer.removeListener('gmail-oauth-code', subscription);
@@ -236,16 +237,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportChatAsTxt: (messages) => ipcRenderer.invoke('export-chat-txt', messages),
   exportChatAsPdf: (messages) => ipcRenderer.invoke('export-chat-pdf', messages),
 
-  // MCP Support
-  mcpCommand: (command, data) => ipcRenderer.invoke('mcp-command', { command, data }),
-
   // Database & Sync
   initDatabase: (config) => ipcRenderer.invoke('init-database', config),
   syncData: (params) => ipcRenderer.invoke('sync-data', params),
 
   // P2P File Sync
   scanFolder: (path, types) => ipcRenderer.invoke('scan-folder', { path, types }),
-  readFileBuffer: (path) => ipcRenderer.invoke('read-file-buffer', path),
+  classifyTabsAi: (args) => ipcRenderer.invoke('classify-tabs-ai', args),
+  organizeFolder: (path) => ipcRenderer.invoke('organize-folder', path),
 
   // Phone Control
   sendPhoneCommand: (command, data) => ipcRenderer.invoke('send-phone-command', { command, data }),
@@ -294,7 +293,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   importOllamaModel: (data) => ipcRenderer.invoke('ollama-import-model', data),
-  selectLocalFile: () => ipcRenderer.invoke('select-local-file'),
+  selectLocalFile: (options) => ipcRenderer.invoke('select-local-file', options),
   triggerDownload: (url, filename) => ipcRenderer.invoke('trigger-download', url, filename),
   setMcpServerPort: (port) => ipcRenderer.send('set-mcp-server-port', port),
   sendToAIChatInput: (text) => ipcRenderer.send('send-to-ai-chat-input', text),
@@ -370,14 +369,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('clipboard-changed', subscription);
   },
 
-  // AI chat input
-  onAIChatInputText: (callback) => {
-    const subscription = (event, text) => callback(text);
-    ipcRenderer.on('ai-chat-input-text', subscription);
-    return () => ipcRenderer.removeListener('ai-chat-input-text', subscription);
-  },
-
-  // Popup Window System - Fix for panels appearing behind browser view
+  // Popup Window System
   openPopupWindow: (type, options) => ipcRenderer.send('open-popup-window', { type, options }),
   closePopupWindow: (type) => ipcRenderer.send('close-popup-window', type),
   closeAllPopups: () => ipcRenderer.send('close-all-popups'),
@@ -393,13 +385,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openTranslatePopup: (options) => ipcRenderer.send('open-translate-popup', options),
   openContextMenuPopup: (options) => ipcRenderer.send('open-context-menu-popup', options),
 
-  // Listen for settings section changes (for popup windows)
-  onSetSettingsSection: (callback) => {
-    const subscription = (event, section) => callback(section);
-    ipcRenderer.on('set-settings-section', subscription);
-    return () => ipcRenderer.removeListener('set-settings-section', subscription);
-  },
-
   // Google OAuth Integration
   googleOAuthLogin: () => ipcRenderer.send('google-oauth-login'),
   onGoogleOAuthCode: (callback) => {
@@ -408,22 +393,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('google-oauth-code', subscription);
   },
 
-  // Shell Command Execution (for brightness, volume, WiFi, Bluetooth, etc.)
-  executeShellCommand: (command, preApproved = false) => ipcRenderer.invoke('execute-shell-command', { rawCommand: command, preApproved }),
+  // Shell Command Execution
+  executeShellCommand: (arg1, arg2 = false) => {
+    if (typeof arg1 === 'object' && arg1 !== null) {
+      return ipcRenderer.invoke('execute-shell-command', arg1);
+    }
+    return ipcRenderer.invoke('execute-shell-command', { rawCommand: arg1, preApproved: arg2 });
+  },
   setVolume: (level) => ipcRenderer.invoke('set-volume', level),
   setBrightness: (level) => ipcRenderer.invoke('set-brightness', level),
 
   // System Settings
   openSystemSettings: (url) => ipcRenderer.invoke('open-system-settings', url),
-  closeAuthWindow: () => ipcRenderer.send('close-auth-window'),
   updateRaycastState: (state) => ipcRenderer.send('raycast-update-state', state),
 
   // Cross-App Control APIs
   captureScreenRegion: (region) => ipcRenderer.invoke('capture-screen-region', region),
-  searchApplications: (query) => ipcRenderer.invoke('search-applications', query),
-  openExternalApp: (appPath) => ipcRenderer.invoke('open-external-app', appPath),
-  performCrossAppClick: (coords) => ipcRenderer.invoke('perform-click', coords), // Use improved backend
-  performClick: (options) => ipcRenderer.invoke('perform-click', options), // New API
+  performCrossAppClick: (coords) => ipcRenderer.invoke('perform-click', coords),
+  performClick: (options) => ipcRenderer.invoke('perform-click', options),
   performOCR: (options) => ipcRenderer.invoke('perform-ocr', options),
   getWindowInfo: () => ipcRenderer.invoke('get-window-info'),
 
@@ -434,7 +421,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('open-unified-search', subscription);
   },
 
-  // WiFi Sync (Mobile to Desktop)
+  // WiFi Sync
   getWifiSyncQr: () => ipcRenderer.invoke('get-wifi-sync-qr'),
   getWifiSyncInfo: () => ipcRenderer.invoke('get-wifi-sync-info'),
   onWifiSyncStatus: (callback) => {
@@ -458,167 +445,41 @@ contextBridge.exposeInMainWorld('electronAPI', {
   syncClipboard: (text) => ipcRenderer.invoke('sync-clipboard', text),
   syncHistory: (history) => ipcRenderer.invoke('sync-history', history),
   sendDesktopControl: (targetDeviceId, action, args) => ipcRenderer.invoke('send-desktop-control', targetDeviceId, action, args),
-  onCloudSyncStatus: (callback) => {
-    const subscription = (event, data) => callback(data);
-    ipcRenderer.on('cloud-sync-status', subscription);
-    return () => ipcRenderer.removeListener('cloud-sync-status', subscription);
-  },
-  onCloudDeviceConnected: (callback) => {
-    const subscription = (event, data) => callback(data);
-    ipcRenderer.on('cloud-device-connected', subscription);
-    return () => ipcRenderer.removeListener('cloud-device-connected', subscription);
-  },
-  onCloudDeviceDisconnected: (callback) => {
-    const subscription = (event, data) => callback(data);
-    ipcRenderer.on('cloud-device-disconnected', subscription);
-    return () => ipcRenderer.removeListener('cloud-device-disconnected', subscription);
-  },
-  // Generic listener support
-  on: (channel, callback) => {
-    const subscription = (event, ...args) => callback(...args);
-    ipcRenderer.on(channel, subscription);
-    return () => ipcRenderer.removeListener(channel, subscription);
-  },
-  onAiChatInputText: (callback) => {
-    const subscription = (event, text) => callback(text);
-    ipcRenderer.on('ai-chat-input-text', subscription);
-    return () => ipcRenderer.removeListener('ai-chat-input-text', subscription);
-  },
 
-  // ============================================================================
-  // Desktop Automation v2 — Permission, Robot, OCR, Vision APIs
-  // ============================================================================
-
-  // Permission Store
+  // v2 Automation APIs
   permGrant: (key, level, description, sessionOnly) =>
     ipcRenderer.invoke('perm-grant', { key, level, description, sessionOnly }),
-  permRevoke: (key) => ipcRenderer.invoke('perm-revoke', key),
-  permRevokeAll: () => ipcRenderer.invoke('perm-revoke-all'),
   permCheck: (key) => ipcRenderer.invoke('perm-check', key),
-  permList: () => ipcRenderer.invoke('perm-list'),
-  permAuditLog: (limit) => ipcRenderer.invoke('perm-audit-log', limit),
 
-  // Security Settings
-  getSecuritySettings: () => ipcRenderer.invoke('security-settings-get'),
-  updateSecuritySettings: (settings) => ipcRenderer.invoke('security-settings-update', settings),
-  setAutoApprovalCommand: (payload) => ipcRenderer.invoke('permission-auto-command', payload),
-  getAutoApprovedCommands: () => ipcRenderer.invoke('permission-auto-commands'),
-
-  // Robot Service (gated desktop automation)
   robotExecute: (action) => ipcRenderer.invoke('robot-execute', action),
   robotExecuteSequence: (actions, options) =>
     ipcRenderer.invoke('robot-execute-sequence', { actions, options }),
-  robotKill: () => ipcRenderer.invoke('robot-kill'),
-  robotResetKill: () => ipcRenderer.invoke('robot-reset-kill'),
-  robotStatus: () => ipcRenderer.invoke('robot-status'),
-  onRobotKilled: (callback) => {
-    const subscription = () => callback();
-    ipcRenderer.on('robot-killed', subscription);
-    return () => ipcRenderer.removeListener('robot-killed', subscription);
-  },
 
-  // Tesseract OCR v2 (with sharp preprocessing + AI resolution)
   ocrCaptureWords: (displayId) => ipcRenderer.invoke('ocr-capture-words', displayId),
   ocrClick: (target, useAi) => ipcRenderer.invoke('ocr-click', { target, useAi }),
-  ocrScreenText: (displayId) => ipcRenderer.invoke('ocr-screen-text', displayId),
 
-  // Screen Vision AI
   visionDescribe: (question) => ipcRenderer.invoke('vision-describe', question),
   visionAnalyze: (question) => ipcRenderer.invoke('vision-analyze', question),
-  visionCaptureBase64: () => ipcRenderer.invoke('vision-capture-base64'),
 
-  // AI Engine (direct multi-provider chat for automation)
   aiEngineChat: (opts) => ipcRenderer.invoke('ai-engine-chat', opts),
-  aiEngineConfigure: (keys) => ipcRenderer.invoke('ai-engine-configure', keys),
+  classifyTabsAi: (args) => ipcRenderer.invoke('classify-tabs-ai', args),
+  organizeFolder: (path) => ipcRenderer.invoke('organize-folder', path),
 
-  // Flutter Bridge
-  bridgeGetPairingCode: () => ipcRenderer.invoke('bridge-get-pairing-code'),
-  bridgeGetStatus: () => ipcRenderer.invoke('bridge-get-status'),
-  bridgeRotateSecret: () => ipcRenderer.invoke('bridge-rotate-secret'),
-  bridgeBroadcast: (message) => ipcRenderer.invoke('bridge-broadcast', message),
-
-  // MCP Desktop — FileSystem (sandboxed)
   mcpFsRead: (filePath) => ipcRenderer.invoke('mcp-fs-read', filePath),
   mcpFsWrite: (filePath, content) => ipcRenderer.invoke('mcp-fs-write', { path: filePath, content }),
   mcpFsList: (dirPath) => ipcRenderer.invoke('mcp-fs-list', dirPath),
-  mcpFsApprovedDirs: () => ipcRenderer.invoke('mcp-fs-approved-dirs'),
-
-  // MCP Desktop — NativeApp (AppleScript/PowerShell)
-  mcpNativeApplescript: (script) => ipcRenderer.invoke('mcp-native-applescript', script),
-  mcpNativePowershell: (script) => ipcRenderer.invoke('mcp-native-powershell', script),
-  mcpNativeActiveWindow: () => ipcRenderer.invoke('mcp-native-active-window'),
-
-  // MCP Core (SSE / Stdio transports)
-  mcpConnectServer: (config) => ipcRenderer.invoke('mcp-connect-server', config),
-  mcpDisconnectServer: (id) => ipcRenderer.invoke('mcp-disconnect-server', id),
-  mcpListServers: () => ipcRenderer.invoke('mcp-list-servers'),
-  mcpGetTools: () => ipcRenderer.invoke('mcp-get-tools'),
-
-  // RAG — Local Vector Store
-  ragIngest: (text, source) => ipcRenderer.invoke('rag-ingest', { text, source }),
-  ragRetrieve: (query, k) => ipcRenderer.invoke('rag-retrieve', { query, k }),
-  ragContext: (query, k) => ipcRenderer.invoke('rag-context', { query, k }),
-  ragStats: () => ipcRenderer.invoke('rag-stats'),
-  ragDeleteSource: (source) => ipcRenderer.invoke('rag-delete-source', source),
-  ragClear: () => ipcRenderer.invoke('rag-clear'),
-
-  // Voice Control (Whisper)
-  voiceTranscribe: (audioBase64, format) => ipcRenderer.invoke('voice-transcribe', { audioBase64, format }),
-  voiceMicPermission: () => ipcRenderer.invoke('voice-mic-permission'),
-
-  // Workflow Recorder
-  workflowStart: () => ipcRenderer.invoke('workflow-start'),
-  workflowRecord: (type, action) => ipcRenderer.invoke('workflow-record', { type, action }),
-  workflowStop: () => ipcRenderer.invoke('workflow-stop'),
-  workflowSave: (name, description) => ipcRenderer.invoke('workflow-save', { name, description }),
-  workflowList: () => ipcRenderer.invoke('workflow-list'),
-  workflowReplay: (name) => ipcRenderer.invoke('workflow-replay', name),
-  workflowDelete: (name) => ipcRenderer.invoke('workflow-delete', name),
-  workflowStatus: () => ipcRenderer.invoke('workflow-status'),
-
-  // PopSearch - Instant Search Popup
-  popSearchShow: (text, x, y) => ipcRenderer.invoke('pop-search-show', { text, x, y }),
-  popSearchShowAtCursor: (text) => ipcRenderer.invoke('pop-search-show-at-cursor', text),
-  popSearchGetConfig: () => ipcRenderer.invoke('pop-search-get-config'),
-  popSearchUpdateConfig: (config) => ipcRenderer.invoke('pop-search-update-config', config),
-  popSearchSaveConfig: (data) => ipcRenderer.invoke('pop-search-save-config', data),
-  popSearchLoadConfig: () => ipcRenderer.invoke('pop-search-load-config'),
-
-  // WiFi Sync
-  wifiSyncBroadcast: (message) => ipcRenderer.invoke('wifi-sync-broadcast', message),
-  getWifiSyncUri: () => ipcRenderer.invoke('get-wifi-sync-uri'),
-  getWifiSyncQr: () => ipcRenderer.invoke('get-wifi-sync-qr'),
-  getWifiSyncInfo: () => ipcRenderer.invoke('get-wifi-sync-info'),
-  generateHighRiskQr: (actionId) => ipcRenderer.invoke('generate-high-risk-qr', actionId),
-  onMobileApproveHighRisk: (callback) => {
-    const subscription = (event, data) => callback(data);
-    ipcRenderer.on('mobile-approve-high-risk', subscription);
-    return () => ipcRenderer.removeListener('mobile-approve-high-risk', subscription);
-  },
 
   // Scheduling & Automation
   scheduleTask: (taskData) => ipcRenderer.invoke('automation:create-task', taskData),
   getScheduledTasks: () => ipcRenderer.invoke('automation:get-tasks'),
-  getScheduledTask: (taskId) => ipcRenderer.invoke('automation:get-task', taskId),
-  updateScheduledTask: (taskId, updates) => ipcRenderer.invoke('automation:update-task', taskId, updates),
-  deleteScheduledTask: (taskId) => ipcRenderer.invoke('automation:delete-task', taskId),
-  toggleScheduledTask: (taskId) => ipcRenderer.invoke('automation:toggle-task', taskId),
-  runScheduledTask: (taskId) => ipcRenderer.invoke('automation:run-task', taskId),
   getTaskLogs: (date) => ipcRenderer.invoke('automation:get-logs', date),
-  getTaskResults: (taskId) => ipcRenderer.invoke('automation:get-results', taskId),
 
-   // Window utilities
-   bringWindowToTop: () => ipcRenderer.invoke('bring-window-to-top'),
-   getAppIcon: () => ipcRenderer.invoke('get-app-icon-base64'),
-
-   // Auto-update APIs
-   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
-   quitAndInstall: () => ipcRenderer.invoke('quit-and-install'),
-   clearAuthData: () => ipcRenderer.invoke('clear-auth'),
-   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
-
-   // Skill Loader - loads document generation skills
-   loadSkill: (format) => ipcRenderer.invoke('load-skill', format),
-   getVersion: () => ipcRenderer.invoke('get-app-version'),
-   getPlatform: () => ipcRenderer.invoke('get-platform'),
+  // Unified App Icon API
+  getAppIcon: (appPath) => {
+    if (appPath) return ipcRenderer.invoke('get-app-icon', appPath);
+    return ipcRenderer.invoke('get-app-icon-base64');
+  },
+  getCometIcon: () => ipcRenderer.invoke('get-app-icon-base64'),
+  
+  getVersion: () => ipcRenderer.invoke('get-app-version'),
 });

@@ -37,7 +37,7 @@ export const Security = {
             combined.set(iv);
             combined.set(new Uint8Array(encrypted), iv.length);
 
-            return `E2EE:${btoa(String.fromCharCode(...combined))}`;
+            return `E2EE:${btoa(String.fromCharCode(...Array.from(combined)))}`;
         } catch (e) {
             console.error("Encryption failed:", e);
             throw new Error("Encryption failed"); // Mandatory throw on failure

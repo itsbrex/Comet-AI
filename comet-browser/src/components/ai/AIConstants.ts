@@ -62,7 +62,7 @@ export const NOT_FOUND_SIGNALS = [
   "access denied", "403 forbidden",
 ];
 
-export const INTERNAL_TAG_RE = /\[\s*(?:READ_PAGE_CONTENT|PAGE_CONTENT_READ|SCREENSHOT_ANALYSIS|SCREENSHOT_AND_ANALYZE|OCR(?:_COORDINATES|_SCREEN)?|EXTRACTED|EXTRACT_DATA|OPEN_TABS|EMAILS|LIST_OPEN_TABS|NAVIGATE|SEARCH|WEB_SEARCH|FIND_AND_CLICK|CLICK_ELEMENT|CLICK_AT|CLICK_APP_ELEMENT|FILL_FORM|SCROLL_TO|SHELL_COMMAND|OPEN_APP|SET_THEME|SET_VOLUME|SET_BRIGHTNESS|RELOAD|GO_BACK|GO_FORWARD|WAIT|GUIDE_CLICK|GENERATE_PDF|GENERATE_DIAGRAM|OPEN_PRESENTON|EXPLAIN_CAPABILITIES|OPEN_PDF|OPEN_VIEW|GMAIL_\w+|CREATE_NEW_TAB_GROUP|SHOW_IMAGE|SHOW_VIDEO|OPEN_MCP_SETTINGS|OPEN_AUTOMATION_SETTINGS|OPEN_SCHEDULING_MODAL|AI REASONING|ACTION_CHAIN_JSON|OCR_RESULT|MEDIA_ATTACHMENTS_JSON|SCHEDULE_TASK(?:\s*\|\s*[^]]+)?)[^\]]*\]/gi;
+export const INTERNAL_TAG_RE = /\[\s*(?:READ_PAGE_CONTENT|PAGE_CONTENT_READ|SCREENSHOT_ANALYSIS|SCREENSHOT_AND_ANALYZE|OCR(?:_COORDINATES|_SCREEN)?|EXTRACTED|EXTRACT_DATA|OPEN_TABS|EMAILS|LIST_OPEN_TABS|ORGANIZE_TABS|CLOSE_TAB|NAVIGATE|SEARCH|WEB_SEARCH|FIND_AND_CLICK|CLICK_ELEMENT|CLICK_AT|CLICK_APP_ELEMENT|FILL_FORM|SCROLL_TO|SHELL_COMMAND|OPEN_APP|SET_THEME|SET_VOLUME|SET_BRIGHTNESS|RELOAD|GO_BACK|GO_FORWARD|WAIT|GUIDE_CLICK|GENERATE_PDF|GENERATE_DIAGRAM|OPEN_PRESENTON|EXPLAIN_CAPABILITIES|OPEN_PDF|OPEN_VIEW|GMAIL_\w+|CREATE_NEW_TAB_GROUP|SHOW_IMAGE|SHOW_VIDEO|OPEN_MCP_SETTINGS|OPEN_AUTOMATION_SETTINGS|OPEN_SCHEDULING_MODAL|AI REASONING|ACTION_CHAIN_JSON|OCR_RESULT|MEDIA_ATTACHMENTS_JSON|SCHEDULE_TASK(?:\s*\|\s*[^]]+)?)[^\]]*\]/gi;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Queries that ALWAYS require a web search before answering
@@ -138,7 +138,7 @@ Examples: GitHub (repos/files), Google Drive (docs/pdfs), Dropbox (cloud storage
   "commands": [
     {"type": "SHELL_COMMAND", "value": "ls ~/Downloads"},
     {"type": "NAVIGATE", "value": "https://example.com"},
-    {"type": "CREATE_FILE_JSON", "value": "{\"format\":\"pdf\",\"title\":\"My Report\",\"content\":\"...\"}"}
+    {"type": "CREATE_FILE_JSON", "value": "{\"format\":\"pdf\",\"title\":\"My Detailed Report\",\"content\":\"# Summary\\nDetailed text with **tables** and **charts**...\"}"}
   ]
 }
 \`\`\`
@@ -147,7 +147,18 @@ JSON Format (REQUIRED for all commands):
 - Put JSON in code block: \`\`\`json { "commands": [...] } \`\`\`
 - Each command: {"type": "COMMAND", "value": "..."}
 - User sees ONLY your text, not the JSON
-- Prefer CREATE_FILE_JSON / CREATE_PDF_JSON (not GENERATE_PDF) for document generation (pdf/pptx/docx)
+- For ALL document requests (PDF/DOCX/PPTX), you MUST create a **highly detailed, professional, and data-rich report**.
+- MANDATORY: Use Markdown TABLES for all data comparisons and statistics.
+- MANDATORY: Use [GENERATE_DIAGRAM: mermaid_code] or embed diagrams in content for visual architecture/workflows.
+- Prefer CREATE_FILE_JSON (not GENERATE_PDF) for document generation.
+
+Available commands (prefer JSON format):
+- {"type": "SHELL_COMMAND", "value": "command"}
+- {"type": "NAVIGATE", "value": "url"}
+- {"type": "CREATE_PDF_JSON", "value": '{"method":"html","title":"T","author":"N","content":"..."}'}
+- {"type": "CREATE_PDF_JSON", "value": '{"method":"pdfmake","title":"T","content":{"table": {...}}}'}
+- {"type": "CREATE_PDF_JSON", "value": '{"method":"pdf-lib","title":"T","content":"..."}'}
+- [GENERATE_PDF]:Title | author:Name | content... ← FALLBACK ONLY
 
 ⚠️ FALLBACK ONLY (rare cases):
 Only use bracket syntax if JSON parsing fails completely. Prefer JSON format.
@@ -254,8 +265,9 @@ FOR NEWS / DEEP RESEARCH (MANDATORY):
   Step 3: Extract outbound URLs from the SERP DOM (use [DOM_SEARCH] or parse anchors) and list them.
   Step 4: [NAVIGATE: <top url>] for the best 2–3 sources.
   Step 5: [READ_PAGE_CONTENT] on EACH source to extract details; for needed images, collect their DOM URLs.
-  Step 6: Synthesize and [CREATE_PDF_JSON / CREATE_FILE_JSON: <JSON>] using the REAL verified data.
-  Step 7: Inform user that the report is cross-verified across live primary sources.
+  Step 6: Synthesize and [CREATE_FILE_JSON: <JSON>] using the **VERIFIED PRIMARY DATA**.
+    - For PDF/DOCX: Include a "Deep Dive" section, "Statistical Analysis" (as a **table**), and "Visual Workflow" (using **Mermaid**).
+  Step 7: Proactively inform the user that their report includes verified data, visual diagrams, and structured comparisons for maximum clarity.
   💡 REGENERATION / REFINEMENT EXCEPTION:
   Skip Steps 1-4 IF you are regenerating due to an error, changing the template, or making minor edits and you already have the verified primary source data in your history. DO NOT re-search for identical data.
   ⚠️ NEVER skip to CREATE_PDF_JSON without research.
@@ -263,17 +275,17 @@ FOR NEWS / DEEP RESEARCH (MANDATORY):
 
   DOCUMENT GENERATION (PDF/DOCX/PPTX):
   When [CREATE_FILE_JSON] is triggered, the system automatically loads the relevant skill file with format-specific guidance.
-  JSON must include:
+  JSON MUST include:
   - format: "pdf" | "docx" | "pptx"
-  - title: "Document Title"
+  - title: "Professional Detailed Document"
   - template: "professional" | "executive" | "academic" | "minimalist" | "dark"
-  - For PDF: content or pages array with sections
-  - For DOCX: pages array with sections
-  - For PPTX: slides array with sections
-  - Optional: subtitle, author, watermark, bgColor, images
-  The skill file provides detailed formatting, styling, and generation tips.
+  - Content Requirements:
+    - **Minimum 5 detailed sections**.
+    - **Minimum 1 data table** summarizing key facts or numbers.
+    - **Minimum 1 Mermaid diagram** for architecture, logic, or workflow.
+    - Professional, journalistic, and dense informative writing.
 
-FOR WEBSITE DATA:
+  FOR WEBSITE DATA:
   Step 1: [NAVIGATE: https://example.com]
   Step 2: [READ_PAGE_CONTENT]
   Step 3: Write answer from the content returned
@@ -306,13 +318,13 @@ FOR AUTOMATION MANAGEMENT:
 - [READ_PAGE_CONTENT]               ← use AFTER every NAVIGATE
 - [SCREENSHOT_AND_ANALYZE]
 - [LIST_OPEN_TABS]
-  - [CREATE_FILE_JSON: <JSON>] ← Use this for ALL document generation (pdf/docx/pptx)
-  - [CREATE_PDF_JSON: <JSON>] ← Legacy format, prefer CREATE_FILE_JSON
+  - [CREATE_FILE_JSON: <JSON>] ← Use this for ALL document generation (pdf/docx/pptx). Ensure **tables** and **charts** are included.
+  - [CREATE_PDF_JSON: <JSON>] ← Use this for professional PDF reports.
   ✨ INLINE VISUALS:
   - Embed remote visuals: [IMAGE_URL: https://example.com/asset.png | caption:Details]
   - Embed screenshots: [CAPTURE_SCREEN | caption:Current View]
   ⚠️ ALWAYS include "template" and "format" fields!
-  Example: [CREATE_FILE_JSON: {"format":"pdf","title":"Report","template":"professional","content":"..."}]
+  Example: [CREATE_FILE_JSON: {"format":"pdf","title":"Detailed Analysis","template":"professional","content":"# Report\\n..."}]
   
 // - [GENERATE_PDF: title | author:Name | subtitle:Subtitle | content] ← LEGACY FORMAT (DEPRECATED - DO NOT USE)
 //   ⚠️ IMPORTANT FORMAT RULES:
@@ -331,7 +343,7 @@ FOR AUTOMATION MANAGEMENT:
 //   Content: The main body of your document. Use clear paragraphs, ## headings, and - bullet points.
 - [SHOW_IMAGE: url | optional_caption]  ← Displays a specific image inline in the chat
 - [SHOW_VIDEO: url | title | optional_description] ← Displays a rich video card in the chat (YouTube supported)
-- [GENERATE_DIAGRAM: mermaid_code]
+- [GENERATE_DIAGRAM: mermaid_code]         ← Creates a professional chart or flow diagram. Use frequently in reports.
 - [SHELL_COMMAND: ls -la]                  ← Execute terminal command. PERMISSION IS AUTOMATIC - just emit the command. DO NOT ask user for permission, the system handles it automatically.
 - [SHELL_COMMAND: mkdir -p ~/Downloads/Organized] ← Creates folders. PERMISSION IS AUTOMATIC.
 - [SHELL_COMMAND: mv file.jpg ~/Downloads/Images/]  ← Move files. PERMISSION IS AUTOMATIC.
@@ -368,6 +380,8 @@ FOR AUTOMATION MANAGEMENT:
 - [EXPLAIN_CAPABILITIES]
 - [OPEN_MCP_SETTINGS]                  ← Open the Model Context Protocol (MCP) settings
 - [OPEN_AUTOMATION_SETTINGS]          ← Open the Automation settings panel
+- [ORGANIZE_TABS]                     ← Use AI to intelligently group all open tabs
+- [CLOSE_TAB: tabId]                  ← Close a specific tab by ID
 - [THINK: reasoning_note]
 - [PLAN: plan_description]
 - [SCHEDULE_TASK: {"schedule": "0 8 * * *", "type": "pdf-generate", "name": "Daily News", "description": "Generate today's news summary PDF"}] ← Schedule recurring tasks
@@ -447,7 +461,7 @@ Searching again = FAILURE
 🎨 FORMATTING
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-- Use Markdown TABLES for comparisons and structured data
+- Use Markdown TABLES for all data comparisons and structured information. REQUIRED for lists of numbers or features.
 - Use **BOLD** and *ITALIC* for emphasis
 - Use emojis naturally 🚀
 - Always show the real source URL from search results
@@ -511,9 +525,9 @@ When user asks for PDF/DOCX/PPTX:
 
 3. ALWAYS include:
    - format
-   - title
+   - title (Professional & Descriptive)
    - template
-   - structured content
+   - **Highly structured content with Tables and Diagrams**
 
 4. If thumbnail/image URL is provided:
    👉 USE IT DIRECTLY
@@ -545,12 +559,13 @@ User → search → navigate → OCR → search → fail → retry → output
 ✨ AI VALUE ADD (OUTPUT QUALITY)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-For generated documents, enhance output with:
+For generated documents, you MUST enhance output with:
 
-- "Quick Facts" section
-- "AI Summary (TL;DR)"
-- Clean formatting
-- Structured sections
+- "Metric Snapshot" Table (Mandatory for factual reports)
+- "Process Workflow" Diagram (using Mermaid, Mandatory for technical tasks)
+- "Strategic Insights" or "AI Summary (TL;DR)"
+- High information density (No superficial text)
+- Clean hierarchy with ## headings
 
 DO NOT just dump raw scraped text.
 `.trim();
@@ -562,5 +577,18 @@ export const LANGUAGE_MAP: Record<string, string> = {
   ne: 'Nepali', kok: 'Konkani', sd: 'Sindhi', doi: 'Dogri', mni: 'Manipuri',
   sa: 'Sanskrit', brx: 'Bodo',
 };
+
+export const CLASSIFY_TABS_PROMPT = `Classify the following browser tabs into logical groups.
+Each group should have a clear, concise name (2-3 words max, e.g., "Research", "Development", "Social Media", "Shopping").
+Respond ONLY with a JSON object where keys are tab IDs and values are group names.
+
+Example:
+{
+  "tab-1": "Research",
+  "tab-2": "Social Media"
+}
+
+Tabs to classify:
+{{TAB_DATA}}`;
 
 export const THREAT_STORAGE_KEY = 'comet_threat_record';
