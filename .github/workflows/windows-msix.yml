@@ -1,0 +1,125 @@
+name: 🪟 Build Windows MSIX (AppX)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v0.2.4)'
+        required: false
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  get-version:
+    name: Get Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      is_stable: ${{ steps.version.outputs.is_stable }}
+    steps:
+      - name: Parse version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          elif [[ -n "${{ github.event.inputs.version }}" ]]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG="v$(node -p "require('./comet-browser/package.json').version")"
+          fi
+          
+          VERSION="${TAG#v}"
+          
+          if [[ "$TAG" == *"-"* ]]; then
+            IS_STABLE="false"
+          else
+            IS_STABLE="true"
+          fi
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_stable=$IS_STABLE" >> $GITHUB_OUTPUT
+
+  build-windows-msix:
+    name: Build Windows MSIX
+    needs: get-version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: comet-browser/package-lock.json
+
+      - name: Remove package-lock.json (Windows)
+        working-directory: comet-browser
+        run: if (Test-Path package-lock.json) { Remove-Item package-lock.json -Force }
+        shell: pwsh
+
+      - name: Install Dependencies
+        working-directory: comet-browser
+        run: npm install --legacy-peer-deps
+
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: comet-browser/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('comet-browser/package-lock.json') }}
+
+      - name: Build MSIX (AppX) Target
+        working-directory: comet-browser
+        env:
+          NEXT_PUBLIC_APP_NAME: Comet
+          NEXT_PUBLIC_APP_VERSION: ${{ needs.get-version.outputs.version }}
+        run: npm run build && npx electron-builder --win appx --x64
+
+      - name: Rename to MSIX (Optional helper)
+        working-directory: comet-browser/release
+        run: |
+          Get-ChildItem -Filter *.appx | Rename-Item -NewName { $_.Name -replace '\.appx$','.msix' }
+        shell: pwsh
+        continue-on-error: true
+
+      - name: Upload MSIX Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: comet-ai-windows-msix
+          path: |
+            comet-browser/release/*.msix
+            comet-browser/release/*.appx
+
+  create-msix-release:
+    name: Add MSIX to Release
+    needs: [get-version, build-windows-msix]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download MSIX Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: comet-ai-windows-msix
+          path: release-artifacts
+
+      - name: Upload Assets
+        run: |
+          for file in release-artifacts/*; do
+            if [ -f "$file" ]; then
+              echo "📤 Uploading: $file"
+              gh release upload "${{ needs.get-version.outputs.tag }}" "$file" --clobber
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
