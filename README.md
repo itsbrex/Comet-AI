@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.6-blue)]()
+[![Version](https://img.shields.io/badge/Version-0.2.7-blue)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
 [![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
@@ -35,7 +35,7 @@ Most browsers are built for monetization. Comet is built for **control**.
 
 ---
 
-## ✨ Features (v0.2.6)
+## ✨ Features (v0.2.7)
 
 ### 🤖 AI Agent
 - Multi-step autonomous task execution via chained commands
@@ -223,13 +223,13 @@ flutter run
 
 ## ⬇️ Downloads
 
-**Latest Release: v0.2.6** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
+**Latest Release: v0.2.7** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
 
 | Platform | Download | Status |
 |----------|----------|--------|
-| 🪟 Windows (.exe) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser.Setup.0.2.6.exe) | ✅ Stable |
-| 🍎 macOS (.dmg) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.6-arm64.dmg) | ✅ Stable |
-| 🐧 Linux (.AppImage) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.6.AppImage) | ✅ Stable |
+| 🪟 Windows (.exe) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser.Setup.0.2.7.exe) | ✅ Stable |
+| 🍎 macOS (.dmg) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.7-arm64.dmg) | ✅ Stable |
+| 🐧 Linux (.AppImage) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.7.AppImage) | ✅ Stable |
 | 📱 Android (.apk) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/app-release.apk) | ✅ Stable |
 | 🍎 iOS (.ipa) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet-AI.ipa) | 🧪 Beta |
 
@@ -246,6 +246,12 @@ flutter run
 | iOS | 🧪 Testing Phase |
 
 ---
+
+## 📝 v0.2.7 Highlights
+- **Hardened Authentication Flow**: Re-engineered Electron auth handling to properly catch custom `comet-browser://` deep links using `did-fail-load` for robust auto-closing during Google/Firebase sign-in.
+- **Main Process De-duplication**: Cleaned up extensive redundant IPC handlers in `main.js`, resolving terminal startup crashes and `MaxListenersExceededWarning` memory leaks.
+- **Automation Service Stability**: Implemented a concurrency lock around `initializeAutomationService()` guarding against duplicate startup spin-ups.
+- **Multi-layered Redirect Fixes**: Added Next.js `did-navigate-in-page` fallback and console message intercept from the landing page.
 
 ## 📝 v0.2.6 Highlights
 - **Native Google Sign-In** – Replaced web OAuth with native `google_sign_in` package for faster, more reliable authentication
@@ -276,8 +282,8 @@ flutter run
 **Option 1: Push a Tag**
 ```bash
 # Create and push a version tag
-git tag v0.2.6-stable
-git push origin v0.2.6-stable
+git tag v0.2.7-stable
+git push origin v0.2.7-stable
 ```
 This automatically triggers the `auto-release-tag.yml` workflow which:
 - Builds all platforms (Windows, macOS, Linux, Android, iOS)
@@ -335,6 +341,14 @@ Comet AI Browser is built by a **16-year-old student** from India, preparing for
 ---
 
 ## 📋 Changelog
+
+### v0.2.7 (2026-04-04) - Auth Hardening & System Stability
+#### New Features & Fixes
+- **Deep-Link Protocol Intercept**: Re-engineered Electron auth handling to properly catch custom `comet-browser://` deep links using `did-fail-load`.
+- **Multi-layered Redirect Fixes**: Added a Next.js `did-navigate-in-page` fallback and console message intercept from the landing page.
+- **IPC Handler Cleanup**: Stripped out extensive redundant IPC handlers in `main.js` resolving terminal startup crashes.
+- **Memory Leak Prevention**: Resolved `MaxListenersExceededWarning` memory leaks by removing unbound process listeners.
+- **Automation Service Locks**: Implemented a concurrency lock around `initializeAutomationService()`.
 
 ### v0.2.6 (2026-03-30) - Native Google Sign-In & Sync Hardening
 #### New Features

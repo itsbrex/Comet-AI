@@ -3112,11 +3112,13 @@ ipcMain.on('open-auth-window', (event, authUrl) => {
     authUrl.includes('auth');
 
   if (isOAuthUrl) {
-    // FIX: Google Sign-In "unsupported browser" / 401 error
-    // For Google/Firebase OAuth, we open the EXTERNAL browser to bypass Electron limits.
-    // The redirect URI (https://browser.ponsrischool.in/oauth2callback) should then
-    // redirect back to comet-browser://auth using the Custom Protocol we registered.
+    // Direct Google OAuth URLs should still use the system browser.
+    // Our hosted /auth page should stay inside Comet so Firebase popup can open as a child window.
     if (authUrl.includes('accounts.google.com')) {
+      if (authWindow && !authWindow.isDestroyed()) {
+        authWindow.destroy();
+        authWindow = null;
+      }
       shell.openExternal(authUrl);
       console.log('[Auth] Google OAuth: Opening external browser');
       return;
@@ -3168,151 +3170,128 @@ ipcMain.on('open-auth-window', (event, authUrl) => {
     // Fix "Unsecure Browser" error by setting a modern User-Agent
     authWindow.webContents.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
 
+    authWindow.webContents.setWindowOpenHandler(({ url }) => {
+      const isPopupAuthUrl = url.includes('accounts.google.com') ||
+        url.includes('googleusercontent.com') ||
+        url.includes('firebaseapp.com') ||
+        url.includes('/__/auth/') ||
+        url.includes('oauth');
+
+      if (isPopupAuthUrl) {
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: {
+            width: 520,
+            height: 720,
+            center: true,
+            autoHideMenuBar: true,
+            modal: false,
+            parent: authWindow || mainWindow,
+            backgroundColor: '#02030a',
+            webPreferences: {
+              nodeIntegration: false,
+              contextIsolation: true,
+              sandbox: false,
+            },
+          }
+        };
+      }
+
+      return { action: 'allow' };
+    });
+
     authWindow.loadURL(authUrl);
 
     authWindow.once('ready-to-show', () => {
       authWindow.show();
     });
 
-    const handleAuthRedirect = (url) => {
-      // Proactive check for success markers in URL or deep link protocol
-      const isCometDeepLink = url.startsWith('comet-browser://');
-      const isAuthSuccess = url.includes('auth_status=success') || url.includes('uid=') || url.includes('token=');
+    let authPoller = null;
 
-      if (isCometDeepLink || isAuthSuccess) {
-        console.log('[Auth] Success detected, processing callback:', url);
-        if (mainWindow) {
-          // If it's not a deep link yet, normalize it
-          const finalUrl = isCometDeepLink ? url : `comet-browser://auth${new URL(url).search}`;
-          mainWindow.webContents.send('auth-callback', finalUrl);
-        }
-        
-        // Use a slight delay before closing to ensure message is sent
-        setTimeout(() => {
-          if (authWindow && !authWindow.isDestroyed()) {
-             authWindow.close();
-             authWindow = null;
-          }
-        }, 100);
-        return true;
+    const closeAuthWindowSafely = () => {
+      if (authPoller) { clearInterval(authPoller); authPoller = null; }
+      if (authWindow && !authWindow.isDestroyed()) {
+        console.log('[Auth] Closing auth window');
+        authWindow.destroy();
+        authWindow = null;
       }
-      return false;
     };
 
-    // Listen for navigation to callback URL
-    authWindow.webContents.on('will-redirect', (event, url) => {
-      if (handleAuthRedirect(url)) {
+    const dispatchAuthCallback = (deepLinkUrl) => {
+      console.log('[Auth] Dispatching callback to main window:', deepLinkUrl.substring(0, 80) + '...');
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('auth-callback', deepLinkUrl);
+        mainWindow.focus();
+      }
+      setTimeout(closeAuthWindowSafely, 300);
+    };
+
+    // ─── PRIMARY: will-navigate fires when window.location.href is set ─────────
+    // When the landing page does `window.location.href = 'comet-browser://auth?...'`
+    // Electron intercepts this here before attempting to navigate
+    authWindow.webContents.on('will-navigate', (event, url) => {
+      if (url.startsWith('comet-browser://')) {
         event.preventDefault();
+        console.log('[Auth] will-navigate intercepted comet-browser:// URL');
+        dispatchAuthCallback(url);
+      }
+    });
+
+    // ─── SECONDARY: will-redirect for server-side HTTP 302 redirects ───────────
+    authWindow.webContents.on('will-redirect', (event, url) => {
+      if (url.startsWith('comet-browser://')) {
+        event.preventDefault();
+        console.log('[Auth] will-redirect intercepted comet-browser:// URL');
+        dispatchAuthCallback(url);
       } else if (url.startsWith('http://localhost') && url.includes('code=')) {
         event.preventDefault();
-        const urlParams = new URLSearchParams(new URL(url).search);
-        const code = urlParams.get('code');
-        if (code) {
-          ipcMain.emit('gmail-oauth-code', null, code);
-          authWindow.close();
-        }
+        const code = new URLSearchParams(new URL(url).search).get('code');
+        if (code) { ipcMain.emit('gmail-oauth-code', null, code); closeAuthWindowSafely(); }
       }
     });
 
-    authWindow.webContents.on('will-navigate', (event, url) => {
-      if (handleAuthRedirect(url)) {
-        event.preventDefault();
+    // ─── KEY FIX: did-fail-load catches failed comet-browser:// navigation ──────
+    // When the web engine cannot resolve `comet-browser://` (it's not a web scheme),
+    // Electron fires did-fail-load with errorCode -300 (ERR_FAILED).
+    // The `validatedURL` param still contains the full comet-browser:// URL with all params.
+    authWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      if (validatedURL && validatedURL.startsWith('comet-browser://')) {
+        console.log('[Auth] did-fail-load caught comet-browser:// navigation:', validatedURL.substring(0, 80));
+        dispatchAuthCallback(validatedURL);
       }
     });
 
-    authWindow.webContents.on('did-navigate', (event, url) => {
-      handleAuthRedirect(url);
-    });
-
-    // Catch Next.js client-side navigations (pushState)
-    authWindow.webContents.on('did-navigate-in-page', (event, url) => {
-      handleAuthRedirect(url);
-    });
-
-    // Fail-safe poller: Check URL every 500ms
-    const poller = setInterval(() => {
-      if (authWindow && !authWindow.isDestroyed()) {
-        try {
-          const currentUrl = authWindow.webContents.getURL();
-          if (handleAuthRedirect(currentUrl)) {
-            clearInterval(poller);
-          }
-        } catch (e) {
-          clearInterval(poller);
-        }
-      } else {
-        clearInterval(poller);
-      }
-    }, 500);
-
-    authWindow.on('closed', () => {
-      clearInterval(poller);
-      authWindow = null;
-    });
-
-
-
-    // Listen for postMessage from Ponsri Ponsri auth page for auth success
-    authWindow.webContents.on('console-message', (event, level, message) => {
+    // ─── BACKUP: Landing page console.log signal ───────────────────────────────
+    authWindow.webContents.on('console-message', (event) => {
+      const message = event.message || '';
       try {
-        // Robust check for various auth success markers
-        if (message.includes('comet-auth-success') || message.includes('auth_success_callback')) {
-          let data = {};
-          try {
-            data = JSON.parse(message);
-          } catch (e) {
-            // If it's not JSON but contains the marker, try to extract from URL if possible
-            const currentUrl = authWindow.webContents.getURL();
-            if (currentUrl.includes('uid=') || currentUrl.includes('token=')) {
-              mainWindow.webContents.send('auth-callback', `comet-browser://auth?${new URL(currentUrl).search}`);
-              authWindow.close();
-              return;
-            }
-          }
-
+        if (message.includes('comet-auth-success')) {
+          const data = JSON.parse(message);
           if (data.type === 'comet-auth-success' && data.data) {
-            if (mainWindow) {
-              const authParams = new URLSearchParams({
-                auth_status: 'success',
-                uid: data.data.uid || '',
-                email: data.data.email || '',
-              });
-
-              if (data.data.name) authParams.set('name', data.data.name);
-              if (data.data.photo) authParams.set('photo', data.data.photo);
-              if (data.data.id_token) authParams.set('id_token', data.data.id_token);
-              if (data.data.token) authParams.set('token', data.data.token);
-              if (data.data.firebase_config) authParams.set('firebase_config', data.data.firebase_config);
-
-              mainWindow.webContents.send('auth-callback', `comet-browser://auth?${authParams.toString()}`);
-            }
-            authWindow.close();
+            const d = data.data;
+            const params = new URLSearchParams({ auth_status: 'success', uid: d.uid || '', email: d.email || '' });
+            if (d.name) params.set('name', d.name);
+            if (d.photo) params.set('photo', d.photo);
+            if (d.idToken) params.set('id_token', d.idToken);
+            if (d.id_token) params.set('id_token', d.id_token);
+            if (d.firebaseConfig) params.set('firebase_config', btoa(JSON.stringify(d.firebaseConfig)));
+            console.log('[Auth] console-message auth signal received, dispatching...');
+            dispatchAuthCallback(`comet-browser://auth?${params.toString()}`);
           }
         }
-      } catch (e) { }
-    });
-
-    // Fallback: Detect success via URL change to ponsrischool home or success page
-    authWindow.webContents.on('did-navigate', (event, url) => {
-      if (url.includes('browser.ponsrischool.in') && (url.includes('success') || url.includes('callback') || url.includes('profile'))) {
-        // Extract params if they exist
-        try {
-          const parsedUrl = new URL(url);
-          if (parsedUrl.searchParams.has('uid') || parsedUrl.searchParams.has('token')) {
-            mainWindow.webContents.send('auth-callback', `comet-browser://auth?${parsedUrl.search}`);
-            authWindow.close();
-          }
-        } catch (e) { }
-      }
+      } catch (e) {}
     });
 
     authWindow.on('closed', () => {
+      if (authPoller) { clearInterval(authPoller); authPoller = null; }
       authWindow = null;
     });
+
   } else {
     // For non-OAuth URLs, open in external browser
     shell.openExternal(authUrl);
   }
+
 });
 
 ipcMain.on('close-auth-window', () => {
@@ -7903,7 +7882,14 @@ app.whenReady().then(async () => {
   let storageManager = null;
   let mobileNotifier = null;
 
+  let isAutomationInitializing = false;
   async function initializeAutomationService() {
+    if (ipcService || isAutomationInitializing) {
+       console.log('[Main] Automation service already initialized or initializing');
+       return;
+    }
+    
+    isAutomationInitializing = true;
     try {
       // Check if modules exist
       const path = require('path');
@@ -7942,6 +7928,8 @@ app.whenReady().then(async () => {
       console.log('[Main] Automation service initialized');
     } catch (error) {
       console.error('[Main] Failed to initialize automation service:', error);
+    } finally {
+      isAutomationInitializing = false;
     }
   }
 

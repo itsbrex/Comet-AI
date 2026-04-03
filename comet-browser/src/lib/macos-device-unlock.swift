@@ -24,9 +24,11 @@ func emit(_ payload: [String: Any]) {
 
 let reason = argumentValue("--reason") ?? "Approve this action in Comet-AI."
 let risk = argumentValue("--risk") ?? "medium"
+let appName = argumentValue("--app-name") ?? "Comet-AI"
 
 let context = LAContext()
 context.localizedCancelTitle = "Deny"
+context.localizedFallbackTitle = "Use Mac Password"
 // Note: We use deviceOwnerAuthentication to allow fallback to password automatically
 let policy = LAPolicy.deviceOwnerAuthentication
 
@@ -48,7 +50,7 @@ var payload: [String: Any] = [
     "mode": "macos-device-owner-auth",
 ]
 
-let localizedReason = "\(reason) Confirm with Touch ID or your Mac password."
+let localizedReason = "\(appName) needs to verify this action. Confirm with Touch ID or your Mac password."
 context.evaluatePolicy(policy, localizedReason: localizedReason) { success, error in
     payload["approved"] = success
     payload["risk"] = risk

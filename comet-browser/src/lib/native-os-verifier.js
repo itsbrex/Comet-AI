@@ -4,6 +4,37 @@ const { execFile } = require('child_process');
 const util = require('util');
 
 const execFileAsync = util.promisify(execFile);
+const HELPER_NAME = 'Comet-AI';
+
+function getMacHelperPaths() {
+  return {
+    bundledBinary: path.join(process.resourcesPath || '', 'bin', HELPER_NAME),
+    localBinary: path.join(__dirname, '..', '..', 'bin', HELPER_NAME),
+    swiftScript: path.join(__dirname, 'macos-device-unlock.swift'),
+  };
+}
+
+async function ensureLocalMacHelperBinary(swiftScript, localBinary) {
+  if (!fs.existsSync(swiftScript)) {
+    return false;
+  }
+
+  const scriptStat = fs.statSync(swiftScript);
+  const binaryExists = fs.existsSync(localBinary);
+  const binaryIsFresh = binaryExists && fs.statSync(localBinary).mtimeMs >= scriptStat.mtimeMs;
+
+  if (binaryIsFresh) {
+    return true;
+  }
+
+  fs.mkdirSync(path.dirname(localBinary), { recursive: true });
+  await execFileAsync('swiftc', [swiftScript, '-o', localBinary], {
+    timeout: 120000,
+    maxBuffer: 1024 * 1024,
+  });
+  fs.chmodSync(localBinary, 0o755);
+  return true;
+}
 
 function hasNativeDeviceUnlockSupport() {
   if (process.platform === 'win32') {
@@ -14,9 +45,7 @@ function hasNativeDeviceUnlockSupport() {
     return false;
   }
 
-  const bundledBinary = path.join(process.resourcesPath || '', 'bin', 'comet-device-unlock-macos');
-  const localBinary = path.join(__dirname, 'bin', 'comet-device-unlock-macos');
-  const swiftScript = path.join(__dirname, 'macos-device-unlock.swift');
+  const { bundledBinary, localBinary, swiftScript } = getMacHelperPaths();
 
   return fs.existsSync(bundledBinary) || fs.existsSync(localBinary) || fs.existsSync(swiftScript);
 }
@@ -72,22 +101,32 @@ async function runHelper(command, args, mode) {
 
 async function verifyMacDeviceUnlock({ reason, actionText, riskLevel = 'medium' }) {
   const promptReason = reason || `Approve a protected ${riskLevel} risk action in Comet-AI.`;
-  const args = ['--reason', promptReason, '--command', actionText || promptReason, '--risk', riskLevel];
+  const args = [
+    '--reason', promptReason,
+    '--command', actionText || promptReason,
+    '--risk', riskLevel,
+    '--app-name', 'Comet-AI',
+  ];
+
+  const { bundledBinary, localBinary, swiftScript } = getMacHelperPaths();
 
   // Try bundled binary first
-  const bundledBinary = path.join(process.resourcesPath || '', 'bin', 'comet-device-unlock-macos');
   if (fs.existsSync(bundledBinary)) {
     return runHelper(bundledBinary, args, 'macos-device-owner-auth');
   }
 
+  try {
+    await ensureLocalMacHelperBinary(swiftScript, localBinary);
+  } catch (error) {
+    console.warn('[NativeVerifier] Failed to compile local macOS helper binary:', error.message);
+  }
+
   // Try local binary
-  const localBinary = path.join(__dirname, 'bin', 'comet-device-unlock-macos');
   if (fs.existsSync(localBinary)) {
     return runHelper(localBinary, args, 'macos-device-owner-auth');
   }
 
   // Try swift script
-  const swiftScript = path.join(__dirname, 'macos-device-unlock.swift');
   if (fs.existsSync(swiftScript)) {
     console.log(`[NativeVerifier] Using Swift helper: ${swiftScript}`);
     try {

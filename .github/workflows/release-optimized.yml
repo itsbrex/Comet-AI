@@ -196,7 +196,9 @@ jobs:
           - target: windows
             os: windows-latest
             build_cmd: npm run dist:win
-            artifact_glob: "comet-browser/release/*.exe"
+            artifact_glob: |
+              comet-browser/release/*.exe
+              comet-browser/release/*.msix
             artifact_name: comet-ai-windows
           - target: macos
             os: macos-latest
@@ -277,7 +279,7 @@ jobs:
             ## Download Comet AI Browser v${{ needs.get-version.outputs.version }}
             
             ### Desktop
-            - 🪟 **Windows**: `Comet.Browser.Setup.*.exe`
+            - 🪟 **Windows**: `Comet.Browser.Setup.*.exe` or `.msix`
             - 🍎 **macOS**: `Comet.Browser-*.dmg`
             - 🐧 **Linux**: `Comet.Browser-*.AppImage`
             

@@ -1,6 +1,6 @@
 {
   "name": "Comet-AI",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "private": true,
   "description": "Comet-AI Browser - A high-performance, intelligence-driven browsing workspace with local LLM support and advanced productivity features.",
   "author": "Latestinssan",
@@ -16,12 +16,13 @@
     "predev": "npx tsc src/lib/P2PFileSyncService.ts src/lib/WiFiSyncService.ts src/lib/modelRegistry.ts src/lib/CloudSyncService.ts src/types/electron.d.ts --outDir src/lib --module CommonJS --skipLibCheck --esModuleInterop",
     "test:prod": "node test-production.js",
     "prebuild-electron": "node verify-build.js",
+    "build-macos-helper": "node scripts/build-macos-device-unlock-helper.js",
     "build-electron": "npm run build && electron-builder",
     "electron:build:win": "npm run build && electron-builder --win --x64",
-    "electron:build:mac": "npm run build && electron-builder --mac",
+    "electron:build:mac": "npm run build-macos-helper && npm run build && electron-builder --mac",
     "electron:build:linux": "npm run build && electron-builder --linux",
     "dist:win": "npm run build && electron-builder --win --x64",
-    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:mac": "npm run build-macos-helper && npm run build && electron-builder --mac --publish never",
     "check-dups": "node check_dups.js",
     "service": "electron src/service/service-main.js",
     "service:install": "node scripts/install-service.js"
@@ -136,8 +137,15 @@
     "win": {
       "icon": "assets/icon.ico",
       "target": [
-        "nsis"
+        "nsis",
+        "msix"
       ]
+    },
+    "appx": {
+      "identityName": "com.latestinssan.cometbrowser",
+      "publisher": "CN=Latestinssan",
+      "publisherDisplayName": "Latestinssan",
+      "applicationId": "CometAI"
     },
     "mac": {
       "icon": "assets/icon.png",
@@ -180,6 +188,13 @@
       {
         "from": "assets",
         "to": "assets",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "bin",
+        "to": "bin",
         "filter": [
           "**/*"
         ]
