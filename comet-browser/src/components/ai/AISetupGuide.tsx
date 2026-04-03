@@ -87,8 +87,8 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
       const result = await window.electronAPI.getScheduledTasks();
       const tasks = Array.isArray(result)
         ? result
-        : Array.isArray(result?.tasks)
-          ? result.tasks
+        : Array.isArray((result as any)?.tasks)
+          ? (result as any).tasks
           : [];
       setAutomationTasks(tasks);
     } catch (error) {
