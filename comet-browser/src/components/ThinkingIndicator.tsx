@@ -5,63 +5,71 @@ import { motion } from 'framer-motion';
 
 const ThinkingIndicator = () => {
   return (
-    <div className="flex items-center gap-4 py-4 px-6 self-start group bg-sky-500/[0.03] border border-sky-500/10 rounded-[2rem] shadow-xl backdrop-blur-sm">
-      <div className="relative flex items-center justify-center w-6 h-6">
-        {/* Animated Scan Ring */}
+    <div className="relative flex items-center gap-4 py-4 px-6 self-start group rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.82),rgba(8,47,73,0.54),rgba(88,28,135,0.38))] shadow-[0_22px_60px_rgba(14,165,233,0.18)] backdrop-blur-2xl overflow-hidden">
+      <motion.div
+        className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.16),transparent_48%)]"
+        animate={{ opacity: [0.65, 1, 0.72] }}
+        transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+      />
+
+      <div className="relative flex items-center justify-center w-8 h-8">
         <motion.div
-           className="absolute inset-0 rounded-full border-2 border-sky-400/20"
-           animate={{ rotate: 360 }}
-           transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+          className="absolute inset-0 rounded-full border border-sky-300/25"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
         />
-        
-        {/* Pulsing Core */}
         <motion.div
-          className="w-2.5 h-2.5 bg-sky-400 rounded-full z-10 shadow-[0_0_15px_rgba(56,189,248,0.8)]"
+          className="absolute inset-1 rounded-full border border-fuchsia-300/20"
+          animate={{ rotate: -360, scale: [0.95, 1.05, 0.95] }}
+          transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="w-3 h-3 bg-sky-300 rounded-full z-10 shadow-[0_0_20px_rgba(56,189,248,0.95)]"
           animate={{
-            scale: [1, 1.3, 1],
-            opacity: [0.8, 1, 0.8],
+            scale: [1, 1.35, 0.95, 1],
+            opacity: [0.7, 1, 0.82, 0.7],
           }}
           transition={{
-            duration: 1.5,
+            duration: 1.35,
             repeat: Infinity,
             ease: "easeInOut"
           }}
         />
-
-        {/* Expanding Wave Rings */}
-        {[0.5, 1, 1.5].map((delay, index) => (
-            <motion.div
-                key={index}
-                className="absolute inset-0 rounded-full border border-sky-400/40"
-                initial={{ scale: 0.8, opacity: 0.6 }}
-                animate={{ scale: 1.8 + index * 0.4, opacity: 0 }}
-                transition={{
-                    duration: 2.5,
-                    repeat: Infinity,
-                    ease: "easeOut",
-                    delay: delay,
-                }}
-            />
+        {[0, 1, 2].map((index) => (
+          <motion.div
+            key={index}
+            className="absolute inset-0 rounded-full border border-sky-300/35"
+            initial={{ scale: 0.85, opacity: 0.55 }}
+            animate={{ scale: 1.9 + index * 0.25, opacity: 0 }}
+            transition={{
+              duration: 2.2,
+              repeat: Infinity,
+              ease: "easeOut",
+              delay: index * 0.35,
+            }}
+          />
         ))}
       </div>
 
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white transition-colors duration-300">
-                Neural Sync
-            </span>
-            <div className="flex gap-1">
-                {[0, 0.2, 0.4].map(d => (
-                    <motion.div 
-                        key={d}
-                        animate={{ opacity: [0.2, 1, 0.2] }}
-                        transition={{ duration: 1, repeat: Infinity, delay: d }}
-                        className="w-1 h-1 rounded-full bg-sky-400"
-                    />
-                ))}
-            </div>
+      <div className="relative z-10 flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-black uppercase tracking-[0.32em] text-white">
+            Neural Flow
+          </span>
+          <div className="flex gap-1">
+            {[0, 0.18, 0.36].map((delay) => (
+              <motion.div
+                key={delay}
+                animate={{ y: [0, -3, 0], opacity: [0.25, 1, 0.25] }}
+                transition={{ duration: 0.95, repeat: Infinity, delay }}
+                className="w-1.5 h-1.5 rounded-full bg-sky-300"
+              />
+            ))}
+          </div>
         </div>
-        <p className="text-[8px] font-bold text-white/20 uppercase tracking-widest whitespace-nowrap">Synthesizing semantic nodes...</p>
+        <p className="text-[8px] font-bold uppercase tracking-[0.24em] text-white/45 whitespace-nowrap">
+          Streaming thoughts through the live workspace
+        </p>
       </div>
     </div>
   );

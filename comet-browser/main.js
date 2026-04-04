@@ -28,6 +28,7 @@ const {
 const path = require('path');
 const os = require('os');
 const { spawn, exec, spawnSync } = require('child_process');
+const { randomBytes } = require('crypto');
 const Store = require('electron-store');
 const store = new Store();
 const { createWorker } = require('tesseract.js');
@@ -198,6 +199,7 @@ const { WorkflowRecorder } = require('./src/lib/workflow-recorder.js');
 const { PopSearchService, popSearchService } = require('./src/lib/pop-search-service.js');
 const { getRecommendedGeminiModel } = require('./src/lib/modelRegistry.js');
 const { WebSearchProvider } = require('./src/lib/web-search-service.js');
+const { MacNativePanelManager } = require('./src/lib/macos-native-panels.js');
 const webSearchProvider = new WebSearchProvider();
 
 // ✅ NEW: Relocate essential system IPC handlers to the top to prevent "no handler registered" errors
@@ -485,6 +487,46 @@ const isMac = process.platform === 'darwin';
 const openWindows = new Set();
 let mainWindow = null;
 let macSidebarWindow = null;
+let nativeMacUiServer = null;
+const MAC_NATIVE_UI_PREFS_KEY = 'mac_native_ui_preferences_v1';
+const DEFAULT_MAC_NATIVE_UI_PREFERENCES = {
+  sidebarMode: 'electron',
+  actionChainMode: 'electron',
+  utilityMode: 'electron',
+  permissionMode: 'electron',
+  sidebarAutoMinimize: false,
+  sidebarGradientPreset: 'graphite',
+  sidebarShowQuickActions: true,
+  sidebarShowSessions: true,
+  sidebarShowSearchTags: true,
+  sidebarShowCommandCenterButton: true,
+  sidebarShowActionChainButton: true,
+};
+const nativeMacUiToken = randomBytes(24).toString('hex');
+const nativeMacUiPort = parseInt(process.env.COMET_NATIVE_MAC_UI_PORT || '46203', 10);
+const nativeMacUiState = {
+  mode: 'sidebar',
+  updatedAt: Date.now(),
+  inputDraft: '',
+  isLoading: false,
+  error: null,
+  themeAppearance: 'dark',
+  messages: [],
+  actionChain: [],
+  currentCommandIndex: 0,
+  activityTags: [],
+  conversations: [],
+  activeConversationId: null,
+  downloads: [],
+  clipboardItems: [],
+  pendingApproval: null,
+};
+const nativeMacPanelManager = new MacNativePanelManager({
+  bridgeUrlProvider: () => `http://127.0.0.1:${nativeMacUiPort}`,
+  tokenProvider: () => nativeMacUiToken,
+  iconPathProvider: () => resolveCometIcon(),
+  appName: app.name || 'Comet-AI',
+});
 
 // Detect python availability once (used to choose optional pipelines; never mandatory for .dmg)
 const pythonAvailable = (() => {
@@ -513,8 +555,107 @@ const sendToActiveWindow = (channel, ...args) => {
   return null;
 };
 
+const deliverNativeMacUiEvent = async (channel, payload = {}) => {
+  const target = sendToActiveWindow(channel, payload);
+  if (target) {
+    return { delivered: true, createdWindow: false };
+  }
+
+  const win = await createWindow();
+  win.webContents.once('did-finish-load', () => {
+    if (!win.isDestroyed()) {
+      win.webContents.send(channel, payload);
+    }
+  });
+  return { delivered: true, createdWindow: true };
+};
+
+const getMacNativeUiPreferences = () => {
+  const saved = store.get(MAC_NATIVE_UI_PREFS_KEY);
+  return {
+    ...DEFAULT_MAC_NATIVE_UI_PREFERENCES,
+    ...(saved && typeof saved === 'object' ? saved : {}),
+  };
+};
+
+const broadcastMacNativeUiPreferences = () => {
+  const preferences = getMacNativeUiPreferences();
+  for (const win of openWindows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('mac-native-ui-preferences-changed', preferences);
+    }
+  }
+};
+
+const setMacNativeUiPreferences = (updates = {}) => {
+  const nextPreferences = {
+    ...getMacNativeUiPreferences(),
+    ...(updates && typeof updates === 'object' ? updates : {}),
+  };
+  store.set(MAC_NATIVE_UI_PREFS_KEY, nextPreferences);
+
+  if (isMac) {
+    if (updates.sidebarMode) {
+      if (nextPreferences.sidebarMode === 'swiftui') {
+        nativeMacPanelManager.show('sidebar').catch((error) => {
+          console.error('[MacNativeUI] Failed to open SwiftUI sidebar:', error);
+        });
+      } else {
+        nativeMacPanelManager.close('sidebar');
+      }
+    }
+
+    if (updates.actionChainMode) {
+      if (nextPreferences.actionChainMode === 'electron') {
+        nativeMacPanelManager.close('action-chain');
+      }
+    }
+
+    if (updates.utilityMode && nextPreferences.utilityMode === 'electron') {
+      ['menu', 'settings', 'downloads', 'clipboard'].forEach((mode) => nativeMacPanelManager.close(mode));
+    }
+
+    if (updates.permissionMode && nextPreferences.permissionMode === 'electron') {
+      nativeMacPanelManager.close('permissions');
+    }
+  }
+
+  broadcastMacNativeUiPreferences();
+  buildApplicationMenu();
+  return nextPreferences;
+};
+
+const createNativeMacUiSnapshot = () => ({
+  ...nativeMacUiState,
+  themeAppearance: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
+  messages: Array.isArray(nativeMacUiState.messages) ? nativeMacUiState.messages : [],
+  actionChain: Array.isArray(nativeMacUiState.actionChain) ? nativeMacUiState.actionChain : [],
+  activityTags: Array.isArray(nativeMacUiState.activityTags) ? nativeMacUiState.activityTags : [],
+  conversations: Array.isArray(nativeMacUiState.conversations) ? nativeMacUiState.conversations : [],
+  downloads: Array.isArray(nativeMacUiState.downloads) ? nativeMacUiState.downloads : [],
+  clipboardItems: Array.isArray(nativeMacUiState.clipboardItems) ? nativeMacUiState.clipboardItems : [],
+  preferences: getMacNativeUiPreferences(),
+});
+
+const normalizeMacNativePanelMode = (mode = 'sidebar') => {
+  const allowedModes = new Set(['sidebar', 'action-chain', 'menu', 'settings', 'downloads', 'clipboard', 'permissions']);
+  return allowedModes.has(mode) ? mode : 'sidebar';
+};
+
 // Quick helpers for native menu items
 const openSettingsSection = (section) => {
+  if (isMac && getMacNativeUiPreferences().utilityMode === 'swiftui') {
+    const panelMode = section === 'downloads'
+      ? 'downloads'
+      : section === 'clipboard'
+        ? 'clipboard'
+        : 'settings';
+    nativeMacPanelManager.show(panelMode).catch((error) => {
+      console.error('[MacNativeUI] Failed to open native utility panel:', error);
+    });
+    return;
+  }
+
   const target = getTopWindow();
   if (target && !target.isDestroyed()) {
     target.webContents.send('set-settings-section', section);
@@ -564,6 +705,14 @@ const registerWindow = (win) => {
 
 const toggleMacSidebarWindow = () => {
   if (!isMac) return;
+
+  const nativePrefs = getMacNativeUiPreferences();
+  if (nativePrefs.sidebarMode === 'swiftui') {
+    nativeMacPanelManager.toggle('sidebar').catch((error) => {
+      console.error('[MacNativeUI] Failed to toggle SwiftUI sidebar:', error);
+    });
+    return;
+  }
 
   if (macSidebarWindow && !macSidebarWindow.isDestroyed()) {
     if (macSidebarWindow.isVisible()) {
@@ -617,6 +766,7 @@ const toggleMacSidebarWindow = () => {
 };
 
 const buildApplicationMenu = () => {
+  const nativePrefs = getMacNativeUiPreferences();
   const template = [
     ...(isMac ? [{
       label: app.name,
@@ -709,6 +859,52 @@ const buildApplicationMenu = () => {
         { label: 'Toggle AI Assistant', accelerator: 'CmdOrCtrl+Option+A', click: () => triggerShortcut('toggle-ai-assist') },
         { label: 'Show AI Overview', accelerator: 'CmdOrCtrl+Option+O', click: () => triggerShortcut('toggle-ai-overview') },
         { type: 'separator' },
+        ...(isMac ? [
+          {
+            label: 'Use SwiftUI AI Sidebar',
+            type: 'checkbox',
+            checked: nativePrefs.sidebarMode === 'swiftui',
+            click: (menuItem) => setMacNativeUiPreferences({ sidebarMode: menuItem.checked ? 'swiftui' : 'electron' }),
+          },
+          {
+            label: 'Use SwiftUI Action Chain',
+            type: 'checkbox',
+            checked: nativePrefs.actionChainMode === 'swiftui',
+            click: (menuItem) => setMacNativeUiPreferences({ actionChainMode: menuItem.checked ? 'swiftui' : 'electron' }),
+          },
+          {
+            label: 'Use SwiftUI Utility Panels',
+            type: 'checkbox',
+            checked: nativePrefs.utilityMode === 'swiftui',
+            click: (menuItem) => setMacNativeUiPreferences({ utilityMode: menuItem.checked ? 'swiftui' : 'electron' }),
+          },
+          {
+            label: 'Use Native SwiftUI Approval Prompts',
+            type: 'checkbox',
+            checked: nativePrefs.permissionMode === 'swiftui',
+            click: (menuItem) => setMacNativeUiPreferences({ permissionMode: menuItem.checked ? 'swiftui' : 'electron' }),
+          },
+          {
+            label: 'Toggle Detached SwiftUI Sidebar',
+            accelerator: 'CmdOrCtrl+Option+D',
+            click: () => nativeMacPanelManager.toggle('sidebar').catch((error) => {
+              console.error('[MacNativeUI] Failed to toggle SwiftUI sidebar from menu:', error);
+            }),
+          },
+          {
+            label: 'Open SwiftUI Action Chain',
+            click: () => nativeMacPanelManager.show('action-chain').catch((error) => {
+              console.error('[MacNativeUI] Failed to open SwiftUI Action Chain from menu:', error);
+            }),
+          },
+          {
+            label: 'Open SwiftUI Command Center',
+            click: () => nativeMacPanelManager.show('menu').catch((error) => {
+              console.error('[MacNativeUI] Failed to open SwiftUI command center from menu:', error);
+            }),
+          },
+          { type: 'separator' },
+        ] : []),
         { label: 'Spotlight Search', accelerator: 'CmdOrCtrl+Space', click: () => triggerShortcut('toggle-spotlight') },
         { label: 'Agent Task Input', accelerator: 'CmdOrCtrl+Option+Space', click: () => sendToActiveWindow('focus-ai-input') },
         { type: 'separator' },
@@ -2225,6 +2421,10 @@ async function createWindow() {
     }
   });
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.send('mac-native-ui-preferences-changed', getMacNativeUiPreferences());
+  });
+
   // Tesseract initialization is now lazy-loaded in 'find-and-click-text' handler to improve startup time
 
   // Handle load failures
@@ -2814,6 +3014,128 @@ ipcMain.handle('delete-persistent-data', async (event, key) => {
   } catch (error) {
     console.error('Failed to delete persistent data:', error);
     return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-mac-native-ui-preferences', async () => {
+  return {
+    success: true,
+    preferences: getMacNativeUiPreferences(),
+    available: isMac && nativeMacPanelManager.getAvailability(),
+  };
+});
+
+ipcMain.handle('set-mac-native-ui-preferences', async (event, updates = {}) => {
+  if (!isMac) {
+    return { success: false, error: 'Native SwiftUI panels are only available on macOS.' };
+  }
+
+  return {
+    success: true,
+    preferences: setMacNativeUiPreferences(updates),
+    available: nativeMacPanelManager.getAvailability(),
+  };
+});
+
+ipcMain.handle('show-mac-native-panel', async (event, mode = 'sidebar') => {
+  if (!isMac) {
+    return { success: false, error: 'Native SwiftUI panels are only available on macOS.' };
+  }
+
+  try {
+    const panelMode = normalizeMacNativePanelMode(`${mode || 'sidebar'}`);
+    const result = await nativeMacPanelManager.show(panelMode);
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('toggle-mac-native-panel', async (event, mode = 'sidebar') => {
+  if (!isMac) {
+    return { success: false, error: 'Native SwiftUI panels are only available on macOS.' };
+  }
+
+  try {
+    const panelMode = normalizeMacNativePanelMode(`${mode || 'sidebar'}`);
+    const result = await nativeMacPanelManager.toggle(panelMode);
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.on('update-native-mac-ui-state', (event, nextState = {}) => {
+  if (!isMac || !nextState || typeof nextState !== 'object') {
+    return;
+  }
+
+  const safeMessages = Array.isArray(nextState.messages) ? nextState.messages.slice(-24) : [];
+  const safeActionChain = Array.isArray(nextState.actionChain) ? nextState.actionChain.slice(0, 30) : [];
+  const safeActivityTags = Array.isArray(nextState.activityTags) ? nextState.activityTags.slice(0, 10) : [];
+  const safeConversations = Array.isArray(nextState.conversations) ? nextState.conversations.slice(0, 24) : [];
+
+  nativeMacUiState.updatedAt = Date.now();
+  nativeMacUiState.inputDraft = `${nextState.inputDraft || ''}`;
+  nativeMacUiState.isLoading = !!nextState.isLoading;
+  nativeMacUiState.error = nextState.error ? `${nextState.error}` : null;
+  if (nextState.themeAppearance === 'light' || nextState.themeAppearance === 'dark') {
+    nativeMacUiState.themeAppearance = nextState.themeAppearance;
+  }
+  nativeMacUiState.messages = safeMessages.map((message, index) => ({
+    id: message.id || `message-${index}-${Date.now()}`,
+    role: message.role || 'model',
+    content: `${message.content || ''}`.slice(0, 8000),
+    timestamp: message.timestamp || Date.now(),
+  }));
+  nativeMacUiState.actionChain = safeActionChain.map((command, index) => ({
+    id: command.id || `command-${index}-${Date.now()}`,
+    type: command.type || 'STEP',
+    value: `${command.value || ''}`.slice(0, 1200),
+    status: command.status || 'pending',
+    category: command.category || null,
+    riskLevel: command.riskLevel || null,
+  }));
+  nativeMacUiState.activityTags = safeActivityTags
+    .map((tag) => `${tag || ''}`.trim())
+    .filter(Boolean)
+    .slice(0, 10);
+  nativeMacUiState.conversations = safeConversations.map((conversation, index) => ({
+    id: conversation.id || `conversation-${index}-${Date.now()}`,
+    title: `${conversation.title || 'Untitled chat'}`.slice(0, 120),
+    updatedAt: Number.isFinite(conversation.updatedAt) ? conversation.updatedAt : Date.now(),
+  }));
+  nativeMacUiState.activeConversationId = nextState.activeConversationId
+    ? `${nextState.activeConversationId}`
+    : null;
+  if (Array.isArray(nextState.downloads)) {
+    nativeMacUiState.downloads = nextState.downloads.slice(0, 30).map((download) => ({
+      name: `${download.name || 'Download'}`,
+      status: `${download.status || 'pending'}`,
+      progress: Number.isFinite(download.progress) ? download.progress : 0,
+      path: download.path ? `${download.path}` : '',
+    }));
+  }
+  if (Array.isArray(nextState.clipboardItems)) {
+    nativeMacUiState.clipboardItems = nextState.clipboardItems.slice(0, 40).map((item) => `${item}`.slice(0, 4000));
+  }
+  nativeMacUiState.currentCommandIndex = Number.isFinite(nextState.currentCommandIndex)
+    ? nextState.currentCommandIndex
+    : 0;
+
+  const shouldAutoManageActionChain = getMacNativeUiPreferences().actionChainMode === 'swiftui';
+  const hasActiveActionChainStep = nativeMacUiState.actionChain.some((command) => (
+    command.status === 'pending' || command.status === 'executing' || command.status === 'awaiting_permission'
+  ));
+
+  if (shouldAutoManageActionChain) {
+    if (hasActiveActionChainStep) {
+      nativeMacPanelManager.show('action-chain').catch((error) => {
+        console.error('[MacNativeUI] Failed to auto-open SwiftUI Action Chain:', error);
+      });
+    } else {
+      nativeMacPanelManager.close('action-chain');
+    }
   }
 });
 
@@ -4457,10 +4779,27 @@ async function requestShellApproval(command, riskLevel, reason, options = {}) {
     highRiskQr: JSON.stringify(qrPayload),
     requiresDeviceUnlock: !!options.requiresDeviceUnlock,
   };
+  const useNativePermissionPanel =
+    isMac &&
+    getMacNativeUiPreferences().permissionMode === 'swiftui';
+
+  nativeMacUiState.pendingApproval = {
+    ...payload,
+    mobileApproved: false,
+    expectedPin: qrPayload?.pin || '',
+    approvalToken: qrPayload?.token || '',
+  };
+  nativeMacUiState.updatedAt = Date.now();
+
   try {
-    mainWindow.webContents.send('automation-shell-approval', payload);
+    if (useNativePermissionPanel) {
+      await nativeMacPanelManager.show('permissions');
+    } else {
+      mainWindow.webContents.send('automation-shell-approval', payload);
+    }
   } catch (error) {
     console.error('[Main] Failed to send shell approval request:', error);
+    nativeMacUiState.pendingApproval = null;
     return false;
   }
 
@@ -4468,12 +4807,14 @@ async function requestShellApproval(command, riskLevel, reason, options = {}) {
     const timeout = setTimeout(() => {
       if (shellApprovalResolvers.has(requestId)) {
         shellApprovalResolvers.delete(requestId);
+        nativeMacUiState.pendingApproval = null;
         resolve(false);
       }
     }, 120000);
 
     shellApprovalResolvers.set(requestId, (allowed) => {
       clearTimeout(timeout);
+      nativeMacUiState.pendingApproval = null;
       resolve(allowed);
     });
   });
@@ -6540,6 +6881,188 @@ app.whenReady().then(async () => {
     console.log(`[Raycast] API listening at http://${RAYCAST_HOST}:${RAYCAST_PORT}`);
   });
 
+  if (isMac) {
+    const nativeMacUiApp = express();
+    nativeMacUiApp.use(bodyParser.json({ limit: '1mb' }));
+
+    nativeMacUiApp.use((req, res, next) => {
+      const headerToken = req.get('X-Comet-Native-Token');
+      const queryToken = req.query?.token;
+      if (headerToken === nativeMacUiToken || queryToken === nativeMacUiToken) {
+        next();
+        return;
+      }
+      res.status(401).json({ success: false, error: 'Unauthorized native panel request.' });
+    });
+
+    nativeMacUiApp.get('/native-mac-ui/state', (req, res) => {
+      const mode = normalizeMacNativePanelMode(`${req.query?.mode || 'sidebar'}`);
+      res.json({
+        success: true,
+        state: {
+          ...createNativeMacUiSnapshot(),
+          mode,
+        },
+      });
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/preferences', (req, res) => {
+      try {
+        const preferences = setMacNativeUiPreferences(req.body || {});
+        res.json({ success: true, preferences });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/prompt', async (req, res) => {
+      const prompt = `${req.body?.prompt || ''}`.trim();
+      if (!prompt) {
+        res.status(400).json({ success: false, error: 'Missing prompt.' });
+        return;
+      }
+
+      const payload = {
+        prompt,
+        source: req.body?.source || 'swiftui',
+      };
+
+      try {
+        await deliverNativeMacUiEvent('native-mac-ui-submit-prompt', payload);
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+        return;
+      }
+
+      res.json({ success: true });
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/conversations/action', async (req, res) => {
+      const action = `${req.body?.action || ''}`.trim();
+      const id = req.body?.id ? `${req.body.id}` : null;
+      if (!['new', 'load', 'delete'].includes(action)) {
+        res.status(400).json({ success: false, error: 'Unsupported conversation action.' });
+        return;
+      }
+      if ((action === 'load' || action === 'delete') && !id) {
+        res.status(400).json({ success: false, error: 'Missing conversation id.' });
+        return;
+      }
+
+      try {
+        await deliverNativeMacUiEvent('native-mac-ui-conversation-action', { action, id });
+        res.json({ success: true });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/export', async (req, res) => {
+      const format = `${req.body?.format || ''}`.trim().toLowerCase();
+      if (!['text', 'pdf'].includes(format)) {
+        res.status(400).json({ success: false, error: 'Unsupported export format.' });
+        return;
+      }
+
+      try {
+        await deliverNativeMacUiEvent('native-mac-ui-export', { format });
+        res.json({ success: true });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/panels/open', async (req, res) => {
+      const mode = normalizeMacNativePanelMode(`${req.body?.mode || 'sidebar'}`);
+      try {
+        const result = await nativeMacPanelManager.show(mode);
+        res.json({ success: true, ...result });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/panels/close', (req, res) => {
+      const mode = normalizeMacNativePanelMode(`${req.body?.mode || 'sidebar'}`);
+      const result = nativeMacPanelManager.close(mode);
+      res.json(result);
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/clipboard/copy', (req, res) => {
+      const text = `${req.body?.text || ''}`;
+      clipboard.writeText(text);
+      res.json({ success: true });
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/clipboard/clear', (req, res) => {
+      nativeMacUiState.clipboardItems = [];
+      sendToActiveWindow('native-mac-ui-clear-clipboard');
+      res.json({ success: true });
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/downloads/open', async (req, res) => {
+      const filePath = `${req.body?.path || ''}`;
+      if (!filePath) {
+        res.status(400).json({ success: false, error: 'Missing download path.' });
+        return;
+      }
+      try {
+        await shell.openPath(filePath);
+        res.json({ success: true });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/downloads/reveal', async (req, res) => {
+      const filePath = `${req.body?.path || ''}`;
+      if (!filePath) {
+        res.status(400).json({ success: false, error: 'Missing download path.' });
+        return;
+      }
+      try {
+        shell.showItemInFolder(filePath);
+        res.json({ success: true });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/approval/respond', (req, res) => {
+      const requestId = `${req.body?.requestId || ''}`;
+      const allowed = !!req.body?.allowed;
+      if (!requestId) {
+        res.status(400).json({ success: false, error: 'Missing requestId.' });
+        return;
+      }
+      const resolver = shellApprovalResolvers.get(requestId);
+      if (!resolver) {
+        res.status(404).json({ success: false, error: 'Approval request expired.' });
+        return;
+      }
+      nativeMacUiState.pendingApproval = null;
+      shellApprovalResolvers.delete(requestId);
+      resolver(allowed);
+      res.json({ success: true });
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/focus-electron', (req, res) => {
+      const target = getTopWindow();
+      if (target && !target.isDestroyed()) {
+        target.show();
+        target.focus();
+        res.json({ success: true });
+        return;
+      }
+
+      res.json({ success: false, error: 'No active Comet window found.' });
+    });
+
+    nativeMacUiServer = nativeMacUiApp.listen(nativeMacUiPort, '127.0.0.1', () => {
+      console.log(`[MacNativeUI] Bridge listening at http://127.0.0.1:${nativeMacUiPort}`);
+    });
+  }
+
   // Load or generate local device ID for P2P sync
   const p2pDeviceIdPath = path.join(app.getPath('userData'), 'p2p_device_id.txt');
   let localP2PDeviceId;
@@ -6612,6 +7135,17 @@ app.whenReady().then(async () => {
         const pin = args.pin;
         const configId = args.id;
         console.log(`[WiFi-Sync] Mobile approved high risk action with PIN: ${pin}`);
+        if (
+          nativeMacUiState.pendingApproval &&
+          nativeMacUiState.pendingApproval.approvalToken === configId
+        ) {
+          nativeMacUiState.pendingApproval = {
+            ...nativeMacUiState.pendingApproval,
+            mobileApproved: true,
+            approvedPin: pin,
+          };
+          nativeMacUiState.updatedAt = Date.now();
+        }
         if (mainWindow) {
           mainWindow.webContents.send('mobile-approve-high-risk', { pin, id: configId });
         }
@@ -8096,6 +8630,12 @@ app.whenReady().then(async () => {
 
   // Specific popup handlers
   ipcMain.on('open-settings-popup', (event, section = 'profile') => {
+    if (isMac && getMacNativeUiPreferences().utilityMode === 'swiftui') {
+      nativeMacPanelManager.show(section === 'downloads' ? 'downloads' : section === 'clipboard' ? 'clipboard' : 'settings').catch((error) => {
+        console.error('[MacNativeUI] Failed to open native settings panel:', error);
+      });
+      return;
+    }
     createPopupWindow('settings', {
       width: 1200,
       height: 800,
@@ -8124,6 +8664,12 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.on('open-downloads-popup', () => {
+    if (isMac && getMacNativeUiPreferences().utilityMode === 'swiftui') {
+      nativeMacPanelManager.show('downloads').catch((error) => {
+        console.error('[MacNativeUI] Failed to open native downloads panel:', error);
+      });
+      return;
+    }
     createPopupWindow('downloads', {
       width: 400,
       height: 600,
@@ -8131,6 +8677,12 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.on('open-clipboard-popup', () => {
+    if (isMac && getMacNativeUiPreferences().utilityMode === 'swiftui') {
+      nativeMacPanelManager.show('clipboard').catch((error) => {
+        console.error('[MacNativeUI] Failed to open native clipboard panel:', error);
+      });
+      return;
+    }
     createPopupWindow('clipboard', {
       width: 450,
       height: 650,
@@ -9599,6 +10151,12 @@ ${tabData}`;
     }
     if (raycastServer) {
       raycastServer.close();
+    }
+    if (nativeMacUiServer) {
+      nativeMacUiServer.close();
+    }
+    if (isMac) {
+      nativeMacPanelManager.closeAll();
     }
   });
 

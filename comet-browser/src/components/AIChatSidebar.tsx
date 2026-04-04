@@ -156,6 +156,7 @@ interface AIChatSidebarProps {
   setShowSchedulingModal?: (show: boolean) => void;
   schedulingIntent?: SchedulingIntent | null;
   setSchedulingIntent?: (intent: SchedulingIntent | null) => void;
+  bridgeOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -191,10 +192,10 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   }, [props.theme]);
   const isLightTheme = resolvedTheme === 'light';
   const sidebarShellStyle = {
-    background: 'linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) 88%, transparent), color-mix(in srgb, var(--primary-bg) 96%, transparent))',
-    borderColor: 'var(--border-color)',
+    background: 'linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) 82%, transparent), color-mix(in srgb, var(--primary-bg) 94%, transparent))',
+    borderColor: 'color-mix(in srgb, var(--border-color) 45%, transparent)',
     color: 'var(--primary-text)',
-    boxShadow: isLightTheme ? '0 4px 12px var(--shadow-color)' : '0 10px 40px var(--shadow-color)',
+    boxShadow: isLightTheme ? '0 6px 20px color-mix(in srgb, var(--shadow-color) 60%, transparent)' : '0 18px 50px color-mix(in srgb, var(--shadow-color) 70%, transparent)',
   } as React.CSSProperties;
   const softPanelStyle = {
     background: 'color-mix(in srgb, var(--card-bg) 92%, transparent)',
@@ -340,6 +341,13 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const terminalLogIdCounter = useRef(0);
   const isDevMode = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
+  const [lastSidebarInteractionAt, setLastSidebarInteractionAt] = useState(() => Date.now());
+  const [isIdleMinimized, setIsIdleMinimized] = useState(false);
+
+  const markSidebarInteraction = useCallback(() => {
+    setLastSidebarInteractionAt(Date.now());
+    setIsIdleMinimized(false);
+  }, []);
 
   const appendTerminalLog = useCallback((commandName: string, output: string, success = true) => {
     if (!isDevMode) return;
@@ -3010,13 +3018,58 @@ I've successfully executed the following real tasks:
     }
   }, [aiProvider, ollamaBaseUrl]);
 
+  const latestMessage = messages[messages.length - 1];
+  const latestMessageContent = latestMessage?.content ?? '';
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages.length, latestMessageContent, isLoading]);
 
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [terminalLogs]);
+
+  useEffect(() => {
+    if (messages.length > 0 || isLoading) {
+      markSidebarInteraction();
+    }
+  }, [messages.length, latestMessageContent, isLoading, markSidebarInteraction]);
+
+  useEffect(() => {
+    if (!store.macNativeSidebarAutoMinimize || props.bridgeOnly) {
+      setIsIdleMinimized(false);
+      return;
+    }
+
+    const updateIdleState = () => {
+      const shouldMinimize = !isLoading
+        && !inputMessage.trim()
+        && attachments.length === 0
+        && !showLLMProviderSettings
+        && !showCapabilities
+        && !showTerminal
+        && !permissionPending
+        && !isFullScreen
+        && Date.now() - lastSidebarInteractionAt > 15000;
+      setIsIdleMinimized(shouldMinimize);
+    };
+
+    updateIdleState();
+    const interval = window.setInterval(updateIdleState, 1000);
+    return () => window.clearInterval(interval);
+  }, [
+    attachments.length,
+    inputMessage,
+    isFullScreen,
+    isLoading,
+    lastSidebarInteractionAt,
+    permissionPending,
+    props.bridgeOnly,
+    showCapabilities,
+    showLLMProviderSettings,
+    showTerminal,
+    store.macNativeSidebarAutoMinimize,
+  ]);
 
   // Remote Prompt Listening (from mobile via cloud sync)
   useEffect(() => {
@@ -3036,6 +3089,128 @@ I've successfully executed the following real tasks:
       if (remoteCleanup) remoteCleanup();
     };
   }, [handleSendMessage]);
+
+  useEffect(() => {
+    if (!window.electronAPI?.onNativeMacPrompt) return;
+    const cleanup = window.electronAPI.onNativeMacPrompt((payload: { prompt: string }) => {
+      if (payload?.prompt) {
+        handleSendMessage(payload.prompt);
+      }
+    });
+    return cleanup;
+  }, [handleSendMessage]);
+
+  useEffect(() => {
+    const listener = window.electronAPI?.onAIChatInputText ?? window.electronAPI?.onAiChatInputText;
+    if (!listener) return;
+    const cleanup = listener((text: string) => {
+      if (typeof text === 'string') {
+        setInputMessage(text);
+      }
+    });
+    return cleanup;
+  }, []);
+
+  useEffect(() => {
+    if (!window.electronAPI?.on) return;
+
+    const cleanupConversationAction = window.electronAPI.on(
+      'native-mac-ui-conversation-action',
+      (payload: { action?: string; id?: string | null }) => {
+        switch (payload?.action) {
+          case 'new':
+            handleNewConversation();
+            break;
+          case 'load':
+            if (payload.id) {
+              handleLoadConversation(payload.id);
+            }
+            break;
+          case 'delete':
+            if (payload.id) {
+              handleDeleteConversation(payload.id);
+            }
+            break;
+          default:
+            break;
+        }
+      }
+    );
+
+    const cleanupExport = window.electronAPI.on(
+      'native-mac-ui-export',
+      (payload: { format?: 'text' | 'pdf' }) => {
+        if (payload?.format === 'text' || payload?.format === 'pdf') {
+          exportChat(payload.format);
+        }
+      }
+    );
+
+    return () => {
+      cleanupConversationAction();
+      cleanupExport();
+    };
+  }, [exportChat, handleDeleteConversation, handleLoadConversation, handleNewConversation]);
+
+  useEffect(() => {
+    if (!window.electronAPI?.updateNativeMacUIState) return;
+
+    const snapshotMessages = messages.slice(-20).map((message, index) => ({
+      id: message.id || `${message.role}-${index}-${Date.now()}`,
+      role: message.role,
+      content: cleanTagsFromText(message.content || '').slice(0, 6000),
+      timestamp: Date.now(),
+    }));
+
+    const snapshotActionChain = commandQueue.slice(0, 24).map((command) => ({
+      id: command.id,
+      type: command.type,
+      value: command.value,
+      status: command.status,
+      category: command.category,
+      riskLevel: command.riskLevel,
+    }));
+
+    const snapshotConversations = conversations.slice(0, 20).map((conversation) => ({
+      id: conversation.id,
+      title: conversation.title,
+      updatedAt: conversation.updatedAt,
+    }));
+
+    const snapshotActivityTags = Array.from(new Set(
+      searchContextStore.getRecentContexts(6).map((context) => {
+        switch (context.type) {
+          case 'web_search':
+            return context.query ? `Searched for: ${context.query}` : 'Searched the web';
+          case 'page_content':
+            return `Read: ${context.title || context.url || 'Current page'}`;
+          case 'ocr':
+            return `OCR: ${context.query || 'Screen capture'}`;
+          case 'dom':
+            return context.query ? `Scanned DOM: ${context.query}` : `Scanned DOM: ${context.url || 'Current page'}`;
+          default:
+            return '';
+        }
+      }).filter(Boolean)
+    )).slice(0, 8);
+
+    if (isLoading) {
+      snapshotActivityTags.unshift('Comet is thinking');
+    }
+
+    window.electronAPI.updateNativeMacUIState({
+      inputDraft: inputMessage,
+      isLoading,
+      error,
+      currentCommandIndex,
+      themeAppearance: resolvedTheme === 'light' ? 'light' : 'dark',
+      messages: snapshotMessages,
+      actionChain: snapshotActionChain,
+      conversations: snapshotConversations,
+      activeConversationId,
+      activityTags: Array.from(new Set(snapshotActivityTags)).slice(0, 8),
+    });
+  }, [messages, commandQueue, conversations, activeConversationId, currentCommandIndex, inputMessage, isLoading, error, resolvedTheme]);
 
   // Remote Approval Listener (from mobile)
   useEffect(() => {
@@ -3083,7 +3258,7 @@ I've successfully executed the following real tasks:
 
   if (props.isCollapsed) {
     return (
-      <div className="flex flex-col items-center h-full py-6 space-y-6 border-l" style={sidebarShellStyle}>
+      <div className="flex flex-col items-center h-full py-6 space-y-6" style={sidebarShellStyle}>
         <button onClick={props.toggleCollapse} className="w-10 h-10 flex items-center justify-center rounded-2xl transition-all text-secondary-text hover:text-primary-text" style={softPanelStyle}>
           {props.side === 'right' ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
         </button>
@@ -3097,10 +3272,22 @@ I've successfully executed the following real tasks:
         aiProvider === 'anthropic' ? store.anthropicModel :
           aiProvider === 'groq' ? store.groqModel : aiProvider;
 
+  if (props.bridgeOnly) {
+    return null;
+  }
+
+  const effectiveSidebarWidth = isIdleMinimized
+    ? Math.max(220, Math.min(sidebarWidth, 260))
+    : sidebarWidth;
+
   return (
     <div
-      className={`ai-sidebar-theme adaptive-theme-surface flex flex-col h-full border-l overflow-hidden relative ${isFullScreen ? 'fixed inset-0 z-[9999]' : ''}`}
-      style={{ width: isFullScreen ? '100%' : sidebarWidth, ...sidebarShellStyle }}
+      className={`ai-sidebar-theme adaptive-theme-surface flex flex-col h-full overflow-hidden relative transition-[width,box-shadow,border-radius] duration-500 ${isFullScreen ? 'fixed inset-0 z-[9999]' : ''}`}
+      style={{ width: isFullScreen ? '100%' : effectiveSidebarWidth, ...sidebarShellStyle }}
+      onMouseEnter={markSidebarInteraction}
+      onMouseDown={markSidebarInteraction}
+      onClick={markSidebarInteraction}
+      onFocusCapture={markSidebarInteraction}
     >
       {/* Overlays */}
       <ConversationHistoryPanel
@@ -3304,7 +3491,7 @@ I've successfully executed the following real tasks:
       </AnimatePresence>
 
       {/* Header */}
-      <header className="h-[76px] px-5 flex flex-col justify-center border-b backdrop-blur-xl sticky top-0 z-[50]" style={sidebarShellStyle}>
+      <header className={`px-5 flex flex-col justify-center border-b backdrop-blur-xl sticky top-0 z-[50] transition-[height,padding] duration-500 ${isIdleMinimized ? 'h-[64px]' : 'h-[76px]'}`} style={{ ...sidebarShellStyle, borderColor: 'color-mix(in srgb, var(--border-color) 45%, transparent)' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-9 h-9 rounded-2xl p-1.5 border" style={softPanelStyle}>
@@ -3315,6 +3502,11 @@ I've successfully executed the following real tasks:
               <div className="flex items-center gap-2 mt-1">
                 <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
                 <span className="text-[9px] font-bold text-secondary-text uppercase tracking-widest">Autonomous</span>
+                {isIdleMinimized && (
+                  <span className="px-2 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.2em] bg-sky-500/10 text-sky-400 border border-sky-500/15">
+                    Minimal
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -3392,7 +3584,7 @@ I've successfully executed the following real tasks:
       </header>
 
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto modern-scrollbar p-5 space-y-8">
+      <div className={`flex-1 overflow-y-auto modern-scrollbar transition-[padding] duration-500 ${isIdleMinimized ? 'p-4 space-y-5' : 'p-5 space-y-8'}`}>
         <AnimatePresence mode="popLayout">
           {messages.length === 0 && (
             <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-20 text-center space-y-4">
@@ -3638,7 +3830,7 @@ I've successfully executed the following real tasks:
       </div>
 
       {/* Input Area */}
-      <footer className="p-6 pt-0 sticky bottom-0" style={{ background: 'linear-gradient(180deg, transparent, color-mix(in srgb, var(--primary-bg) 86%, transparent) 28%, var(--primary-bg) 100%)' }}>
+      <footer className={`sticky bottom-0 transition-[padding] duration-500 ${isIdleMinimized ? 'p-4 pt-0' : 'p-6 pt-0'}`} style={{ background: 'linear-gradient(180deg, transparent, color-mix(in srgb, var(--primary-bg) 86%, transparent) 28%, var(--primary-bg) 100%)' }}>
         <div className={`p-4 rounded-[2.5rem] border transition-all shadow-2xl relative group ${shiftTabGlow
           ? 'border-purple-500/80 shadow-[0_0_24px_4px_rgba(168,85,247,0.35)] focus-within:border-purple-500/80'
           : 'border-white/10 focus-within:border-sky-500/30'
@@ -3681,10 +3873,14 @@ I've successfully executed the following real tasks:
 
           <textarea
             value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
+            onChange={(e) => {
+              markSidebarInteraction();
+              setInputMessage(e.target.value);
+            }}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
+            onFocus={markSidebarInteraction}
             placeholder="Command your workspace..."
-            className="w-full bg-transparent text-sm text-primary-text placeholder:text-secondary-text outline-none resize-none h-24 py-2 modern-scrollbar font-medium"
+            className={`w-full bg-transparent text-sm text-primary-text placeholder:text-secondary-text outline-none resize-none modern-scrollbar font-medium transition-[height] duration-500 ${isIdleMinimized ? 'h-16 py-1.5' : 'h-24 py-2'}`}
           />
 
           <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/10">

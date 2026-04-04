@@ -192,6 +192,17 @@ export interface BrowserState {
     toggleSidebarCollapse: () => void;
     setSidebarSide: (side: "left" | "right") => void;
     setSidebarWidth: (width: number) => void;
+    macNativeSidebarMode: 'electron' | 'swiftui';
+    macNativeActionChainMode: 'electron' | 'swiftui';
+    macNativeUtilityPanelMode: 'electron' | 'swiftui';
+    macNativePermissionMode: 'electron' | 'swiftui';
+    macNativeSidebarAutoMinimize: boolean;
+    setMacNativeSidebarMode: (mode: 'electron' | 'swiftui') => void;
+    setMacNativeActionChainMode: (mode: 'electron' | 'swiftui') => void;
+    setMacNativeUtilityPanelMode: (mode: 'electron' | 'swiftui') => void;
+    setMacNativePermissionMode: (mode: 'electron' | 'swiftui') => void;
+    setMacNativeSidebarAutoMinimize: (enabled: boolean) => void;
+    applyMacNativeUiPreferences: (preferences: Partial<Pick<BrowserState, 'macNativeSidebarMode' | 'macNativeActionChainMode' | 'macNativeUtilityPanelMode' | 'macNativePermissionMode' | 'macNativeSidebarAutoMinimize'>>) => void;
 
     // Student mode
     studentMode: boolean;
@@ -424,6 +435,11 @@ export const useAppStore = create<BrowserState>()(
             sidebarWidth: 280,
             sidebarSide: "left",
             isSidebarCollapsed: false,
+            macNativeSidebarMode: 'electron',
+            macNativeActionChainMode: 'electron',
+            macNativeUtilityPanelMode: 'electron',
+            macNativePermissionMode: 'electron',
+            macNativeSidebarAutoMinimize: false,
 
             // Student mode
             studentMode: false,
@@ -846,6 +862,48 @@ export const useAppStore = create<BrowserState>()(
             toggleSidebarCollapse: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
             setSidebarSide: (side: 'left' | 'right') => set({ sidebarSide: side }),
             setSidebarWidth: (width: number) => set({ sidebarWidth: width }),
+            setMacNativeSidebarMode: (mode: 'electron' | 'swiftui') => {
+                set((state) => ({
+                    macNativeSidebarMode: mode,
+                    sidebarOpen: mode === 'swiftui' ? false : state.sidebarOpen,
+                }));
+                if (window.electronAPI?.setMacNativeUIPreferences) {
+                    void window.electronAPI.setMacNativeUIPreferences({ sidebarMode: mode });
+                }
+            },
+            setMacNativeActionChainMode: (mode: 'electron' | 'swiftui') => {
+                set({ macNativeActionChainMode: mode });
+                if (window.electronAPI?.setMacNativeUIPreferences) {
+                    void window.electronAPI.setMacNativeUIPreferences({ actionChainMode: mode });
+                }
+            },
+            setMacNativeUtilityPanelMode: (mode: 'electron' | 'swiftui') => {
+                set({ macNativeUtilityPanelMode: mode });
+                if (window.electronAPI?.setMacNativeUIPreferences) {
+                    void window.electronAPI.setMacNativeUIPreferences({ utilityMode: mode });
+                }
+            },
+            setMacNativePermissionMode: (mode: 'electron' | 'swiftui') => {
+                set({ macNativePermissionMode: mode });
+                if (window.electronAPI?.setMacNativeUIPreferences) {
+                    void window.electronAPI.setMacNativeUIPreferences({ permissionMode: mode });
+                }
+            },
+            setMacNativeSidebarAutoMinimize: (enabled: boolean) => {
+                set({ macNativeSidebarAutoMinimize: enabled });
+                if (window.electronAPI?.setMacNativeUIPreferences) {
+                    void window.electronAPI.setMacNativeUIPreferences({ sidebarAutoMinimize: enabled });
+                }
+            },
+            applyMacNativeUiPreferences: (preferences) => set((state) => ({
+                macNativeSidebarMode: preferences.macNativeSidebarMode || state.macNativeSidebarMode,
+                macNativeActionChainMode: preferences.macNativeActionChainMode || state.macNativeActionChainMode,
+                macNativeUtilityPanelMode: preferences.macNativeUtilityPanelMode || state.macNativeUtilityPanelMode,
+                macNativePermissionMode: preferences.macNativePermissionMode || state.macNativePermissionMode,
+                macNativeSidebarAutoMinimize: typeof preferences.macNativeSidebarAutoMinimize === 'boolean'
+                    ? preferences.macNativeSidebarAutoMinimize
+                    : state.macNativeSidebarAutoMinimize,
+            })),
 
             // Student mode
             setStudentMode: (student: boolean) => set({ studentMode: student }),
@@ -1098,6 +1156,11 @@ export const useAppStore = create<BrowserState>()(
                 sidebarOpen: state.sidebarOpen,
                 sidebarWidth: state.sidebarWidth,
                 sidebarSide: state.sidebarSide,
+                macNativeSidebarMode: state.macNativeSidebarMode,
+                macNativeActionChainMode: state.macNativeActionChainMode,
+                macNativeUtilityPanelMode: state.macNativeUtilityPanelMode,
+                macNativePermissionMode: state.macNativePermissionMode,
+                macNativeSidebarAutoMinimize: state.macNativeSidebarAutoMinimize,
                 selectedEngine: state.selectedEngine,
                 aiProvider: state.aiProvider,
                 bookmarks: state.bookmarks,

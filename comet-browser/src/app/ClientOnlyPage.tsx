@@ -152,6 +152,7 @@ const MusicVisualizer = ({ color = 'rgb', isPlaying = false }: { color?: string,
 export default function Home() {
   const store = useAppStore();
   const { shouldRenderTab, isTabSuspended } = useOptimizedTabs();
+  const isMacOS = typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgent);
   const [showClipboard, setShowClipboard] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -159,10 +160,31 @@ export default function Home() {
 
   // Helper to open settings and disable browser
   const openSettingsPanel = (section: string = 'profile') => {
+    if (isMacOS && useAppStore.getState().macNativeUtilityPanelMode === 'swiftui') {
+      window.electronAPI?.showMacNativePanel?.(section === 'downloads' ? 'downloads' : section === 'clipboard' ? 'clipboard' : 'settings');
+      return;
+    }
     setSettingsSection(section);
     setShowSettings(true);
     setIsBrowserDisabled(true);
   };
+
+  const openClipboardPanel = useCallback(() => {
+    if (isMacOS && useAppStore.getState().macNativeUtilityPanelMode === 'swiftui') {
+      window.electronAPI?.showMacNativePanel?.('clipboard');
+      return;
+    }
+    setShowClipboard(true);
+  }, [isMacOS]);
+
+  const openDownloadsPanel = useCallback(() => {
+    if (isMacOS && useAppStore.getState().macNativeUtilityPanelMode === 'swiftui') {
+      window.electronAPI?.showMacNativePanel?.('downloads');
+      return;
+    }
+    setShowDownloads(true);
+    setIsBrowserDisabled(true);
+  }, [isMacOS]);
 
   const [showCart, setShowCart] = useState(false);
   const [urlPrediction, setUrlPrediction] = useState<string | null>(null);
@@ -209,6 +231,7 @@ export default function Home() {
   const [isBrowserDisabled, setIsBrowserDisabled] = useState(false);
   const [showSchedulingModal, setShowSchedulingModal] = useState(false);
   const [schedulingIntent, setSchedulingIntent] = useState<SchedulingIntent | null>(null);
+  const clearClipboardHistory = useAppStore((state) => state.clearClipboard);
 
   const isFirebaseIdToken = useCallback((token: string) => {
     try {
@@ -238,6 +261,42 @@ export default function Home() {
   useEffect(() => {
     setInputValue(store.currentUrl);
   }, [store.currentUrl]);
+
+  useEffect(() => {
+    if (!window.electronAPI?.getMacNativeUIPreferences) return;
+
+    let disposed = false;
+    const applyPreferences = (preferences?: { sidebarMode: 'electron' | 'swiftui'; actionChainMode: 'electron' | 'swiftui'; utilityMode: 'electron' | 'swiftui'; permissionMode: 'electron' | 'swiftui'; sidebarAutoMinimize?: boolean }) => {
+      if (!preferences || disposed) return;
+      useAppStore.getState().applyMacNativeUiPreferences({
+        macNativeSidebarMode: preferences.sidebarMode,
+        macNativeActionChainMode: preferences.actionChainMode,
+        macNativeUtilityPanelMode: preferences.utilityMode,
+        macNativePermissionMode: preferences.permissionMode,
+        macNativeSidebarAutoMinimize: preferences.sidebarAutoMinimize,
+      });
+      if (preferences.sidebarMode === 'swiftui') {
+        useAppStore.setState({ sidebarOpen: false });
+      }
+    };
+
+    window.electronAPI.getMacNativeUIPreferences().then((result) => {
+      if (result?.success) {
+        applyPreferences(result.preferences);
+      }
+    }).catch((error) => {
+      console.warn('Failed to load mac native UI preferences:', error);
+    });
+
+    const cleanup = window.electronAPI.onMacNativeUIPreferencesChanged?.((preferences) => {
+      applyPreferences(preferences);
+    });
+
+    return () => {
+      disposed = true;
+      cleanup?.();
+    };
+  }, []);
 
   // Mirror tabs/history state for Raycast integration
   useEffect(() => {
@@ -295,10 +354,10 @@ export default function Home() {
       switch (item.popup) {
         case 'plugins': setShowExtensionsPopup(true); setIsBrowserDisabled(true); break;
         case 'settings': openSettingsPanel(); break;
-        case 'clipboard': setShowClipboard(true); setIsBrowserDisabled(true); break;
+        case 'clipboard': openClipboardPanel(); break;
         case 'translate': openTranslateDialog(); break;
         case 'search': setShowSpotlightSearch(true); setIsBrowserDisabled(true); break;
-        case 'downloads': setShowDownloads(true); setIsBrowserDisabled(true); break;
+        case 'downloads': openDownloadsPanel(); break;
         case 'cart': setShowCart(true); setIsBrowserDisabled(true); break;
       }
     }
@@ -338,8 +397,7 @@ export default function Home() {
       });
       setIsDownloading(true);
       setDownloadStatus('in_progress');
-      setShowDownloads(true);
-      setIsBrowserDisabled(true);
+      openDownloadsPanel();
     });
 
     const cleanProgress = window.electronAPI.on('download-progress', ({ name, progress }: { name: string, progress: number }) => {
@@ -364,7 +422,7 @@ export default function Home() {
       cleanDone();
       cleanFail();
     };
-  }, []);
+  }, [openDownloadsPanel]);
 
   useEffect(() => {
     if (window.electronAPI) {
@@ -472,7 +530,11 @@ export default function Home() {
   const handlePopSearch = async () => {
     if (window.electronAPI) {
       const selectedText = await window.electronAPI.getSelectedText();
-      await window.electronAPI.popSearchShowAtCursor(selectedText || '');
+      if (window.electronAPI.popSearchShowAtCursor) {
+        await window.electronAPI.popSearchShowAtCursor(selectedText || '');
+      } else if (window.electronAPI.popSearchShow) {
+        await window.electronAPI.popSearchShow(selectedText || '', 140, 140);
+      }
     }
   };
 
@@ -878,6 +940,14 @@ export default function Home() {
     }
   }, [addClipboardItem]);
 
+  useEffect(() => {
+    if (!window.electronAPI?.on) return;
+    const cleanup = window.electronAPI.on('native-mac-ui-clear-clipboard', () => {
+      clearClipboardHistory();
+    });
+    return cleanup;
+  }, [clearClipboardHistory]);
+
   // Debounced Predictor and Suggestions Fetcher
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -983,19 +1053,46 @@ export default function Home() {
           case 'close-tab': store.removeTab(store.activeTabId); break;
           case 'next-tab': store.nextTab(); break;
           case 'prev-tab': store.prevTab(); break;
-          case 'toggle-sidebar': store.toggleSidebar(); break;
-          case 'open-settings': setShowSettings(true); break;
+          case 'toggle-sidebar':
+            if (isMacOS && useAppStore.getState().macNativeSidebarMode === 'swiftui') {
+              useAppStore.setState({ activeView: 'browser', sidebarOpen: false });
+              window.electronAPI.toggleMacNativePanel?.('sidebar');
+            } else {
+              store.toggleSidebar();
+            }
+            break;
+          case 'open-settings':
+            if (isMacOS && useAppStore.getState().macNativeUtilityPanelMode === 'swiftui') {
+              window.electronAPI.showMacNativePanel?.('settings');
+            } else {
+              setShowSettings(true);
+            }
+            break;
           case 'new-incognito-tab': store.addIncognitoTab(); break;
           case 'toggle-spotlight': setShowSpotlightSearch(prev => !prev); break;
           case 'cycle-theme': cycleTheme(); break;
-          case 'open-history': store.setSettingsSection('history'); setShowSettings(true); break;
+          case 'open-history': openSettingsPanel('history'); break;
           case 'clear-history': store.clearHistory(); break;
-          case 'open-downloads': setShowDownloads(true); break;
-          case 'open-extensions': store.setSettingsSection('extensions'); setShowSettings(true); break;
-          case 'open-bookmarks': store.setSettingsSection('vault'); setShowSettings(true); break;
+          case 'open-downloads':
+            if (isMacOS && useAppStore.getState().macNativeUtilityPanelMode === 'swiftui') {
+              window.electronAPI.showMacNativePanel?.('downloads');
+            } else {
+              setShowDownloads(true);
+            }
+            break;
+          case 'open-extensions': openSettingsPanel('extensions'); break;
+          case 'open-bookmarks': openSettingsPanel('vault'); break;
           case 'open-workspace': store.setActiveView('workspace'); break;
           case 'open-webstore': store.setActiveView('webstore'); break;
-          case 'open-ai-chat': store.setActiveView('browser'); break;
+          case 'open-ai-chat':
+            store.setActiveView('browser');
+            if (isMacOS && useAppStore.getState().macNativeSidebarMode === 'swiftui') {
+              useAppStore.setState({ sidebarOpen: false });
+              window.electronAPI.showMacNativePanel?.('sidebar');
+            } else {
+              useAppStore.setState({ sidebarOpen: true });
+            }
+            break;
           case 'open-media-studio': store.setActiveView('media-studio'); break;
           case 'open-presenton': store.setActiveView('presenton'); break;
           case 'open-p2p-sync': store.setActiveView('p2p-sync'); break;
@@ -1006,7 +1103,13 @@ export default function Home() {
           case 'open-documentation': store.setActiveView('documentation'); break;
           case 'open-cart': setShowCart(true); break;
           case 'open-camera': setShowCamera(true); break;
-          case 'open-clipboard': setShowClipboard(true); break;
+          case 'open-clipboard':
+            if (isMacOS && useAppStore.getState().macNativeUtilityPanelMode === 'swiftui') {
+              window.electronAPI.showMacNativePanel?.('clipboard');
+            } else {
+              setShowClipboard(true);
+            }
+            break;
           case 'toggle-ai-assist': store.setEnableAIAssist(!store.enableAIAssist); break;
           case 'toggle-ai-overview': store.setEnableAiOverview(!store.enableAiOverview); break;
           case 'reload-tab': window.electronAPI.reload(); break;
@@ -1599,11 +1702,24 @@ export default function Home() {
   // ─────────────────────────────────────────────────────────────────────────────
   // MAIN RENDER
   // ─────────────────────────────────────────────────────────────────────────────
+  const useNativeSidebarShell = isMacOS && store.macNativeSidebarMode === 'swiftui';
+  const useNativeActionChainShell = isMacOS && store.macNativeActionChainMode === 'swiftui';
+  const keepNativeBridgeMounted = useNativeSidebarShell || useNativeActionChainShell;
+  const showEmbeddedSidebar = store.sidebarOpen && !useNativeSidebarShell;
+
+  useEffect(() => {
+    if (!window.electronAPI?.updateNativeMacUIState) return;
+    window.electronAPI.updateNativeMacUIState({
+      downloads,
+      clipboardItems: store.clipboard,
+    });
+  }, [downloads, store.clipboard]);
+
   return (
     <div className={`flex flex-col h-screen w-full bg-deep-space overflow-hidden relative font-sans text-primary-text transition-all duration-700`}>
       <TitleBar
         onToggleSpotlightSearch={() => setShowSpotlightSearch(prev => !prev)}
-        onOpenSettings={() => setShowSettings(true)}
+        onOpenSettings={() => openSettingsPanel()}
       />
 
       {!store.hasSeenWelcomePage ? (
@@ -1650,7 +1766,7 @@ export default function Home() {
         </AnimatePresence>
 
         <AnimatePresence>
-          {store.sidebarOpen && (
+          {(showEmbeddedSidebar || keepNativeBridgeMounted) && (
             <motion.div
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
@@ -1665,19 +1781,21 @@ export default function Home() {
                 }
               }}
               initial={{ width: 0, opacity: 0 }}
-              animate={{ width: store.isSidebarCollapsed ? 70 : store.sidebarWidth, opacity: 1 }}
+              animate={{ width: showEmbeddedSidebar ? (store.isSidebarCollapsed ? 70 : store.sidebarWidth) : 0, opacity: showEmbeddedSidebar ? 1 : 0 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
               className={`relative h-full cursor-grab active:cursor-grabbing ${store.sidebarSide === 'left' ? 'order-first border-r border-border-color' : 'order-last border-l border-border-color'} no-drag-region outline-none ring-0`}
               style={{
                 background: `linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) ${store.themeOpacity - 3}%, transparent), color-mix(in srgb, var(--primary-bg) ${Math.max(0, store.themeOpacity - 7)}%, transparent), color-mix(in srgb, var(--primary-bg) ${Math.max(0, store.themeOpacity - 2)}%, transparent))`,
                 backdropFilter: `blur(${store.themeBlur}px)`,
+                overflow: showEmbeddedSidebar ? 'visible' : 'hidden',
+                pointerEvents: showEmbeddedSidebar ? 'auto' : 'none',
               }}
               onUpdate={() => {
                 if (window.electronAPI) window.dispatchEvent(new Event('resize'));
               }}
             >
-              {!store.isSidebarCollapsed && (
+              {showEmbeddedSidebar && !store.isSidebarCollapsed && (
                 <div
                   className={`absolute top-0 bottom-0 w-1 cursor-col-resize z-50 hover:bg-deep-space-accent-neon/30 transition-colors ${store.sidebarSide === 'left' ? 'right-0' : 'left-0'}`}
                   onMouseDown={(e) => {
@@ -1729,6 +1847,7 @@ export default function Home() {
                 setShowSchedulingModal={setShowSchedulingModal}
                 schedulingIntent={schedulingIntent}
                 setSchedulingIntent={setSchedulingIntent}
+                bridgeOnly={!showEmbeddedSidebar}
               />
             </motion.div>
           )}
@@ -1755,7 +1874,12 @@ export default function Home() {
                       window.electronAPI.sendToAIChatInput(selectedText);
                     }
                   }
-                  store.toggleSidebar();
+                  if (isMacOS && useAppStore.getState().macNativeSidebarMode === 'swiftui') {
+                    useAppStore.setState({ activeView: 'browser', sidebarOpen: false });
+                    window.electronAPI?.toggleMacNativePanel?.('sidebar');
+                  } else {
+                    store.toggleSidebar();
+                  }
                 }} className="p-2 rounded-xl hover:bg-primary-bg/10 text-secondary-text hover:text-primary-text transition-all" title="AI Analyst">
                   <Sparkles size={18} />
                 </button>
@@ -1829,7 +1953,13 @@ export default function Home() {
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 no-drag-region z-20 flex items-center gap-1.5">
                     {store.showDownloadsIcon && (
                       <button
-                        onClick={() => setShowDownloads(!showDownloads)}
+                        onClick={() => {
+                          if (isMacOS && useAppStore.getState().macNativeUtilityPanelMode === 'swiftui') {
+                            window.electronAPI?.showMacNativePanel?.('downloads');
+                          } else {
+                            setShowDownloads(!showDownloads);
+                          }
+                        }}
                         className={`p-1.5 rounded-lg transition-all 
                                      ${isDownloading ? 'text-accent animate-pulse' : ''}
                                      ${downloadStatus === 'completed' ? 'text-green-400' : ''}
@@ -1843,7 +1973,13 @@ export default function Home() {
                       </button>
                     )}
                     {store.showClipboardIcon && (
-                      <button onClick={() => setShowClipboard(!showClipboard)} className={`p-1.5 rounded-lg transition-all ${showClipboard ? 'text-accent bg-sky-500/10' : 'text-secondary-text hover:text-sky-400'} hover:bg-white/5`} title="Clipboard">
+                      <button onClick={() => {
+                        if (isMacOS && useAppStore.getState().macNativeUtilityPanelMode === 'swiftui') {
+                          window.electronAPI?.showMacNativePanel?.('clipboard');
+                        } else {
+                          setShowClipboard(!showClipboard);
+                        }
+                      }} className={`p-1.5 rounded-lg transition-all ${showClipboard ? 'text-accent bg-sky-500/10' : 'text-secondary-text hover:text-sky-400'} hover:bg-white/5`} title="Clipboard">
                         <CopyIcon size={14} />
                       </button>
                     )}
@@ -1893,7 +2029,7 @@ export default function Home() {
 
               {/* ── RIGHT HEADER ACTIONS ── */}
               <div className="flex items-center gap-1">
-                <button onClick={() => { setSettingsSection('history'); setShowSettings(true); }} className="p-1.5 rounded-lg text-secondary-text hover:text-primary-text transition-all" title="History">
+                <button onClick={() => { openSettingsPanel('history'); }} className="p-1.5 rounded-lg text-secondary-text hover:text-primary-text transition-all" title="History">
                   <RefreshCcw size={14} />
                 </button>
                 <button onClick={handleReadAloud} className={`p-1.5 rounded-lg transition-all ${isReadingAloud ? 'text-accent animate-pulse' : 'text-secondary-text hover:text-primary-text'}`} title="Read Aloud">
@@ -1919,7 +2055,7 @@ export default function Home() {
                   {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
                 </button>
 
-                <button onClick={() => setShowSettings(true)} className="p-1 rounded-2xl hover:scale-110 transition-all outline-none border border-white/10 bg-white/5 overflow-hidden">
+                <button onClick={() => openSettingsPanel()} className="p-1 rounded-2xl hover:scale-110 transition-all outline-none border border-white/10 bg-white/5 overflow-hidden">
                   {(store.user?.photoURL || store.localPhotoURL) ? (
                     <img
                       src={store.user?.photoURL || store.localPhotoURL || ''}
@@ -2178,7 +2314,7 @@ export default function Home() {
                 <Sparkles size={14} />
                 <span className="text-xs font-bold uppercase tracking-widest">Search with AI</span>
               </button>
-              <button onClick={() => { setShowSettings(true); setShowContextMenu(null); }} className="w-full px-4 py-2 flex items-center gap-3 hover:bg-black/5 text-secondary-text hover:text-primary-text transition-all">
+              <button onClick={() => { openSettingsPanel(); setShowContextMenu(null); }} className="w-full px-4 py-2 flex items-center gap-3 hover:bg-black/5 text-secondary-text hover:text-primary-text transition-all">
                 <GhostSettings size={14} />
                 <span className="text-xs font-bold uppercase tracking-widest">Settings</span>
               </button>

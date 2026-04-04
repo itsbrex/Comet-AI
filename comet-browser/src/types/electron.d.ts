@@ -246,6 +246,26 @@ declare global {
             savePersistentData: (key: string, data: any) => Promise<{ success: boolean; error?: string }>;
             loadPersistentData: (key: string) => Promise<{ success: boolean; data?: any; error?: string }>;
             deletePersistentData: (key: string) => Promise<{ success: boolean; error?: string }>;
+            getMacNativeUIPreferences: () => Promise<{ success: boolean; preferences?: { sidebarMode: 'electron' | 'swiftui'; actionChainMode: 'electron' | 'swiftui'; utilityMode: 'electron' | 'swiftui'; permissionMode: 'electron' | 'swiftui'; sidebarAutoMinimize?: boolean; sidebarGradientPreset?: 'graphite' | 'ocean' | 'aurora'; sidebarShowQuickActions?: boolean; sidebarShowSessions?: boolean; sidebarShowSearchTags?: boolean; sidebarShowCommandCenterButton?: boolean; sidebarShowActionChainButton?: boolean }; available?: boolean; error?: string }>;
+            setMacNativeUIPreferences: (preferences: Partial<{ sidebarMode: 'electron' | 'swiftui'; actionChainMode: 'electron' | 'swiftui'; utilityMode: 'electron' | 'swiftui'; permissionMode: 'electron' | 'swiftui'; sidebarAutoMinimize: boolean; sidebarGradientPreset: 'graphite' | 'ocean' | 'aurora'; sidebarShowQuickActions: boolean; sidebarShowSessions: boolean; sidebarShowSearchTags: boolean; sidebarShowCommandCenterButton: boolean; sidebarShowActionChainButton: boolean }>) => Promise<{ success: boolean; preferences?: { sidebarMode: 'electron' | 'swiftui'; actionChainMode: 'electron' | 'swiftui'; utilityMode: 'electron' | 'swiftui'; permissionMode: 'electron' | 'swiftui'; sidebarAutoMinimize?: boolean; sidebarGradientPreset?: 'graphite' | 'ocean' | 'aurora'; sidebarShowQuickActions?: boolean; sidebarShowSessions?: boolean; sidebarShowSearchTags?: boolean; sidebarShowCommandCenterButton?: boolean; sidebarShowActionChainButton?: boolean }; available?: boolean; error?: string }>;
+            showMacNativePanel: (mode: 'sidebar' | 'action-chain' | 'menu' | 'settings' | 'downloads' | 'clipboard' | 'permissions') => Promise<{ success: boolean; reused?: boolean; error?: string }>;
+            toggleMacNativePanel: (mode: 'sidebar' | 'action-chain' | 'menu' | 'settings' | 'downloads' | 'clipboard' | 'permissions') => Promise<{ success: boolean; closed?: boolean; reused?: boolean; error?: string }>;
+            updateNativeMacUIState: (state: {
+                inputDraft?: string;
+                isLoading?: boolean;
+                error?: string | null;
+                themeAppearance?: 'dark' | 'light';
+                currentCommandIndex?: number;
+                messages?: Array<{ id?: string; role: string; content: string; timestamp?: number }>;
+                actionChain?: Array<{ id?: string; type: string; value: string; status: string; category?: string; riskLevel?: string }>;
+                activityTags?: string[];
+                conversations?: Array<{ id: string; title: string; updatedAt: number }>;
+                activeConversationId?: string | null;
+                downloads?: Array<{ name: string; status: string; progress?: number; path?: string }>;
+                clipboardItems?: string[];
+            }) => void;
+            onMacNativeUIPreferencesChanged: (callback: (preferences: { sidebarMode: 'electron' | 'swiftui'; actionChainMode: 'electron' | 'swiftui'; utilityMode: 'electron' | 'swiftui'; permissionMode: 'electron' | 'swiftui'; sidebarAutoMinimize?: boolean; sidebarGradientPreset?: 'graphite' | 'ocean' | 'aurora'; sidebarShowQuickActions?: boolean; sidebarShowSessions?: boolean; sidebarShowSearchTags?: boolean; sidebarShowCommandCenterButton?: boolean; sidebarShowActionChainButton?: boolean }) => void) => () => void;
+            onNativeMacPrompt: (callback: (payload: { prompt: string; source?: string }) => void) => () => void;
 
             // Event Listeners for UI updates
             onNetworkStatusChanged: (callback: (isOnline: boolean) => void) => () => void;

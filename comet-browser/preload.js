@@ -285,6 +285,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('resume-tab-and-activate', subscription);
   },
   getMemoryUsage: () => ipcRenderer.invoke('get-memory-usage'),
+  popSearchShow: (text, x, y) => ipcRenderer.invoke('pop-search-show', { text, x, y }),
+  popSearchShowAtCursor: (text) => ipcRenderer.invoke('pop-search-show-at-cursor', text),
+  popSearchGetConfig: () => ipcRenderer.invoke('pop-search-get-config'),
+  popSearchUpdateConfig: (config) => ipcRenderer.invoke('pop-search-update-config', config),
+  popSearchSaveConfig: (data) => ipcRenderer.invoke('pop-search-save-config', data),
+  popSearchLoadConfig: () => ipcRenderer.invoke('pop-search-load-config'),
   pullOllamaModel: (model, callback) => {
     ipcRenderer.send('ollama-pull-model', model);
     const subscription = (event, data) => callback(data);
@@ -354,6 +360,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
   savePersistentData: (key, data) => ipcRenderer.invoke('save-persistent-data', { key, data }),
   loadPersistentData: (key) => ipcRenderer.invoke('load-persistent-data', key),
   deletePersistentData: (key) => ipcRenderer.invoke('delete-persistent-data', key),
+  getMacNativeUIPreferences: () => ipcRenderer.invoke('get-mac-native-ui-preferences'),
+  setMacNativeUIPreferences: (preferences) => ipcRenderer.invoke('set-mac-native-ui-preferences', preferences),
+  showMacNativePanel: (mode) => ipcRenderer.invoke('show-mac-native-panel', mode),
+  toggleMacNativePanel: (mode) => ipcRenderer.invoke('toggle-mac-native-panel', mode),
+  updateNativeMacUIState: (state) => ipcRenderer.send('update-native-mac-ui-state', state),
+  onMacNativeUIPreferencesChanged: (callback) => {
+    const subscription = (event, preferences) => callback(preferences);
+    ipcRenderer.on('mac-native-ui-preferences-changed', subscription);
+    return () => ipcRenderer.removeListener('mac-native-ui-preferences-changed', subscription);
+  },
+  onNativeMacPrompt: (callback) => {
+    const subscription = (event, payload) => callback(payload);
+    ipcRenderer.on('native-mac-ui-submit-prompt', subscription);
+    return () => ipcRenderer.removeListener('native-mac-ui-submit-prompt', subscription);
+  },
+  onAIChatInputText: (callback) => {
+    const subscription = (event, text) => callback(text);
+    ipcRenderer.on('ai-chat-input-text', subscription);
+    return () => ipcRenderer.removeListener('ai-chat-input-text', subscription);
+  },
+  onAiChatInputText: (callback) => {
+    const subscription = (event, text) => callback(text);
+    ipcRenderer.on('ai-chat-input-text', subscription);
+    return () => ipcRenderer.removeListener('ai-chat-input-text', subscription);
+  },
 
   // Network status
   onNetworkStatusChanged: (callback) => {

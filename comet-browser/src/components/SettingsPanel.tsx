@@ -41,6 +41,7 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
     const [showFirebaseConfig, setShowFirebaseConfig] = useState(false);
     const [showMysqlConfig, setShowMysqlConfig] = useState(false);
     const versionLabel = `v${useAppVersion()}`;
+    const isMacOS = typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgent);
 
     useEffect(() => {
         if (store.settingsSection && store.settingsSection !== activeSection) {
@@ -353,6 +354,166 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                                             aria-label="Panel Width"
                                         />
                                     </div>
+                                    {isMacOS && (
+                                        <div className="pt-6 border-t border-white/5 space-y-5">
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div>
+                                                    <h3 className="font-bold text-white mb-1 flex items-center gap-2">
+                                                        <Sparkles size={16} className="text-deep-space-accent-neon" />
+                                                        Native SwiftUI Panels
+                                                    </h3>
+                                                    <p className="text-xs text-white/30">
+                                                        Run the AI sidebar and Action Chain as detached macOS windows while keeping the Electron sidebar available as a fallback.
+                                                    </p>
+                                                </div>
+                                                <div className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border border-deep-space-accent-neon/20 text-deep-space-accent-neon bg-deep-space-accent-neon/10">
+                                                    macOS only
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="rounded-2xl border border-white/5 bg-black/20 p-4 space-y-4">
+                                                    <div>
+                                                        <p className="text-sm font-bold text-white">AI Sidebar Surface</p>
+                                                        <p className="text-xs text-white/40">Choose whether prompts live inside the browser or in a detached SwiftUI panel, and optionally let idle sessions collapse into a minimal shell.</p>
+                                                    </div>
+                                                    <div className="flex gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
+                                                        {[
+                                                            { id: 'electron', label: 'Electron' },
+                                                            { id: 'swiftui', label: 'SwiftUI' },
+                                                        ].map((option) => (
+                                                            <button
+                                                                key={option.id}
+                                                                onClick={() => store.setMacNativeSidebarMode(option.id as 'electron' | 'swiftui')}
+                                                                className={`flex-1 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${store.macNativeSidebarMode === option.id ? 'bg-deep-space-accent-neon text-deep-space-bg shadow-[0_0_15px_#38bdf8]' : 'text-white/40 hover:text-white'}`}
+                                                            >
+                                                                {option.label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-black/30 border border-white/5">
+                                                        <div>
+                                                            <p className="text-[11px] font-black uppercase tracking-widest text-white/80">Auto-minimize when idle</p>
+                                                            <p className="text-[11px] text-white/35">Shrinks the AI sidebar into a compact minimal state when it has been inactive for a bit.</p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => store.setMacNativeSidebarAutoMinimize(!store.macNativeSidebarAutoMinimize)}
+                                                            className={`relative w-12 h-6 rounded-full border transition-all ${store.macNativeSidebarAutoMinimize ? 'bg-deep-space-accent-neon/20 border-deep-space-accent-neon shadow-[0_0_14px_rgba(56,189,248,0.35)]' : 'bg-white/5 border-white/10'}`}
+                                                        >
+                                                            <span className={`absolute top-[2px] left-[2px] w-5 h-5 rounded-full transition-transform ${store.macNativeSidebarAutoMinimize ? 'translate-x-6 bg-deep-space-accent-neon' : 'translate-x-0 bg-white/70'}`} />
+                                                        </button>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => window.electronAPI?.showMacNativePanel?.('sidebar')}
+                                                        className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/10 text-[10px] font-black uppercase tracking-widest transition-all"
+                                                    >
+                                                        Open Detached AI Sidebar
+                                                    </button>
+                                                </div>
+
+                                                <div className="rounded-2xl border border-white/5 bg-black/20 p-4 space-y-4">
+                                                    <div>
+                                                        <p className="text-sm font-bold text-white">Action Chain Surface</p>
+                                                        <p className="text-xs text-white/40">Mirror command execution and approvals inside a native SwiftUI control window.</p>
+                                                    </div>
+                                                    <div className="flex gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
+                                                        {[
+                                                            { id: 'electron', label: 'Electron' },
+                                                            { id: 'swiftui', label: 'SwiftUI' },
+                                                        ].map((option) => (
+                                                            <button
+                                                                key={option.id}
+                                                                onClick={() => store.setMacNativeActionChainMode(option.id as 'electron' | 'swiftui')}
+                                                                className={`flex-1 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${store.macNativeActionChainMode === option.id ? 'bg-deep-space-accent-neon text-deep-space-bg shadow-[0_0_15px_#38bdf8]' : 'text-white/40 hover:text-white'}`}
+                                                            >
+                                                                {option.label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => window.electronAPI?.showMacNativePanel?.('action-chain')}
+                                                        className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/10 text-[10px] font-black uppercase tracking-widest transition-all"
+                                                    >
+                                                        Open Detached Action Chain
+                                                    </button>
+                                                </div>
+
+                                                <div className="rounded-2xl border border-white/5 bg-black/20 p-4 space-y-4">
+                                                    <div>
+                                                        <p className="text-sm font-bold text-white">Utility Panels</p>
+                                                        <p className="text-xs text-white/40">Use SwiftUI for settings, downloads, clipboard, and the native command menu.</p>
+                                                    </div>
+                                                    <div className="flex gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
+                                                        {[
+                                                            { id: 'electron', label: 'Electron' },
+                                                            { id: 'swiftui', label: 'SwiftUI' },
+                                                        ].map((option) => (
+                                                            <button
+                                                                key={option.id}
+                                                                onClick={() => store.setMacNativeUtilityPanelMode(option.id as 'electron' | 'swiftui')}
+                                                                className={`flex-1 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${store.macNativeUtilityPanelMode === option.id ? 'bg-deep-space-accent-neon text-deep-space-bg shadow-[0_0_15px_#38bdf8]' : 'text-white/40 hover:text-white'}`}
+                                                            >
+                                                                {option.label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <button
+                                                            onClick={() => window.electronAPI?.showMacNativePanel?.('menu')}
+                                                            className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/10 text-[10px] font-black uppercase tracking-widest transition-all"
+                                                        >
+                                                            Open Menu
+                                                        </button>
+                                                        <button
+                                                            onClick={() => window.electronAPI?.showMacNativePanel?.('settings')}
+                                                            className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/10 text-[10px] font-black uppercase tracking-widest transition-all"
+                                                        >
+                                                            Open Settings
+                                                        </button>
+                                                        <button
+                                                            onClick={() => window.electronAPI?.showMacNativePanel?.('downloads')}
+                                                            className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/10 text-[10px] font-black uppercase tracking-widest transition-all"
+                                                        >
+                                                            Open Downloads
+                                                        </button>
+                                                        <button
+                                                            onClick={() => window.electronAPI?.showMacNativePanel?.('clipboard')}
+                                                            className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/10 text-[10px] font-black uppercase tracking-widest transition-all"
+                                                        >
+                                                            Open Clipboard
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="rounded-2xl border border-white/5 bg-black/20 p-4 space-y-4">
+                                                    <div>
+                                                        <p className="text-sm font-bold text-white">Permission Prompts</p>
+                                                        <p className="text-xs text-white/40">Show low, medium, and high-risk approval prompts as native macOS sheets.</p>
+                                                    </div>
+                                                    <div className="flex gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
+                                                        {[
+                                                            { id: 'electron', label: 'Electron' },
+                                                            { id: 'swiftui', label: 'SwiftUI' },
+                                                        ].map((option) => (
+                                                            <button
+                                                                key={option.id}
+                                                                onClick={() => store.setMacNativePermissionMode(option.id as 'electron' | 'swiftui')}
+                                                                className={`flex-1 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${store.macNativePermissionMode === option.id ? 'bg-deep-space-accent-neon text-deep-space-bg shadow-[0_0_15px_#38bdf8]' : 'text-white/40 hover:text-white'}`}
+                                                            >
+                                                                {option.label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => window.electronAPI?.showMacNativePanel?.('permissions')}
+                                                        className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white/80 hover:text-white hover:bg-white/10 text-[10px] font-black uppercase tracking-widest transition-all"
+                                                    >
+                                                        Preview Native Approval Panel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="pt-6 border-t border-white/5 space-y-4">
                                         <div>
                                             <h3 className="font-bold text-white mb-1">Top Bar Icons</h3>
