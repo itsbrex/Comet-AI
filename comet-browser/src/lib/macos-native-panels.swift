@@ -2836,6 +2836,415 @@ struct RootPanelView: View {
     }
 }
 
+enum ContextMenuAction: String, CaseIterable {
+    case copy = "Copy"
+    case cut = "Cut"
+    case paste = "Paste"
+    case selectAll = "Select All"
+    case inspect = "Inspect Element"
+    case searchWithAI = "Search with AI"
+    case translate = "Translate"
+    case lookUp = "Look Up"
+    case share = "Share"
+    case openLink = "Open Link"
+    case copyLink = "Copy Link"
+    case saveImage = "Save Image"
+    case copyImage = "Copy Image"
+    
+    var icon: String {
+        switch self {
+        case .copy: return "doc.on.doc"
+        case .cut: return "scissors"
+        case .paste: return "doc.on.clipboard"
+        case .selectAll: return "checkmark.circle"
+        case .inspect: return "magnifyingglass"
+        case .searchWithAI: return "sparkles"
+        case .translate: return "globe"
+        case .lookUp: return "book"
+        case .share: return "square.and.arrow.up"
+        case .openLink: return "link"
+        case .copyLink: return "link"
+        case .saveImage: return "arrow.down.to.line"
+        case .copyImage: return "photo"
+        }
+    }
+    
+    var shortcut: String? {
+        switch self {
+        case .copy: return "⌘C"
+        case .cut: return "⌘X"
+        case .paste: return "⌘V"
+        case .selectAll: return "⌘A"
+        case .inspect: return "⌥⌘I"
+        case .searchWithAI: return nil
+        case .translate: return nil
+        case .lookUp: return nil
+        case .share: return nil
+        case .openLink: return nil
+        case .copyLink: return nil
+        case .saveImage: return nil
+        case .copyImage: return nil
+        }
+    }
+}
+
+struct ContextMenuState {
+    var selectedText: String = ""
+    var selectedURL: String?
+    var selectedImageURL: String?
+    var isVisible: Bool = false
+    var position: CGPoint = .zero
+    var contextType: ContextType = .text
+    
+    enum ContextType {
+        case text
+        case link
+        case image
+        case selection
+    }
+}
+
+@MainActor
+final class ContextMenuViewModel: ObservableObject {
+    @Published var state = ContextMenuState()
+    
+    func updateSelection(text: String, url: String? = nil, imageURL: String? = nil) {
+        state.selectedText = text
+        state.selectedURL = url
+        state.selectedImageURL = imageURL
+        
+        if url != nil {
+            state.contextType = .link
+        } else if imageURL != nil {
+            state.contextType = .image
+        } else if !text.isEmpty {
+            state.contextType = .selection
+        } else {
+            state.contextType = .text
+        }
+    }
+    
+    func show(at position: CGPoint) {
+        state.isVisible = true
+        state.position = position
+    }
+    
+    func hide() {
+        state.isVisible = false
+    }
+    
+    var availableActions: [ContextMenuAction] {
+        switch state.contextType {
+        case .text:
+            return [.copy, .cut, .paste, .selectAll]
+        case .selection:
+            return [.copy, .cut, .inspect, .searchWithAI, .translate, .lookUp, .share]
+        case .link:
+            return [.openLink, .copyLink, .inspect, .searchWithAI, .share]
+        case .image:
+            return [.saveImage, .copyImage, .searchWithAI, .inspect]
+        }
+    }
+}
+
+struct NativeContextMenuView: View {
+    @ObservedObject var viewModel: ContextMenuViewModel
+    let onAction: (ContextMenuAction) -> Void
+    
+    var body: some View {
+        if viewModel.state.isVisible {
+            VStack(spacing: 0) {
+                ForEach(viewModel.availableActions, id: \.rawValue) { action in
+                    Button {
+                        onAction(action)
+                        viewModel.hide()
+                    } label: {
+                        HStack {
+                            Image(systemName: action.icon)
+                                .font(.system(size: 13, weight: .medium))
+                                .frame(width: 20)
+                            
+                            Text(action.rawValue)
+                                .font(.system(size: 13, weight: .regular))
+                            
+                            if let shortcut = action.shortcut {
+                                Spacer()
+                                Text(shortcut)
+                                    .font(.system(size: 11, weight: .regular))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    if action != viewModel.availableActions.last {
+                        Divider()
+                            .padding(.horizontal, 8)
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+                    .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+            )
+            .fixedSize()
+            .position(viewModel.state.position)
+        }
+    }
+}
+
+struct WebContentContextMenu: NSViewRepresentable {
+    let selectedText: String
+    let selectedURL: String?
+    let selectedImageURL: String?
+    let onAction: (ContextMenuAction) -> Void
+    
+    func makeNSView(context: Context) -> ContextMenuNSView {
+        let view = ContextMenuNSView()
+        view.onAction = onAction
+        view.onSelectionChange = { text, url, imageURL in
+            context.coordinator.updateSelection(text: text, url: url, imageURL: imageURL)
+        }
+        return view
+    }
+    
+    func updateNSView(_ nsView: ContextMenuNSView, context: Context) {
+        nsView.selectedText = selectedText
+        nsView.selectedURL = selectedURL
+        nsView.selectedImageURL = selectedImageURL
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject {
+        var parent: WebContentContextMenu
+        
+        init(_ parent: WebContentContextMenu) {
+            self.parent = parent
+        }
+        
+        func updateSelection(text: String, url: String?, imageURL: String?) {
+        }
+    }
+}
+
+final class ContextMenuNSView: NSView {
+    var onAction: ((ContextMenuAction) -> Void)?
+    var onSelectionChange: ((String, String?, String?) -> Void)?
+    var selectedText: String = ""
+    var selectedURL: String?
+    var selectedImageURL: String?
+    
+    override func rightMouseDown(with event: NSEvent) {
+        updateSelectionInfo()
+        showContextMenu(with: event)
+    }
+    
+    private func updateSelectionInfo() {
+        if let webView = window?.contentView?.findWebView() {
+            webView.evaluateJavaScript("window.getSelection().toString()") { result, _ in
+                if let text = result as? String {
+                    self.selectedText = text
+                }
+            }
+        }
+    }
+    
+    private func showContextMenu(with event: NSEvent) {
+        let menu = NSMenu()
+        
+        let actions: [ContextMenuAction] = selectedText.isEmpty 
+            ? [.copy, .cut, .paste, .selectAll]
+            : [.copy, .cut, .searchWithAI, .translate, .inspect]
+        
+        for action in actions {
+            let item = NSMenuItem(title: action.rawValue, action: #selector(handleMenuAction(_:)), keyEquivalent: "")
+            item.representedObject = action
+            item.target = self
+            
+            if let shortcut = action.shortcut {
+                item.keyEquivalentModifierMask = []
+                item.keyEquivalent = shortcut
+            }
+            
+            menu.addItem(item)
+        }
+        
+        if !selectedText.isEmpty {
+            menu.addItem(NSMenuItem.separator())
+            
+            let lookUpItem = NSMenuItem(title: "Look Up", action: #selector(lookUpSelection), keyEquivalent: "")
+            lookUpItem.target = self
+            menu.addItem(lookUpItem)
+            
+            let shareItem = NSMenuItem(title: "Share", action: #selector(shareSelection), keyEquivalent: "")
+            shareItem.target = self
+            menu.addItem(shareItem)
+        }
+        
+        let location = event.locationInWindow
+        menu.popUp(positioning: nil, at: location, in: self)
+    }
+    
+    @objc private func handleMenuAction(_ sender: NSMenuItem) {
+        guard let action = sender.representedObject as? ContextMenuAction else { return }
+        onAction?(action)
+    }
+    
+    @objc private func lookUpSelection() {
+        guard !selectedText.isEmpty else { return }
+        NSWorkspace.shared.open(URL(string: "dictionary://lookup/\(selectedText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")")!)
+    }
+    
+    @objc private func shareSelection() {
+        guard !selectedText.isEmpty else { return }
+        let picker = NSSharingServicePicker(items: [selectedText])
+        picker.show(relativeTo: bounds, of: self, preferredEdge: .minY)
+    }
+}
+
+extension NSView {
+    func findWebView() -> WKWebView? {
+        if let webView = self as? WKWebView {
+            return webView
+        }
+        for subview in subviews {
+            if let found = subview.findWebView() {
+                return found
+            }
+        }
+        return nil
+    }
+}
+
+struct TranslationMenuView: View {
+    let text: String
+    let onTranslate: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    private let languages = [
+        ("English", "en"),
+        ("Spanish", "es"),
+        ("French", "fr"),
+        ("German", "de"),
+        ("Italian", "it"),
+        ("Portuguese", "pt"),
+        ("Chinese", "zh"),
+        ("Japanese", "ja"),
+        ("Korean", "ko"),
+        ("Arabic", "ar"),
+        ("Russian", "ru"),
+        ("Hindi", "hi")
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Translate to...")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.primary)
+            
+            ScrollView {
+                VStack(spacing: 2) {
+                    ForEach(0..<languages.count, id: \.self) { index in
+                        Button {
+                            onTranslate(languages[index].1)
+                            dismiss()
+                        } label: {
+                            Text(languages[index].0)
+                                .font(.system(size: 12, weight: .regular))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(maxHeight: 300)
+        }
+        .padding(12)
+        .frame(width: 180)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+        )
+    }
+}
+
+struct AISearchMenuView: View {
+    let searchText: String
+    let onSearch: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    private let searchOptions = [
+        ("Quick Search", "Quick AI-powered search of the selected text", "bolt"),
+        ("Deep Analysis", "Get an in-depth analysis of the content", "brain"),
+        ("Summarize", "Get a concise summary", "text.badge.checkmark"),
+        ("Explain", "Explain the concept or term", "lightbulb"),
+        ("Compare", "Compare with related topics", "arrow.left.arrow.right"),
+        ("Research", "Conduct comprehensive research", "magnifyingglass")
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Search with AI")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.primary)
+            
+            Text("Selected: \"\(searchText.prefix(30))\(searchText.count > 30 ? "..." : "")\"")
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            
+            Divider()
+            
+            ForEach(0..<searchOptions.count, id: \.self) { index in
+                let option = searchOptions[index]
+                Button {
+                    onSearch(option.0)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Image(systemName: option.2)
+                            .font(.system(size: 12, weight: .medium))
+                            .frame(width: 16)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(option.0)
+                                .font(.system(size: 12, weight: .medium))
+                            Text(option.1)
+                                .font(.system(size: 10, weight: .regular))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .frame(width: 260)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+        )
+    }
+}
+
 @main
 struct CometNativePanelsApp: App {
     @NSApplicationDelegateAdaptor(NativePanelsAppDelegate.self) private var appDelegate

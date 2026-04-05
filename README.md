@@ -8,12 +8,12 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.7-blue)]()
+[![Version](https://img.shields.io/badge/Version-0.2.8-blue)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
 [![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
 
-[Features](#-features) • [Download](#-download) • [Quick Start](#-quick-start) • [Security](#-security) • [Contributing](#-contributing)
+[Features](#-features) • [Documentation](#-documentation) • [Download](#-download) • [Quick Start](#-quick-start) • [Security](#-security) • [Contributing](#-contributing)
 
 </div>
 
@@ -35,7 +35,22 @@ Most browsers are built for monetization. Comet is built for **control**.
 
 ---
 
-## ✨ Features (v0.2.7)
+## 📚 Documentation
+
+Full documentation is available at [browser.ponsrischool.in](https://browser.ponsrischool.in):
+
+| Page | Description |
+|------|-------------|
+| [/docs/ai-commands](https://browser.ponsrischool.in/docs/ai-commands) | Complete guide to AI commands and JSON format |
+| [/docs/automation](https://browser.ponsrischool.in/docs/automation) | Background scheduling and task automation |
+| [/docs/native-api](https://browser.ponsrischool.in/docs/native-api) | System-level APIs for control |
+| [/docs/plugins](https://browser.ponsrischool.in/docs/plugins) | Plugin marketplace and SDK |
+| [/docs/deep-links](https://browser.ponsrischool.in/docs/deep-links) | URL schemes and routing |
+| [/docs/document-generation](https://browser.ponsrischool.in/docs/document-generation) | PDF, PPTX, DOCX generation |
+
+---
+
+## ✨ Features (v0.2.8)
 
 ### 🤖 AI Agent
 - Multi-step autonomous task execution via chained commands
@@ -104,6 +119,14 @@ Most browsers are built for monetization. Comet is built for **control**.
 - **Injection pattern detection** in DOM reading
 - All shell commands and native clicks require explicit user approval
 - Read-only DOM mode with automatic security filtering
+
+### 📝 Document Generation
+- **PDF Generation** - Professional PDFs with templates (professional, executive, dark, minimalist)
+- **PowerPoint (PPTX)** - Slide presentations with charts, images, and animations
+- **Word Documents (DOCX)** - Rich formatting with tables, lists, and styles
+- **Screenshot Embedding** - AI captures and includes screen images in reports
+- **Live Streaming** - Watch reports being generated in real-time
+- **Branding** - Custom headers, footers, and company logos
 
 ### 🤖 AI Provider Support
 | Provider | Type | Notes |
@@ -223,13 +246,13 @@ flutter run
 
 ## ⬇️ Downloads
 
-**Latest Release: v0.2.7** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
+**Latest Release: v0.2.8** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
 
 | Platform | Download | Status |
 |----------|----------|--------|
-| 🪟 Windows (.exe) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser.Setup.0.2.7.exe) | ✅ Stable |
-| 🍎 macOS (.dmg) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.7-arm64.dmg) | ✅ Stable |
-| 🐧 Linux (.AppImage) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.7.AppImage) | ✅ Stable |
+| 🪟 Windows (.exe) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser.Setup.0.2.8.exe) | ✅ Stable |
+| 🍎 macOS (.dmg) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.8-arm64.dmg) | ✅ Stable |
+| 🐧 Linux (.AppImage) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.8.AppImage) | ✅ Stable |
 | 📱 Android (.apk) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/app-release.apk) | ✅ Stable |
 | 🍎 iOS (.ipa) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet-AI.ipa) | 🧪 Beta |
 
@@ -246,6 +269,14 @@ flutter run
 | iOS | 🧪 Testing Phase |
 
 ---
+
+## 📝 v0.2.8 Highlights
+- **Comprehensive Documentation Website** - Added 6 new documentation pages covering AI Commands, Automation, Native API, Plugins, Deep Links, and Document Generation
+- **Document Generation Guide** - Detailed PDF, PPTX, and DOCX generation with templates, features, and code examples
+- **Native API Reference** - Complete guide to 50+ system-level APIs for window management, file system, network, and media control
+- **Plugin System Documentation** - Plugin marketplace with SDK, manifest format, security verification, and development guides
+- **Deep Links Reference** - URL schemes (`comet-ai://`), web URLs, route reference, and cross-platform support
+- **Structured Changelog** - Created proper CHANGELOG.md and RELEASE_NOTES.md files
 
 ## 📝 v0.2.7 Highlights
 - **Hardened Authentication Flow**: Re-engineered Electron auth handling to properly catch custom `comet-browser://` deep links using `did-fail-load` for robust auto-closing during Google/Firebase sign-in.
@@ -341,6 +372,18 @@ Comet AI Browser is built by a **16-year-old student** from India, preparing for
 ---
 
 ## 📋 Changelog
+
+### v0.2.8 (2026-04-05) - Documentation Website & Structured Changelog
+#### New Features
+- **Documentation Website** - Comprehensive docs at [browser.ponsrischool.in](https://browser.ponsrischool.in)
+  - `/docs/ai-commands` - Complete AI command reference
+  - `/docs/automation` - Background scheduling guide
+  - `/docs/native-api` - System APIs documentation
+  - `/docs/plugins` - Plugin marketplace and SDK
+  - `/docs/deep-links` - URL schemes and routing
+  - `/docs/document-generation` - PDF/PPTX/DOCX generation
+- **CHANGELOG.md** - Structured changelog following Keep a Changelog format
+- **RELEASE_NOTES.md** - Comprehensive release notes
 
 ### v0.2.7 (2026-04-04) - Auth Hardening & System Stability
 #### New Features & Fixes
