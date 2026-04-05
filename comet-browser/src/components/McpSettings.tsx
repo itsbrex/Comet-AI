@@ -1,20 +1,149 @@
 "use client";
 import React, { useState } from 'react';
-import { Server, Plus, Trash2, Globe, Activity, Shield, Link as LinkIcon } from 'lucide-react';
+import { Server, Plus, Trash2, Globe, Activity, Shield, Link as LinkIcon, Terminal, Key, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/useAppStore';
+
+interface ServerPreset {
+    name: string;
+    desc: string;
+    type: 'stdio' | 'sse';
+    command?: string;
+    args?: string[];
+    env?: Record<string, string>;
+    url?: string;
+    requiresToken?: boolean;
+    tokenEnvVar?: string;
+    tokenPlaceholder?: string;
+}
+
+const SERVER_PRESETS: ServerPreset[] = [
+    {
+        name: 'Filesystem',
+        desc: 'Read, write, and browse local files securely',
+        type: 'stdio',
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-filesystem', '.'],
+    },
+    {
+        name: 'GitHub',
+        desc: 'Manage repositories, issues, PRs, and code',
+        type: 'stdio',
+        command: 'docker',
+        args: ['run', '-i', '--rm', '-e', 'GITHUB_PERSONAL_ACCESS_TOKEN', 'ghcr.io/github/github-mcp-server'],
+        env: { 'GITHUB_PERSONAL_ACCESS_TOKEN': '' },
+        requiresToken: true,
+        tokenEnvVar: 'GITHUB_PERSONAL_ACCESS_TOKEN',
+        tokenPlaceholder: 'ghp_xxxxxxxxxxxxxxxxxxxx',
+    },
+    {
+        name: 'Slack',
+        desc: 'Send messages, manage channels, and more',
+        type: 'stdio',
+        command: 'npx',
+        args: ['-y', '@zencoderai/slack-mcp-server'],
+        env: { 'SLACK_BOT_TOKEN': '', 'SLACK_TEAM_ID': '' },
+        requiresToken: true,
+        tokenEnvVar: 'SLACK_BOT_TOKEN',
+        tokenPlaceholder: 'xoxb-xxxxxxxxxxxxxxxxxxxx',
+    },
+    {
+        name: 'Gmail',
+        desc: 'Read, send, and manage emails',
+        type: 'stdio',
+        command: 'npx',
+        args: ['-y', '@pouyanafisi/gmail-mcp'],
+        env: { 'GMAIL_CREDENTIALS_PATH': '' },
+        requiresToken: true,
+        tokenEnvVar: 'GMAIL_CREDENTIALS_PATH',
+        tokenPlaceholder: '/path/to/credentials.json',
+    },
+    {
+        name: 'n8n Workflows',
+        desc: 'Trigger and automate n8n workflows',
+        type: 'stdio',
+        command: 'npx',
+        args: ['-y', 'n8n-mcp'],
+        env: { 'N8N_URL': '', 'N8N_API_KEY': '' },
+        requiresToken: true,
+        tokenEnvVar: 'N8N_URL',
+        tokenPlaceholder: 'https://your-n8n-instance.com',
+    },
+    {
+        name: 'Git',
+        desc: 'Read, search, and manipulate Git repositories',
+        type: 'stdio',
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-git'],
+    },
+];
 
 const McpSettings = () => {
     const store = useAppStore();
     const [isAdding, setIsAdding] = useState(false);
-    const [newServer, setNewServer] = useState({ name: '', url: '' });
+    const [selectedPreset, setSelectedPreset] = useState<ServerPreset | null>(null);
+    const [newServer, setNewServer] = useState({
+        name: '',
+        type: 'sse' as 'sse' | 'stdio',
+        url: '',
+        command: '',
+        args: '',
+        envVars: [] as { key: string; value: string }[],
+    } as { name: string; type: 'sse' | 'stdio'; url?: string; command: string; args: string; envVars: { key: string; value: string }[] });
+
+    const handleAddPreset = (preset: ServerPreset) => {
+        if (preset.requiresToken) {
+            setSelectedPreset(preset);
+            const envVars = preset.env ? Object.entries(preset.env).map(([key, value]) => ({ key, value })) : [];
+            setNewServer({
+                name: preset.name,
+                type: preset.type,
+                command: preset.command || '',
+                args: preset.args?.join(' ') || '',
+                envVars,
+            });
+            setIsAdding(true);
+        } else {
+            store.addMcpServer({
+                name: preset.name,
+                type: preset.type,
+                command: preset.command,
+                args: preset.args,
+            });
+        }
+    };
 
     const handleAdd = () => {
-        if (newServer.name && newServer.url) {
-            store.addMcpServer(newServer);
-            setNewServer({ name: '', url: '' });
-            setIsAdding(false);
+        if (!newServer.name) return;
+        
+        if (newServer.type === 'stdio') {
+            const env = newServer.envVars.reduce((acc, { key, value }) => {
+                if (key && value) acc[key] = value;
+                return acc;
+            }, {} as Record<string, string>);
+            
+            store.addMcpServer({
+                name: newServer.name,
+                type: 'stdio',
+                command: newServer.command,
+                args: newServer.args.split(' ').filter(Boolean),
+                env: Object.keys(env).length > 0 ? env : undefined,
+            });
+        } else {
+            store.addMcpServer({
+                name: newServer.name,
+                type: 'sse',
+                url: newServer.url,
+            });
         }
+        
+        resetForm();
+    };
+
+    const resetForm = () => {
+        setNewServer({ name: '', type: 'sse', url: '', command: '', args: '', envVars: [] });
+        setSelectedPreset(null);
+        setIsAdding(false);
     };
 
     return (
@@ -27,26 +156,28 @@ const McpSettings = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                    { name: 'GitHub', desc: 'Manage repos, issues & PRs', url: 'mcp://github.com/mcp-server' },
-                    { name: 'Google Drive', desc: 'Search & read documents', url: 'mcp://drive.google.com/mcp-server' },
-                    { name: 'Dropbox', desc: 'Analyze cloud storage files', url: 'mcp://dropbox.com/mcp-server' }
-                ].map((preset) => (
+                {SERVER_PRESETS.map((preset) => (
                     <button
                         key={preset.name}
-                        onClick={() => {
-                            setNewServer({ name: preset.name, url: preset.url });
-                            setIsAdding(true);
-                        }}
+                        onClick={() => handleAddPreset(preset)}
                         className="p-5 rounded-[2rem] bg-white/[0.02] border border-white/5 hover:border-deep-space-accent-neon/30 hover:bg-deep-space-accent-neon/5 transition-all text-left flex flex-col gap-2 group relative overflow-hidden"
                     >
                         <div className="flex items-center justify-between">
-                            <span className="text-white font-bold text-sm tracking-tight">{preset.name}</span>
+                            <div className="flex items-center gap-2">
+                                <Terminal size={14} className="text-deep-space-accent-neon" />
+                                <span className="text-white font-bold text-sm tracking-tight">{preset.name}</span>
+                            </div>
                             <div className="p-1 px-2 rounded-lg bg-deep-space-accent-neon/10 text-deep-space-accent-neon text-[8px] font-black uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                                Connect
+                                {preset.requiresToken ? 'Configure' : 'Add'}
                             </div>
                         </div>
                         <p className="text-white/30 text-[11px] leading-relaxed line-clamp-2">{preset.desc}</p>
+                        {preset.requiresToken && (
+                            <div className="flex items-center gap-1 text-amber-400/50 text-[9px] mt-1">
+                                <Key size={10} />
+                                <span>Requires token</span>
+                            </div>
+                        )}
                     </button>
                 ))}
             </div>
@@ -70,7 +201,11 @@ const McpSettings = () => {
                         <Activity size={14} /> Refresh All
                     </button>
                     <button
-                        onClick={() => setIsAdding(true)}
+                        onClick={() => {
+                            setSelectedPreset(null);
+                            setNewServer({ name: '', type: 'stdio', url: '', command: '', args: '', envVars: [] });
+                            setIsAdding(true);
+                        }}
                         className="flex items-center gap-2 px-4 py-2 bg-deep-space-accent-neon/20 hover:bg-deep-space-accent-neon/30 border border-deep-space-accent-neon/30 rounded-xl text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon transition-all"
                     >
                         <Plus size={14} /> Custom Server
@@ -87,6 +222,29 @@ const McpSettings = () => {
                         className="overflow-hidden"
                     >
                         <div className="p-6 rounded-3xl bg-white/[0.03] border border-white/10 space-y-4 mb-6">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    {selectedPreset ? (
+                                        <>
+                                            <Terminal size={16} className="text-deep-space-accent-neon" />
+                                            <span className="text-white font-bold text-sm">{selectedPreset.name}</span>
+                                            {selectedPreset.requiresToken && <Key size={12} className="text-amber-400" />}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Zap size={16} className="text-deep-space-accent-neon" />
+                                            <span className="text-white font-bold text-sm">Custom Server</span>
+                                        </>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={resetForm}
+                                    className="text-white/30 hover:text-white/60 text-[10px] font-bold uppercase tracking-widest"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">Server Name</label>
@@ -99,19 +257,99 @@ const McpSettings = () => {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">Server URL (SSE or stdio)</label>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">Connection Type</label>
+                                    <select
+                                        value={newServer.type}
+                                        onChange={(e) => setNewServer({ ...newServer, type: e.target.value as 'sse' | 'stdio' })}
+                                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-deep-space-accent-neon/50 transition-all"
+                                    >
+                                        <option value="stdio">Stdio (Local Command)</option>
+                                        <option value="sse">SSE (Remote Server)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {newServer.type === 'stdio' ? (
+                                <>
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">Command</label>
+                                            <input
+                                                type="text"
+                                                value={newServer.command}
+                                                onChange={(e) => setNewServer({ ...newServer, command: e.target.value })}
+                                                placeholder="e.g. npx, docker, node"
+                                                className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-deep-space-accent-neon/50 transition-all placeholder:text-white/10"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">Arguments (space-separated)</label>
+                                            <input
+                                                type="text"
+                                                value={newServer.args}
+                                                onChange={(e) => setNewServer({ ...newServer, args: e.target.value })}
+                                                placeholder="e.g. -y @modelcontextprotocol/server-filesystem ."
+                                                className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-deep-space-accent-neon/50 transition-all placeholder:text-white/10"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {newServer.envVars.length > 0 && (
+                                        <div className="space-y-3 pt-2">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Environment Variables</label>
+                                                <button
+                                                    onClick={() => setNewServer({ ...newServer, envVars: [...newServer.envVars, { key: '', value: '' }] })}
+                                                    className="text-[9px] font-bold text-deep-space-accent-neon hover:text-white transition-all"
+                                                >
+                                                    + Add Variable
+                                                </button>
+                                            </div>
+                                            {newServer.envVars.map((envVar, index) => (
+                                                <div key={index} className="grid grid-cols-2 gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={envVar.key}
+                                                        onChange={(e) => {
+                                                            const newEnvVars = [...newServer.envVars];
+                                                            newEnvVars[index].key = e.target.value;
+                                                            setNewServer({ ...newServer, envVars: newEnvVars });
+                                                        }}
+                                                        placeholder="VARIABLE_NAME"
+                                                        className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-deep-space-accent-neon/50 transition-all placeholder:text-white/10 font-mono"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={envVar.value}
+                                                        onChange={(e) => {
+                                                            const newEnvVars = [...newServer.envVars];
+                                                            newEnvVars[index].value = e.target.value;
+                                                            setNewServer({ ...newServer, envVars: newEnvVars });
+                                                        }}
+                                                        placeholder={selectedPreset?.tokenPlaceholder || 'value'}
+                                                        className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-deep-space-accent-neon/50 transition-all placeholder:text-white/10 font-mono"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">Server URL</label>
                                     <input
                                         type="text"
                                         value={newServer.url}
                                         onChange={(e) => setNewServer({ ...newServer, url: e.target.value })}
-                                        placeholder="http://localhost:3000/sse"
+                                        placeholder="http://localhost:3000/mcp"
                                         className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-deep-space-accent-neon/50 transition-all placeholder:text-white/10"
                                     />
                                 </div>
-                            </div>
-                            <div className="flex justify-end gap-3">
+                            )}
+
+                            <div className="flex justify-end gap-3 pt-2">
                                 <button
-                                    onClick={() => setIsAdding(false)}
+                                    onClick={resetForm}
                                     className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-white transition-all"
                                 >
                                     Cancel
@@ -163,10 +401,19 @@ const McpSettings = () => {
                                                 {server.status}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2 text-white/30 truncate">
-                                            <LinkIcon size={12} />
-                                            <span className="text-[11px] font-medium truncate">{server.url}</span>
-                                        </div>
+                                        {server.type === 'stdio' ? (
+                                            <div className="flex items-center gap-2 text-white/30 truncate">
+                                                <Terminal size={12} />
+                                                <span className="text-[11px] font-medium truncate font-mono">
+                                                    {server.command} {server.args?.join(' ')}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-2 text-white/30 truncate">
+                                                <LinkIcon size={12} />
+                                                <span className="text-[11px] font-medium truncate">{server.url}</span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="flex items-center gap-2">

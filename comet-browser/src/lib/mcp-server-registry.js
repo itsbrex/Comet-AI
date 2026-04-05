@@ -9,7 +9,7 @@ class McpManager {
   }
 
   async connect(id, config) {
-    const { url, type = 'sse', command, args, name = 'MCP Server' } = config;
+    const { url, type = 'sse', command, args, env, name = 'MCP Server' } = config;
     console.log(`[MCP-Manager] Connecting to ${id} (${url || command})`);
     
     try {
@@ -19,7 +19,11 @@ class McpManager {
       if (type === 'sse') {
         transport = new SSEClientTransport(new URL(url));
       } else if (type === 'stdio') {
-        transport = new StdioClientTransport({ command, args });
+        const transportOptions = { command, args };
+        if (env) {
+          transportOptions.env = { ...process.env, ...env };
+        }
+        transport = new StdioClientTransport(transportOptions);
       } else {
         throw new Error(`Unsupported transport type: ${type}`);
       }

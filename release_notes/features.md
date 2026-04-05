@@ -7,8 +7,33 @@ Comet-AI/
 ├── comet-browser/          # Electron Desktop Browser
 ├── flutter_browser_app/    # Flutter Mobile App
 ├── release_notes/          # Release documentation
+├── Landing_Page/           # Documentation website
+│   └── landing-page-v-0.1.0alpha/src/app/docs/
+│       ├── ai-commands/       # AI command reference
+│       ├── automation/         # Scheduling & automation
+│       ├── native-api/         # System APIs
+│       ├── plugins/            # Plugin marketplace
+│       ├── deep-links/         # URL schemes
+│       └── document-generation/ # PDF/PPTX/DOCX
 └── skills/                 # AI generation skills
 ```
+
+---
+
+## Documentation Website
+
+The landing page at [browser.ponsrischool.in](https://browser.ponsrischool.in) provides comprehensive documentation:
+
+### Available Documentation Pages
+
+| Page | Description |
+|------|-------------|
+| **AI Commands** | Complete guide to JSON commands, bracket format, HTML comments, multi-command chains |
+| **Automation** | Background scheduling, cron expressions, task types, service installation |
+| **Native API** | System APIs (window management, file system, network, media control) |
+| **Plugins** | Plugin marketplace, SDK, manifest format, security verification |
+| **Deep Links** | URL schemes (`comet-ai://`), web URLs, route reference, platform support |
+| **Document Generation** | PDF templates, PPTX slides, DOCX styles, generation methods |
 
 ---
 
@@ -130,10 +155,11 @@ Comet-AI/
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| v0.2.6 | 2026-03-30 | BrowserView resize fixes, DOCX page config |
+| v0.2.7 | 2026-04-04 | Auth hardening, IPC cleanup, memory leak fixes |
+| v0.2.6 | 2026-03-30 | Native sign-in, Firebase auth, mobile sync |
 | v0.2.5 | 2026-03-26 | Scheduling modal, macOS polish, human-in-loop |
 | v0.2.4 | 2026-03-xx | Previous stable release |
 
 ---
 
-*Last Updated: 2026-03-30*
+*Last Updated: 2026-04-05*

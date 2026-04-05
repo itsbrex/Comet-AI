@@ -147,8 +147,8 @@ export interface BrowserState {
     setHasSeenAiMistakeWarning: (val: boolean) => void;
     mcpServerPort: number;
     setMcpServerPort: (port: number) => void;
-    mcpServers: Array<{ id: string; name: string; url: string; status: 'online' | 'offline' | 'connecting'; type?: string; tools?: any[] }>;
-    addMcpServer: (server: { name: string; url: string; type?: string }) => Promise<void>;
+    mcpServers: Array<{ id: string; name: string; url?: string; status: 'online' | 'offline' | 'connecting'; type?: 'sse' | 'stdio'; command?: string; args?: string[]; env?: Record<string, string>; tools?: any[] }>;
+    addMcpServer: (server: { name: string; url?: string; type?: 'sse' | 'stdio'; command?: string; args?: string[]; env?: Record<string, string> }) => Promise<void>;
     removeMcpServer: (id: string) => Promise<void>;
     syncMcpServers: () => Promise<void>;
     updateMcpServerStatus: (id: string, status: 'online' | 'offline' | 'connecting') => void;
@@ -531,19 +531,20 @@ export const useAppStore = create<BrowserState>()(
 
             // MCP Servers
             mcpServers: [],
-            addMcpServer: async (server: { name: string; url: string }) => {
+            addMcpServer: async (server: { name: string; url?: string; type?: 'sse' | 'stdio'; command?: string; args?: string[]; env?: Record<string, string> }) => {
                 const id = `mcp-${Date.now()}`;
+                const serverConfig = { ...server, id };
                 if (window.electronAPI) {
                     set((state: BrowserState) => ({
-                        mcpServers: [...state.mcpServers, { ...server, id, status: 'connecting' }]
+                        mcpServers: [...state.mcpServers, { ...serverConfig, status: 'connecting' as const }]
                     }));
-                    const res = await window.electronAPI.mcpConnectServer({ ...server, id });
+                    const res = await window.electronAPI.mcpConnectServer(serverConfig);
                     set((state: BrowserState) => ({
                         mcpServers: state.mcpServers.map(s => s.id === id ? { ...s, status: res.success ? 'online' : 'offline' } : s)
                     }));
                 } else {
                     set((state: BrowserState) => ({
-                        mcpServers: [...state.mcpServers, { ...server, id, status: 'online' }]
+                        mcpServers: [...state.mcpServers, { ...serverConfig, status: 'online' as const }]
                     }));
                 }
             },

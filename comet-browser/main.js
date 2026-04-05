@@ -9631,7 +9631,8 @@ ${tabData}`;
   // ============================================================================
 
   ipcMain.handle('mcp-connect-server', async (event, config) => {
-    console.log(`[Main] Connecting to MCP server: ${config.name} (${config.url})`);
+    const serverInfo = config.url || (config.command ? `${config.command} ${config.args?.join(' ') || ''}` : 'unknown');
+    console.log(`[Main] Connecting to MCP server: ${config.name} (${serverInfo})`);
     const id = config.id || `mcp-${Date.now()}`;
     const success = await mcpManager.connect(id, config);
     if (success) {
@@ -9988,9 +9989,8 @@ ${tabData}`;
     }
   } else {
     // Default MCP servers - users can add their own via settings
-    // Note: Google MCP removed due to rate limiting issues (429)
+    // Note: Removed github-mcp and brave-search due to connection issues
     const defaultServers = [
-      { id: 'github-mcp', name: 'GitHub MCP', url: 'https://api.github.com/mcp', type: 'sse', status: 'offline' },
       { id: 'filesystem-mcp', name: 'Filesystem MCP (Local)', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '.'], type: 'stdio', status: 'offline' }
     ];
     console.log('[Main] No MCP servers found, loading defaults.');
@@ -10029,80 +10029,6 @@ ${tabData}`;
       return { success: true };
     } catch (error) {
       console.error('[Main] Failed to open external URL:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle('open-external-app', async (event, app_name_or_path) => {
-    if (!app_name_or_path || typeof app_name_or_path !== 'string') {
-      return { success: false, error: 'Invalid app path' };
-    }
-
-    // Basic sanitization
-    app_name_or_path = app_name_or_path.trim().slice(0, 500);
-
-    try {
-      console.log('[Main] Opening external app:', app_name_or_path);
-
-      // First try as a direct absolute path
-      if (path.isAbsolute(app_name_or_path) && fs.existsSync(app_name_or_path)) {
-        const result = await shell.openPath(app_name_or_path);
-        if (!result) return { success: true };
-      }
-
-      const lowerName = (app_name_or_path || '').toLowerCase().trim();
-
-      if (process.platform === 'win32') {
-        // Look up well-known app name (handles UWP shell: paths and simple exe names)
-        const winCmd = WINDOWS_APP_MAP[lowerName];
-
-        return new Promise((resolve) => {
-          let cmdToRun;
-
-          if (winCmd) {
-            // Known app — use mapped command directly
-            if (winCmd.startsWith('explorer.exe shell:') || winCmd.startsWith('ms-settings:')) {
-              // UWP / settings URI — pass to cmd start without extra quotes
-              cmdToRun = `start "" "${winCmd}"`;
-            } else {
-              cmdToRun = winCmd;
-            }
-          } else {
-            // Assume it's an executable name or path
-            cmdToRun = `"${app_name_or_path}"`;
-          }
-
-          exec(cmdToRun, (error, stdout, stderr) => {
-            if (error) {
-              console.error('[Main] Failed to open external app:', error);
-              resolve({ success: false, error: error.message });
-            } else {
-              resolve({ success: true });
-            }
-          });
-        });
-      } else if (process.platform === 'darwin') {
-        exec(`open "${app_name_or_path}"`, (error) => {
-          if (error) {
-            console.error('[Main] Failed to open external app:', error);
-            resolve({ success: false, error: error.message });
-          } else {
-            resolve({ success: true });
-          }
-        });
-      } else {
-        // Linux
-        exec(`xdg-open "${app_name_or_path}"`, (error) => {
-          if (error) {
-            console.error('[Main] Failed to open external app:', error);
-            resolve({ success: false, error: error.message });
-          } else {
-            resolve({ success: true });
-          }
-        });
-      }
-    } catch (error) {
-      console.error('[Main] Error opening external app:', error);
       return { success: false, error: error.message };
     }
   });

@@ -128,7 +128,7 @@ declare global {
 
             // MCP Support
             mcpCommand: (command: string, data: any) => Promise<any>;
-            mcpConnectServer: (config: { id: string; name: string; url: string; type?: string }) => Promise<{ success: boolean; error?: string }>;
+            mcpConnectServer: (config: { id: string; name: string; url?: string; type?: 'sse' | 'stdio'; command?: string; args?: string[]; env?: Record<string, string> }) => Promise<{ success: boolean; error?: string }>;
             mcpDisconnectServer: (id: string) => Promise<{ success: boolean; error?: string }>;
             mcpListServers: () => Promise<{ success: boolean; servers: any[], error?: string }>;
             mcpGetTools: (serverId: string) => Promise<{ success: boolean; tools: any[], error?: string }>;
