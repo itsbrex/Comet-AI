@@ -2,13 +2,15 @@ name: 🚀 Publish Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*.*.*'
       - 'v*.*.*-*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g. v0.2.4)'
+        description: 'Version tag (e.g. v0.2.4) - leave empty to use package.json'
         required: false
       release_name:
         description: 'Release Name'
@@ -18,9 +20,15 @@ on:
         required: false
         type: boolean
         default: true
+      auto_tag:
+        description: 'Auto-tag from package.json version'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  actions: read
 
 env:
   NODE_VERSION: '22'
@@ -37,12 +45,25 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       is_stable: ${{ steps.version.outputs.is_stable }}
+      is_auto_tag: ${{ steps.version.outputs.is_auto_tag }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Parse version
         id: version
         run: |
-          # Handle tag push
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          # Check if this is an auto-tag from package.json
+          IS_AUTO_TAG="false"
+          if [[ "${{ github.event.inputs.auto_tag }}" == "true" ]] || [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            IS_AUTO_TAG="true"
+          fi
+          
+          # Get version from package.json
+          if [[ "$IS_AUTO_TAG" == "true" ]]; then
+            TAG="v$(node -p "require('./comet-browser/package.json').version")"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
           elif [[ -n "${{ github.event.inputs.version }}" ]]; then
             TAG="${{ github.event.inputs.version }}"
@@ -52,7 +73,7 @@ jobs:
           
           VERSION="${TAG#v}"
           
-          # Check if stable release
+          # Check if stable release (no suffix like -beta, -rc, etc.)
           if [[ "$TAG" == *"-"* ]]; then
             IS_STABLE="false"
           else
@@ -62,6 +83,82 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "is_stable=$IS_STABLE" >> $GITHUB_OUTPUT
+          echo "is_auto_tag=$IS_AUTO_TAG" >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git tag | grep -q "^${{ steps.version.outputs.tag }}$"; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create tag if needed
+        if: steps.check_tag.outputs.exists == 'false' && steps.version.outputs.is_auto_tag == 'true'
+        run: |
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin ${{ steps.version.outputs.tag }}
+
+  # ============================================================================
+  # GENERATE CHANGELOG
+  # ============================================================================
+  changelog:
+    name: Generate Changelog
+    needs: get-version
+    runs-on: ubuntu-latest
+    outputs:
+      changelog: ${{ steps.changelog.outputs.content }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          TAG=${{ needs.get-version.outputs.tag }}
+          VERSION=${{ needs.get-version.outputs.version }}
+          
+          # Get commits since last tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG=$(git log --oneline -1 --format="%H" | head -1)
+          fi
+          
+          # Generate changelog
+          CHANGELOG="# 🚀 Comet AI Browser v${VERSION}\n\n"
+          CHANGELOG+="**Release Date:** $(date '+%B %d, %Y')\n\n"
+          CHANGELOG+="## 📝 What's New\n\n"
+          
+          # Get commits between tags
+          COMMITS=$(git log ${PREV_TAG}..HEAD --oneline --format="* %s (%h)" 2>/dev/null || echo "* Initial release")
+          
+          # Categorize commits
+          FEATURES=$(echo "$COMMITS" | grep -iE "(feat|feature|add|new)" | head -10 || echo "")
+          FIXES=$(echo "$COMMITS" | grep -iE "(fix|bug|patch)" | head -10 || echo "")
+          IMPROVEMENTS=$(echo "$COMMITS" | grep -iE "(improve|enhance|refactor|update)" | head -10 || echo "")
+          OTHER=$(echo "$COMMITS" | grep -vE "(feat|fix|improve|enhance|refactor|update|merge)" | head -10 || echo "")
+          
+          if [ -n "$FEATURES" ]; then
+            CHANGELOG+="### ✨ New Features\n$FEATURES\n\n"
+          fi
+          if [ -n "$FIXES" ]; then
+            CHANGELOG+="### 🐛 Bug Fixes\n$FIXES\n\n"
+          fi
+          if [ -n "$IMPROVEMENTS" ]; then
+            CHANGELOG+="### ⚡ Improvements\n$IMPROVEMENTS\n\n"
+          fi
+          if [ -n "$OTHER" ]; then
+            CHANGELOG+="### 📦 Other Changes\n$OTHER\n\n"
+          fi
+          
+          CHANGELOG+="---\n"
+          CHANGELOG+="*Generated automatically from commit history*\n"
+          
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
   # ============================================================================
   # ANDROID BUILD
@@ -272,8 +369,9 @@ jobs:
   # ============================================================================
   create-release:
     name: Create Release
-    needs: [get-version, build-android, build-ios, build-desktop]
+    needs: [get-version, changelog, build-android, build-ios, build-desktop]
     runs-on: ubuntu-latest
+    if: needs.get-version.outputs.tag != ''
     steps:
       - uses: actions/checkout@v4
 
@@ -290,32 +388,30 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body: |
-            # 🚀 Comet AI Browser v${{ needs.get-version.outputs.version }}
+            ${{ needs.changelog.outputs.changelog }}
+            
+            ## 📥 Download Installers
             
             Download the latest release for your platform below!
             
-            ## Desktop
+            ### Desktop
             | Platform | File |
             |----------|------|
             | 🪟 Windows | `Comet.Browser.Setup.*.exe` or `.msix` |
             | 🍎 macOS | `Comet.Browser-*.dmg` |
             | 🐧 Linux | `Comet.Browser-*.AppImage` |
             
-            ## Mobile
+            ### Mobile
             | Platform | File |
             |----------|------|
             | 📱 Android | `app-release.apk` |
             | 🍎 iOS | `Comet-AI.ipa` |
             
-            ## 📌 Notes
-            - Compatible with landing page auto-detection
-            - All builds are production-ready
-            
             ---
             Built with ❤️ by [Latestinssan](https://github.com/Preet3627)
           draft: false
           prerelease: ${{ needs.get-version.outputs.is_stable == 'false' }}
-          generate_release_notes: true
+          generate_release_notes: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Assets

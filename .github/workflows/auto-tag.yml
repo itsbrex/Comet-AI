@@ -1,0 +1,89 @@
+name: 🏷️ Auto Tag on Main Push
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (show version without tagging)'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    name: Check & Generate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      should_tag: ${{ steps.version.outputs.should_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get package.json version and find next available tag
+        id: version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./comet-browser/package.json').version")
+          echo "Base version from package.json: ${CURRENT_VERSION}"
+          
+          # Function to increment patch version
+          increment_patch() {
+            local ver=$1
+            # Handle versions like 0.2.7 -> 0.2.8, or 0.2.7.1 -> 0.2.7.2
+            echo "$ver" | awk -F. '{
+              if (NF == 2) {
+                print $1 "." $2 ".1"
+              } else if (NF == 3) {
+                print $1 "." $2 "." ($3 + 1)
+              } else {
+                print $1 "." $2 "." $3 ".1"
+              }
+            }'
+          }
+          
+          # Check if base tag exists and keep incrementing
+          TAG="v${CURRENT_VERSION}"
+          while git tag | grep -q "^${TAG}$"; do
+            echo "Tag ${TAG} already exists, incrementing..."
+            CURRENT_VERSION=$(increment_patch "$CURRENT_VERSION")
+            TAG="v${CURRENT_VERSION}"
+          done
+          
+          echo "Final tag to create: ${TAG}"
+          echo "version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "should_tag=true" >> $GITHUB_OUTPUT
+
+      - name: Dry run - Show what would happen
+        if: github.event.inputs.dry_run == 'true'
+        run: |
+          echo "=== Dry Run Mode ==="
+          echo "Would create tag: ${{ steps.version.outputs.tag }}"
+          echo "Version: ${{ steps.version.outputs.version }}"
+
+      - name: Create and push tag
+        if: steps.version.outputs.should_tag == 'true' && github.event.inputs.dry_run != 'true'
+        run: |
+          echo "Creating tag: ${{ steps.version.outputs.tag }}"
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag ${{ steps.version.outputs.tag }} -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin ${{ steps.version.outputs.tag }}
+          echo "✅ Tag ${{ steps.version.outputs.tag }} pushed successfully!"
+
+  # Trigger main release workflow if tag was pushed
+  trigger-release:
+    name: Trigger Release
+    needs: check-version
+    runs-on: ubuntu-latest
+    if: needs.check-version.outputs.should_tag == 'true' && github.event.inputs.dry_run != 'true'
+    steps:
+      - name: Trigger release workflow
+        run: |
+          echo "Tag ${{ needs.check-version.outputs.tag }} pushed. Release workflow will be triggered automatically."

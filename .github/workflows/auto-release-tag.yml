@@ -49,6 +49,77 @@ jobs:
           echo "is_stable=$IS_STABLE" >> $GITHUB_OUTPUT
 
   # ============================================================================
+  # GENERATE CHANGELOG
+  # ============================================================================
+  changelog:
+    name: Generate Changelog
+    needs: parse-tag
+    runs-on: ubuntu-latest
+    outputs:
+      changelog: ${{ steps.changelog.outputs.content }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          TAG=${{ needs.parse-tag.outputs.tag }}
+          VERSION=${{ needs.parse-tag.outputs.version }}
+          
+          # Get commits since last tag
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            # Use first commit if no previous tags
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD 2>/dev/null | head -1)
+          fi
+          
+          # Generate changelog
+          CHANGELOG="# 🚀 Comet AI Browser v${VERSION}\n\n"
+          CHANGELOG+="**Release Date:** $(date '+%B %d, %Y')\n\n"
+          
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG+="## 📝 What's New\n\n"
+            
+            # Get commits between tags
+            COMMITS=$(git log ${PREV_TAG}..HEAD --oneline --format="* %s (%h)" 2>/dev/null || echo "")
+            
+            if [ -n "$COMMITS" ]; then
+              # Categorize commits
+              FEATURES=$(echo "$COMMITS" | grep -iE "(feat|feature|add|new)" | head -10 || echo "")
+              FIXES=$(echo "$COMMITS" | grep -iE "(fix|bug|patch)" | head -10 || echo "")
+              IMPROVEMENTS=$(echo "$COMMITS" | grep -iE "(improve|enhance|refactor|update)" | head -10 || echo "")
+              OTHER=$(echo "$COMMITS" | grep -vE "(feat|fix|improve|enhance|refactor|update|merge|docs|chore)" | head -10 || echo "")
+              
+              if [ -n "$FEATURES" ]; then
+                CHANGELOG+="### ✨ New Features\n$FEATURES\n\n"
+              fi
+              if [ -n "$FIXES" ]; then
+                CHANGELOG+="### 🐛 Bug Fixes\n$FIXES\n\n"
+              fi
+              if [ -n "$IMPROVEMENTS" ]; then
+                CHANGELOG+="### ⚡ Improvements\n$IMPROVEMENTS\n\n"
+              fi
+              if [ -n "$OTHER" ]; then
+                CHANGELOG+="### 📦 Other Changes\n$OTHER\n\n"
+              fi
+            else
+              CHANGELOG+="*No commits since last release*\n\n"
+            fi
+          else
+            CHANGELOG+="## 📝 Initial Release\n\n"
+            CHANGELOG+="*First release of Comet AI Browser*\n\n"
+          fi
+          
+          CHANGELOG+="---\n"
+          CHANGELOG+="*Generated automatically from commit history*\n"
+          
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  # ============================================================================
   # ANDROID BUILD
   # ============================================================================
   build-android:
@@ -247,7 +318,7 @@ jobs:
   # ============================================================================
   create-release:
     name: Create Release
-    needs: [parse-tag, build-android, build-ios, build-desktop]
+    needs: [parse-tag, changelog, build-android, build-ios, build-desktop]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -265,18 +336,20 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body: |
-            # 🚀 Comet AI Browser v${{ needs.parse-tag.outputs.version }}
+            ${{ needs.changelog.outputs.changelog }}
+            
+            ## 📥 Download Installers
             
             Download the latest release for your platform below!
             
-            ## Desktop
+            ### Desktop
             | Platform | File |
             |----------|------|
             | 🪟 Windows | `Comet.Browser.Setup.*.exe` or `.msix` |
             | 🍎 macOS | `Comet.Browser-*.dmg` |
             | 🐧 Linux | `Comet.Browser-*.AppImage` |
             
-            ## Mobile
+            ### Mobile
             | Platform | File |
             |----------|------|
             | 📱 Android | `app-release.apk` |
@@ -291,7 +364,7 @@ jobs:
             Built with ❤️ by [Latestinssan](https://github.com/Preet3627)
           draft: false
           prerelease: ${{ needs.parse-tag.outputs.is_stable == 'false' }}
-          generate_release_notes: true
+          generate_release_notes: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Assets

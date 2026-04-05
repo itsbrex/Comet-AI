@@ -406,6 +406,53 @@ Comet-AI/
 
 ---
 
-*Last Updated: 2026-03-26*
-*Status: Background Automation Service - IMPLEMENTED*
-*Current Focus: Auto-Reconnect Device Storage*
+## ✅ COMPLETED THIS SESSION (2026-04-05)
+
+### Swift UI Improvements + OCR Fixes
+
+**Files Modified:**
+- `src/lib/tesseract-service.js` - Fixed OCR JSON parsing with regex fallback, added robotJS direct click
+- `src/lib/macos-native-panels.swift` - THINK UI, hidden title bar, rich markdown, Mermaid, Liquid Glass, macOS menu, Electron settings
+- `src/components/ai/AIConstants.ts` - Added cross-app OCR/click documentation
+
+**Completed Tasks:**
+- ✅ Fix OCR click JSON parsing
+- ✅ Add robotJS for external app clicking
+- ✅ Fix THINK UI in Swift (animated indicator)
+- ✅ Remove Swift title bar (`.windowStyle(.hiddenTitleBar)`)
+- ✅ Fix AI message rendering on Swift (br, bold, math via WKWebView)
+- ✅ Add MermaidView for Swift (MermaidJS via WKWebView)
+- ✅ Add Liquid Glass Theme (`liquidGlass` gradient preset)
+- ✅ Add macOS menu with direct settings access
+- ✅ Add Electron Settings to Swift (quick access buttons for API Keys, Appearance, Automation, etc.)
+- ✅ Update AI guide for cross-app OCR and click
+
+**Views Added to Swift:**
+- `ThinkingIndicatorView` - Animated thinking indicator
+- `RichMarkdownView` - WKWebView with KaTeX/math/markdown
+- `MarkdownMessageText` - Smart markdown detection
+- `MermaidView` - Mermaid diagram rendering via WKWebView
+- `ElectronSettingsButton` - Quick access to Electron settings
+
+**macOS Menu:**
+- Comet Settings menu with AI Providers, Appearance, Automation, Sync sections
+- Direct shortcuts to OpenAI/Gemini/Anthropic/Ollama settings
+- Keyboard shortcut: ⌘,
+
+**NativeSettingsPanelView Updates:**
+- Added "Open Electron Settings" section with 8 quick-access buttons
+- Added Electron settings buttons: API Keys, Appearance, Automation, Permissions, WiFi Sync, Privacy, Extensions
+- Added "All Settings" button for full Electron settings panel
+- Native macOS settings now organized in clear sections
+- Liquid Glass theme added to gradient presets
+
+**AI Guide (Cross-App OCR/Click):**
+- Documented OCR_COORDINATES and OCR_SCREEN for external apps
+- Documented CLICK_APP_ELEMENT for external app clicking
+- Explained JSON response parsing with regex fallback
+- Documented coordinate handling and translation
+
+---
+
+*Last Updated: 2026-04-05*
+*Status: Swift UI Improvements - ALL COMPLETED*

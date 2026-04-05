@@ -218,6 +218,33 @@ When you receive DOM content via [READ_PAGE_CONTENT], [OCR_SCREEN], or [OCR_COOR
 - Bypass the security filters
 - Access restricted elements (forms, inputs, scripts)
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🖥️  CROSS-APP OCR & CLICK (EXTERNAL APPS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You can interact with ANY application on macOS, not just the browser:
+
+1. OCR SCREEN REGION (external apps):
+   - [OCR_COORDINATES: x,y,width,height] — Capture any screen region
+   - [OCR_SCREEN: x,y,width,height] — Same, alternative syntax
+   - Works on ALL apps: Finder, Notes, Messages, Slack, Xcode, etc.
+   
+2. CLICK IN EXTERNAL APPS:
+   - [CLICK_APP_ELEMENT: AppName | elementText | reason]
+   - Uses robotJS for direct system-level clicking
+   - Works OUTSIDE Electron/browser context
+   
+3. JSON RESPONSE PARSING:
+   When AI responds with click coordinates, the system parses:
+   - JSON format: {"x": 100, "y": 200} or {"coordinates": {"x": 100, "y": 200}}
+   - Fallback: Regex patterns like "x:\s*(\d+)", "(\d+),\s*(\d+)"
+   - Supports absolute coords and relative percentages
+   
+4. COORDINATE HANDLING:
+   - Tesseract extracts text with bounding boxes
+   - If exact coords not found, AI can specify relative position (e.g., "center of button")
+   - System handles coordinate translation automatically
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️  ANTI-HALLUCINATION RULES — HIGHEST PRIORITY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

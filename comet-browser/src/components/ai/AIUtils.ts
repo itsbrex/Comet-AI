@@ -113,7 +113,10 @@ export function applyInlineMarkdown(text: string): string {
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/~~(.+?)~~/g, '<del>$1</del>');
+    .replace(/~~(.+?)~~/g, '<del>$1</del>')
+    // Inline math: $...$ or \(...\)
+    .replace(/\$([^$\n]+?)\$/g, '<span class="math-inline">$$1$</span>')
+    .replace(/\\\(([^)]+?)\\\)/g, '<span class="math-inline">$1</span>');
 }
 
 export function escapeHtml(str: string): string {
@@ -222,15 +225,18 @@ export function buildBodyFromMarkdown(text: string): string {
     } else if (inTable) { flushTable(); }
 
     let line = rawLine.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    
     if (/^#{1}\s/.test(line))  { flushList(); htmlLines.push(`<h1>${applyInlineMarkdown(line.replace(/^#+\s/, ''))}</h1>`); continue; }
     if (/^#{2}\s/.test(line))  { flushList(); htmlLines.push(`<h2>${applyInlineMarkdown(line.replace(/^#+\s/, ''))}</h2>`); continue; }
     if (/^#{3,}\s/.test(line)) { flushList(); htmlLines.push(`<h3>${applyInlineMarkdown(line.replace(/^#+\s/, ''))}</h3>`); continue; }
     if (/^[-*]{3,}$/.test(line.trim())) { flushList(); htmlLines.push('<hr/>'); continue; }
+    
     if (/^&gt;\s/.test(line.trim())) {
       flushList();
       htmlLines.push(`<blockquote>${applyInlineMarkdown(line.trim().replace(/^&gt;\s/, ''))}</blockquote>`);
       continue;
     }
+    
     if (/^[-*•]\s/.test(line.trim())) {
       if (!inList || listType !== 'ul') { if (inList) htmlLines.push(`</${listType}>`); htmlLines.push('<ul>'); inList = true; listType = 'ul'; }
       htmlLines.push(`<li>${applyInlineMarkdown(line.trim().replace(/^[-*•]\s/, ''))}</li>`);
@@ -241,9 +247,26 @@ export function buildBodyFromMarkdown(text: string): string {
       htmlLines.push(`<li>${applyInlineMarkdown(line.trim().replace(/^\d+\.\s/, ''))}</li>`);
       continue;
     }
-    if (line.trim() === '') { flushList(); htmlLines.push('<br/>'); continue; }
+    
+    if (line.trim() === '') { flushList(); htmlLines.push('<br/><br/>'); continue; }
+    
+    let processedLine = applyInlineMarkdown(line);
+    
+    if (/^\$\$.+\$\$$/.test(processedLine.trim())) {
+      flushList();
+      const mathContent = processedLine.trim().slice(2, -2);
+      htmlLines.push(`<div class="katex-display math-block"><span class="math-inline">${mathContent}</span></div>`);
+      continue;
+    }
+    if (/^\\\[.+\\\]$/.test(processedLine.trim())) {
+      flushList();
+      const mathContent = processedLine.trim().slice(2, -2);
+      htmlLines.push(`<div class="katex-display math-block"><span class="math-inline">${mathContent}</span></div>`);
+      continue;
+    }
+    
     flushList();
-    htmlLines.push(`<p>${applyInlineMarkdown(line)}</p>`);
+    htmlLines.push(`<p>${processedLine}</p>`);
   }
   flushList(); flushTable();
   if (inCodeFence && codeBuffer.length > 0) {
@@ -369,10 +392,13 @@ export function buildCleanPDFContent(
     }
     h2 { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 600; margin: 32px 0 12px; color: #1e293b; }
     h3 { font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 600; margin: 24px 0 10px; color: ${accent}; }
-    table { border-collapse: collapse; width: 100%; margin: 24px 0; border: 1px solid #e2e8f0; table-layout: fixed; word-wrap: break-word; }
-    th { background: #f8fafc; color: #475569; padding: 12px 16px; text-align: left; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; width: auto; border-bottom: 2px solid #e2e8f0; }
+    table { border-collapse: collapse; width: 100%; margin: 24px 0; border: 1px solid #e2e8f0; table-layout: fixed; word-wrap: break-word; page-break-inside: avoid; page-break-after: auto; }
+    thead { page-break-after: avoid; }
+    tbody { page-break-before: auto; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    th { background: #f8fafc; color: #475569; padding: 12px 16px; text-align: left; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; width: auto; border-bottom: 2px solid #e2e8f0; page-break-after: avoid; }
     td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; word-break: break-word; max-width: 300px; }
-    .table-wrapper { overflow-x: auto; margin: 24px 0; max-width: 100%; }
+    .table-wrapper { overflow-x: auto; margin: 24px 0; max-width: 100%; page-break-inside: avoid; }
     code { font-family: monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 2px; color: ${accent}; }
     pre { background: #0f172a; color: #f8fafc; padding: 16px; overflow-x: auto; margin: 24px 0; white-space: pre-wrap; word-break: break-all; }
     blockquote { border-left: 4px solid ${accent}; padding: 12px 24px; background: #f0f9ff; color: #1e40af; margin: 24px 0; }
@@ -409,8 +435,30 @@ export function buildCleanPDFContent(
   </div>
   <div class="footer">
     <div class="footer-brand">${footerLogoHTML} Comet AI</div>
-    <span>${escapeHtml(title)} • ${new Date().getFullYear()}</span>
+    <span>${escapeHtml(data.title)} • ${new Date().getFullYear()}</span>
   </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof renderMathInElement !== 'undefined') {
+        renderMathInElement(document.body, {
+          delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false},
+            {left: '\\[', right: '\\]', display: true},
+            {left: '\\(', right: '\\)', display: false}
+          ],
+          throwOnError: false,
+          trust: true
+        });
+      }
+      document.querySelectorAll('.math-block').forEach(function(el) {
+        el.innerHTML = el.textContent;
+        if (typeof katex !== 'undefined') {
+          try { katex.render(el.textContent, el, { throwOnError: false, displayMode: true }); } catch(e) {}
+        }
+      });
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -605,6 +653,9 @@ export function buildPDFFromJSON(
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;600&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -647,8 +698,10 @@ export function buildPDFFromJSON(
     }
     h2 { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 600; margin: 32px 0 12px; color: #1e293b; }
     h3 { font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 600; margin: 24px 0 10px; color: ${accent}; }
-    table { border-collapse: collapse; width: 100%; margin: 24px 0; border: 1px solid #e2e8f0; }
-    th { background: #f8fafc; color: #475569; padding: 12px 16px; text-align: left; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
+    table { border-collapse: collapse; width: 100%; margin: 24px 0; border: 1px solid #e2e8f0; page-break-inside: avoid; }
+    thead { page-break-after: avoid; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    th { background: #f8fafc; color: #475569; padding: 12px 16px; text-align: left; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; page-break-after: avoid; }
     td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
     pre { background: #0f172a; color: #f8fafc; padding: 16px; overflow-x: auto; margin: 24px 0; white-space: pre-wrap; word-break: break-all; }
     .footer {
@@ -662,6 +715,9 @@ export function buildPDFFromJSON(
     .pdf-images figure { margin: 24px 0; text-align: center; page-break-inside: avoid; clear: both; display: block; }
     .pdf-images img { max-width: 100%; width: auto; height: auto; max-height: 600px; display: block; margin: 0 auto; }
     .pdf-images figcaption { font-size: 0.85rem; color: #64748b; margin-top: 12px; font-style: italic; text-align: center; }
+    .katex-display { margin: 16px 0; overflow-x: auto; }
+    .katex { font-size: 1.1em; }
+    .math-block { background: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0; border-left: 4px solid ${accent}; }
   </style>
 </head>
 <body>
@@ -786,8 +842,10 @@ export function buildEnhancedPDFFromJSON(
     h1 { font-family: 'Outfit', sans-serif; font-size: 2.25rem; font-weight: 700; margin-bottom: 12px; color: ${textColor}; line-height: 1.2; }
     h2 { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 600; margin: 32px 0 12px; color: ${textColor}; }
     h3 { font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 600; margin: 24px 0 10px; color: ${accent}; }
-    table { border-collapse: collapse; width: 100%; margin: 24px 0; border: 1px solid ${outline}; }
-    th { background: ${data.theme === 'dark' ? '#1e293b' : '#f8fafc'}; color: ${mutedColor}; padding: 12px 16px; text-align: left; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; border-bottom: 2px solid ${outline}; }
+    table { border-collapse: collapse; width: 100%; margin: 24px 0; border: 1px solid ${outline}; page-break-inside: avoid; }
+    thead { page-break-after: avoid; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    th { background: ${data.theme === 'dark' ? '#1e293b' : '#f8fafc'}; color: ${mutedColor}; padding: 12px 16px; text-align: left; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; border-bottom: 2px solid ${outline}; page-break-after: avoid; }
     td { padding: 10px 16px; border-bottom: 1px solid ${outline}; font-size: 0.9rem; }
     pre { background: ${data.theme === 'dark' ? '#1e293b' : '#0f172a'}; color: #f8fafc; padding: 16px; overflow-x: auto; margin: 24px 0; white-space: pre-wrap; word-break: break-all; }
     blockquote { border-left: 4px solid ${accent}; padding: 12px 24px; background: ${data.theme === 'dark' ? '#1e293b' : '#f0f9ff'}; color: ${textColor}; margin: 24px 0; }

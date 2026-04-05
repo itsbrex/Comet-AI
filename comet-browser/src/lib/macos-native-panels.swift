@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import Foundation
 import QuartzCore
+import WebKit
 
 enum PanelMode: String, CaseIterable {
     case sidebar
@@ -119,6 +120,7 @@ struct NativePanelState: Codable {
         let sidebarShowSearchTags: Bool?
         let sidebarShowCommandCenterButton: Bool?
         let sidebarShowActionChainButton: Bool?
+        let sidebarActionChainAutoAppear: Bool?
 
         static let defaults = Preferences(
             sidebarMode: "electron",
@@ -131,7 +133,8 @@ struct NativePanelState: Codable {
             sidebarShowSessions: true,
             sidebarShowSearchTags: true,
             sidebarShowCommandCenterButton: true,
-            sidebarShowActionChainButton: true
+            sidebarShowActionChainButton: true,
+            sidebarActionChainAutoAppear: false
         )
     }
 
@@ -248,7 +251,18 @@ final class NativePanelViewModel: ObservableObject {
             }
         }
     }
-
+    
+    func openSettings(target: String) {
+        recordInteraction()
+        Task {
+            do {
+                _ = try await sendJSONRequest(path: "/native-mac-ui/settings/open", body: ["target": target])
+            } catch {
+                statusText = "Unable to open settings"
+            }
+        }
+    }
+    
     func focusBrowser() {
         recordInteraction()
         Task {
@@ -688,6 +702,14 @@ struct PanelPalette {
             return [Color(red: 0.99, green: 0.97, blue: 1.0), Color(red: 0.94, green: 0.93, blue: 1.0), Color(red: 0.92, green: 0.98, blue: 0.97)]
         case ("aurora", false):
             return [Color(red: 0.06, green: 0.05, blue: 0.12), Color(red: 0.09, green: 0.12, blue: 0.22), Color(red: 0.11, green: 0.06, blue: 0.18)]
+        case ("liquidGlass", true):
+            return [Color.white.opacity(0.15), Color.white.opacity(0.08), Color.white.opacity(0.03)]
+        case ("liquidGlass", false):
+            return [Color(red: 0.12, green: 0.12, blue: 0.16).opacity(0.85), Color(red: 0.08, green: 0.08, blue: 0.12).opacity(0.90), Color.black.opacity(0.95)]
+        case ("custom", true):
+            return [Color.white.opacity(0.20), Color.white.opacity(0.12), Color.white.opacity(0.05)]
+        case ("custom", false):
+            return [Color(red: 0.10, green: 0.10, blue: 0.14).opacity(0.90), Color(red: 0.06, green: 0.06, blue: 0.10).opacity(0.95), Color.black.opacity(0.98)]
         default:
             return isLight
                 ? [Color(red: 0.97, green: 0.98, blue: 1.0), Color(red: 0.90, green: 0.95, blue: 0.99), Color(red: 0.96, green: 0.95, blue: 0.99)]
@@ -704,6 +726,14 @@ struct PanelPalette {
             return isLight
                 ? [Color.white.opacity(0.78), Color(red: 0.95, green: 0.92, blue: 1.0).opacity(0.62)]
                 : [Color(red: 0.30, green: 0.16, blue: 0.40).opacity(0.22), Color.white.opacity(0.05)]
+        case "liquidGlass":
+            return isLight
+                ? [Color.white.opacity(0.35), Color.white.opacity(0.20), Color.white.opacity(0.08)]
+                : [Color.white.opacity(0.15), Color.white.opacity(0.08), Color.white.opacity(0.03)]
+        case "custom":
+            return isLight
+                ? [Color.white.opacity(0.82), Color.white.opacity(0.65)]
+                : [Color.white.opacity(0.14), Color.white.opacity(0.07)]
         default:
             return isLight
                 ? [Color.white.opacity(0.74), Color.white.opacity(0.52)]
@@ -716,6 +746,10 @@ struct PanelPalette {
             return isLight ? Color(red: 0.06, green: 0.50, blue: 0.84) : Color(red: 0.24, green: 0.86, blue: 0.96)
         case "aurora":
             return isLight ? Color(red: 0.32, green: 0.48, blue: 0.96) : Color(red: 0.42, green: 0.94, blue: 0.84)
+        case "liquidGlass":
+            return isLight ? Color(red: 0.10, green: 0.60, blue: 0.90) : Color(red: 0.30, green: 0.85, blue: 1.00)
+        case "custom":
+            return isLight ? Color(red: 0.55, green: 0.27, blue: 0.98) : Color(red: 0.78, green: 0.52, blue: 1.00)
         default:
             return isLight ? Color(red: 0.08, green: 0.56, blue: 0.94) : Color(red: 0.26, green: 0.80, blue: 1.00)
         }
@@ -726,6 +760,10 @@ struct PanelPalette {
             return isLight ? Color(red: 0.12, green: 0.73, blue: 0.77) : Color(red: 0.34, green: 0.56, blue: 1.00)
         case "aurora":
             return isLight ? Color(red: 0.72, green: 0.40, blue: 0.98) : Color(red: 0.96, green: 0.48, blue: 0.90)
+        case "liquidGlass":
+            return isLight ? Color(red: 0.50, green: 0.40, blue: 0.98) : Color(red: 0.80, green: 0.50, blue: 1.00)
+        case "custom":
+            return isLight ? Color(red: 0.02, green: 0.71, blue: 0.84) : Color(red: 0.02, green: 0.92, blue: 0.95)
         default:
             return isLight ? Color(red: 0.43, green: 0.35, blue: 0.96) : Color(red: 0.76, green: 0.44, blue: 1.00)
         }
@@ -1143,71 +1181,260 @@ struct NativeSettingsPanelView: View {
 
     var body: some View {
         let prefs = viewModel.state.preferences ?? .defaults
+        let palette = PanelPalette(appearance: viewModel.state.themeAppearance)
+        
         PanelShell(mode: .settings, viewModel: viewModel) {
-            VStack(alignment: .leading, spacing: 18) {
-                PanelHeader(
-                    title: "Native macOS Settings",
-                    subtitle: "Choose whether each major Comet surface uses Electron or detached SwiftUI.",
-                    symbol: PanelMode.settings.symbol,
-                    viewModel: viewModel
-                )
-                .padding(18)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: PanelMode.settings.symbol)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(palette.accent)
+                            Text("Comet Settings")
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .foregroundStyle(palette.primaryText)
+                        }
+                        Text("Configure Electron and native macOS settings")
+                            .font(.system(size: 13))
+                            .foregroundStyle(palette.secondaryText)
+                    }
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(LinearGradient(colors: palette.surfaceGradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(palette.stroke, lineWidth: 1)
+                            )
+                    )
 
-                ScrollView {
-                    VStack(spacing: 14) {
-                        PreferenceCard(title: "AI Sidebar", subtitle: "Browser sidebar vs detached SwiftUI assistant", current: prefs.sidebarMode, appearance: viewModel.state.themeAppearance) { value in
-                            viewModel.setPreference(key: "sidebarMode", value: value)
-                        }
-                        PreferenceCard(title: "Action Chain", subtitle: "Execution feed and planning panel", current: prefs.actionChainMode, appearance: viewModel.state.themeAppearance) { value in
-                            viewModel.setPreference(key: "actionChainMode", value: value)
-                        }
-                        PreferenceCard(title: "Utility Panels", subtitle: "Settings, downloads, clipboard, and command center", current: prefs.utilityMode, appearance: viewModel.state.themeAppearance) { value in
-                            viewModel.setPreference(key: "utilityMode", value: value)
-                        }
-                        PreferenceCard(title: "Permission Prompts", subtitle: "Low, medium, and high-risk shell approvals", current: prefs.permissionMode, appearance: viewModel.state.themeAppearance) { value in
-                            viewModel.setPreference(key: "permissionMode", value: value)
-                        }
-                        TogglePreferenceCard(title: "Auto-Minimize Sidebar", subtitle: "Shrink the detached AI sidebar into a compact shell when it has been idle for a while.", value: prefs.sidebarAutoMinimize ?? false, appearance: viewModel.state.themeAppearance) { value in
-                            viewModel.setPreference(key: "sidebarAutoMinimize", value: value)
-                        }
-                        SelectionPreferenceCard(
-                            title: "Sidebar Gradient",
-                            subtitle: "Tune the native sidebar chrome with a premium gradient preset.",
-                            current: prefs.sidebarGradientPreset ?? "graphite",
-                            options: [("graphite", "Graphite"), ("ocean", "Ocean"), ("aurora", "Aurora")],
-                            appearance: viewModel.state.themeAppearance
-                        ) { value in
-                            viewModel.setPreference(key: "sidebarGradientPreset", value: value)
-                        }
-                        TogglePreferenceCard(title: "Show Quick Actions", subtitle: "Display the prompt shortcut pills above the composer.", value: prefs.sidebarShowQuickActions ?? true, appearance: viewModel.state.themeAppearance) { value in
-                            viewModel.setPreference(key: "sidebarShowQuickActions", value: value)
-                        }
-                        TogglePreferenceCard(title: "Show Sessions", subtitle: "Show recent saved chat sessions in the native sidebar.", value: prefs.sidebarShowSessions ?? true, appearance: viewModel.state.themeAppearance) { value in
-                            viewModel.setPreference(key: "sidebarShowSessions", value: value)
-                        }
-                        TogglePreferenceCard(title: "Show Search Tags", subtitle: "Display live context tags like searched pages and read sources.", value: prefs.sidebarShowSearchTags ?? true, appearance: viewModel.state.themeAppearance) { value in
-                            viewModel.setPreference(key: "sidebarShowSearchTags", value: value)
-                        }
-                        TogglePreferenceCard(title: "Show Command Center Button", subtitle: "Keep the Command Center launcher in the native sidebar action row.", value: prefs.sidebarShowCommandCenterButton ?? true, appearance: viewModel.state.themeAppearance) { value in
-                            viewModel.setPreference(key: "sidebarShowCommandCenterButton", value: value)
-                        }
-                        TogglePreferenceCard(title: "Show Action Chain Button", subtitle: "Keep the Action Chain launcher visible in the native sidebar action row.", value: prefs.sidebarShowActionChainButton ?? true, appearance: viewModel.state.themeAppearance) { value in
-                            viewModel.setPreference(key: "sidebarShowActionChainButton", value: value)
-                        }
-
-                        HStack(spacing: 10) {
-                            NativeActionButton(title: "Open Downloads", systemImage: PanelMode.downloads.symbol, appearance: viewModel.state.themeAppearance) {
-                                viewModel.openPanel(.downloads)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("OPEN ELECTRON SETTINGS")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(palette.secondaryText)
+                            .tracking(1.2)
+                        
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                            ElectronSettingsButton(
+                                title: "API Keys",
+                                subtitle: "OpenAI, Anthropic, Gemini",
+                                systemImage: "key.fill",
+                                appearance: viewModel.state.themeAppearance
+                            ) {
+                                viewModel.openSettings(target: "api-keys")
                             }
-                            NativeActionButton(title: "Open Clipboard", systemImage: PanelMode.clipboard.symbol, appearance: viewModel.state.themeAppearance) {
-                                viewModel.openPanel(.clipboard)
+                            ElectronSettingsButton(
+                                title: "Appearance",
+                                subtitle: "Theme, colors, layout",
+                                systemImage: "paintpalette.fill",
+                                appearance: viewModel.state.themeAppearance
+                            ) {
+                                viewModel.openSettings(target: "appearance")
+                            }
+                            ElectronSettingsButton(
+                                title: "Automation",
+                                subtitle: "Scheduled tasks, workflows",
+                                systemImage: "bolt.fill",
+                                appearance: viewModel.state.themeAppearance
+                            ) {
+                                viewModel.openSettings(target: "automation")
+                            }
+                            ElectronSettingsButton(
+                                title: "Permissions",
+                                subtitle: "Shell commands, safety",
+                                systemImage: "shield.fill",
+                                appearance: viewModel.state.themeAppearance
+                            ) {
+                                viewModel.openSettings(target: "permissions")
+                            }
+                            ElectronSettingsButton(
+                                title: "WiFi Sync",
+                                subtitle: "Mobile connect, pairing",
+                                systemImage: "wifi",
+                                appearance: viewModel.state.themeAppearance
+                            ) {
+                                viewModel.openSettings(target: "sync")
+                            }
+                            ElectronSettingsButton(
+                                title: "Privacy",
+                                subtitle: "Security, history, data",
+                                systemImage: "lock.fill",
+                                appearance: viewModel.state.themeAppearance
+                            ) {
+                                viewModel.openSettings(target: "privacy")
+                            }
+                            ElectronSettingsButton(
+                                title: "Extensions",
+                                subtitle: "Add-ons, MCP servers",
+                                systemImage: "puzzlepiece.fill",
+                                appearance: viewModel.state.themeAppearance
+                            ) {
+                                viewModel.openSettings(target: "extensions")
+                            }
+                            ElectronSettingsButton(
+                                title: "All Settings",
+                                subtitle: "Full settings panel",
+                                systemImage: "gearshape.fill",
+                                appearance: viewModel.state.themeAppearance
+                            ) {
+                                viewModel.openSettings(target: "all")
                             }
                         }
                     }
                     .padding(18)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(LinearGradient(colors: palette.surfaceGradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(palette.stroke, lineWidth: 1)
+                            )
+                    )
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("NATIVE MACOS SETTINGS")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(palette.secondaryText)
+                            .tracking(1.2)
+                        
+                        VStack(spacing: 10) {
+                            PreferenceCard(title: "AI Sidebar", subtitle: "Browser sidebar vs detached SwiftUI assistant", current: prefs.sidebarMode, appearance: viewModel.state.themeAppearance) { value in
+                                viewModel.setPreference(key: "sidebarMode", value: value)
+                            }
+                            PreferenceCard(title: "Action Chain", subtitle: "Execution feed and planning panel", current: prefs.actionChainMode, appearance: viewModel.state.themeAppearance) { value in
+                                viewModel.setPreference(key: "actionChainMode", value: value)
+                            }
+                            PreferenceCard(title: "Utility Panels", subtitle: "Settings, downloads, clipboard, and command center", current: prefs.utilityMode, appearance: viewModel.state.themeAppearance) { value in
+                                viewModel.setPreference(key: "utilityMode", value: value)
+                            }
+                            PreferenceCard(title: "Permission Prompts", subtitle: "Low, medium, and high-risk shell approvals", current: prefs.permissionMode, appearance: viewModel.state.themeAppearance) { value in
+                                viewModel.setPreference(key: "permissionMode", value: value)
+                            }
+                        }
+                    }
+                    .padding(18)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(LinearGradient(colors: palette.surfaceGradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(palette.stroke, lineWidth: 1)
+                            )
+                    )
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("SIDEBAR APPEARANCE")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(palette.secondaryText)
+                            .tracking(1.2)
+                        
+                        VStack(spacing: 10) {
+                            SelectionPreferenceCard(
+                                title: "Gradient Theme",
+                                subtitle: "Tune the native sidebar chrome with a premium gradient preset.",
+                                current: prefs.sidebarGradientPreset ?? "graphite",
+                                options: [("graphite", "Graphite"), ("ocean", "Ocean"), ("aurora", "Aurora"), ("liquidGlass", "Liquid Glass"), ("custom", "Custom")],
+                                appearance: viewModel.state.themeAppearance
+                            ) { value in
+                                viewModel.setPreference(key: "sidebarGradientPreset", value: value)
+                            }
+                            
+                            if prefs.sidebarGradientPreset == "custom" {
+                                CustomThemeEditor(
+                                    preferences: prefs,
+                                    appearance: viewModel.state.themeAppearance,
+                                    onUpdate: { key, value in
+                                        if let stringValue = value as? String {
+                                            viewModel.setPreference(key: key, value: stringValue)
+                                        }
+                                    }
+                                )
+                            }
+                            TogglePreferenceCard(title: "Auto-Minimize Sidebar", subtitle: "Shrink the detached AI sidebar when idle.", value: prefs.sidebarAutoMinimize ?? false, appearance: viewModel.state.themeAppearance) { value in
+                                viewModel.setPreference(key: "sidebarAutoMinimize", value: value)
+                            }
+                            TogglePreferenceCard(title: "Show Quick Actions", subtitle: "Display prompt shortcut pills above the composer.", value: prefs.sidebarShowQuickActions ?? true, appearance: viewModel.state.themeAppearance) { value in
+                                viewModel.setPreference(key: "sidebarShowQuickActions", value: value)
+                            }
+                            TogglePreferenceCard(title: "Show Sessions", subtitle: "Show recent saved chat sessions.", value: prefs.sidebarShowSessions ?? true, appearance: viewModel.state.themeAppearance) { value in
+                                viewModel.setPreference(key: "sidebarShowSessions", value: value)
+                            }
+                            TogglePreferenceCard(title: "Show Search Tags", subtitle: "Display live context tags.", value: prefs.sidebarShowSearchTags ?? true, appearance: viewModel.state.themeAppearance) { value in
+                                viewModel.setPreference(key: "sidebarShowSearchTags", value: value)
+                            }
+                            TogglePreferenceCard(title: "Action Chain Auto Appear", subtitle: "Auto-open Action Chain for multi-step plans.", value: prefs.sidebarActionChainAutoAppear ?? false, appearance: viewModel.state.themeAppearance) { value in
+                                viewModel.setPreference(key: "sidebarActionChainAutoAppear", value: value)
+                            }
+                        }
+                    }
+                    .padding(18)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(LinearGradient(colors: palette.surfaceGradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(palette.stroke, lineWidth: 1)
+                            )
+                    )
+
+                    HStack(spacing: 10) {
+                        NativeActionButton(title: "Open Downloads", systemImage: PanelMode.downloads.symbol, appearance: viewModel.state.themeAppearance) {
+                            viewModel.openPanel(.downloads)
+                        }
+                        NativeActionButton(title: "Open Clipboard", systemImage: PanelMode.clipboard.symbol, appearance: viewModel.state.themeAppearance) {
+                            viewModel.openPanel(.clipboard)
+                        }
+                    }
+                    .padding(.bottom, 20)
                 }
+                .padding(16)
             }
         }
+    }
+}
+
+struct ElectronSettingsButton: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let appearance: String
+    let action: () -> Void
+    
+    var body: some View {
+        let palette = PanelPalette(appearance: appearance)
+        
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(palette.accent)
+                    .frame(width: 32, height: 32)
+                    .background(palette.accent.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(palette.primaryText)
+                
+                Text(subtitle)
+                    .font(.system(size: 10))
+                    .foregroundStyle(palette.secondaryText)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(palette.mutedSurface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(palette.stroke, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -1461,6 +1688,96 @@ struct SelectionPreferenceCard: View {
         }
         .padding(16)
         .background(palette.mutedSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+struct CustomThemeEditor: View {
+    let preferences: NativePanelState.Preferences
+    let appearance: String
+    let onUpdate: (String, Any) -> Void
+    
+    private let presetColors: [(String, String, Color)] = [
+        ("Violet", "violet", Color(red: 0.55, green: 0.27, blue: 0.98)),
+        ("Sky", "sky", Color(red: 0.02, green: 0.71, blue: 0.84)),
+        ("Rose", "rose", Color(red: 0.95, green: 0.36, blue: 0.47)),
+        ("Emerald", "emerald", Color(red: 0.16, green: 0.78, blue: 0.47)),
+        ("Amber", "amber", Color(red: 0.98, green: 0.72, blue: 0.12)),
+        ("Cyan", "cyan", Color(red: 0.02, green: 0.92, blue: 0.95)),
+    ]
+    
+    private let secondaryColors: [(String, String, Color)] = [
+        ("Purple", "purple", Color(red: 0.78, green: 0.52, blue: 1.00)),
+        ("Blue", "blue", Color(red: 0.30, green: 0.85, blue: 1.00)),
+        ("Pink", "pink", Color(red: 0.98, green: 0.48, blue: 0.72)),
+        ("Green", "green", Color(red: 0.20, green: 0.90, blue: 0.60)),
+        ("Orange", "orange", Color(red: 0.98, green: 0.62, blue: 0.20)),
+        ("Teal", "teal", Color(red: 0.20, green: 0.85, blue: 0.85)),
+    ]
+    
+    var body: some View {
+        let palette = PanelPalette(appearance: appearance)
+        
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Primary Accent Color")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(palette.secondaryText)
+            
+            HStack(spacing: 10) {
+                ForEach(presetColors, id: \.0) { name, key, color in
+                    Button(action: { onUpdate("customPrimaryAccent", key) }) {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 32, height: 32)
+                            .overlay(
+                                Circle()
+                                    .stroke(palette.primaryText.opacity(0.2), lineWidth: 1)
+                            )
+                            .shadow(color: color.opacity(0.5), radius: 4, x: 0, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                    .help(name)
+                }
+            }
+            
+            Text("Secondary Accent Color")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(palette.secondaryText)
+            
+            HStack(spacing: 10) {
+                ForEach(secondaryColors, id: \.0) { name, key, color in
+                    Button(action: { onUpdate("customSecondaryAccent", key) }) {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 32, height: 32)
+                            .overlay(
+                                Circle()
+                                    .stroke(palette.primaryText.opacity(0.2), lineWidth: 1)
+                            )
+                            .shadow(color: color.opacity(0.5), radius: 4, x: 0, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                    .help(name)
+                }
+            }
+            
+            Button(action: { onUpdate("sidebarGradientPreset", "graphite") }) {
+                Text("Reset to Default")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.red.opacity(0.8))
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 16)
+                    .background(Color.red.opacity(0.1))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .background(palette.mutedSurface.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
@@ -1769,16 +2086,88 @@ struct MessageBubbleView: View {
 
     var body: some View {
         let palette = PanelPalette(appearance: appearance)
+        let parseResult = AICommandParser.parseCommands(from: message.content)
         VStack(alignment: .leading, spacing: 8) {
             Text(message.role == "user" ? "You" : "Comet")
                 .font(.system(size: 10, weight: .black, design: .rounded))
                 .foregroundStyle(message.role == "user" ? palette.accent : palette.secondaryAccent)
                 .textCase(.uppercase)
-            MarkdownMessageText(content: message.content, appearance: appearance)
+
+            if parseResult.hasCommands && message.role != "user" {
+                ForEach(parseResult.commands) { command in
+                    CommandTagView(command: command, appearance: appearance)
+                }
+                if !parseResult.textWithoutCommands.isEmpty {
+                    MarkdownMessageText(content: parseResult.textWithoutCommands, appearance: appearance)
+                }
+            } else {
+                MarkdownMessageText(content: message.content, appearance: appearance)
+            }
         }
         .padding(14)
         .background(message.role == "user" ? palette.accent.opacity(0.12) : palette.mutedSurface)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+struct CommandTagView: View {
+    let command: CommandInfo
+    let appearance: String
+
+    var body: some View {
+        if command.type == "THINK" {
+            ThinkingIndicatorView(appearance: appearance, thought: command.value.isEmpty ? nil : command.value)
+        } else {
+            standardTagView
+        }
+    }
+
+    @ViewBuilder
+    private var standardTagView: some View {
+        let palette = PanelPalette(appearance: appearance)
+        HStack(spacing: 8) {
+            Image(systemName: iconForCategory(command.category))
+                .font(.system(size: 10, weight: .bold))
+            Text(command.type.replacingOccurrences(of: "_", with: " "))
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+            if !command.value.isEmpty {
+                Text(command.value.prefix(30) + (command.value.count > 30 ? "..." : ""))
+                    .font(.system(size: 9, design: .rounded))
+                    .foregroundStyle(palette.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .foregroundStyle(colorForRisk(command.riskLevel))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(colorForRisk(command.riskLevel).opacity(0.15))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(colorForRisk(command.riskLevel).opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private func iconForCategory(_ category: String) -> String {
+        switch category {
+        case "navigation": return "globe"
+        case "browser": return "safari"
+        case "automation": return "gearshape.2"
+        case "system": return "terminal"
+        case "pdf": return "doc.richtext"
+        case "utility": return "wrench.and.screwdriver"
+        case "media": return "photo"
+        case "meta": return "brain"
+        default: return "command"
+        }
+    }
+
+    private func colorForRisk(_ risk: String) -> Color {
+        switch risk {
+        case "high": return .red
+        case "medium": return .orange
+        default: return .green
+        }
     }
 }
 
@@ -1788,12 +2177,16 @@ struct MarkdownMessageText: View {
 
     var body: some View {
         let palette = PanelPalette(appearance: appearance)
+        let processedContent = preprocessMarkdown(content)
+        
         Group {
-            if let attributed = markdown {
+            if containsComplexElements(processedContent) {
+                RichMarkdownView(content: processedContent, appearance: appearance)
+            } else if let attributed = try? AttributedString(markdown: processedContent, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)) {
                 Text(attributed)
                     .font(.system(size: 13, design: .rounded))
             } else {
-                Text(content)
+                Text(processedContent)
                     .font(.system(size: 13, design: .rounded))
             }
         }
@@ -1801,12 +2194,256 @@ struct MarkdownMessageText: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
     }
+    
+    private func preprocessMarkdown(_ text: String) -> String {
+        var result = text
+        result = result.replacingOccurrences(of: "<br\\s*/?>", with: "\n\n", options: .regularExpression)
+        result = result.replacingOccurrences(of: "<br>", with: "\n\n", options: .regularExpression)
+        result = result.replacingOccurrences(of: "<\\\\?br\\\\?>", with: "\n\n", options: .regularExpression)
+        return result
+    }
+    
+    private func containsComplexElements(_ text: String) -> Bool {
+        let patterns = ["\\$\\$", "\\$[^$]+\\$", "\\\\\\[", "\\\\\\(", "\\begin\\{", "\\frac\\{", "\\sum\\{", "\\int\\{", "```", "\\|\\|", "\\[\\(.*?\\)\\]"]
+        for pattern in patterns {
+            if text.range(of: pattern, options: .regularExpression) != nil {
+                return true
+            }
+        }
+        return false
+    }
+}
 
-    private var markdown: AttributedString? {
-        try? AttributedString(
-            markdown: content,
-            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
-        )
+struct RichMarkdownView: NSViewRepresentable {
+    let content: String
+    let appearance: String
+    
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.preferences.javaScriptEnabled = true
+        
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.setValue(false, forKey: "drawsBackground")
+        return webView
+    }
+    
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        let isDark = appearance != "light"
+        let html = generateHTML(content: content, isDark: isDark)
+        nsView.loadHTMLString(html, baseURL: nil)
+    }
+    
+    private func generateHTML(content: String, isDark: Bool) -> String {
+        let escapedContent = content
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+            .replacingOccurrences(of: "\n", with: "\\n")
+        
+        let textColor = isDark ? "#ffffff" : "#1a1a1a"
+        let bgColor = isDark ? "#1e1e2e" : "#ffffff"
+        let codeBg = isDark ? "#2d2d3d" : "#f5f5f5"
+        let accentColor = "#6366f1"
+        
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+            <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Rounded', 'Segoe UI', sans-serif;
+                    font-size: 13px;
+                    line-height: 1.6;
+                    color: \(textColor);
+                    background: transparent;
+                    padding: 4px;
+                    word-wrap: break-word;
+                    overflow-wrap: break-word;
+                }
+                h1, h2, h3, h4, h5, h6 { margin: 12px 0 8px 0; font-weight: 600; }
+                h1 { font-size: 18px; }
+                h2 { font-size: 16px; }
+                h3 { font-size: 14px; }
+                p { margin: 8px 0; }
+                strong, b { font-weight: 600; }
+                em, i { font-style: italic; }
+                code {
+                    font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+                    font-size: 12px;
+                    background: \(codeBg);
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                }
+                pre {
+                    background: \(codeBg);
+                    padding: 12px;
+                    border-radius: 8px;
+                    overflow-x: auto;
+                    margin: 10px 0;
+                }
+                pre code { background: none; padding: 0; }
+                blockquote {
+                    border-left: 3px solid \(accentColor);
+                    padding-left: 12px;
+                    margin: 10px 0;
+                    opacity: 0.9;
+                }
+                ul, ol { margin: 8px 0; padding-left: 20px; }
+                li { margin: 4px 0; }
+                a { color: \(accentColor); text-decoration: none; }
+                hr { border: none; border-top: 1px solid rgba(128,128,128,0.3); margin: 16px 0; }
+                table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+                th, td { border: 1px solid rgba(128,128,128,0.3); padding: 8px; text-align: left; }
+                th { background: \(codeBg); font-weight: 600; }
+                .katex-display { margin: 12px 0; overflow-x: auto; }
+                .katex { font-size: 13px; }
+            </style>
+        </head>
+        <body>
+            <div id="content"></div>
+            <script>
+                function escapeHtml(text) {
+                    return text
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+                }
+                
+                function renderMarkdown(text) {
+                    text = text.replace(/```(\\w+)?\\n([\\s\\S]*?)```/g, '<pre><code>$2</code></pre>');
+                    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+                    text = text.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+                    text = text.replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
+                    text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+                    text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
+                    text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+                    text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+                    text = text.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+                    text = text.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+                    text = text.replace(/\\n\\n/g, '<br><br>');
+                    text = text.replace(/^- (.+)$/gm, '<li>$1</li>');
+                    text = text.replace(/(<li>.*<\\/li>)/s, '<ul>$1</ul>');
+                    return text;
+                }
+                
+                let raw = `\(escapedContent)`;
+                let processed = renderMarkdown(raw);
+                document.getElementById('content').innerHTML = processed;
+                
+                if (typeof renderMathInElement !== 'undefined') {
+                    renderMathInElement(document.body, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                            {left: '\\\\[', right: '\\\\]', display: true},
+                            {left: '\\\\(', right: '\\\\)', display: false}
+                        ],
+                        throwOnError: false
+                    });
+                } else {
+                    try {
+                        document.querySelectorAll('code').forEach(block => {
+                            if (block.textContent.includes('\\\\') || block.textContent.includes('\\$')) {
+                                katex.render(block.textContent, block, { throwOnError: false, displayMode: false });
+                            }
+                        });
+                    } catch(e) {}
+                }
+            </script>
+        </body>
+        </html>
+        """
+    }
+}
+
+struct MermaidView: NSViewRepresentable {
+    let diagram: String
+    let appearance: String
+    
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.preferences.javaScriptEnabled = true
+        
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.setValue(false, forKey: "drawsBackground")
+        return webView
+    }
+    
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        let isDark = appearance != "light"
+        let html = generateMermaidHTML(diagram: diagram, isDark: isDark)
+        nsView.loadHTMLString(html, baseURL: nil)
+    }
+    
+    private func generateMermaidHTML(diagram: String, isDark: Bool) -> String {
+        let escapedDiagram = diagram
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "`", with: "\\`")
+            .replacingOccurrences(of: "$", with: "\\$")
+        
+        let bgColor = isDark ? "#1e1e2e" : "#ffffff"
+        let textColor = isDark ? "#ffffff" : "#1a1a1a"
+        let primaryColor = "#6366f1"
+        let secondaryColor = "#8b5cf6"
+        let lineColor = isDark ? "#4a4a6a" : "#d1d5db"
+        
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Rounded', sans-serif;
+                    background: transparent;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100px;
+                    padding: 16px;
+                }
+                .mermaid {
+                    color-scheme: \(isDark ? "dark" : "light");
+                }
+            </style>
+        </head>
+        <body>
+            <pre class="mermaid">
+            \(escapedDiagram)
+            </pre>
+            <script>
+                mermaid.initialize({
+                    startOnLoad: true,
+                    theme: '\(isDark ? "dark" : "default")',
+                    themeVariables: {
+                        primaryColor: '\(primaryColor)',
+                        primaryTextColor: '\(textColor)',
+                        primaryBorderColor: '\(lineColor)',
+                        lineColor: '\(lineColor)',
+                        secondaryColor: '\(secondaryColor)',
+                        tertiaryColor: '\(isDark ? "#2d2d3d" : "#f5f5f5")'
+                    },
+                    flowchart: {
+                        useMaxWidth: true,
+                        htmlLabels: true,
+                        curve: 'basis'
+                    },
+                    securityLevel: 'loose'
+                });
+            </script>
+        </body>
+        </html>
+        """
     }
 }
 
@@ -1854,6 +2491,86 @@ struct AuroraThinkingView: View {
     }
 }
 
+struct ThinkingIndicatorView: View {
+    let appearance: String
+    let thought: String?
+    @State private var pulse = false
+    @State private var dots = ""
+
+    var body: some View {
+        let palette = PanelPalette(appearance: appearance)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(palette.accent.opacity(0.2))
+                        .frame(width: 28, height: 28)
+                        .scaleEffect(pulse ? 1.2 : 1.0)
+                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: pulse)
+                    Image(systemName: "brain.head.profile")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(palette.accent)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Reasoning")
+                        .font(.system(size: 11, weight: .black, design: .rounded))
+                        .foregroundStyle(palette.primaryText)
+                    Text("Processing thought\(dots)")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(palette.secondaryText)
+                }
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    ForEach(0..<3, id: \.self) { index in
+                        Circle()
+                            .fill(palette.accent.opacity(0.6))
+                            .frame(width: 5, height: 5)
+                            .scaleEffect(pulse ? 1.3 : 0.8)
+                            .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true).delay(Double(index) * 0.15), value: pulse)
+                    }
+                }
+            }
+
+            if let thought = thought, !thought.isEmpty {
+                Text(thought)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(palette.secondaryText)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(palette.accent.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(palette.mutedSurface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(palette.accent.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .onAppear {
+            pulse = true
+            animateDots()
+        }
+    }
+
+    private func animateDots() {
+        Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
+            switch dots.count {
+            case 0: dots = "."
+            case 1: dots = ".."
+            case 2: dots = "..."
+            default: dots = ""
+            }
+        }
+    }
+}
+
 struct PromptComposer: NSViewRepresentable {
     @Binding var text: String
     let appearance: String
@@ -1879,7 +2596,9 @@ struct PromptComposer: NSViewRepresentable {
         textView.textContainerInset = NSSize(width: 6, height: 8)
         textView.onSubmit = onSubmit
         textView.onInteraction = onInteraction
+        textView.backgroundColor = .clear
         scrollView.documentView = textView
+        applyAppearance(to: textView, appearance: appearance)
         return scrollView
     }
 
@@ -1888,11 +2607,19 @@ struct PromptComposer: NSViewRepresentable {
         if textView.string != text {
             textView.string = text
         }
-        textView.textColor = appearance == "light" ? .labelColor : .white
-        textView.insertionPointColor = appearance == "light" ? .labelColor : .white
+        applyAppearance(to: textView, appearance: appearance)
         textView.onSubmit = onSubmit
         textView.onInteraction = onInteraction
         nsView.backgroundColor = .clear
+    }
+
+    private func applyAppearance(to textView: PromptEditorTextView, appearance: String) {
+        let isLight = appearance == "light"
+        let textColor: NSColor = isLight ? .labelColor : .white
+        textView.textColor = textColor
+        textView.insertionPointColor = isLight ? .labelColor : .white
+        textView.backgroundColor = .clear
+        textView.font = NSFont.systemFont(ofSize: 13, weight: .medium)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -1937,6 +2664,155 @@ final class PromptEditorTextView: NSTextView {
     }
 }
 
+struct CommandInfo: Identifiable {
+    let id = UUID()
+    let type: String
+    let value: String
+    let category: String
+    let riskLevel: String
+    let originalMatch: String
+    let index: Int
+}
+
+struct CommandParseResult {
+    let commands: [CommandInfo]
+    let textWithoutCommands: String
+    let hasCommands: Bool
+}
+
+enum AICommandType: String, CaseIterable {
+    case NAVIGATE, SEARCH, WEB_SEARCH, READ_PAGE_CONTENT, LIST_OPEN_TABS
+    case CREATE_PDF_JSON, CREATE_FILE_JSON, GENERATE_PDF
+    case SHELL_COMMAND, SET_THEME, SET_VOLUME, SET_BRIGHTNESS, OPEN_APP
+    case SCREENSHOT_AND_ANALYZE, CLICK_ELEMENT, FIND_AND_CLICK
+    case GENERATE_DIAGRAM, OPEN_VIEW, RELOAD, GO_BACK, GO_FORWARD
+    case WAIT, THINK, PLAN, EXPLAIN_CAPABILITIES
+    case DOM_SEARCH, DOM_READ_FILTERED
+    case OPEN_MCP_SETTINGS, OPEN_AUTOMATION_SETTINGS, LIST_AUTOMATIONS, DELETE_AUTOMATION
+    case OPEN_SCHEDULING_MODAL, SCHEDULE_TASK
+    case ORGANIZE_TABS, CLOSE_TAB
+
+    var category: String {
+        switch self {
+        case .NAVIGATE, .SEARCH, .WEB_SEARCH: return "navigation"
+        case .READ_PAGE_CONTENT, .LIST_OPEN_TABS, .CLOSE_TAB: return "browser"
+        case .CLICK_ELEMENT, .FIND_AND_CLICK, .ORGANIZE_TABS: return "automation"
+        case .SHELL_COMMAND, .OPEN_APP, .SET_VOLUME, .SET_BRIGHTNESS: return "system"
+        case .CREATE_PDF_JSON, .CREATE_FILE_JSON, .GENERATE_PDF, .GENERATE_DIAGRAM: return "pdf"
+        case .WAIT, .OPEN_VIEW, .OPEN_MCP_SETTINGS, .OPEN_AUTOMATION_SETTINGS, .LIST_AUTOMATIONS, .DELETE_AUTOMATION, .OPEN_SCHEDULING_MODAL, .SCHEDULE_TASK: return "utility"
+        case .SCREENSHOT_AND_ANALYZE: return "media"
+        case .THINK, .PLAN, .EXPLAIN_CAPABILITIES: return "meta"
+        case .DOM_SEARCH, .DOM_READ_FILTERED: return "browser"
+        case .SET_THEME, .RELOAD, .GO_BACK, .GO_FORWARD: return "utility"
+        }
+    }
+
+    var defaultRisk: String {
+        switch self {
+        case .NAVIGATE, .SEARCH, .WEB_SEARCH, .READ_PAGE_CONTENT, .LIST_OPEN_TABS, .RELOAD, .GO_BACK, .GO_FORWARD, .WAIT, .THINK, .PLAN, .EXPLAIN_CAPABILITIES, .DOM_SEARCH, .DOM_READ_FILTERED, .OPEN_VIEW, .SET_THEME, .OPEN_MCP_SETTINGS, .OPEN_AUTOMATION_SETTINGS, .LIST_AUTOMATIONS, .ORGANIZE_TABS, .CLOSE_TAB:
+            return "low"
+        case .GENERATE_PDF, .CREATE_PDF_JSON, .CREATE_FILE_JSON, .GENERATE_DIAGRAM, .SET_VOLUME, .SET_BRIGHTNESS, .DELETE_AUTOMATION, .OPEN_SCHEDULING_MODAL, .SCHEDULE_TASK:
+            return "medium"
+        case .SHELL_COMMAND, .OPEN_APP, .SCREENSHOT_AND_ANALYZE, .CLICK_ELEMENT, .FIND_AND_CLICK:
+            return "medium"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .NAVIGATE: return "Go to URL"
+        case .SEARCH: return "Search engine"
+        case .WEB_SEARCH: return "Web search"
+        case .READ_PAGE_CONTENT: return "Read page"
+        case .LIST_OPEN_TABS: return "List tabs"
+        case .CREATE_PDF_JSON: return "Create PDF (JSON)"
+        case .CREATE_FILE_JSON: return "Create file (JSON)"
+        case .GENERATE_PDF: return "Create PDF"
+        case .SHELL_COMMAND: return "Terminal command"
+        case .SET_THEME: return "Set theme"
+        case .SET_VOLUME: return "Set volume"
+        case .SET_BRIGHTNESS: return "Set brightness"
+        case .OPEN_APP: return "Open app"
+        case .SCREENSHOT_AND_ANALYZE: return "Screenshot"
+        case .CLICK_ELEMENT: return "Click element"
+        case .FIND_AND_CLICK: return "Find and click"
+        case .GENERATE_DIAGRAM: return "Generate diagram"
+        case .OPEN_VIEW: return "Open view"
+        case .RELOAD: return "Reload"
+        case .GO_BACK: return "Go back"
+        case .GO_FORWARD: return "Go forward"
+        case .WAIT: return "Wait"
+        case .THINK: return "Think"
+        case .PLAN: return "Plan"
+        case .EXPLAIN_CAPABILITIES: return "Capabilities"
+        case .DOM_SEARCH: return "Search DOM"
+        case .DOM_READ_FILTERED: return "Read DOM"
+        case .OPEN_MCP_SETTINGS: return "MCP settings"
+        case .OPEN_AUTOMATION_SETTINGS: return "Automation settings"
+        case .LIST_AUTOMATIONS: return "List automations"
+        case .DELETE_AUTOMATION: return "Delete automation"
+        case .OPEN_SCHEDULING_MODAL: return "Schedule modal"
+        case .SCHEDULE_TASK: return "Schedule task"
+        case .ORGANIZE_TABS: return "Organize tabs"
+        case .CLOSE_TAB: return "Close tab"
+        }
+    }
+}
+
+struct AICommandParser {
+    static func parseCommands(from content: String) -> CommandParseResult {
+        let commands = AICommandType.allCases
+        let commandPattern = commands.map { $0.rawValue }.joined(separator: "|")
+        let regexPattern = "\\[\\s*(\(commandPattern))\\s*(?::\\s*([^\\]]+?))?\\s*\\]"
+
+        guard let regex = try? NSRegularExpression(pattern: regexPattern, options: [.caseInsensitive]) else {
+            return CommandParseResult(commands: [], textWithoutCommands: content, hasCommands: false)
+        }
+
+        var parsedCommands: [CommandInfo] = []
+        var rangesToRemove: [(Range<String.Index>, String)] = []
+
+        let nsRange = NSRange(content.startIndex..., in: content)
+        let matches = regex.matches(in: content, options: [], range: nsRange)
+
+        for match in matches {
+            guard let typeRange = Range(match.range(at: 1), in: content),
+                  let typeString = AICommandType(rawValue: String(content[typeRange]).uppercased()) else {
+                continue
+            }
+
+            let fullMatchRange = Range(match.range, in: content)!
+            var value = ""
+            if match.range(at: 2).location != NSNotFound,
+               let valueRange = Range(match.range(at: 2), in: content) {
+                value = String(content[valueRange]).trimmingCharacters(in: .whitespaces)
+            }
+
+            let cmdInfo = CommandInfo(
+                type: typeString.rawValue,
+                value: value,
+                category: typeString.category,
+                riskLevel: typeString.defaultRisk,
+                originalMatch: String(content[fullMatchRange]),
+                index: content.distance(from: content.startIndex, to: fullMatchRange.lowerBound)
+            )
+            parsedCommands.append(cmdInfo)
+            rangesToRemove.append((fullMatchRange, cmdInfo.originalMatch))
+        }
+
+        var cleanText = content
+        for (range, _) in rangesToRemove.sorted(by: { content.distance(from: content.startIndex, to: $0.0.lowerBound) > content.distance(from: content.startIndex, to: $1.0.lowerBound) }) {
+            cleanText = cleanText.replacingCharacters(in: range, with: "")
+        }
+
+        return CommandParseResult(
+            commands: parsedCommands,
+            textWithoutCommands: cleanText.trimmingCharacters(in: .whitespacesAndNewlines),
+            hasCommands: !parsedCommands.isEmpty
+        )
+    }
+}
+
 struct RootPanelView: View {
     @ObservedObject var viewModel: NativePanelViewModel
 
@@ -1976,10 +2852,58 @@ struct CometNativePanelsApp: App {
         WindowGroup(configuration.mode.title) {
             RootPanelView(viewModel: viewModel)
         }
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .defaultSize(configuration.mode.defaultSize)
         .commands {
             CommandGroup(replacing: .newItem) { }
+            CommandGroup(after: .appInfo) {
+                Menu("Comet Settings") {
+                    Section("AI Providers") {
+                        Button("OpenAI API Key") {
+                            viewModel.openSettings(target: "openai")
+                        }
+                        Button("Anthropic API Key") {
+                            viewModel.openSettings(target: "anthropic")
+                        }
+                        Button("Google Gemini API Key") {
+                            viewModel.openSettings(target: "gemini")
+                        }
+                        Button("Ollama Models") {
+                            viewModel.openSettings(target: "ollama")
+                        }
+                    }
+                    Section("Appearance") {
+                        Button("Theme & Colors") {
+                            viewModel.openSettings(target: "appearance")
+                        }
+                        Button("Sidebar Layout") {
+                            viewModel.openSettings(target: "layout")
+                        }
+                    }
+                    Section("Automation") {
+                        Button("Permissions & Safety") {
+                            viewModel.openSettings(target: "permissions")
+                        }
+                        Button("Scheduled Tasks") {
+                            viewModel.openSettings(target: "automation")
+                        }
+                    }
+                    Section("Sync & Connect") {
+                        Button("WiFi Sync Settings") {
+                            viewModel.openSettings(target: "sync")
+                        }
+                        Button("Mobile App Setup") {
+                            viewModel.openSettings(target: "mobile")
+                        }
+                    }
+                    Divider()
+                    Button("All Settings...") {
+                        viewModel.openSettings(target: "all")
+                    }
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
     }
 }

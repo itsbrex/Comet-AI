@@ -3,12 +3,39 @@ const { createWorker } = require('tesseract.js');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 let sharp = null;
 try {
   sharp = require('sharp');
 } catch (e) {
   console.warn('[TesseractService] sharp not available, preprocessing disabled:', e.message);
+}
+
+let nativeMacOcr = null;
+try {
+  if (process.platform === 'darwin') {
+    nativeMacOcr = require('@cherrystudio/mac-system-ocr');
+    console.log('[TesseractService] Native macOS OCR loaded successfully');
+  }
+} catch (e) {
+  console.warn('[TesseractService] @cherrystudio/mac-system-ocr not available:', e.message);
+  nativeMacOcr = null;
+}
+
+let robotjs = null;
+try {
+  robotjs = require('robotjs');
+  robotjs.setMouseDelay(2);
+} catch (e) {
+  try {
+    robotjs = require('@jitsi/robotjs');
+    robotjs.setMouseDelay(2);
+  } catch (e2) {
+    console.warn('[TesseractService] robotjs not available:', e.message);
+  }
 }
 
 class TesseractOcrService {
@@ -150,7 +177,7 @@ class TesseractOcrService {
     return { words, lines };
   }
 
-  async ocrClick(targetDescription, aiEngine, robotService, permissionStore) {
+  async ocrClick(targetDescription, aiEngine, robotService, permissionStore, useDirectClick = false) {
     const { words, lines } = await this.captureAndOcr();
 
     if (words.length === 0 && lines.length === 0) {
@@ -159,6 +186,31 @@ class TesseractOcrService {
 
     const searchLower = targetDescription.toLowerCase().trim();
 
+    const performClick = async (x, y, reason) => {
+      if (useDirectClick && robotjs) {
+        return this.directClick(x, y, reason);
+      }
+      if (robotService && robotService.execute) {
+        try {
+          await robotService.execute({
+            type: 'click',
+            x, y, reason,
+          });
+          return { success: true, x, y, reason };
+        } catch (e) {
+          console.warn('[TesseractService] robotService.execute failed, trying direct robotjs:', e.message);
+          if (robotjs) {
+            return this.directClick(x, y, reason);
+          }
+          return { success: false, error: e.message };
+        }
+      }
+      if (robotjs) {
+        return this.directClick(x, y, reason);
+      }
+      return { success: false, error: 'No click mechanism available' };
+    };
+
     // 1. First try direct matching on reconstructed lines (ideal for multi-word phrases)
     const lineMatch = lines.find(l =>
       l.text.toLowerCase().includes(searchLower) ||
@@ -166,15 +218,11 @@ class TesseractOcrService {
     );
 
     if (lineMatch) {
-      // If we found a line match, we should try to find where IN the line the text is
-      // but clicking the line center is usually a good enough approximation for a button.
-      await robotService.execute({
-        type: 'click',
-        x: lineMatch.centerX,
-        y: lineMatch.centerY,
-        reason: `OCR line match: "${lineMatch.text}" (target: "${targetDescription}")`,
-      });
-      return { success: true, clickedText: lineMatch.text, method: 'line-match' };
+      const result = await performClick(
+        lineMatch.centerX, lineMatch.centerY,
+        `OCR line match: "${lineMatch.text}" (target: "${targetDescription}")`
+      );
+      return { ...result, clickedText: lineMatch.text, method: 'line-match' };
     }
 
     // 2. Fallback to word-level matching
@@ -184,13 +232,11 @@ class TesseractOcrService {
     );
 
     if (wordMatch) {
-      await robotService.execute({
-        type: 'click',
-        x: wordMatch.centerX,
-        y: wordMatch.centerY,
-        reason: `OCR word match: "${wordMatch.text}" (target: "${targetDescription}")`,
-      });
-      return { success: true, clickedText: wordMatch.text, method: 'word-match' };
+      const result = await performClick(
+        wordMatch.centerX, wordMatch.centerY,
+        `OCR word match: "${wordMatch.text}" (target: "${targetDescription}")`
+      );
+      return { ...result, clickedText: wordMatch.text, method: 'word-match' };
     }
 
     if (!aiEngine) {
@@ -210,29 +256,100 @@ class TesseractOcrService {
       });
 
       const cleaned = response.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-      const result = JSON.parse(cleaned);
+      let result;
+      try {
+        result = JSON.parse(cleaned);
+      } catch (parseErr) {
+        // Try extracting JSON object from mixed response
+        const jsonMatch = cleaned.match(/\{[\s\S]*"index"\s*:\s*(-?\d+)[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            result = JSON.parse(jsonMatch[0]);
+          } catch (e2) {
+            // Try simpler extraction
+            const indexMatch = cleaned.match(/"index"\s*:\s*(-?\d+)/);
+            const textMatch = cleaned.match(/"text"\s*:\s*"([^"]*)"/);
+            if (indexMatch) {
+              result = { index: parseInt(indexMatch[1]), text: textMatch ? textMatch[1] : '' };
+            } else {
+              return { success: false, error: `AI response parsing failed: ${parseErr.message}` };
+            }
+          }
+        } else {
+          return { success: false, error: `AI response parsing failed: ${parseErr.message}` };
+        }
+      }
 
       if (result.index < 0 || result.index >= lines.length) {
         return { success: false, error: `AI could not find "${targetDescription}" on screen` };
       }
 
       const target = lines[result.index];
-      await robotService.execute({
-        type: 'click',
-        x: target.centerX,
-        y: target.centerY,
-        reason: `OCR AI click: "${target.text}" (target: "${targetDescription}")`,
-      });
+      const clickResult = await performClick(
+        target.centerX, target.centerY,
+        `OCR AI click: "${target.text}" (target: "${targetDescription}")`
+      );
 
-      return { success: true, clickedText: target.text, method: 'ai-resolved' };
+      return { ...clickResult, clickedText: target.text, method: 'ai-resolved' };
     } catch (e) {
       return { success: false, error: `AI resolution failed: ${e.message}` };
     }
   }
 
   async getScreenText(displayId) {
+    if (process.platform === 'darwin' && nativeMacOcr) {
+      try {
+        const result = await nativeMacOcr.getScreenText();
+        if (result && result.text) {
+          return result.text;
+        }
+      } catch (e) {
+        console.warn('[TesseractService] Native OCR failed, falling back to Tesseract:', e.message);
+      }
+    }
     const { lines } = await this.captureAndOcr(displayId);
     return lines.map(l => l.text).join('\n');
+  }
+
+  async getScreenTextWithBoxes(displayId) {
+    if (process.platform === 'darwin' && nativeMacOcr) {
+      try {
+        const result = await nativeMacOcr.getScreenTextWithBoxes();
+        if (result && result.results) {
+          return result.results.map(r => ({
+            text: r.text || '',
+            confidence: r.confidence || 0.9,
+            bbox: r.bbox || { x0: 0, y0: 0, x1: 0, y1: 0 },
+            centerX: r.bbox ? Math.round((r.bbox.x0 + r.bbox.x1) / 2) : 0,
+            centerY: r.bbox ? Math.round((r.bbox.y0 + r.bbox.y1) / 2) : 0,
+          }));
+        }
+      } catch (e) {
+        console.warn('[TesseractService] Native OCR failed, falling back to Tesseract:', e.message);
+      }
+    }
+    const { lines } = await this.captureAndOcr(displayId);
+    return lines;
+  }
+
+  directClick(x, y, reason = 'OCR direct click') {
+    if (!robotjs) {
+      return { success: false, error: 'robotjs not available' };
+    }
+    try {
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const scaleFactor = primaryDisplay.scaleFactor || 1;
+      const scaledX = Math.round(x * scaleFactor);
+      const scaledY = Math.round(y * scaleFactor);
+      
+      robotjs.moveMouse(scaledX, scaledY);
+      robotjs.mouseClick();
+      console.log(`[TesseractService] Direct click at (${x}, ${y}) - ${reason}`);
+      return { success: true, x, y, reason };
+    } catch (e) {
+      console.error('[TesseractService] Direct click failed:', e.message);
+      return { success: false, error: e.message };
+    }
   }
 }
 

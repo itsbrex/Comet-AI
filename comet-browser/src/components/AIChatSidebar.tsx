@@ -49,6 +49,8 @@ import { secureDOMReader, type DOMSearchResult, type FilteredDOMResult, type DOM
 import { detectSchedulingIntent, type SchedulingIntent } from './ai/SchedulingIntentDetector';
 import SchedulingModal from './ai/SchedulingModal';
 import MermaidDiagram from './ai/MermaidDiagram';
+import FlowchartDiagram from './ai/FlowchartDiagram';
+import ChartDiagram from './ai/ChartDiagram';
 
 // Logic & Utils
 import {
@@ -92,6 +94,29 @@ type MediaItem = {
   type: 'mermaid';
   diagramId: string;
   code: string;
+} | {
+  type: 'flowchart';
+  diagramId: string;
+  code: string;
+} | {
+  type: 'chart';
+  chartId: string;
+  data: {
+    labels?: string[];
+    datasets: Array<{
+      label?: string;
+      data: number[];
+      backgroundColor?: string | string[];
+      borderColor?: string | string[];
+      borderWidth?: number;
+      fill?: boolean;
+    }>;
+  };
+  options?: {
+    type?: 'bar' | 'line' | 'pie' | 'doughnut' | 'radar' | 'scatter';
+    title?: string;
+    colors?: string[];
+  };
 };
 
 type ExtendedChatMessage = ChatMessage & {
@@ -192,10 +217,11 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   }, [props.theme]);
   const isLightTheme = resolvedTheme === 'light';
   const sidebarShellStyle = {
-    background: 'linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) 82%, transparent), color-mix(in srgb, var(--primary-bg) 94%, transparent))',
-    borderColor: 'color-mix(in srgb, var(--border-color) 45%, transparent)',
+    background: 'linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) 75%, transparent), color-mix(in srgb, var(--primary-bg) 88%, transparent))',
+    borderColor: 'color-mix(in srgb, var(--border-color) 40%, transparent)',
     color: 'var(--primary-text)',
-    boxShadow: isLightTheme ? '0 6px 20px color-mix(in srgb, var(--shadow-color) 60%, transparent)' : '0 18px 50px color-mix(in srgb, var(--shadow-color) 70%, transparent)',
+    backdropFilter: 'blur(24px)',
+    boxShadow: isLightTheme ? '0 6px 30px color-mix(in srgb, var(--shadow-color) 40%, transparent)' : '0 18px 60px color-mix(in srgb, var(--shadow-color) 55%, transparent)',
   } as React.CSSProperties;
   const softPanelStyle = {
     background: 'color-mix(in srgb, var(--card-bg) 92%, transparent)',
@@ -211,17 +237,20 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   } as React.CSSProperties;
   const userBubbleStyle = {
     background: props.theme === 'custom' ? 'var(--user-bubble-bg, var(--card-bg))' : isLightTheme
-      ? 'var(--primary-bg)'
-      : 'color-mix(in srgb, var(--card-bg) 92%, transparent)',
-    borderColor: 'var(--border-color)',
-    boxShadow: isLightTheme ? '0 4px 15px var(--shadow-color)' : 'none',
+      ? 'color-mix(in srgb, var(--card-bg) 95%, transparent)'
+      : 'color-mix(in srgb, var(--card-bg) 85%, transparent)',
+    borderColor: isLightTheme ? 'var(--border-color)' : 'color-mix(in srgb, var(--border-color) 70%, transparent)',
+    boxShadow: isLightTheme ? '0 4px 20px color-mix(in srgb, var(--shadow-color) 50%, transparent)' : 'none',
+    backdropFilter: 'blur(12px)',
     color: 'var(--primary-text)',
   } as React.CSSProperties;
   const modelBubbleStyle = {
     background: props.theme === 'custom' ? 'var(--model-bubble-bg, var(--card-bg))' : isLightTheme
-      ? 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 5%, var(--primary-bg)), color-mix(in srgb, var(--accent-light) 2%, var(--primary-bg)))'
-      : 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, var(--accent-light) 8%, var(--card-bg)))',
-    borderColor: isLightTheme ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'color-mix(in srgb, var(--accent) 26%, transparent)',
+      ? 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, var(--primary-bg)), color-mix(in srgb, var(--accent-light) 4%, var(--primary-bg)))'
+      : 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 15%, transparent), color-mix(in srgb, var(--accent-light) 10%, var(--card-bg)))',
+    borderColor: isLightTheme ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'color-mix(in srgb, var(--accent) 30%, transparent)',
+    backdropFilter: 'blur(16px)',
+    boxShadow: isLightTheme ? '0 4px 25px color-mix(in srgb, var(--shadow-color) 40%, transparent)' : '0 4px 30px color-mix(in srgb, var(--accent) 15%, transparent)',
     color: 'var(--primary-text)',
   } as React.CSSProperties;
 
@@ -1245,6 +1274,67 @@ I couldn't schedule the task. The background service may not be running. Please 
             return updated;
           });
           output = `Diagram generated successfully`;
+          break;
+        }
+
+        // ── GENERATE_FLOWCHART: render custom flowchart in chat ─────────────────
+        case 'GENERATE_FLOWCHART': {
+          const flowchartCode = command.value || command.context || '';
+          if (!flowchartCode || flowchartCode.length < 5) {
+            output = 'No valid flowchart code provided.';
+            break;
+          }
+          const flowchartId = `flowchart-${Date.now()}`;
+          setMessages(prev => {
+            if (prev.length === 0) return prev;
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            const existing = last.mediaItems || [];
+            updated[updated.length - 1] = {
+              ...last,
+              mediaItems: [...existing, {
+                type: 'flowchart',
+                diagramId: flowchartId,
+                code: flowchartCode
+              }]
+            };
+            return updated;
+          });
+          output = `Flowchart generated successfully`;
+          break;
+        }
+
+        // ── GENERATE_CHART: render Chart.js chart in chat ───────────────────────
+        case 'GENERATE_CHART': {
+          let chartData: any;
+          try {
+            chartData = robustJSONParse(command.value || command.context || '{}');
+          } catch {
+            output = 'Invalid chart data JSON.';
+            break;
+          }
+          if (!chartData.datasets || chartData.datasets.length === 0) {
+            output = 'No valid chart datasets provided.';
+            break;
+          }
+          const chartId = `chart-${Date.now()}`;
+          setMessages(prev => {
+            if (prev.length === 0) return prev;
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            const existing = last.mediaItems || [];
+            updated[updated.length - 1] = {
+              ...last,
+              mediaItems: [...existing, {
+                type: 'chart',
+                chartId,
+                data: chartData,
+                options: chartData.options || {}
+              }]
+            };
+            return updated;
+          });
+          output = `Chart generated successfully`;
           break;
         }
 
@@ -2373,6 +2463,15 @@ I've successfully executed the following real tasks:
         case 'OCR_COORDINATES':
         case 'OCR_SCREEN':
         case 'SCREENSHOT_AND_ANALYZE': {
+          // Check if user has already granted OCR permission permanently
+          const permKey = `OCR_SCREEN:${command.value || 'default'}`;
+          if (window.electronAPI?.permCheck) {
+            const permRes = await window.electronAPI.permCheck(permKey);
+            if (permRes?.granted) {
+              console.log('[Permission] OCR pre-authorized via stored permission');
+            }
+          }
+
           const stepId = addThinkingStep('Capturing screenshot...', 'Taking screenshot and running OCR');
           try {
             let ocrText = '';
@@ -3282,7 +3381,7 @@ I've successfully executed the following real tasks:
 
   return (
     <div
-      className={`ai-sidebar-theme adaptive-theme-surface flex flex-col h-full overflow-hidden relative transition-[width,box-shadow,border-radius] duration-500 ${isFullScreen ? 'fixed inset-0 z-[9999]' : ''}`}
+      className={`ai-sidebar-theme adaptive-theme-surface flex flex-col h-full overflow-hidden relative transition-[width,box-shadow,border-radius] duration-500 backdrop-blur-xl ${isFullScreen ? 'fixed inset-0 z-[9999]' : ''}`}
       style={{ width: isFullScreen ? '100%' : effectiveSidebarWidth, ...sidebarShellStyle }}
       onMouseEnter={markSidebarInteraction}
       onMouseDown={markSidebarInteraction}
@@ -3491,7 +3590,7 @@ I've successfully executed the following real tasks:
       </AnimatePresence>
 
       {/* Header */}
-      <header className={`px-5 flex flex-col justify-center border-b backdrop-blur-xl sticky top-0 z-[50] transition-[height,padding] duration-500 ${isIdleMinimized ? 'h-[64px]' : 'h-[76px]'}`} style={{ ...sidebarShellStyle, borderColor: 'color-mix(in srgb, var(--border-color) 45%, transparent)' }}>
+      <header className={`px-5 flex flex-col justify-center border-b backdrop-blur-2xl sticky top-0 z-[50] transition-[height,padding] duration-500 ${isIdleMinimized ? 'h-[64px]' : 'h-[76px]'}`} style={{ ...sidebarShellStyle, borderColor: 'color-mix(in srgb, var(--border-color) 35%, transparent)' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-9 h-9 rounded-2xl p-1.5 border" style={softPanelStyle}>
@@ -3584,7 +3683,7 @@ I've successfully executed the following real tasks:
       </header>
 
       {/* Chat Messages */}
-      <div className={`flex-1 overflow-y-auto modern-scrollbar transition-[padding] duration-500 ${isIdleMinimized ? 'p-4 space-y-5' : 'p-5 space-y-8'}`}>
+      <div className={`flex-1 overflow-y-auto modern-scrollbar transition-[padding] duration-500 backdrop-blur-sm ${isIdleMinimized ? 'p-4 space-y-5' : 'p-5 space-y-8'}`} style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--primary-bg) 92%, transparent), color-mix(in srgb, var(--primary-bg) 98%, transparent))' }}>
         <AnimatePresence mode="popLayout">
           {messages.length === 0 && (
             <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-20 text-center space-y-4">
@@ -3608,6 +3707,12 @@ I've successfully executed the following real tasks:
             }
 
             displayContent = displayContent.replace(INTERNAL_TAG_RE, '').trim();
+
+            const isLastMessage = i === messages.length - 1;
+            const isStreamingEmpty = isLastMessage && isLoading && !displayContent;
+            if (isStreamingEmpty && msg.role === 'model') {
+              return null;
+            }
 
             return (
               <motion.div
@@ -3754,6 +3859,16 @@ I've successfully executed the following real tasks:
                             <MermaidDiagram key={midx} diagramId={item.diagramId} code={item.code} />
                           );
                         }
+                        if (item.type === 'flowchart') {
+                          return (
+                            <FlowchartDiagram key={midx} diagramId={item.diagramId} code={item.code} />
+                          );
+                        }
+                        if (item.type === 'chart') {
+                          return (
+                            <ChartDiagram key={midx} chartId={item.chartId} data={item.data} options={item.options} />
+                          );
+                        }
                         return null;
                       })}
                     </div>
@@ -3824,13 +3939,13 @@ I've successfully executed the following real tasks:
               </motion.div>
             )
           })}
-          {isLoading && <ThinkingIndicator />}
+          {isLoading && messages.length === 0 && <ThinkingIndicator />}
         </AnimatePresence>
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input Area */}
-      <footer className={`sticky bottom-0 transition-[padding] duration-500 ${isIdleMinimized ? 'p-4 pt-0' : 'p-6 pt-0'}`} style={{ background: 'linear-gradient(180deg, transparent, color-mix(in srgb, var(--primary-bg) 86%, transparent) 28%, var(--primary-bg) 100%)' }}>
+      <footer className={`sticky bottom-0 transition-[padding] duration-500 ${isIdleMinimized ? 'p-4 pt-0' : 'p-6 pt-0'}`} style={{ background: 'linear-gradient(180deg, transparent, color-mix(in srgb, var(--primary-bg) 75%, transparent) 28%, var(--primary-bg) 100%)', backdropFilter: 'blur(20px)' }}>
         <div className={`p-4 rounded-[2.5rem] border transition-all shadow-2xl relative group ${shiftTabGlow
           ? 'border-purple-500/80 shadow-[0_0_24px_4px_rgba(168,85,247,0.35)] focus-within:border-purple-500/80'
           : 'border-white/10 focus-within:border-sky-500/30'
