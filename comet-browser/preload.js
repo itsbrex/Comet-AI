@@ -476,6 +476,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   syncClipboard: (text) => ipcRenderer.invoke('sync-clipboard', text),
   syncHistory: (history) => ipcRenderer.invoke('sync-history', history),
   sendDesktopControl: (targetDeviceId, action, args) => ipcRenderer.invoke('send-desktop-control', targetDeviceId, action, args),
+  onCloudSyncStatus: (callback) => {
+    const subscription = (event, data) => callback(data);
+    ipcRenderer.on('cloud-sync-status', subscription);
+    return () => ipcRenderer.removeListener('cloud-sync-status', subscription);
+  },
 
   // v2 Automation APIs
   permGrant: (key, level, description, sessionOnly) =>

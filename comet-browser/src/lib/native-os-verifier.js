@@ -19,6 +19,11 @@ async function ensureLocalMacHelperBinary(swiftScript, localBinary) {
     return false;
   }
 
+  // If inside asar, we can't compile to localBinary (which is inside asar) or read swiftScript directly.
+  if (swiftScript.includes('.asar') || localBinary.includes('.asar')) {
+    return false;
+  }
+
   const scriptStat = fs.statSync(swiftScript);
   const binaryExists = fs.existsSync(localBinary);
   const binaryIsFresh = binaryExists && fs.statSync(localBinary).mtimeMs >= scriptStat.mtimeMs;
@@ -122,20 +127,34 @@ async function verifyMacDeviceUnlock({ reason, actionText, riskLevel = 'medium' 
   }
 
   // Try local binary
-  if (fs.existsSync(localBinary)) {
+  if (fs.existsSync(localBinary) && !localBinary.includes('.asar')) {
     return runHelper(localBinary, args, 'macos-device-owner-auth');
   }
 
   // Try swift script
   if (fs.existsSync(swiftScript)) {
-    console.log(`[NativeVerifier] Using Swift helper: ${swiftScript}`);
+    let scriptToRun = swiftScript;
+    let tempScriptPath = null;
+    
+    // If inside an ASAR archive, swift compiler can't access it. Copy to temp dir.
+    if (swiftScript.includes('.asar')) {
+      const os = require('os');
+      tempScriptPath = path.join(os.tmpdir(), `macos-device-unlock-${Date.now()}.swift`);
+      fs.writeFileSync(tempScriptPath, fs.readFileSync(swiftScript, 'utf8'));
+      scriptToRun = tempScriptPath;
+    }
+
+    console.log(`[NativeVerifier] Using Swift helper: ${scriptToRun}`);
     try {
-        const result = await runHelper('swift', [swiftScript, ...args], 'macos-device-owner-auth');
+        const result = await runHelper('swift', [scriptToRun, ...args], 'macos-device-owner-auth');
+        if (tempScriptPath) fs.unlinkSync(tempScriptPath); // clean up
+        
         if (result.approved || (!result.error && result.supported)) {
             return result;
         }
         console.warn('[NativeVerifier] Swift helper returned failure, trying fallback...');
     } catch (e) {
+        if (tempScriptPath && fs.existsSync(tempScriptPath)) fs.unlinkSync(tempScriptPath); // clean up
         console.warn('[NativeVerifier] Swift execution failed, trying alternative...');
     }
   }

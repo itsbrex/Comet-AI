@@ -142,10 +142,10 @@
       ]
     },
     "appx": {
-      "identityName": "com.latestinssan.cometbrowser",
-      "publisher": "CN=Latestinssan",
+      "identityName": "Latestinssan.Comet-AI",
+      "publisher": "CN=CF2DF47B-A710-4E1D-8C29-FC648FFA1CAE",
       "publisherDisplayName": "Latestinssan",
-      "applicationId": "CometAI"
+      "applicationId": "Comet-AI"
     },
     "mac": {
       "icon": "assets/icon.png",
