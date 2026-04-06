@@ -2745,7 +2745,7 @@ I've successfully executed the following real tasks:
             
             if (window.electronAPI?.plugins?.executeCommand) {
               const result = await window.electronAPI.plugins.executeCommand(pluginCommandId, params);
-              output = result.success ? (result.output || 'Command executed successfully') : `Error: ${result.error}`;
+              output = result.success ? (result.result || 'Command executed successfully') : `Error: ${result.error}`;
             } else {
               output = 'Plugin command execution is not available.';
             }

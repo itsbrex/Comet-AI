@@ -473,6 +473,25 @@ declare global {
             getVersion: () => Promise<string>;
             getPlatform: () => string;
 
+            // Plugin System APIs
+            plugins: {
+                list: () => Promise<Array<{ id: string; name: string; version: string; description?: string; enabled: boolean; author?: string }>>;
+                get: (pluginId: string) => Promise<{ id: string; name: string; version: string; description?: string; enabled: boolean; author?: string } | null>;
+                install: (source: string, options?: { force?: boolean }) => Promise<{ success: boolean; pluginId?: string; error?: string }>;
+                uninstall: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
+                update: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
+                enable: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
+                disable: (pluginId: string) => Promise<{ success: boolean; error?: string }>;
+                getCommands: () => Promise<Array<{ id: string; name: string; description?: string; pluginId: string }>>;
+                executeCommand: (commandId: string, params?: any) => Promise<{ success: boolean; result?: any; error?: string }>;
+                updateConfig: (pluginId: string, config: any) => Promise<{ success: boolean; error?: string }>;
+                getDir: () => Promise<string>;
+                scan: (directory: string) => Promise<{ success: boolean; plugins?: string[]; error?: string }>;
+                onInstalled: (callback: (manifest: { id: string; name: string; version: string }) => void) => () => void;
+                onUninstalled: (callback: (pluginId: string) => void) => () => void;
+                onConfigUpdated: (callback: (data: { pluginId: string; config: any }) => void) => () => void;
+            };
+
         };
 
     }

@@ -158,8 +158,8 @@ export const Security = {
                 /\{(?:system|base)_prompt\}/gi,
                 /<\/?(?:system|base)_prompt>/gi,
                 /\[INST\][\s\S]*\[\/INST\]/gi,
-                /<<<.*?>>>/gs,
-                /\{\{.*?\}\}/gs,
+                /<<<[\s\S]*?>>>/g,
+                /\{\{[\s\S]*?\}\}/g,
                 /<\?php[\s\S]*?\?>/gi,
                 /<\?[\s\S]*?\?>/gi,
                 /<script[\s\S]*?<\/script>/gi,
@@ -316,9 +316,9 @@ export const Security = {
             for (const [layerName, patterns] of Object.entries(Security.SecureDOMParser.injectionPatterns)) {
                 if (Array.isArray(patterns)) {
                     // Simple regex patterns
-                    for (const pattern of patterns) {
+                    for (const pattern of (patterns as RegExp[])) {
                         let match;
-                        const regex = new RegExp(pattern.source, pattern.flags);
+                        const regex = pattern;
                         while ((match = regex.exec(content)) !== null) {
                             const severity = Security.SecureDOMParser.getSeverity(layerName, match[0]);
                             findings.push({
@@ -333,13 +333,13 @@ export const Security = {
                     }
                 } else if (typeof patterns === 'object') {
                     // API key patterns with names
-                    for (const { pattern, name } of patterns) {
+                    for (const patternObj of patterns as Array<{pattern: RegExp, name: string}>) {
                         let match;
-                        const regex = new RegExp(pattern.source, pattern.flags);
+                        const regex = patternObj.pattern;
                         while ((match = regex.exec(content)) !== null) {
                             findings.push({
                                 layer: 'apiKeyPatterns',
-                                pattern: name,
+                                pattern: patternObj.name,
                                 match: match[0].substring(0, 50) + '...',
                                 position: match.index,
                                 severity: 'warning'
@@ -376,7 +376,7 @@ export const Security = {
             for (const finding of findings) {
                 if (finding.severity === 'critical') {
                     sanitizedContent = sanitizedContent.replace(
-                        new RegExp(Security.escapeRegex(finding.match), 'g'),
+                        new RegExp(Security.SecureDOMParser.escapeRegex(finding.match), 'g'),
                         `[BLOCKED: ${finding.layer.toUpperCase()}]`
                     );
                 }

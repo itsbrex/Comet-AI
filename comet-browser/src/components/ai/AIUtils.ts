@@ -435,7 +435,7 @@ export function buildCleanPDFContent(
   </div>
   <div class="footer">
     <div class="footer-brand">${footerLogoHTML} Comet AI</div>
-    <span>${escapeHtml(data.title)} • ${new Date().getFullYear()}</span>
+    <span>${escapeHtml(title)} • ${new Date().getFullYear()}</span>
   </div>
   <script>
     document.addEventListener('DOMContentLoaded', function() {

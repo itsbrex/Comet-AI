@@ -69,7 +69,20 @@ export default function PluginSettings() {
       setError(null);
       if (window.electronAPI?.plugins) {
         const list = await window.electronAPI.plugins.list();
-        setPlugins(list || []);
+        const mappedPlugins: Plugin[] = (list || []).map(p => ({
+          id: p.id,
+          name: p.name,
+          version: p.version,
+          description: p.description || '',
+          author: p.author || 'Unknown',
+          type: 'command' as const,
+          permissions: [],
+          enabled: p.enabled,
+          hasConfig: false,
+          path: '',
+          status: p.enabled ? 'loaded' as const : 'disabled' as const
+        }));
+        setPlugins(mappedPlugins);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load plugins');
@@ -80,13 +93,13 @@ export default function PluginSettings() {
 
   const setupListeners = () => {
     if (window.electronAPI?.plugins) {
-      window.electronAPI.plugins.onInstalled((manifest) => {
+      window.electronAPI.plugins.onInstalled((_manifest: { id: string; name: string; version: string }) => {
         loadPlugins();
       });
-      window.electronAPI.plugins.onUninstalled((pluginId) => {
+      window.electronAPI.plugins.onUninstalled((_pluginId: string) => {
         loadPlugins();
       });
-      window.electronAPI.plugins.onConfigUpdated(({ pluginId, config }) => {
+      window.electronAPI.plugins.onConfigUpdated(({ pluginId: _pluginId, config: _config }: { pluginId: string; config: unknown }) => {
         loadPlugins();
       });
     }
