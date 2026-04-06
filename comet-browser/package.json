@@ -35,7 +35,6 @@
     "@ai-sdk/mcp": "^1.0.30",
     "@ai-sdk/openai": "^3.0.47",
     "@ai-sdk/xai": "^3.0.72",
-    "@cherrystudio/mac-system-ocr": "^0.2.7",
     "@ghostery/adblocker-electron": "^2.14.1",
     "@googleapis/gmail": "^16.1.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -73,6 +72,9 @@
     "wait-on": "^9.0.3",
     "ws": "^8.18.0",
     "zod": "^3.25.76"
+  },
+  "optionalDependencies": {
+    "@cherrystudio/mac-system-ocr": "^0.2.7"
   },
   "devDependencies": {
     "@eslint/compat": "^2.0.1",
