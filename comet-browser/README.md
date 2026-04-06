@@ -1,4 +1,9 @@
-#  Comet AI Browser (v0.2.6)!      [Made with Love in India](https://madewithlove.org.in/badge.svg)
+#  Comet AI Browser (v0.2.7.1)!      [Made with Love in India](https://madewithlove.org.in/badge.svg)
+
+### v0.2.7.1 Patch (2026-04-06)
+- **TypeScript Compilation Fixes**: Fixed all TS errors for `npm run dev`
+- **Plugin API Types**: Added complete type definitions for plugins interface
+- **Regex Compatibility**: Replaced ES2018 flags with compatible patterns
 
 ### v0.2.6 New Features
 - **On-Demand Skill Loading**: Document generation skills (PDF/DOCX/PPTX) now load dynamically when needed, reducing AI context size by ~150 lines
@@ -21,7 +26,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.6--stable-green)]()
+[![Version](https://img.shields.io/badge/Version-0.2.7.1--stable-green)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 ![Maintained](https://img.shields.io/badge/Maintained-Yes-green)
 ![Hardware](https://img.shields.io/badge/Tested_On-i5--8250U_|_8GB-orange)

@@ -1,5 +1,21 @@
 # Comet AI Browser - Release Notes
 
+## v0.2.7.1 (2026-04-06)
+
+### TypeScript Compilation Fixes
+- **Fixed Security.ts type errors**: Properly typed regex pattern iteration with explicit `RegExp[]` casting
+- **Added plugins API to electron.d.ts**: Complete type definitions for all 12 plugin methods
+- **Fixed PluginSettings.tsx**: Added proper type mapping and callback annotations
+- **Fixed AIChatSidebar.tsx**: Corrected `result.result` property access
+- **Fixed AIUtils.ts**: Replaced undefined `data.title` with `title` parameter
+- **Regex flag compatibility**: Replaced ES2018 `gs` flags with `[\s\S]*?` pattern
+
+### Build Verification
+- `npx tsc --noEmit` now passes with 0 errors
+- `npm run predev` compiles successfully
+
+---
+
 ## v0.2.7 (2026-04-04)
 
 ### Authentication Hardening

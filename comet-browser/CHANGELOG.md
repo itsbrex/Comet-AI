@@ -1,5 +1,29 @@
 # Comet Browser - Recent Changes
 
+## Version 0.2.7.1 - TypeScript Compilation Fixes (2026-04-06)
+
+### Overview
+Patch release addressing TypeScript compilation errors and type safety improvements.
+
+### Changes
+
+#### TypeScript Fixes
+- **Security.ts**: Fixed regex pattern type casting with explicit `RegExp[]` casting
+- **electron.d.ts**: Added complete plugins API interface (12 methods + 3 event listeners)
+- **PluginSettings.tsx**: Added proper type mapping and callback annotations
+- **AIChatSidebar.tsx**: Fixed `result.output` → `result.result`
+- **AIUtils.ts**: Fixed `data.title` → `title` in buildCleanPDFContent
+
+#### Build System
+- Replaced ES2018 `gs` regex flags with compatible `[\s\S]*?` pattern
+- Updated tsconfig.json target from ES2017 to ES2020
+
+### Verification
+- `npx tsc --noEmit` passes with 0 errors
+- `npm run predev` compiles successfully
+
+---
+
 ## Version 0.2.4-stable - PDF & OCR Improvements (Current)
 
 ### Overview

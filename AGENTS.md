@@ -438,6 +438,33 @@ Comet-AI/
 
 ## ✅ COMPLETED THIS SESSION
 
+### TypeScript Compilation Fixes (2026-04-06)
+
+**Status:** ✅ COMPLETE
+
+**Goal:** Fix TypeScript compilation errors so `npm run dev` works locally.
+
+**Discoveries:**
+1. ES2018 regex flag 's' issue on lines 161-162
+2. Type issues with regex patterns iteration
+3. `escapeRegex` scope issue in Security.ts
+4. Missing `plugins` API in electron.d.ts type definitions
+5. Undefined `data.title` reference in AIUtils.ts
+
+**Files Modified:**
+- `src/types/electron.d.ts` - Added complete plugins API interface
+- `src/lib/Security.ts` - Fixed regex pattern type casting, replaced `gs` flags
+- `src/components/PluginSettings.tsx` - Added type mapping and callback annotations
+- `src/components/AIChatSidebar.tsx` - Fixed `result.output` → `result.result`
+- `src/components/ai/AIUtils.ts` - Fixed `data.title` → `title`
+- `tsconfig.json` - Updated target from ES2017 to ES2020
+
+**Verification:**
+- ✅ `npx tsc --noEmit` passes with 0 errors
+- ✅ `npm run predev` compiles successfully
+
+---
+
 ### AI Scheduling Intent Detection + UI Update (2026-03-26)
 
 **Files Created/Modified:**
