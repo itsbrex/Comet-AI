@@ -200,6 +200,7 @@ const { PopSearchService, popSearchService } = require('./src/lib/pop-search-ser
 const { getRecommendedGeminiModel } = require('./src/lib/modelRegistry.js');
 const { WebSearchProvider } = require('./src/lib/web-search-service.js');
 const { MacNativePanelManager } = require('./src/lib/macos-native-panels.js');
+const { PluginManager, pluginManager } = require('./src/lib/plugin-manager.js');
 const webSearchProvider = new WebSearchProvider();
 
 // ✅ NEW: Relocate essential system IPC handlers to the top to prevent "no handler registered" errors
@@ -5397,6 +5398,163 @@ ipcMain.handle('network-security-update', async (_event, updates) => {
   }
 });
 
+// ============================================================
+// Plugin System IPC Handlers
+// ============================================================
+ipcMain.handle('plugins:list', async () => {
+  try {
+    return pluginManager.getPlugins();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('plugins:get', async (event, pluginId) => {
+  try {
+    const plugin = pluginManager.getPlugin(pluginId);
+    if (!plugin) {
+      return { success: false, error: 'Plugin not found' };
+    }
+    return { success: true, plugin };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('plugins:install', async (event, { source, pluginId, path: filePath }) => {
+  try {
+    const result = await pluginManager.installPlugin(source, { pluginId, filePath });
+    return result;
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('plugins:uninstall', async (event, pluginId) => {
+  try {
+    const result = await pluginManager.uninstallPlugin(pluginId);
+    return result;
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('plugins:update', async (event, pluginId) => {
+  try {
+    const result = await pluginManager.updatePlugin(pluginId);
+    return result;
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('plugins:enable', async (event, pluginId) => {
+  try {
+    const result = await pluginManager.enablePlugin(pluginId);
+    return result;
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('plugins:disable', async (event, pluginId) => {
+  try {
+    const result = await pluginManager.disablePlugin(pluginId);
+    return result;
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('plugins:get-commands', async () => {
+  try {
+    return pluginManager.getCommands();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('plugins:execute-command', async (event, commandId, params) => {
+  try {
+    const result = await pluginManager.executeCommand(commandId, params);
+    return result;
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('plugins:update-config', async (event, pluginId, config) => {
+  try {
+    const result = pluginManager.updatePluginConfig(pluginId, config);
+    return result;
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('plugins:get-dir', async () => {
+  return pluginManager.getPluginsDirPath();
+});
+
+ipcMain.handle('plugins:scan', async (event, directory) => {
+  try {
+    const results = await pluginManager.scanDirectory(directory);
+    return { success: true, plugins: results };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+// Plugin internal API handlers
+ipcMain.handle('plugin-api:read-file', async (event, filePath) => {
+  const fs = require('fs');
+  const path = require('path');
+  const pluginsDir = pluginManager.getPluginsDirPath();
+  const resolvedPath = path.resolve(pluginsDir, '..', filePath);
+  if (!resolvedPath.startsWith(pluginsDir)) {
+    throw new Error('Access denied: Path outside plugins directory');
+  }
+  return fs.readFileSync(resolvedPath, 'utf-8');
+});
+
+ipcMain.handle('plugin-api:write-file', async (event, filePath, content) => {
+  const fs = require('fs');
+  const path = require('path');
+  const pluginsDir = pluginManager.getPluginsDirPath();
+  const resolvedPath = path.resolve(pluginsDir, '..', filePath);
+  if (!resolvedPath.startsWith(pluginsDir)) {
+    throw new Error('Access denied: Path outside plugins directory');
+  }
+  fs.writeFileSync(resolvedPath, content);
+  return { success: true };
+});
+
+ipcMain.handle('plugin-api:log', async (event, { pluginId, message, level }) => {
+  const levels = ['info', 'warn', 'error', 'debug'];
+  const logFn = levels.includes(level) ? console[level] : console.log;
+  logFn(`[Plugin:${pluginId}]`, message);
+  return { success: true };
+});
+
+// Listen for plugin events and emit to renderer
+pluginManager.on('plugin:installed', (manifest) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('plugin:installed', manifest);
+  }
+});
+
+pluginManager.on('plugin:uninstalled', ({ pluginId }) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('plugin:uninstalled', { pluginId });
+  }
+});
+
+pluginManager.on('plugin:config-updated', ({ pluginId, config }) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('plugin:config-updated', { pluginId, config });
+  }
+});
+
 app.whenReady().then(async () => {
   nativeTheme.on('updated', () => {
     updateGoogleSearchTheme();
@@ -6683,6 +6841,16 @@ app.whenReady().then(async () => {
   });
 
   createWindow();
+
+  // Load all plugins on startup
+  (async () => {
+    try {
+      await pluginManager.loadAllPlugins();
+      console.log(`[PluginManager] Loaded ${pluginManager.getPlugins().length} plugins.`);
+    } catch (err) {
+      console.error('[PluginManager] Failed to load plugins:', err);
+    }
+  })();
 
   app.on('activate', () => {
     if (openWindows.size === 0) {

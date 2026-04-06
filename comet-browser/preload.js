@@ -518,4 +518,41 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCometIcon: () => ipcRenderer.invoke('get-app-icon-base64'),
   
   getVersion: () => ipcRenderer.invoke('get-app-version'),
+
+  // Plugin System APIs
+  plugins: {
+    list: () => ipcRenderer.invoke('plugins:list'),
+    get: (pluginId) => ipcRenderer.invoke('plugins:get', pluginId),
+    install: (source, options) => ipcRenderer.invoke('plugins:install', source, options),
+    uninstall: (pluginId) => ipcRenderer.invoke('plugins:uninstall', pluginId),
+    update: (pluginId) => ipcRenderer.invoke('plugins:update', pluginId),
+    enable: (pluginId) => ipcRenderer.invoke('plugins:enable', pluginId),
+    disable: (pluginId) => ipcRenderer.invoke('plugins:disable', pluginId),
+    getCommands: () => ipcRenderer.invoke('plugins:get-commands'),
+    executeCommand: (commandId, params) => ipcRenderer.invoke('plugins:execute-command', commandId, params),
+    updateConfig: (pluginId, config) => ipcRenderer.invoke('plugins:update-config', pluginId, config),
+    getDir: () => ipcRenderer.invoke('plugins:get-dir'),
+    scan: (directory) => ipcRenderer.invoke('plugins:scan', directory),
+    onInstalled: (callback) => {
+      const subscription = (event, manifest) => callback(manifest);
+      ipcRenderer.on('plugin:installed', subscription);
+      return () => ipcRenderer.removeListener('plugin:installed', subscription);
+    },
+    onUninstalled: (callback) => {
+      const subscription = (event, { pluginId }) => callback(pluginId);
+      ipcRenderer.on('plugin:uninstalled', subscription);
+      return () => ipcRenderer.removeListener('plugin:uninstalled', subscription);
+    },
+    onConfigUpdated: (callback) => {
+      const subscription = (event, { pluginId, config }) => callback({ pluginId, config });
+      ipcRenderer.on('plugin:config-updated', subscription);
+      return () => ipcRenderer.removeListener('plugin:config-updated', subscription);
+    },
+  },
+
+  pluginApi: {
+    readFile: (filePath) => ipcRenderer.invoke('plugin-api:read-file', filePath),
+    writeFile: (filePath, content) => ipcRenderer.invoke('plugin-api:write-file', filePath, content),
+    log: (message, level) => ipcRenderer.invoke('plugin-api:log', message, level),
+  },
 });

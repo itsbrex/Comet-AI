@@ -133,7 +133,15 @@ dist
 .yarn/unplugged
 .yarn/build-state.yml
 .yarn/install-state.gz
-.pnp.*
+# System files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.backup
+*.bak
+*.backup.*
+
+# Project specific
 Comet-AI_/
-/Landing_Page
 /Landing_Page

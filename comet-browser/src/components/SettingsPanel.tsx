@@ -6,7 +6,7 @@ import { useAppStore, BrowserState } from '@/store/useAppStore';
 import {
     Monitor, Shield, Globe, Info, Download,
     ChevronRight, ShieldCheck, Key, Package, Keyboard,
-    Briefcase, ShieldAlert, Database, LogIn, LogOut, History as HistoryIcon, User as UserIcon, Zap, RefreshCw, Languages, Music2, Eye, EyeOff, Lock, BookOpen, Sparkles
+    Briefcase, ShieldAlert, Database, LogIn, LogOut, History as HistoryIcon, User as UserIcon, Zap, RefreshCw, Languages, Music2, Eye, EyeOff, Lock, BookOpen, Sparkles, Puzzle
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import SearchEngineSettings from './SearchEngineSettings';
@@ -27,6 +27,7 @@ import McpSettings from './McpSettings';
 import PermissionSettings from './PermissionSettings';
 import AutomationSettings from './AutomationSettings';
 import UpdatesSettings from './UpdatesSettings';
+import PluginSettings from './PluginSettings';
 import { useAppVersion } from '@/lib/useAppVersion';
 import ThemeSettings from './ThemeSettings';
 
@@ -145,6 +146,7 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
         { id: 'shortcuts', icon: <Keyboard size={18} />, label: 'Keyboard Shortcuts' },
         { id: 'sync', icon: <RefreshCw size={18} />, label: 'Sync' },
         { id: 'extensions', icon: <Package size={18} />, label: 'Extensions' },
+        { id: 'plugins', icon: <Puzzle size={18} />, label: 'Plugins' },
         { id: 'tabs', icon: <Monitor size={18} />, label: 'Tab Management' },
         { id: 'integrations', icon: <Briefcase size={18} />, label: 'Integrations' },
         { id: 'mcp', icon: <Globe size={18} />, label: 'MCP Servers' },
@@ -911,6 +913,10 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
 
                         {activeSection === 'extensions' && (
                             <ExtensionSettings />
+                        )}
+
+                        {activeSection === 'plugins' && (
+                            <PluginSettings />
                         )}
 
                         {activeSection === 'tabs' && (

@@ -2736,6 +2736,25 @@ I've successfully executed the following real tasks:
           break;
         }
 
+        // ── PLUGIN_COMMAND: Execute plugin-defined commands ─────────────────────
+        case 'PLUGIN_COMMAND': {
+          setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
+          try {
+            const pluginCommandId = command.value;
+            const params = command.context ? JSON.parse(command.context) : {};
+            
+            if (window.electronAPI?.plugins?.executeCommand) {
+              const result = await window.electronAPI.plugins.executeCommand(pluginCommandId, params);
+              output = result.success ? (result.output || 'Command executed successfully') : `Error: ${result.error}`;
+            } else {
+              output = 'Plugin command execution is not available.';
+            }
+          } catch (e: any) {
+            output = `Plugin command error: ${e.message}`;
+          }
+          break;
+        }
+
         default:
           output = `Operation ${command.type} completed.`;
       }
