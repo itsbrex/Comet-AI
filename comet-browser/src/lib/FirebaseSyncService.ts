@@ -6,16 +6,72 @@ import { Security } from "./Security";
 // These will be null initially, and set once firebaseService is initialized
 let db: Database | null = null;
 let auth: Auth | null = null;
+let initCheckInterval: ReturnType<typeof setInterval> | null = null;
+let isInitialized = false;
 
 // Listen for FirebaseService to be initialized and then set db and auth
-const initCheckInterval = setInterval(() => {
-  if (firebaseService.app && firebaseService.auth) {
-    db = getDatabase(firebaseService.app);
-    auth = firebaseService.auth;
+const initializeFirebaseSync = () => {
+  // Clear any existing interval
+  if (initCheckInterval !== null) {
     clearInterval(initCheckInterval);
+    initCheckInterval = null;
   }
-}, 500);
+  
+  // Check if Firebase is already initialized
+  if (firebaseService.app && firebaseService.auth && !isInitialized) {
+    try {
+      db = getDatabase(firebaseService.app);
+      auth = firebaseService.auth;
+      isInitialized = true;
+      console.log('[FirebaseSyncService] Firebase initialized successfully');
+    } catch (error) {
+      console.error('[FirebaseSyncService] Failed to initialize Firebase:', error);
+      // Retry in case of temporary failure
+      initCheckInterval = setInterval(initializeFirebaseSync, 1000);
+      return;
+    }
+  } else if (!firebaseService.app || !firebaseService.auth) {
+    // Firebase not ready yet, set up interval to check
+    initCheckInterval = setInterval(() => {
+      if (firebaseService.app && firebaseService.auth && !isInitialized) {
+        try {
+          db = getDatabase(firebaseService.app);
+          auth = firebaseService.auth;
+          isInitialized = true;
+          if (initCheckInterval !== null) {
+            clearInterval(initCheckInterval);
+            initCheckInterval = null;
+          }
+          console.log('[FirebaseSyncService] Firebase initialized successfully');
+        } catch (error) {
+          console.error('[FirebaseSyncService] Failed to initialize Firebase:', error);
+          // Keep retrying
+        }
+      }
+    }, 500);
+    return;
+  }
+};
 
+// Start initialization
+initializeFirebaseSync();
+
+// Handle reinitialization if FirebaseService is reinitialized
+const originalReinitialize = firebaseService.reinitialize;
+firebaseService.reinitialize = function() {
+  originalReinitialize.call(this);
+  // Reset state
+  isInitialized = false;
+  db = null;
+  auth = null;
+  // Clear existing interval if any
+  if (initCheckInterval !== null) {
+    clearInterval(initCheckInterval);
+    initCheckInterval = null;
+  }
+  // Restart initialization
+  initializeFirebaseSync();
+};
 
 class FirebaseSyncService {
   private userId: string | null = null;
@@ -46,7 +102,10 @@ class FirebaseSyncService {
   }
 
   public async syncClipboard() {
-    if (!this.userId || !db) return;
+    if (!this.userId || !db) {
+      console.warn('[FirebaseSyncService] Cannot sync clipboard: missing userId or db');
+      return;
+    }
 
     const useAppStore = await this.getStore();
     const store = useAppStore.getState();
@@ -73,7 +132,10 @@ class FirebaseSyncService {
   }
 
   public async setClipboard(clipboard: unknown[]) {
-    if (!this.userId || !db) return;
+    if (!this.userId || !db) {
+      console.warn('[FirebaseSyncService] Cannot set clipboard: missing userId or db');
+      return;
+    }
     const useAppStore = await this.getStore();
     const store = useAppStore.getState();
 
@@ -89,7 +151,10 @@ class FirebaseSyncService {
   }
 
   public async syncHistory() {
-    if (!this.userId || !db) return;
+    if (!this.userId || !db) {
+      console.warn('[FirebaseSyncService] Cannot sync history: missing userId or db');
+      return;
+    }
 
     const useAppStore = await this.getStore();
     const store = useAppStore.getState();
@@ -113,7 +178,10 @@ class FirebaseSyncService {
   }
 
   public async setHistory(history: string[]) {
-    if (!this.userId || !db) return;
+    if (!this.userId || !db) {
+      console.warn('[FirebaseSyncService] Cannot set history: missing userId or db');
+      return;
+    }
     const useAppStore = await this.getStore();
     const store = useAppStore.getState();
 
@@ -129,8 +197,10 @@ class FirebaseSyncService {
   }
 
   public async syncApiKeys() {
-    if (!this.userId || !db) return;
-
+    if (!this.userId || !db) {
+      console.warn('[FirebaseSyncService] Cannot sync API keys: missing userId or db');
+      return;
+    }
     const useAppStore = await this.getStore();
     const store = useAppStore.getState();
 
@@ -156,7 +226,10 @@ class FirebaseSyncService {
   }
 
   public async setApiKeys(apiKeys: Record<string, string>) {
-    if (!this.userId || !db) return;
+    if (!this.userId || !db) {
+      console.warn('[FirebaseSyncService] Cannot set API keys: missing userId or db');
+      return;
+    }
     const useAppStore = await this.getStore();
     const store = useAppStore.getState();
 

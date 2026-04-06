@@ -15,7 +15,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
+    "jsx": "preserve",
     "incremental": true,
     "plugins": [
       {
@@ -35,8 +35,9 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "**/*.mts",
-    ".next/dev/types/**/*.ts"
-, "src/components/ai/AIConstants.ts.backup"  ],
+    ".next/dev/types/**/*.ts",
+    "src/components/ai/AIConstants.ts.backup"
+  ],
   "exclude": [
     "node_modules",
     ".next"
