@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -35,7 +34,10 @@ class AuthService {
 
   bool _isInitialized = false;
 
-  static const String _webClientId = '507073680966.apps.googleusercontent.com';
+  static const String _iosClientId =
+      '507073680966-4k6edbtnlnc0shv1knirfl436pou53e1.apps.googleusercontent.com';
+  static const String _serverClientId =
+      '507073680966-htnpcip4v3o5fhse7iqsdon9rqq8bhmk.apps.googleusercontent.com';
 
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -52,8 +54,10 @@ class AuthService {
     );
 
     _googleSignIn = GoogleSignIn(
-      clientId: _webClientId,
-      scopes: ['email', 'profile'],
+      clientId:
+          defaultTargetPlatform == TargetPlatform.iOS ? _iosClientId : null,
+      serverClientId: !kIsWeb ? _serverClientId : null,
+      scopes: const ['email', 'profile'],
     );
 
     _firebaseAuth.authStateChanges().listen((user) {
@@ -114,6 +118,7 @@ class AuthService {
     try {
       print('[Auth] Starting native Google Sign-In...');
 
+      await _googleSignIn.signOut();
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
@@ -126,9 +131,17 @@ class AuthService {
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
+      final idToken = googleAuth.idToken;
+      final accessToken = googleAuth.accessToken;
+      if ((idToken == null || idToken.isEmpty) &&
+          (accessToken == null || accessToken.isEmpty)) {
+        print('[Auth] Google sign-in completed without Firebase tokens');
+        return false;
+      }
+
       final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
+        accessToken: accessToken,
+        idToken: idToken,
       );
 
       final UserCredential userCredential =

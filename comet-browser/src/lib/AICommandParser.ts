@@ -19,6 +19,13 @@ export interface CommandParseResult {
     commands: ParsedCommand[];
     textWithoutCommands: string;
     hasCommands: boolean;
+    parseIssues: Array<{
+        type: string;
+        value: string;
+        error: string;
+        originalMatch: string;
+        index: number;
+    }>;
 }
 
 // Strict Command Registry with descriptions and examples
@@ -93,111 +100,98 @@ function getCategoryForType(type: string): string {
  * Extract commands from JSON format
  * Supports: {"commands": [{"type": "...", "value": "..."}]}
  */
+function normalizeCommandValue(value: unknown): string {
+    if (typeof value === 'string') return value;
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return String(value);
+    }
+}
+
+function extractCommandsFromStructuredPayload(payload: any, originalMatch: string, index: number): ParsedCommand[] {
+    const commands: ParsedCommand[] = [];
+
+    const appendCommand = (cmd: any) => {
+        const cmdType = (cmd?.type || cmd?.command || '').toUpperCase();
+        const cmdValue = cmd?.value ?? cmd?.url ?? cmd?.query ?? cmd?.args ?? '';
+
+        if (!cmdType || !SUPPORTED_COMMANDS.includes(cmdType as any)) {
+            return;
+        }
+
+        commands.push({
+            type: cmdType,
+            value: normalizeCommandValue(cmdValue),
+            reason: typeof cmd?.reason === 'string' ? cmd.reason : '',
+            risk: (['low', 'medium', 'high'].includes(cmd?.risk) ? cmd.risk : 'medium') as any,
+            originalMatch,
+            index,
+        });
+    };
+
+    if (Array.isArray(payload)) {
+        payload.forEach(appendCommand);
+        return commands;
+    }
+
+    if (payload && typeof payload === 'object') {
+        if (Array.isArray(payload.commands)) {
+            payload.commands.forEach(appendCommand);
+            return commands;
+        }
+
+        if (payload.type || payload.command) {
+            appendCommand(payload);
+        }
+    }
+
+    return commands;
+}
+
 function extractJSONCommands(content: string): ParsedCommand[] {
     const commands: ParsedCommand[] = [];
-    
-    // Try to find and parse JSON with commands array
-    const jsonPatterns = [
+
+    const candidatePatterns = [
         /\{[\s\S]*?"commands"\s*:\s*\[[\s\S]*?\][\s\S]*?\}/g,
+        /\[[\s\S]*?\{[\s\S]*?"type"\s*:\s*"[^"]+"[\s\S]*?\}[\s\S]*?\]/g,
+        /\{[\s\S]*?"type"\s*:\s*"[^"]+"[\s\S]*?\}/g,
+        /```json\s*([\s\S]*?)```/gi,
+        /```\s*([\s\S]*?)```/g,
     ];
-    
-    for (const pattern of jsonPatterns) {
+
+    for (const pattern of candidatePatterns) {
         let match: RegExpExecArray | null;
         while ((match = pattern.exec(content)) !== null) {
-            // Use robust JSON parsing for nested structures
-            const robustResult = robustJSONParse(match[0]);
+            const rawCandidate = match[1] ? match[1].trim() : match[0];
+            if (!/"(?:commands|type|command)"/.test(rawCandidate)) {
+                continue;
+            }
+
+            const robustResult = robustJSONParse(rawCandidate);
             if (robustResult.success) {
-                const parsed = robustResult.data;
-                
-                if (parsed.commands && Array.isArray(parsed.commands)) {
-                    parsed.commands.forEach((cmd: any, _i: number) => {
-                        const cmdType = (cmd.type || cmd.command || '').toUpperCase();
-                        const cmdValue = cmd.value || cmd.url || cmd.query || '';
-                        
-                        if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
-                            commands.push({
-                                type: cmdType,
-                                value: typeof cmdValue === 'string' ? cmdValue : JSON.stringify(cmdValue),
-                                reason: cmd.reason || '',
-                                risk: (['low', 'medium', 'high'].includes(cmd.risk) ? cmd.risk : 'medium') as any,
-                                originalMatch: match![0],
-                                index: match!.index,
-                            });
-                        }
-                    });
-                }
+                commands.push(...extractCommandsFromStructuredPayload(robustResult.data, match[0], match.index));
             } else {
-                // Fallback: brute-force extraction from raw text
-                const fbRegex = /"type"\s*:\s*"([^"]+)"\s*,\s*"value"\s*:\s*"([\s\S]*?)"(?=\s*\})/g;
+                const fbRegex = /"type"\s*:\s*"([^"]+)"[\s\S]*?"(?:value|url|query|args)"\s*:\s*"([\s\S]*?)"(?=\s*[},])/g;
                 let fbMatch;
-                while ((fbMatch = fbRegex.exec(match[0])) !== null) {
+                while ((fbMatch = fbRegex.exec(rawCandidate)) !== null) {
                     const cmdType = fbMatch[1].toUpperCase();
                     const cmdValue = fbMatch[2].replace(/\\n/g, '\n').replace(/\\"/g, '"');
                     if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
                         commands.push({
                             type: cmdType,
                             value: cmdValue,
-                            originalMatch: match![0],
-                            index: match!.index,
+                            originalMatch: match[0],
+                            index: match.index,
                         });
                     }
                 }
             }
         }
     }
-    
-    // Also try markdown code block patterns
-    const codeBlockPatterns = [
-        /```json\s*\{[\s\S]*?"commands"\s*:\s*\[[\s\S]*?\][\s\S]*?\}\s*```/g,
-        /```\s*\{[\s\S]*?"commands"\s*:\s*\[[\s\S]*?\][\s\S]*?\}\s*```/g,
-    ];
-    
-    for (const pattern of codeBlockPatterns) {
-        let match: RegExpExecArray | null;
-        while ((match = pattern.exec(content)) !== null) {
-            // Strip wrapping backticks and tags
-            let rawJson = match[0].replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
-            
-            // Use robust JSON parsing for nested structures
-            const robustResult = robustJSONParse(rawJson);
-            if (robustResult.success) {
-                const parsed = robustResult.data;
-                
-                if (parsed.commands && Array.isArray(parsed.commands)) {
-                    parsed.commands.forEach((cmd: any, _i: number) => {
-                        const cmdType = (cmd.type || cmd.command || '').toUpperCase();
-                        const cmdValue = cmd.value || cmd.url || cmd.query || '';
-                        
-                        if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
-                            commands.push({
-                                type: cmdType,
-                                value: typeof cmdValue === 'string' ? cmdValue : JSON.stringify(cmdValue),
-                                originalMatch: match![0],
-                                index: match!.index,
-                            });
-                        }
-                    });
-                }
-            } else {
-                // Fallback: brute-force extraction
-                const fbRegex = /"type"\s*:\s*"([^"]+)"\s*,\s*"value"\s*:\s*"([\s\S]*?)"(?=\s*\})/g;
-                let fbMatch;
-                while ((fbMatch = fbRegex.exec(match[0])) !== null) {
-                    const cmdType = fbMatch[1].toUpperCase();
-                    const cmdValue = fbMatch[2].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-                    if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
-                        commands.push({
-                            type: cmdType,
-                            value: cmdValue,
-                            originalMatch: match![0],
-                            index: match!.index,
-                        });
-                    }
-                }
-            }
-        }
-    }
-    
+
     return commands;
 }
 
@@ -210,6 +204,7 @@ export function parseAICommands(content: string): CommandParseResult {
     const commands: ParsedCommand[] = [];
     const commandsSet = new Set(SUPPORTED_COMMANDS);
     const metaCommandsSet = new Set(META_COMMANDS);
+    const parseIssues: CommandParseResult['parseIssues'] = [];
     
     // Deduplication set - tracks "type:value" to avoid duplicates
     const seenCommands = new Set<string>();
@@ -233,8 +228,12 @@ export function parseAICommands(content: string): CommandParseResult {
             // Remove JSON from content for display
             const jsonPatterns = [
                 /\{"commands"\s*:\s*\[[\s\S]*?\]\}/g,
+                /\[[\s\S]*?\{[\s\S]*?"type"\s*:\s*"[^"]+"[\s\S]*?\}[\s\S]*?\]/g,
+                /\{[\s\S]*?"type"\s*:\s*"[^"]+"[\s\S]*?\}/g,
                 /```json\s*\{[\s\S]*?\}\s*```/g,
+                /```json\s*\[[\s\S]*?\]\s*```/g,
                 /```\s*\{[\s\S]*?\}\s*```/g,
+                /```\s*\[[\s\S]*?\]\s*```/g,
             ];
             let cleanedContent = content;
             for (const pattern of jsonPatterns) {
@@ -244,6 +243,7 @@ export function parseAICommands(content: string): CommandParseResult {
                 commands,
                 textWithoutCommands: cleanedContent.trim(),
                 hasCommands: true,
+                parseIssues,
             };
         }
     }
@@ -258,7 +258,7 @@ export function parseAICommands(content: string): CommandParseResult {
             const trimmed = line.trim();
             if (!trimmed) continue;
             // Parse [COMMAND]:value format from HTML comments
-            const match = trimmed.match(/^\[([A-Z_]+)\]:(.*)$/);
+            const match = trimmed.match(/^\[([A-Z_]+)\]\s*:(.*)$/);
             if (match) {
                 const cmdType = match[1].toUpperCase();
                 const cmdValue = match[2] || '';
@@ -307,12 +307,16 @@ export function parseAICommands(content: string): CommandParseResult {
     while ((match = commandRegex.exec(mask)) !== null) {
         const [fullMatch, commandType, commandValue = ''] = match;
         const type = commandType.toUpperCase();
+        const trailingSlice = mask.substring(match.index + fullMatch.length);
 
         // Validate command type (only if it's in the master list)
         if (!commandsSet.has(type as CommandType)) continue;
 
         // SKIP Meta Commands - they should NOT go into the execution queue
         if (metaCommandsSet.has(type as any)) continue;
+
+        // Legacy syntax like [NAVIGATE]:https://example.com is handled separately below.
+        if (!commandValue && /^\s*:/.test(trailingSlice)) continue;
 
         // Clean up command value: trim and strip surrounding quotes
         let rawValue = (match[2] || '').trim();
@@ -334,6 +338,50 @@ export function parseAICommands(content: string): CommandParseResult {
         });
     }
 
+    const legacyCommandRegex = new RegExp(`\\[\\s*(${commandPattern})\\s*\\]\\s*:\\s*([^\\n\\r]+)`, 'gi');
+    legacyCommandRegex.lastIndex = 0;
+
+    while ((match = legacyCommandRegex.exec(mask)) !== null) {
+        const [fullMatch, commandType, commandValue = ''] = match;
+        const type = commandType.toUpperCase();
+
+        if (!commandsSet.has(type as CommandType) || metaCommandsSet.has(type as any)) continue;
+
+        let rawValue = commandValue.trim();
+        if ((rawValue.startsWith('"') && rawValue.endsWith('"')) || (rawValue.startsWith("'") && rawValue.endsWith("'"))) {
+            rawValue = rawValue.substring(1, rawValue.length - 1).trim();
+        }
+
+        const shouldStoreRawValue = ['GENERATE_PDF', 'CREATE_PDF_JSON', 'CREATE_FILE_JSON', 'SCHEDULE_TASK', 'OPEN_SCHEDULING_MODAL'].includes(type);
+
+        addUniqueCommand({
+            type,
+            value: shouldStoreRawValue ? rawValue : rawValue.split('|')[0].trim(),
+            reason: rawValue.split('|').find(p => p.trim().toLowerCase().startsWith('reason:'))?.split(':').slice(1).join(':').trim() || (rawValue.split('|')[1] || '').trim(),
+            risk: (rawValue.split('|').find(p => p.trim().toLowerCase().startsWith('risk:'))?.split(':').slice(1).join(':').trim().toLowerCase() as any) || 'medium',
+            originalMatch: content.substring(match.index, match.index + fullMatch.length),
+            index: match.index,
+        });
+    }
+
+    const potentialCommandRegex = /\[\s*([A-Z_][A-Z0-9_]*)[^\]]*\](?:\s*:\s*[^\n\r]+)?/g;
+    potentialCommandRegex.lastIndex = 0;
+
+    while ((match = potentialCommandRegex.exec(mask)) !== null) {
+        const type = (match[1] || '').toUpperCase();
+        if (!type || commandsSet.has(type as CommandType) || metaCommandsSet.has(type as any)) {
+            continue;
+        }
+
+        parseIssues.push({
+            type,
+            value: '',
+            error: `Unsupported command "${type}" was ignored.`,
+            originalMatch: content.substring(match.index, match.index + match[0].length),
+            index: match.index,
+        });
+    }
+
     // 3. Prepare response text by removing EXECUTED commands (keep meta commands)
     let textWithoutCommands = content;
     // Remove from bottom to top to preserve string indices
@@ -343,10 +391,22 @@ export function parseAICommands(content: string): CommandParseResult {
                             textWithoutCommands.substring(cmd.index + cmd.originalMatch.length);
     }
 
+    const sortedIssues = [...parseIssues].sort((a, b) => b.index - a.index);
+    for (const issue of sortedIssues) {
+        textWithoutCommands = textWithoutCommands.substring(0, issue.index) +
+                            textWithoutCommands.substring(issue.index + issue.originalMatch.length);
+    }
+
+    textWithoutCommands = textWithoutCommands
+        .replace(htmlCommentPattern, '')
+        .replace(/```(?:json)?\s*```/gi, '')
+        .trim();
+
     return {
         commands,
         textWithoutCommands: textWithoutCommands.trim(),
         hasCommands: commands.length > 0,
+        parseIssues,
     };
 }
 
@@ -433,6 +493,18 @@ export function prepareCommandsForExecution(content: string): {
     const parseResult = parseAICommands(content);
     const invalidCommands: Array<{ command: ParsedCommand; error: string }> = [];
     const validCommands: ParsedCommand[] = [];
+
+    parseResult.parseIssues.forEach((issue) => {
+        invalidCommands.push({
+            command: {
+                type: issue.type,
+                value: issue.value,
+                originalMatch: issue.originalMatch,
+                index: issue.index,
+            },
+            error: issue.error,
+        });
+    });
 
     for (const command of parseResult.commands) {
         const validation = validateCommand(command);

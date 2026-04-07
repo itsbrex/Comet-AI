@@ -35,7 +35,6 @@ import {
   extractOCRResult,
   extractActionChain,
   extractMediaAttachments,
-  cleanTagsFromText,
   extractActionCommands
 } from './ai/RobustParsers';
 import { useAppVersion } from '@/lib/useAppVersion';
@@ -189,6 +188,10 @@ interface AIChatSidebarProps {
 // ---------------------------------------------------------------------------
 
 const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
+  const ACTION_CHAIN_MAX_ITERATIONS = 4;
+  const ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS = 2;
+  const ACTION_CHAIN_MAX_COMMANDS_PER_PASS = 6;
+  const ACTION_CHAIN_MAX_SAME_COMMAND_ATTEMPTS = 2;
   const router = useRouter();
   const store = useAppStore();
   const {
@@ -377,6 +380,168 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     setLastSidebarInteractionAt(Date.now());
     setIsIdleMinimized(false);
   }, []);
+
+  const buildActionChainClarification = useCallback((options: {
+    reason: string;
+    failedCommands?: Array<{ type: string; value?: string; error?: string }>;
+    invalidCommands?: Array<{ type: string; error: string }>;
+    skippedCommands?: string[];
+    attemptsUsed?: number;
+    maxAttempts?: number;
+  }) => {
+    const failedCommands = options.failedCommands || [];
+    const invalidCommands = options.invalidCommands || [];
+    const skippedCommands = options.skippedCommands || [];
+
+    const lines = [
+      `I couldn't complete the action chain automatically.`,
+      ``,
+      `Reason: ${options.reason}`,
+    ];
+
+    if (failedCommands.length > 0) {
+      lines.push('', 'Failed steps:');
+      failedCommands.slice(0, 4).forEach((command, index) => {
+        const detail = command.error || 'Step failed without a detailed error.';
+        lines.push(`${index + 1}. ${command.type}${command.value ? ` (${command.value.slice(0, 80)})` : ''} - ${detail}`);
+      });
+    }
+
+    if (invalidCommands.length > 0) {
+      lines.push('', 'Invalid or unexecutable steps:');
+      invalidCommands.slice(0, 4).forEach((command, index) => {
+        lines.push(`${index + 1}. ${command.type} - ${command.error}`);
+      });
+    }
+
+    if (skippedCommands.length > 0) {
+      lines.push('', 'Skipped to avoid a loop:');
+      skippedCommands.slice(0, 4).forEach((command, index) => {
+        lines.push(`${index + 1}. ${command}`);
+      });
+    }
+
+    if (typeof options.attemptsUsed === 'number' && typeof options.maxAttempts === 'number') {
+      lines.push('', `Recovery attempts used: ${options.attemptsUsed}/${options.maxAttempts}`);
+    }
+
+    lines.push(
+      '',
+      'Please clarify the next step you want me to take, or tell me to retry with a different target/page.'
+    );
+
+    return lines.join('\n');
+  }, []);
+
+  const normalizeNavigationTarget = useCallback((rawTarget: string) => {
+    const trimmed = rawTarget.trim();
+    if (!trimmed || trimmed.startsWith('comet://')) {
+      return trimmed;
+    }
+
+    if (/^(https?:|file:|about:|data:|mailto:|tel:)/i.test(trimmed)) {
+      return trimmed;
+    }
+
+    if (/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}(\/.*)?$/.test(trimmed)) {
+      return `https://${trimmed}`;
+    }
+
+    return trimmed;
+  }, []);
+
+  const waitForTabNavigation = useCallback(async (tabId: string, expectedUrl?: string, timeoutMs = 20000) => {
+    const normalizeUrlForCompare = (url?: string) => {
+      if (!url) return '';
+      const trimmed = url.trim();
+      return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+    };
+
+    const urlsRoughlyMatch = (actualUrl?: string, expected?: string) => {
+      const normalizedActual = normalizeUrlForCompare(actualUrl);
+      const normalizedExpected = normalizeUrlForCompare(expected);
+
+      if (!normalizedExpected) return Boolean(normalizedActual);
+      if (!normalizedActual) return false;
+      if (normalizedActual === normalizedExpected || normalizedActual.startsWith(normalizedExpected)) {
+        return true;
+      }
+
+      try {
+        const actual = new URL(normalizedActual);
+        const wanted = new URL(normalizedExpected);
+        if (actual.origin !== wanted.origin || actual.pathname !== wanted.pathname) {
+          return false;
+        }
+
+        const expectedParams = new URLSearchParams(wanted.search);
+        for (const [key, value] of expectedParams.entries()) {
+          if (actual.searchParams.get(key) !== value) {
+            return false;
+          }
+        }
+
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    const deadline = Date.now() + timeoutMs;
+    let sawLoading = false;
+    let lastSeenUrl = '';
+
+    while (Date.now() < deadline) {
+      const state = useAppStore.getState();
+      const tab = state.tabs.find((item) => item.id === tabId);
+
+      if (tab) {
+        const actualUrl = `${tab.url || ''}`.trim();
+        const matchesExpected = !expectedUrl || urlsRoughlyMatch(actualUrl, expectedUrl);
+
+        if (tab.isLoading) {
+          sawLoading = true;
+        }
+        if (actualUrl) {
+          lastSeenUrl = actualUrl;
+        }
+
+        if ((matchesExpected || sawLoading) && !tab.isLoading && actualUrl && actualUrl !== 'about:blank') {
+          return {
+            url: actualUrl,
+            title: tab.title || 'New Tab',
+          };
+        }
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+
+    throw new Error(`Timed out waiting for navigation${lastSeenUrl ? ` (${lastSeenUrl})` : ''}`);
+  }, []);
+
+  const openTabAndWaitForLoad = useCallback(async (url: string, groupId?: string) => {
+    const normalizedUrl = normalizeNavigationTarget(url);
+    const existingIds = new Set(useAppStore.getState().tabs.map((tab) => tab.id));
+    store.addTab(normalizedUrl, groupId);
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const state = useAppStore.getState();
+    const createdTab = state.tabs.find((tab) => !existingIds.has(tab.id)) || state.tabs.find((tab) => tab.id === state.activeTabId);
+    if (!createdTab) {
+      throw new Error(`Failed to create tab for ${normalizedUrl}`);
+    }
+
+    return waitForTabNavigation(createdTab.id, normalizedUrl);
+  }, [normalizeNavigationTarget, store, waitForTabNavigation]);
+
+  const waitForActiveTabToSettle = useCallback(async (timeoutMs = 20000) => {
+    const state = useAppStore.getState();
+    if (!state.activeTabId) {
+      return null;
+    }
+    return waitForTabNavigation(state.activeTabId, state.currentUrl || undefined, timeoutMs);
+  }, [waitForTabNavigation]);
 
   const appendTerminalLog = useCallback((commandName: string, output: string, success = true) => {
     if (!isDevMode) return;
@@ -824,10 +989,11 @@ I couldn't schedule the task. The background service may not be running. Please 
       ];
 
       let iterations = 0;
-      const MAX_ITERATIONS = 5;
       let finalSynthesisDone = false;
+      let recoveryAttempts = 0;
+      const commandAttemptCounts = new Map<string, number>();
 
-      while (iterations < MAX_ITERATIONS && !finalSynthesisDone) {
+      while (iterations < ACTION_CHAIN_MAX_ITERATIONS && !finalSynthesisDone) {
         iterations++;
         const aiId = addThinkingStep(iterations === 1 ? 'LLM Processing...' : `Action Chain Synthesis & Evaluation (Step ${iterations})...`);
 
@@ -839,10 +1005,43 @@ I couldn't schedule the task. The background service may not be running. Please 
 
         // Clean up text format to remove the action commands from the visible message
         // parseAICommands now handles ALL formats (JSON, brackets, HTML comments) with built-in deduplication
-        let { commands, responseText } = prepareCommandsForExecution(response.text);
+        let { commands, responseText, invalidCommands } = prepareCommandsForExecution(response.text);
 
         // Also strip any remaining command tags/JSON for display
         responseText = stripAllCommands(responseText);
+
+        const skippedCommands: string[] = [];
+        const duplicatePreventedCommands: string[] = [];
+        const normalizedCommands = commands
+          .filter(command => command.type && (command.value !== undefined))
+          .map(command => ({
+            ...command,
+            value: `${command.value || ''}`.trim(),
+          }));
+
+        commands = normalizedCommands.filter((command, index) => {
+          if (index >= ACTION_CHAIN_MAX_COMMANDS_PER_PASS) {
+            skippedCommands.push(`${command.type} was ignored because this pass exceeded ${ACTION_CHAIN_MAX_COMMANDS_PER_PASS} actions.`);
+            return false;
+          }
+
+          const signature = `${command.type}:${command.value.replace(/\s+/g, ' ').trim().toLowerCase()}`;
+          const seenAttempts = (commandAttemptCounts.get(signature) || 0) + 1;
+          commandAttemptCounts.set(signature, seenAttempts);
+
+          if (seenAttempts > ACTION_CHAIN_MAX_SAME_COMMAND_ATTEMPTS) {
+            duplicatePreventedCommands.push(`${command.type}${command.value ? ` (${command.value.slice(0, 80)})` : ''}`);
+            return false;
+          }
+
+          return true;
+        });
+
+        skippedCommands.push(...duplicatePreventedCommands.map(command =>
+          `${command} was skipped because the AI already tried that step too many times.`
+        ));
+
+        const trimmedResponseText = responseText.trim();
 
         // Update the last visible message to include the response content and reasoning
         setMessages(prev => {
@@ -852,7 +1051,7 @@ I couldn't schedule the task. The background service may not be running. Please 
           if (updated[lastIdx].role === 'model') {
             updated[lastIdx] = {
               ...updated[lastIdx],
-              content: responseText,
+              content: trimmedResponseText,
               thinkText: response.thought // 🚀 PERSIST reasoning for exports/copy
             };
           }
@@ -860,6 +1059,36 @@ I couldn't schedule the task. The background service may not be running. Please 
         });
 
         if (commands.length === 0) {
+          if (!trimmedResponseText || invalidCommands.length > 0 || skippedCommands.length > 0) {
+            const clarificationMessage = buildActionChainClarification({
+              reason: !trimmedResponseText
+                ? 'The AI returned an empty or unusable step, so execution was stopped before it could stall.'
+                : 'The AI produced malformed or repetitive action steps, so execution was stopped before it could loop.',
+              invalidCommands: invalidCommands.map(({ command, error }) => ({ type: command.type, error })),
+              skippedCommands,
+              attemptsUsed: recoveryAttempts,
+              maxAttempts: ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS,
+            });
+
+            setMessages(prev => {
+              if (prev.length === 0) {
+                return [{ role: 'model', content: clarificationMessage } as ExtendedChatMessage];
+              }
+
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              const last = updated[lastIdx];
+              if (last.role === 'model' && !(last.content || '').trim()) {
+                updated[lastIdx] = {
+                  ...last,
+                  content: clarificationMessage,
+                };
+                return updated;
+              }
+
+              return [...updated, { role: 'model', content: clarificationMessage } as ExtendedChatMessage];
+            });
+          }
           finalSynthesisDone = true;
           break; // No commands needed, LLM has finished its task.
         }
@@ -884,8 +1113,8 @@ I couldn't schedule the task. The background service may not be running. Please 
         setCommandQueue(aiCommands);
         setCurrentCommandIndex(0);
 
-        const finalCommands = await new Promise<AICommand[]>((resolve) => {
-          const timeout = setTimeout(() => resolve([]), 300000);
+        const finalCommandResult = await new Promise<{ commands: AICommand[]; timedOut: boolean }>((resolve) => {
+          const timeout = setTimeout(() => resolve({ commands: [], timedOut: true }), 120000);
           let isResolved = false;
           const checkStatus = () => {
             if (isResolved) return;
@@ -894,7 +1123,7 @@ I couldn't schedule the task. The background service may not be running. Please 
               if (allDone && !isResolved) {
                 isResolved = true;
                 clearTimeout(timeout);
-                resolve(q);
+                resolve({ commands: q, timedOut: false });
               } else if (!isResolved) {
                 setTimeout(checkStatus, 500);
               }
@@ -906,9 +1135,34 @@ I couldn't schedule the task. The background service may not be running. Please 
 
         resolveThinkingStep(cmdId, 'done');
 
-        // If the queue was manually emptied (aborted) by the user during execution
+        if (finalCommandResult.timedOut) {
+          setMessages(prev => [...prev, {
+            role: 'model',
+            content: buildActionChainClarification({
+              reason: 'The browser workflow hit its execution timeout while waiting for steps to finish.',
+              invalidCommands: invalidCommands.map(({ command, error }) => ({ type: command.type, error })),
+              skippedCommands,
+              attemptsUsed: recoveryAttempts,
+              maxAttempts: ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS,
+            })
+          } as ExtendedChatMessage]);
+          break;
+        }
+
+        const finalCommands = finalCommandResult.commands;
+
+        // If the queue was cleared before completion
         if (finalCommands.length === 0 && commands.length > 0) {
-          setMessages(prev => [...prev, { role: 'model', content: '(⚠️ Sequence aborted by user)' } as ExtendedChatMessage]);
+          setMessages(prev => [...prev, {
+            role: 'model',
+            content: buildActionChainClarification({
+              reason: 'The browser workflow stopped before any actionable result was returned.',
+              invalidCommands: invalidCommands.map(({ command, error }) => ({ type: command.type, error })),
+              skippedCommands,
+              attemptsUsed: recoveryAttempts,
+              maxAttempts: ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS,
+            })
+          } as ExtendedChatMessage]);
           break;
         }
 
@@ -917,11 +1171,49 @@ I couldn't schedule the task. The background service may not be running. Please 
           `[Action ${c.type}]: ${c.status === 'completed' ? (c.output || 'Success') : ('Error: ' + (c.error || 'Failed'))}`
         ).join('\n');
 
+        const failedCommands = finalCommands
+          .filter(command => command.status === 'failed')
+          .map(command => ({
+            type: command.type,
+            value: command.value,
+            error: command.error,
+          }));
+        const hadRecoveryIssues = failedCommands.length > 0 || invalidCommands.length > 0 || skippedCommands.length > 0;
+
+        if (hadRecoveryIssues) {
+          recoveryAttempts += 1;
+        } else {
+          recoveryAttempts = 0;
+        }
+
+        if (hadRecoveryIssues && recoveryAttempts > ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS) {
+          setMessages(prev => [...prev, {
+            role: 'model',
+            content: buildActionChainClarification({
+              reason: `The AI hit the recovery limit after ${ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS} retry rounds.`,
+              failedCommands,
+              invalidCommands: invalidCommands.map(({ command, error }) => ({ type: command.type, error })),
+              skippedCommands,
+              attemptsUsed: recoveryAttempts,
+              maxAttempts: ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS,
+            })
+          } as ExtendedChatMessage]);
+          break;
+        }
+
         currentHistory = [
           ...currentHistory,
           {
             role: 'user',
-            content: `Action outputs for the steps above:\n${actionResults}\n\nPlease analyze these results. If any step failed, explain why and execute an alternative action if possible using command formatting. If the steps succeeded or you have sufficient data, provide the comprehensive final answer to the original request now.`
+            content: `Action outputs for the steps above:\n${actionResults}${
+              invalidCommands.length > 0
+                ? `\n\nInvalid commands skipped:\n${invalidCommands.map(({ command, error }) => `- ${command.type}: ${error}`).join('\n')}`
+                : ''
+            }${
+              skippedCommands.length > 0
+                ? `\n\nLoop prevention notes:\n${skippedCommands.map(note => `- ${note}`).join('\n')}`
+                : ''
+            }\n\nRecovery attempts used: ${recoveryAttempts}/${ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS}.\nDo not repeat the same failed command unless the parameters materially change. If you need another action pass, emit at most 3 focused commands. If you cannot safely continue, explain the blocker clearly to the user and ask one specific clarification question. If the steps succeeded or you already have enough information, provide the final answer now without more commands.`
           }
         ];
       }
@@ -935,7 +1227,7 @@ I couldn't schedule the task. The background service may not be running. Please 
       setIsLoading(false);
       setIsThinking(false);
     }
-  }, [inputMessage, attachments, messages, aiProvider, currentUrl, addThinkingStep, resolveThinkingStep, getStreamingResponse, isAiSetup, fetchRealSearchContext]);
+  }, [inputMessage, attachments, messages, aiProvider, currentUrl, addThinkingStep, resolveThinkingStep, getStreamingResponse, isAiSetup, fetchRealSearchContext, buildActionChainClarification]);
 
   const processNextCommand = useCallback(async () => {
     console.log('[AI] processNextCommand called, current index:', currentCommandIndex, 'queue length:', commandQueue.length);
@@ -983,8 +1275,8 @@ I couldn't schedule the task. The background service may not be running. Please 
             output = `Navigated to internal page: ${page}`;
           } else {
             setActiveView('browser');
-            store.addTab(targetUrl, 'ai-session'); // ✨ ALWAYS create a new tab for AI navigations
-            output = `Opened new tab and navigated to ${targetUrl}`;
+            const navigationResult = await openTabAndWaitForLoad(targetUrl, 'ai-session');
+            output = `Opened new tab and navigated to ${navigationResult.url || targetUrl}`;
           }
           break;
         }
@@ -1099,8 +1391,8 @@ I couldn't schedule the task. The background service may not be running. Please 
 
           setActiveView('browser');
 
-          store.addTab(searchUrl, 'ai-session'); // ✨ ALWAYS create a new tab for deep web searches
-          output = `Opened new tab for: "${query}"`;
+          const navigationResult = await openTabAndWaitForLoad(searchUrl, 'ai-session');
+          output = `Opened new tab for: "${query}" (${navigationResult.url || searchUrl})`;
 
           // Fetch real results and store in vector memory for LLM context
           const results = await window.electronAPI.webSearchRag(query);
@@ -1180,7 +1472,7 @@ I couldn't schedule the task. The background service may not be running. Please 
         }
 
         case 'READ_PAGE_CONTENT': {
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await waitForActiveTabToSettle(20000);
           const res = await window.electronAPI.extractPageContent();
           if (res.content) {
             const scrubbed = scrubbedContent(res.content);
@@ -2796,7 +3088,7 @@ I've successfully executed the following real tasks:
       processingQueueRef.current = false;
       setCurrentCommandIndex(prev => prev + 1);
     }
-  }, [commandQueue, currentCommandIndex, activeTabId, router, storeSetTheme, setActiveView, currentUrl, requestActionPermission, preloadCometIconLocal, addThinkingStep, resolveThinkingStep, fetchRealSearchContext]);
+  }, [commandQueue, currentCommandIndex, activeTabId, router, storeSetTheme, setActiveView, currentUrl, requestActionPermission, preloadCometIconLocal, addThinkingStep, resolveThinkingStep, fetchRealSearchContext, openTabAndWaitForLoad, waitForActiveTabToSettle]);
 
   const formatMessageForExport = (m: ExtendedChatMessage) => {
     let result = `${m.role.toUpperCase()}:\n`;
@@ -3276,8 +3568,57 @@ I've successfully executed the following real tasks:
     const snapshotMessages = messages.slice(-20).map((message, index) => ({
       id: message.id || `${message.role}-${index}-${Date.now()}`,
       role: message.role,
-      content: cleanTagsFromText(message.content || '').slice(0, 6000),
+      content: `${message.content || ''}`.slice(0, 12000),
       timestamp: Date.now(),
+      thinkText: message.thinkText ? message.thinkText.slice(0, 8000) : null,
+      isOcr: !!message.isOcr,
+      ocrLabel: message.ocrLabel ? `${message.ocrLabel}`.slice(0, 120) : null,
+      ocrText: message.ocrText ? message.ocrText.slice(0, 12000) : null,
+      actionLogs: Array.isArray(message.actionLogs)
+        ? message.actionLogs.slice(0, 24).map((log) => ({
+          type: `${log.type || ''}`.slice(0, 120),
+          output: `${log.output || ''}`.slice(0, 4000),
+          success: !!log.success,
+        }))
+        : [],
+      mediaItems: Array.isArray(message.mediaItems)
+        ? message.mediaItems.slice(0, 12).map((item) => {
+          if (item.type === 'image') {
+            return {
+              type: item.type,
+              url: item.url,
+              caption: item.caption || null,
+            };
+          }
+
+          if (item.type === 'video') {
+            return {
+              type: item.type,
+              videoUrl: item.videoUrl,
+              title: item.title,
+              description: item.description || null,
+              thumbnailUrl: item.thumbnailUrl || null,
+              source: item.source,
+              videoId: item.videoId || null,
+            };
+          }
+
+          if (item.type === 'mermaid' || item.type === 'flowchart') {
+            return {
+              type: item.type,
+              diagramId: item.diagramId,
+              code: item.code,
+            };
+          }
+
+          return {
+            type: item.type,
+            chartId: item.chartId,
+            chartDataJSON: JSON.stringify(item.data || {}),
+            chartOptionsJSON: JSON.stringify(item.options || {}),
+          };
+        })
+        : [],
     }));
 
     const snapshotActionChain = commandQueue.slice(0, 24).map((command) => ({

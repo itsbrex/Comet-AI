@@ -36,6 +36,14 @@
 				<string>comet-ai</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.507073680966-4k6edbtnlnc0shv1knirfl436pou53e1</string>
+			</array>
+		</dict>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>

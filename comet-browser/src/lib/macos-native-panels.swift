@@ -84,11 +84,53 @@ struct BridgeStateEnvelope: Codable {
 }
 
 struct NativePanelState: Codable {
+    struct ActionLog: Codable, Identifiable {
+        var id: String { "\(type)-\(success)-\(output.prefix(40))" }
+        let type: String
+        let output: String
+        let success: Bool
+    }
+
+    struct MediaItem: Codable {
+        let id: String?
+        let type: String
+        let url: String?
+        let caption: String?
+        let videoUrl: String?
+        let title: String?
+        let description: String?
+        let thumbnailUrl: String?
+        let source: String?
+        let videoId: String?
+        let diagramId: String?
+        let code: String?
+        let chartId: String?
+        let chartDataJSON: String?
+        let chartOptionsJSON: String?
+
+        var stableId: String {
+            if let id, !id.isEmpty { return id }
+            if let diagramId, !diagramId.isEmpty { return diagramId }
+            if let chartId, !chartId.isEmpty { return chartId }
+            if let videoId, !videoId.isEmpty { return videoId }
+            if let videoUrl, !videoUrl.isEmpty { return videoUrl }
+            if let url, !url.isEmpty { return url }
+            let seed = code ?? chartDataJSON ?? caption ?? title ?? type
+            return "\(type)-\(abs(seed.hashValue))"
+        }
+    }
+
     struct Message: Codable, Identifiable {
         let id: String
         let role: String
         let content: String
         let timestamp: Double?
+        let thinkText: String?
+        let isOcr: Bool?
+        let ocrLabel: String?
+        let ocrText: String?
+        let actionLogs: [ActionLog]?
+        let mediaItems: [MediaItem]?
     }
 
     struct Command: Codable, Identifiable {
@@ -515,8 +557,15 @@ struct WindowConfigurator: NSViewRepresentable {
 
     private func configure(window: NSWindow?) {
         guard let window else { return }
+        var styleMask = window.styleMask
+        styleMask.insert([.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView])
+        styleMask.remove(.unifiedTitleAndToolbar)
+        window.styleMask = styleMask
         window.titleVisibility = .hidden
+        window.title = ""
         window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.toolbar = nil
         window.isMovableByWindowBackground = true
         window.level = .floating
         window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
@@ -525,8 +574,14 @@ struct WindowConfigurator: NSViewRepresentable {
         window.hasShadow = true
         window.styleMask.insert(.fullSizeContentView)
         window.styleMask.insert(.resizable)
-        window.toolbarStyle = .unifiedCompact
-        window.titlebarSeparatorStyle = .none
+        window.contentView?.wantsLayer = true
+        window.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
+        window.contentView?.superview?.wantsLayer = true
+        window.contentView?.superview?.layer?.backgroundColor = NSColor.clear.cgColor
+        window.contentView?.superview?.superview?.wantsLayer = true
+        window.contentView?.superview?.superview?.layer?.backgroundColor = NSColor.clear.cgColor
+        window.setContentBorderThickness(0, for: .minY)
+        window.setContentBorderThickness(0, for: .maxY)
         let targetSize = resolvedSize
         window.minSize = NSSize(width: targetSize.width, height: targetSize.height)
         if window.contentLayoutRect.size != NSSize(width: targetSize.width, height: targetSize.height) {
@@ -633,9 +688,12 @@ struct PanelShell<Content: View>: View {
             )
             .shadow(color: palette.shadow, radius: mode == .sidebar ? 22 : 36, x: 0, y: mode == .sidebar ? 10 : 18)
             .padding(mode == .sidebar ? 0 : 14)
+            .ignoresSafeArea()
         }
         .background(WindowConfigurator(mode: mode, compactSidebar: viewModel.compactSidebar, iconPath: viewModel.configuration.iconPath))
         .preferredColorScheme(viewModel.themeColorScheme)
+        .background(Color.clear)
+        .ignoresSafeArea()
     }
 }
 
@@ -806,7 +864,7 @@ struct SidebarPanelView: View {
             appearance: viewModel.state.themeAppearance,
             gradientPreset: preferences.sidebarGradientPreset
         )
-        let visibleMessages = Array(viewModel.state.messages.suffix(viewModel.compactSidebar ? 4 : 16))
+        let visibleMessages = filteredMessages
         let activityTags = Array((viewModel.state.activityTags ?? []).prefix(6))
         let conversations = Array((viewModel.state.conversations ?? []).sorted(by: { $0.updatedAt > $1.updatedAt }).prefix(8))
         let showQuickActions = preferences.sidebarShowQuickActions ?? true
@@ -1032,8 +1090,32 @@ struct SidebarPanelView: View {
     }
 
     private var scrollToken: String {
-        let last = viewModel.state.messages.last
+        let last = filteredMessages.last
         return "\(last?.id ?? "empty")-\(last?.content.count ?? 0)-\(viewModel.state.isLoading)"
+    }
+
+    private var filteredMessages: [NativePanelState.Message] {
+        let recentMessages = Array(viewModel.state.messages.suffix(viewModel.compactSidebar ? 4 : 16))
+        return recentMessages.filter { message in
+            if message.role == "user" {
+                return !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+
+            let cleaned = visibleMessageContent(for: message)
+            if cleaned.isEmpty && viewModel.state.isLoading {
+                let isLastAssistantMessage = recentMessages.last?.id == message.id
+                if isLastAssistantMessage {
+                    return false
+                }
+            }
+            return !cleaned.isEmpty
+        }
+    }
+
+    private func visibleMessageContent(for message: NativePanelState.Message) -> String {
+        let parseResult = AICommandParser.parseCommands(from: message.content)
+        let baseContent = parseResult.hasCommands ? parseResult.textWithoutCommands : message.content
+        return AICommandParser.cleanCustomTags(from: baseContent)
     }
 }
 
@@ -1182,18 +1264,27 @@ struct NativeSettingsPanelView: View {
     var body: some View {
         let prefs = viewModel.state.preferences ?? .defaults
         let palette = PanelPalette(appearance: viewModel.state.themeAppearance)
+        let launchColumns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
         
         PanelShell(mode: .settings, viewModel: viewModel) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack {
+                        HStack(alignment: .top) {
                             Image(systemName: PanelMode.settings.symbol)
                                 .font(.system(size: 20, weight: .semibold))
                                 .foregroundStyle(palette.accent)
-                            Text("Comet Settings")
-                                .font(.system(size: 22, weight: .bold, design: .rounded))
-                                .foregroundStyle(palette.primaryText)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Comet Settings")
+                                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                                    .foregroundStyle(palette.primaryText)
+                                HStack(spacing: 8) {
+                                    ConnectionBadge(isConnected: viewModel.isConnected, text: viewModel.statusText)
+                                    StatusPill(text: prefs.sidebarMode.uppercased(), color: (prefs.sidebarMode == "swiftui" ? palette.accent : palette.mutedSurface))
+                                    StatusPill(text: prefs.permissionMode.uppercased(), color: (prefs.permissionMode == "swiftui" ? Color.orange.opacity(0.22) : palette.mutedSurface))
+                                }
+                            }
+                            Spacer()
                         }
                         Text("Configure Electron and native macOS settings")
                             .font(.system(size: 13))
@@ -1201,6 +1292,76 @@ struct NativeSettingsPanelView: View {
                     }
                     .padding(18)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(LinearGradient(colors: palette.surfaceGradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(palette.stroke, lineWidth: 1)
+                            )
+                    )
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("QUICK LAUNCH")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(palette.secondaryText)
+                            .tracking(1.2)
+
+                        LazyVGrid(columns: launchColumns, spacing: 10) {
+                            NativeQuickActionCard(title: "AI Sidebar", subtitle: "Open the detached assistant", systemImage: PanelMode.sidebar.symbol, appearance: viewModel.state.themeAppearance) {
+                                viewModel.openPanel(.sidebar)
+                            }
+                            NativeQuickActionCard(title: "Action Chain", subtitle: "View current execution", systemImage: PanelMode.actionChain.symbol, appearance: viewModel.state.themeAppearance) {
+                                viewModel.openPanel(.actionChain)
+                            }
+                            NativeQuickActionCard(title: "Command Center", subtitle: "Launch native tools", systemImage: PanelMode.menu.symbol, appearance: viewModel.state.themeAppearance) {
+                                viewModel.openPanel(.menu)
+                            }
+                            NativeQuickActionCard(title: "Permissions", subtitle: "Review approvals", systemImage: PanelMode.permissions.symbol, appearance: viewModel.state.themeAppearance) {
+                                viewModel.openPanel(.permissions)
+                            }
+                            NativeQuickActionCard(title: "Downloads", subtitle: "Open file downloads", systemImage: PanelMode.downloads.symbol, appearance: viewModel.state.themeAppearance) {
+                                viewModel.openPanel(.downloads)
+                            }
+                            NativeQuickActionCard(title: "Clipboard", subtitle: "Open clipboard history", systemImage: PanelMode.clipboard.symbol, appearance: viewModel.state.themeAppearance) {
+                                viewModel.openPanel(.clipboard)
+                            }
+                        }
+                    }
+                    .padding(18)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(LinearGradient(colors: palette.surfaceGradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(palette.stroke, lineWidth: 1)
+                            )
+                    )
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("SESSION TOOLS")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(palette.secondaryText)
+                            .tracking(1.2)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                NativeActionButton(title: "Focus Browser", systemImage: "macwindow.on.rectangle", appearance: viewModel.state.themeAppearance) {
+                                    viewModel.focusBrowser()
+                                }
+                                NativeActionButton(title: "New Chat", systemImage: "plus.bubble", appearance: viewModel.state.themeAppearance) {
+                                    viewModel.conversationAction("new")
+                                }
+                                NativeActionButton(title: "Export Text", systemImage: "text.justify.left", appearance: viewModel.state.themeAppearance) {
+                                    viewModel.exportSession("text")
+                                }
+                                NativeActionButton(title: "Export PDF", systemImage: "doc.richtext", appearance: viewModel.state.themeAppearance) {
+                                    viewModel.exportSession("pdf")
+                                }
+                            }
+                        }
+                    }
+                    .padding(18)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
                             .fill(LinearGradient(colors: palette.surfaceGradient, startPoint: .topLeading, endPoint: .bottomTrailing))
@@ -1364,6 +1525,12 @@ struct NativeSettingsPanelView: View {
                             TogglePreferenceCard(title: "Show Search Tags", subtitle: "Display live context tags.", value: prefs.sidebarShowSearchTags ?? true, appearance: viewModel.state.themeAppearance) { value in
                                 viewModel.setPreference(key: "sidebarShowSearchTags", value: value)
                             }
+                            TogglePreferenceCard(title: "Show Command Center Button", subtitle: "Keep the Command Center launcher visible in the native sidebar header.", value: prefs.sidebarShowCommandCenterButton ?? true, appearance: viewModel.state.themeAppearance) { value in
+                                viewModel.setPreference(key: "sidebarShowCommandCenterButton", value: value)
+                            }
+                            TogglePreferenceCard(title: "Show Action Chain Button", subtitle: "Keep the Action Chain shortcut visible in the native sidebar header.", value: prefs.sidebarShowActionChainButton ?? true, appearance: viewModel.state.themeAppearance) { value in
+                                viewModel.setPreference(key: "sidebarShowActionChainButton", value: value)
+                            }
                             TogglePreferenceCard(title: "Action Chain Auto Appear", subtitle: "Auto-open Action Chain for multi-step plans.", value: prefs.sidebarActionChainAutoAppear ?? false, appearance: viewModel.state.themeAppearance) { value in
                                 viewModel.setPreference(key: "sidebarActionChainAutoAppear", value: value)
                             }
@@ -1392,6 +1559,47 @@ struct NativeSettingsPanelView: View {
                 .padding(16)
             }
         }
+    }
+}
+
+struct NativeQuickActionCard: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let appearance: String
+    let action: () -> Void
+
+    var body: some View {
+        let palette = PanelPalette(appearance: appearance)
+
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(palette.accent)
+                    .frame(width: 30, height: 30)
+                    .background(palette.accent.opacity(0.14))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                Text(title)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(palette.primaryText)
+
+                Text(subtitle)
+                    .font(.system(size: 10, design: .rounded))
+                    .foregroundStyle(palette.secondaryText)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, minHeight: 106, alignment: .topLeading)
+            .padding(12)
+            .background(palette.mutedSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(palette.stroke, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -2087,26 +2295,63 @@ struct MessageBubbleView: View {
     var body: some View {
         let palette = PanelPalette(appearance: appearance)
         let parseResult = AICommandParser.parseCommands(from: message.content)
+        let visibleContent = AICommandParser.cleanCustomTags(from: parseResult.hasCommands ? parseResult.textWithoutCommands : message.content)
+        let reasoningBlocks = resolvedReasoning
+        let ocrText = AICommandParser.extractOCRText(from: message)
+        let actionLogs = AICommandParser.extractActionLogs(from: message)
+        let mediaItems = AICommandParser.extractMediaItems(from: message)
+
         VStack(alignment: .leading, spacing: 8) {
             Text(message.role == "user" ? "You" : "Comet")
                 .font(.system(size: 10, weight: .black, design: .rounded))
                 .foregroundStyle(message.role == "user" ? palette.accent : palette.secondaryAccent)
                 .textCase(.uppercase)
 
+            if message.role != "user" {
+                ForEach(reasoningBlocks, id: \.self) { reasoning in
+                    ThinkingIndicatorView(appearance: appearance, thought: reasoning)
+                }
+            }
+
             if parseResult.hasCommands && message.role != "user" {
                 ForEach(parseResult.commands) { command in
                     CommandTagView(command: command, appearance: appearance)
                 }
-                if !parseResult.textWithoutCommands.isEmpty {
-                    MarkdownMessageText(content: parseResult.textWithoutCommands, appearance: appearance)
-                }
-            } else {
-                MarkdownMessageText(content: message.content, appearance: appearance)
+            }
+
+            if !visibleContent.isEmpty {
+                MarkdownMessageText(content: visibleContent, appearance: appearance)
+            }
+
+            if let ocrText, !ocrText.isEmpty {
+                OCRResultCard(label: message.ocrLabel ?? "OCR_RESULT", content: ocrText, appearance: appearance)
+            }
+
+            if !actionLogs.isEmpty {
+                ActionLogCard(actionLogs: actionLogs, appearance: appearance)
+            }
+
+            if !mediaItems.isEmpty {
+                MediaAttachmentGroup(items: mediaItems, appearance: appearance)
             }
         }
         .padding(14)
         .background(message.role == "user" ? palette.accent.opacity(0.12) : palette.mutedSurface)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var resolvedReasoning: [String] {
+        var values: [String] = []
+        if let thinkText = message.thinkText?.trimmingCharacters(in: .whitespacesAndNewlines), !thinkText.isEmpty {
+            values.append(thinkText)
+        }
+        values.append(contentsOf: AICommandParser.extractReasoning(from: message.content))
+        var seen = Set<String>()
+        return values.filter { value in
+            guard !value.isEmpty, !seen.contains(value) else { return false }
+            seen.insert(value)
+            return true
+        }
     }
 }
 
@@ -2171,6 +2416,240 @@ struct CommandTagView: View {
     }
 }
 
+struct OCRResultCard: View {
+    let label: String
+    let content: String
+    let appearance: String
+
+    var body: some View {
+        let palette = PanelPalette(appearance: appearance)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(label.replacingOccurrences(of: "_", with: " "), systemImage: "viewfinder")
+                    .font(.system(size: 10, weight: .black, design: .rounded))
+                    .foregroundStyle(Color.orange.opacity(0.95))
+                Spacer()
+                Text("\(content.count) chars")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(palette.secondaryText)
+            }
+
+            ScrollView(.vertical, showsIndicators: true) {
+                Text(content)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(palette.primaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+            .frame(maxHeight: 180)
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.orange.opacity(0.25), lineWidth: 1)
+        )
+    }
+}
+
+struct ActionLogCard: View {
+    let actionLogs: [NativePanelState.ActionLog]
+    let appearance: String
+
+    var body: some View {
+        let palette = PanelPalette(appearance: appearance)
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Action Chain", systemImage: "point.3.filled.connected.trianglepath.dotted")
+                .font(.system(size: 10, weight: .black, design: .rounded))
+                .foregroundStyle(palette.secondaryAccent)
+
+            ForEach(Array(actionLogs.prefix(8).enumerated()), id: \.offset) { index, log in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("\(index + 1). \(log.type.replacingOccurrences(of: "_", with: " "))")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(palette.primaryText)
+                        Spacer()
+                        StatusPill(text: log.success ? "DONE" : "FAILED", color: log.success ? Color.green.opacity(0.25) : Color.red.opacity(0.25))
+                    }
+                    Text(log.output)
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(palette.secondaryText)
+                        .lineLimit(4)
+                        .textSelection(.enabled)
+                }
+                .padding(10)
+                .background(Color.white.opacity(appearance == "light" ? 0.45 : 0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+        .padding(12)
+        .background(palette.mutedSurface.opacity(0.7))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+struct MediaAttachmentGroup: View {
+    let items: [NativePanelState.MediaItem]
+    let appearance: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Media", systemImage: "photo.on.rectangle.angled")
+                .font(.system(size: 10, weight: .black, design: .rounded))
+                .foregroundStyle(PanelPalette(appearance: appearance).secondaryAccent)
+
+            ForEach(items, id: \.stableId) { item in
+                MediaAttachmentCard(item: item, appearance: appearance)
+            }
+        }
+    }
+}
+
+struct MediaAttachmentCard: View {
+    let item: NativePanelState.MediaItem
+    let appearance: String
+
+    var body: some View {
+        let palette = PanelPalette(appearance: appearance)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(titleText, systemImage: systemImage)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(palette.primaryText)
+                Spacer()
+                if let actionURL {
+                    Link("Open", destination: actionURL)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(palette.accent)
+                }
+            }
+
+            if let subtitleText, !subtitleText.isEmpty {
+                Text(subtitleText)
+                    .font(.system(size: 10, design: .rounded))
+                    .foregroundStyle(palette.secondaryText)
+            }
+
+            mediaBody
+        }
+        .padding(12)
+        .background(palette.mutedSurface.opacity(0.75))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var mediaBody: some View {
+        switch item.type {
+        case "mermaid":
+            if let code = item.code, !code.isEmpty {
+                MermaidView(diagram: code, appearance: appearance)
+                    .frame(height: 220)
+            }
+        case "flowchart":
+            if let code = item.code, !code.isEmpty {
+                if looksLikeMermaid(code) {
+                    MermaidView(diagram: code, appearance: appearance)
+                        .frame(height: 220)
+                } else {
+                    MarkdownMessageText(content: "```text\n\(code)\n```", appearance: appearance)
+                }
+            }
+        case "chart":
+            ChartSummaryView(dataJSON: item.chartDataJSON, optionsJSON: item.chartOptionsJSON, appearance: appearance)
+        default:
+            EmptyView()
+        }
+    }
+
+    private var titleText: String {
+        switch item.type {
+        case "image": return item.caption ?? "Image"
+        case "video": return item.title ?? "Video"
+        case "mermaid": return item.caption ?? "Mermaid Diagram"
+        case "flowchart": return item.caption ?? "Flowchart"
+        case "chart": return item.title ?? "Chart"
+        default: return item.type.capitalized
+        }
+    }
+
+    private var subtitleText: String? {
+        switch item.type {
+        case "image":
+            return item.url
+        case "video":
+            return item.description ?? item.videoUrl ?? item.thumbnailUrl
+        case "chart":
+            return chartSubtitle
+        default:
+            return nil
+        }
+    }
+
+    private var systemImage: String {
+        switch item.type {
+        case "image": return "photo"
+        case "video": return "play.rectangle"
+        case "mermaid", "flowchart": return "point.3.filled.connected.trianglepath.dotted"
+        case "chart": return "chart.xyaxis.line"
+        default: return "paperclip"
+        }
+    }
+
+    private var actionURL: URL? {
+        let candidate = item.videoUrl ?? item.url ?? item.thumbnailUrl
+        guard let candidate, let url = URL(string: candidate) else { return nil }
+        return url
+    }
+
+    private var chartSubtitle: String? {
+        guard
+            let dataJSON = item.chartDataJSON,
+            let data = dataJSON.data(using: .utf8),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return nil
+        }
+        let labelsCount = (json["labels"] as? [Any])?.count ?? 0
+        let datasetCount = (json["datasets"] as? [Any])?.count ?? 0
+        return "\(datasetCount) dataset(s) • \(labelsCount) label(s)"
+    }
+
+    private func looksLikeMermaid(_ code: String) -> Bool {
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return trimmed.hasPrefix("graph ")
+            || trimmed.hasPrefix("flowchart ")
+            || trimmed.hasPrefix("sequencediagram")
+            || trimmed.hasPrefix("statediagram")
+            || trimmed.hasPrefix("classdiagram")
+    }
+}
+
+struct ChartSummaryView: View {
+    let dataJSON: String?
+    let optionsJSON: String?
+    let appearance: String
+
+    var body: some View {
+        if let dataJSON, !dataJSON.isEmpty {
+            MarkdownMessageText(content: "```json\n\(prettyPrinted(dataJSON) ?? dataJSON)\n```", appearance: appearance)
+        }
+    }
+
+    private func prettyPrinted(_ text: String) -> String? {
+        guard
+            let data = text.data(using: .utf8),
+            let json = try? JSONSerialization.jsonObject(with: data),
+            let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted]),
+            let pretty = String(data: prettyData, encoding: .utf8)
+        else {
+            return nil
+        }
+        return pretty
+    }
+}
+
 struct MarkdownMessageText: View {
     let content: String
     let appearance: String
@@ -2182,29 +2661,47 @@ struct MarkdownMessageText: View {
         Group {
             if containsComplexElements(processedContent) {
                 RichMarkdownView(content: processedContent, appearance: appearance)
-            } else if let attributed = try? AttributedString(markdown: processedContent, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)) {
+            } else if let attributed = try? AttributedString(markdown: processedContent, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
                 Text(attributed)
                     .font(.system(size: 13, design: .rounded))
             } else {
-                Text(processedContent)
+                Text(verbatim: processedContent)
                     .font(.system(size: 13, design: .rounded))
             }
         }
         .foregroundStyle(palette.primaryText)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
         .textSelection(.enabled)
     }
     
     private func preprocessMarkdown(_ text: String) -> String {
         var result = text
-        result = result.replacingOccurrences(of: "<br\\s*/?>", with: "\n\n", options: .regularExpression)
-        result = result.replacingOccurrences(of: "<br>", with: "\n\n", options: .regularExpression)
-        result = result.replacingOccurrences(of: "<\\\\?br\\\\?>", with: "\n\n", options: .regularExpression)
+        result = result.replacingOccurrences(of: "\r\n", with: "\n")
+        result = result.replacingOccurrences(of: "\r", with: "\n")
+        result = result.replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: .regularExpression)
+        result = result.replacingOccurrences(of: "<\\\\?br\\\\?>", with: "\n", options: .regularExpression)
+        result = result.replacingOccurrences(of: "(?<=[.!?])\\h*(?=(?:\\d+\\.|[-*•])\\h)", with: "\n\n", options: .regularExpression)
+        result = result.replacingOccurrences(of: "(?<!\\n)(#{1,6}\\h)", with: "\n$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: "\\n{3,}", with: "\n\n", options: .regularExpression)
         return result
     }
     
     private func containsComplexElements(_ text: String) -> Bool {
-        let patterns = ["\\$\\$", "\\$[^$]+\\$", "\\\\\\[", "\\\\\\(", "\\begin\\{", "\\frac\\{", "\\sum\\{", "\\int\\{", "```", "\\|\\|", "\\[\\(.*?\\)\\]"]
+        let patterns = [
+            "\\$\\$",
+            "\\$[^$]+\\$",
+            "\\\\\\[",
+            "\\\\\\(",
+            "\\\\begin\\{",
+            "\\\\frac\\{",
+            "\\\\sum\\{",
+            "\\\\int\\{",
+            "```",
+            "<[a-zA-Z][^>]*>",
+            "\\|\\s*[-:]+\\s*\\|",
+            "(?m)^\\s*(?:[-*•]|\\d+\\.)\\s+.+$"
+        ]
         for pattern in patterns {
             if text.range(of: pattern, options: .regularExpression) != nil {
                 return true
@@ -2235,12 +2732,14 @@ struct RichMarkdownView: NSViewRepresentable {
     
     private func generateHTML(content: String, isDark: Bool) -> String {
         let escapedContent = content
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "'", with: "\\'")
             .replacingOccurrences(of: "\n", with: "\\n")
         
         let textColor = isDark ? "#ffffff" : "#1a1a1a"
-        let bgColor = isDark ? "#1e1e2e" : "#ffffff"
         let codeBg = isDark ? "#2d2d3d" : "#f5f5f5"
         let accentColor = "#6366f1"
         
@@ -2264,6 +2763,7 @@ struct RichMarkdownView: NSViewRepresentable {
                     padding: 4px;
                     word-wrap: break-word;
                     overflow-wrap: break-word;
+                    white-space: pre-wrap;
                 }
                 h1, h2, h3, h4, h5, h6 { margin: 12px 0 8px 0; font-weight: 600; }
                 h1 { font-size: 18px; }
@@ -2307,15 +2807,6 @@ struct RichMarkdownView: NSViewRepresentable {
         <body>
             <div id="content"></div>
             <script>
-                function escapeHtml(text) {
-                    return text
-                        .replace(/&/g, '&amp;')
-                        .replace(/</g, '&lt;')
-                        .replace(/>/g, '&gt;')
-                        .replace(/"/g, '&quot;')
-                        .replace(/'/g, '&#039;');
-                }
-                
                 function renderMarkdown(text) {
                     text = text.replace(/```(\\w+)?\\n([\\s\\S]*?)```/g, '<pre><code>$2</code></pre>');
                     text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
@@ -2327,9 +2818,11 @@ struct RichMarkdownView: NSViewRepresentable {
                     text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
                     text = text.replace(/^# (.+)$/gm, '<h1>$1</h1>');
                     text = text.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
-                    text = text.replace(/\\n\\n/g, '<br><br>');
-                    text = text.replace(/^- (.+)$/gm, '<li>$1</li>');
-                    text = text.replace(/(<li>.*<\\/li>)/s, '<ul>$1</ul>');
+                    text = text.replace(/(?:^|\\n)([-*•])\\s+(.+?)(?=\\n|$)/g, '<li>$2</li>');
+                    text = text.replace(/(?:^|\\n)(\\d+)\\.\\s+(.+?)(?=\\n|$)/g, '<li>$1. $2</li>');
+                    text = text.replace(/(<li>[\\s\\S]*?<\\/li>)/g, '<ul>$1</ul>');
+                    text = text.replace(/<\\/ul>\\s*<ul>/g, '');
+                    text = text.replace(/\\n/g, '<br>');
                     return text;
                 }
                 
@@ -2585,7 +3078,9 @@ struct PromptComposer: NSViewRepresentable {
         let scrollView = NSScrollView()
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
+        scrollView.contentInsets = NSEdgeInsetsZero
 
         let textView = PromptEditorTextView()
         textView.delegate = context.coordinator
@@ -2594,11 +3089,25 @@ struct PromptComposer: NSViewRepresentable {
         textView.drawsBackground = false
         textView.font = NSFont.systemFont(ofSize: 13, weight: .medium)
         textView.textContainerInset = NSSize(width: 6, height: 8)
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+        textView.allowsUndo = true
         textView.onSubmit = onSubmit
         textView.onInteraction = onInteraction
         textView.backgroundColor = .clear
+        textView.frame = NSRect(origin: .zero, size: NSSize(width: scrollView.contentSize.width, height: scrollView.contentSize.height))
         scrollView.documentView = textView
         applyAppearance(to: textView, appearance: appearance)
+        DispatchQueue.main.async {
+            scrollView.window?.makeFirstResponder(textView)
+        }
         return scrollView
     }
 
@@ -2640,6 +3149,14 @@ final class PromptEditorTextView: NSTextView {
     var onSubmit: (() -> Void)?
     var onInteraction: (() -> Void)?
 
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
     override func keyDown(with event: NSEvent) {
         onInteraction?()
         if event.keyCode == 36 || event.keyCode == 76 {
@@ -2655,6 +3172,7 @@ final class PromptEditorTextView: NSTextView {
 
     override func mouseDown(with event: NSEvent) {
         onInteraction?()
+        window?.makeFirstResponder(self)
         super.mouseDown(with: event)
     }
 
@@ -2662,16 +3180,36 @@ final class PromptEditorTextView: NSTextView {
         onInteraction?()
         return super.becomeFirstResponder()
     }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.window?.makeFirstResponder(self)
+        }
+    }
 }
 
 struct CommandInfo: Identifiable {
-    let id = UUID()
+    let id: String
     let type: String
     let value: String
     let category: String
     let riskLevel: String
+    let reason: String?
     let originalMatch: String
     let index: Int
+
+    init(type: String, value: String, category: String, riskLevel: String, reason: String? = nil, originalMatch: String, index: Int) {
+        self.type = type
+        self.value = value
+        self.category = category
+        self.riskLevel = riskLevel
+        self.reason = reason
+        self.originalMatch = originalMatch
+        self.index = index
+        self.id = "\(type)-\(index)-\(value.prefix(48))"
+    }
 }
 
 struct CommandParseResult {
@@ -2684,36 +3222,37 @@ enum AICommandType: String, CaseIterable {
     case NAVIGATE, SEARCH, WEB_SEARCH, READ_PAGE_CONTENT, LIST_OPEN_TABS
     case CREATE_PDF_JSON, CREATE_FILE_JSON, GENERATE_PDF
     case SHELL_COMMAND, SET_THEME, SET_VOLUME, SET_BRIGHTNESS, OPEN_APP
-    case SCREENSHOT_AND_ANALYZE, CLICK_ELEMENT, FIND_AND_CLICK
-    case GENERATE_DIAGRAM, OPEN_VIEW, RELOAD, GO_BACK, GO_FORWARD
+    case SCREENSHOT_AND_ANALYZE, CLICK_ELEMENT, CLICK_AT, FIND_AND_CLICK, FILL_FORM, SCROLL_TO
+    case GENERATE_DIAGRAM, GENERATE_FLOWCHART, GENERATE_CHART, OPEN_VIEW, RELOAD, GO_BACK, GO_FORWARD
     case WAIT, THINK, PLAN, EXPLAIN_CAPABILITIES
+    case SHOW_IMAGE, SHOW_VIDEO, OCR_COORDINATES, OCR_SCREEN, EXTRACT_DATA
     case DOM_SEARCH, DOM_READ_FILTERED
     case OPEN_MCP_SETTINGS, OPEN_AUTOMATION_SETTINGS, LIST_AUTOMATIONS, DELETE_AUTOMATION
-    case OPEN_SCHEDULING_MODAL, SCHEDULE_TASK
+    case OPEN_SCHEDULING_MODAL, SCHEDULE_TASK, OPEN_PDF, PLUGIN_COMMAND
     case ORGANIZE_TABS, CLOSE_TAB
 
     var category: String {
         switch self {
         case .NAVIGATE, .SEARCH, .WEB_SEARCH: return "navigation"
         case .READ_PAGE_CONTENT, .LIST_OPEN_TABS, .CLOSE_TAB: return "browser"
-        case .CLICK_ELEMENT, .FIND_AND_CLICK, .ORGANIZE_TABS: return "automation"
+        case .CLICK_ELEMENT, .CLICK_AT, .FIND_AND_CLICK, .FILL_FORM, .SCROLL_TO, .ORGANIZE_TABS: return "automation"
         case .SHELL_COMMAND, .OPEN_APP, .SET_VOLUME, .SET_BRIGHTNESS: return "system"
-        case .CREATE_PDF_JSON, .CREATE_FILE_JSON, .GENERATE_PDF, .GENERATE_DIAGRAM: return "pdf"
-        case .WAIT, .OPEN_VIEW, .OPEN_MCP_SETTINGS, .OPEN_AUTOMATION_SETTINGS, .LIST_AUTOMATIONS, .DELETE_AUTOMATION, .OPEN_SCHEDULING_MODAL, .SCHEDULE_TASK: return "utility"
-        case .SCREENSHOT_AND_ANALYZE: return "media"
+        case .CREATE_PDF_JSON, .CREATE_FILE_JSON, .GENERATE_PDF, .GENERATE_DIAGRAM, .GENERATE_FLOWCHART, .GENERATE_CHART, .OPEN_PDF: return "pdf"
+        case .SHOW_IMAGE, .SHOW_VIDEO, .SCREENSHOT_AND_ANALYZE, .OCR_COORDINATES, .OCR_SCREEN: return "media"
+        case .WAIT, .OPEN_VIEW, .OPEN_MCP_SETTINGS, .OPEN_AUTOMATION_SETTINGS, .LIST_AUTOMATIONS, .DELETE_AUTOMATION, .OPEN_SCHEDULING_MODAL, .SCHEDULE_TASK, .PLUGIN_COMMAND: return "utility"
         case .THINK, .PLAN, .EXPLAIN_CAPABILITIES: return "meta"
-        case .DOM_SEARCH, .DOM_READ_FILTERED: return "browser"
+        case .DOM_SEARCH, .DOM_READ_FILTERED, .EXTRACT_DATA: return "browser"
         case .SET_THEME, .RELOAD, .GO_BACK, .GO_FORWARD: return "utility"
         }
     }
 
     var defaultRisk: String {
-        switch self {
-        case .NAVIGATE, .SEARCH, .WEB_SEARCH, .READ_PAGE_CONTENT, .LIST_OPEN_TABS, .RELOAD, .GO_BACK, .GO_FORWARD, .WAIT, .THINK, .PLAN, .EXPLAIN_CAPABILITIES, .DOM_SEARCH, .DOM_READ_FILTERED, .OPEN_VIEW, .SET_THEME, .OPEN_MCP_SETTINGS, .OPEN_AUTOMATION_SETTINGS, .LIST_AUTOMATIONS, .ORGANIZE_TABS, .CLOSE_TAB:
+        switch category {
+        case "navigation", "browser", "meta":
             return "low"
-        case .GENERATE_PDF, .CREATE_PDF_JSON, .CREATE_FILE_JSON, .GENERATE_DIAGRAM, .SET_VOLUME, .SET_BRIGHTNESS, .DELETE_AUTOMATION, .OPEN_SCHEDULING_MODAL, .SCHEDULE_TASK:
+        case "system", "automation", "media", "pdf", "utility":
             return "medium"
-        case .SHELL_COMMAND, .OPEN_APP, .SCREENSHOT_AND_ANALYZE, .CLICK_ELEMENT, .FIND_AND_CLICK:
+        default:
             return "medium"
         }
     }
@@ -2735,8 +3274,13 @@ enum AICommandType: String, CaseIterable {
         case .OPEN_APP: return "Open app"
         case .SCREENSHOT_AND_ANALYZE: return "Screenshot"
         case .CLICK_ELEMENT: return "Click element"
+        case .CLICK_AT: return "Click coordinates"
         case .FIND_AND_CLICK: return "Find and click"
+        case .FILL_FORM: return "Fill form"
+        case .SCROLL_TO: return "Scroll"
         case .GENERATE_DIAGRAM: return "Generate diagram"
+        case .GENERATE_FLOWCHART: return "Generate flowchart"
+        case .GENERATE_CHART: return "Generate chart"
         case .OPEN_VIEW: return "Open view"
         case .RELOAD: return "Reload"
         case .GO_BACK: return "Go back"
@@ -2745,6 +3289,11 @@ enum AICommandType: String, CaseIterable {
         case .THINK: return "Think"
         case .PLAN: return "Plan"
         case .EXPLAIN_CAPABILITIES: return "Capabilities"
+        case .SHOW_IMAGE: return "Show image"
+        case .SHOW_VIDEO: return "Show video"
+        case .OCR_COORDINATES: return "OCR region"
+        case .OCR_SCREEN: return "OCR screen"
+        case .EXTRACT_DATA: return "Extract data"
         case .DOM_SEARCH: return "Search DOM"
         case .DOM_READ_FILTERED: return "Read DOM"
         case .OPEN_MCP_SETTINGS: return "MCP settings"
@@ -2753,6 +3302,8 @@ enum AICommandType: String, CaseIterable {
         case .DELETE_AUTOMATION: return "Delete automation"
         case .OPEN_SCHEDULING_MODAL: return "Schedule modal"
         case .SCHEDULE_TASK: return "Schedule task"
+        case .OPEN_PDF: return "Open PDF"
+        case .PLUGIN_COMMAND: return "Plugin command"
         case .ORGANIZE_TABS: return "Organize tabs"
         case .CLOSE_TAB: return "Close tab"
         }
@@ -2760,56 +3311,418 @@ enum AICommandType: String, CaseIterable {
 }
 
 struct AICommandParser {
-    static func parseCommands(from content: String) -> CommandParseResult {
-        let commands = AICommandType.allCases
-        let commandPattern = commands.map { $0.rawValue }.joined(separator: "|")
-        let regexPattern = "\\[\\s*(\(commandPattern))\\s*(?::\\s*([^\\]]+?))?\\s*\\]"
+    private static let rawValueCommands: Set<String> = [
+        AICommandType.GENERATE_PDF.rawValue,
+        AICommandType.CREATE_PDF_JSON.rawValue,
+        AICommandType.CREATE_FILE_JSON.rawValue,
+        AICommandType.SCHEDULE_TASK.rawValue,
+        AICommandType.OPEN_SCHEDULING_MODAL.rawValue,
+    ]
 
-        guard let regex = try? NSRegularExpression(pattern: regexPattern, options: [.caseInsensitive]) else {
-            return CommandParseResult(commands: [], textWithoutCommands: content, hasCommands: false)
+    private static let jsonCommandPatterns = [
+        #"(?s)\{[\s\S]*?"commands"\s*:\s*\[[\s\S]*?\][\s\S]*?\}"#,
+        #"(?s)```json\s*\{[\s\S]*?"commands"\s*:\s*\[[\s\S]*?\][\s\S]*?\}\s*```"#,
+        #"(?s)```\s*\{[\s\S]*?"commands"\s*:\s*\[[\s\S]*?\][\s\S]*?\}\s*```"#,
+    ]
+
+    static func parseCommands(from content: String) -> CommandParseResult {
+        let jsonCommands = extractJSONCommands(from: content)
+        if !jsonCommands.isEmpty {
+            var cleaned = content
+            for pattern in jsonCommandPatterns {
+                cleaned = cleaned.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+            }
+            return CommandParseResult(
+                commands: deduplicated(jsonCommands),
+                textWithoutCommands: cleaned.trimmingCharacters(in: .whitespacesAndNewlines),
+                hasCommands: true
+            )
         }
 
         var parsedCommands: [CommandInfo] = []
-        var rangesToRemove: [(Range<String.Index>, String)] = []
+        var seen = Set<String>()
+        var rangesToRemove: [NSRange] = []
 
-        let nsRange = NSRange(content.startIndex..., in: content)
-        let matches = regex.matches(in: content, options: [], range: nsRange)
-
-        for match in matches {
-            guard let typeRange = Range(match.range(at: 1), in: content),
-                  let typeString = AICommandType(rawValue: String(content[typeRange]).uppercased()) else {
-                continue
-            }
-
-            let fullMatchRange = Range(match.range, in: content)!
-            var value = ""
-            if match.range(at: 2).location != NSNotFound,
-               let valueRange = Range(match.range(at: 2), in: content) {
-                value = String(content[valueRange]).trimmingCharacters(in: .whitespaces)
-            }
-
-            let cmdInfo = CommandInfo(
-                type: typeString.rawValue,
-                value: value,
-                category: typeString.category,
-                riskLevel: typeString.defaultRisk,
-                originalMatch: String(content[fullMatchRange]),
-                index: content.distance(from: content.startIndex, to: fullMatchRange.lowerBound)
-            )
-            parsedCommands.append(cmdInfo)
-            rangesToRemove.append((fullMatchRange, cmdInfo.originalMatch))
+        func addUnique(_ command: CommandInfo) {
+            let signature = "\(command.type):\(command.value)"
+            guard !seen.contains(signature) else { return }
+            seen.insert(signature)
+            parsedCommands.append(command)
         }
 
-        var cleanText = content
-        for (range, _) in rangesToRemove.sorted(by: { content.distance(from: content.startIndex, to: $0.0.lowerBound) > content.distance(from: content.startIndex, to: $1.0.lowerBound) }) {
-            cleanText = cleanText.replacingCharacters(in: range, with: "")
+        if let htmlCommentRegex = try? NSRegularExpression(pattern: #"(?is)<!--\s*AI_COMMANDS_START\s*-->[\s\S]*?<!--\s*AI_COMMANDS_END\s*-->"#) {
+            let nsRange = NSRange(content.startIndex..., in: content)
+            for match in htmlCommentRegex.matches(in: content, range: nsRange) {
+                guard let matchRange = Range(match.range, in: content) else { continue }
+                let block = String(content[matchRange])
+                    .replacingOccurrences(of: #"<!--\s*AI_COMMANDS_START\s*-->"#, with: "", options: .regularExpression)
+                    .replacingOccurrences(of: #"<!--\s*AI_COMMANDS_END\s*-->"#, with: "", options: .regularExpression)
+                for line in block.components(separatedBy: .newlines) {
+                    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { continue }
+                    guard
+                        let lineRegex = try? NSRegularExpression(pattern: #"^\[([A-Z_]+)\]:(.*)$"#),
+                        let lineMatch = lineRegex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
+                        let typeRange = Range(lineMatch.range(at: 1), in: trimmed),
+                        let valueRange = Range(lineMatch.range(at: 2), in: trimmed)
+                    else { continue }
+
+                    let type = String(trimmed[typeRange]).uppercased()
+                    let value = String(trimmed[valueRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if let command = buildCommand(type: type, value: value, reason: nil, risk: nil, originalMatch: trimmed, index: match.range.location) {
+                        addUnique(command)
+                    }
+                }
+            }
+        }
+
+        let maskedContent = maskedContent(from: content)
+        let commandPattern = AICommandType.allCases.map { $0.rawValue }.joined(separator: "|")
+        let regexPattern = #"(?i)\[\s*(\#(commandPattern))\s*(?::\s*([^\]]+?))?\s*\]"#
+            .replacingOccurrences(of: #"\#(commandPattern)"#, with: commandPattern)
+
+        guard let regex = try? NSRegularExpression(pattern: regexPattern) else {
+            return CommandParseResult(commands: parsedCommands, textWithoutCommands: content.trimmingCharacters(in: .whitespacesAndNewlines), hasCommands: !parsedCommands.isEmpty)
+        }
+
+        let nsRange = NSRange(maskedContent.startIndex..., in: maskedContent)
+        for match in regex.matches(in: maskedContent, options: [], range: nsRange) {
+            guard let typeRange = Range(match.range(at: 1), in: maskedContent) else { continue }
+            let type = String(maskedContent[typeRange]).uppercased()
+            var rawValue = ""
+            if match.range(at: 2).location != NSNotFound, let valueRange = Range(match.range(at: 2), in: maskedContent) {
+                rawValue = String(maskedContent[valueRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
+            if (rawValue.hasPrefix("\"") && rawValue.hasSuffix("\"")) || (rawValue.hasPrefix("'") && rawValue.hasSuffix("'")) {
+                rawValue = String(rawValue.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
+            let normalized = normalizeValue(type: type, rawValue: rawValue)
+            guard let originalRange = Range(match.range, in: content) else { continue }
+            let originalMatch = String(content[originalRange])
+            if let command = buildCommand(type: type, value: normalized.value, reason: normalized.reason, risk: normalized.risk, originalMatch: originalMatch, index: match.range.location) {
+                addUnique(command)
+                rangesToRemove.append(match.range)
+            }
+        }
+
+        var cleanedText = content
+        for range in rangesToRemove.sorted(by: { $0.location > $1.location }) {
+            guard let stringRange = Range(range, in: cleanedText) else { continue }
+            cleanedText.replaceSubrange(stringRange, with: "")
         }
 
         return CommandParseResult(
             commands: parsedCommands,
-            textWithoutCommands: cleanText.trimmingCharacters(in: .whitespacesAndNewlines),
+            textWithoutCommands: cleanedText.trimmingCharacters(in: .whitespacesAndNewlines),
             hasCommands: !parsedCommands.isEmpty
         )
+    }
+
+    static func cleanCustomTags(from text: String) -> String {
+        var result = text
+        let patterns = [
+            #"\[\s*AI REASONING\s*\][\s\S]*?\[\s*/AI REASONING\s*\]"#,
+            #"\[\s*OCR_RESULT\s*\][\s\S]*?\[\s*/OCR_RESULT\s*\]"#,
+            #"\[\s*ACTION_CHAIN_JSON\s*\][\s\S]*?\[\s*/ACTION_CHAIN_JSON\s*\]"#,
+            #"\[\s*MEDIA_ATTACHMENTS_JSON\s*\][\s\S]*?\[\s*/MEDIA_ATTACHMENTS_JSON\s*\]"#,
+            #"(?is)<(think|thinking|thought)>[\s\S]*?</\1>"#,
+        ]
+        for pattern in patterns {
+            result = result.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func extractReasoning(from text: String) -> [String] {
+        let tagged = extractAllTagContents(in: text, tagName: "AI REASONING")
+        if !tagged.isEmpty {
+            return tagged
+        }
+        return extractRegexCaptureGroups(in: text, pattern: #"(?is)<(?:think|thinking|thought)>\s*([\s\S]*?)\s*</(?:think|thinking|thought)>"#)
+    }
+
+    static func extractOCRText(from message: NativePanelState.Message) -> String? {
+        if let ocrText = message.ocrText, !ocrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return ocrText
+        }
+        guard let content = extractFirstTagContent(in: message.content, tagName: "OCR_RESULT") else { return nil }
+        if
+            let json = robustJSONParse(content) as? [String: Any],
+            let extracted = json["content"] as? String,
+            !extracted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
+            return extracted
+        }
+        return content
+    }
+
+    static func extractActionLogs(from message: NativePanelState.Message) -> [NativePanelState.ActionLog] {
+        if let actionLogs = message.actionLogs, !actionLogs.isEmpty {
+            return actionLogs
+        }
+        guard let content = extractFirstTagContent(in: message.content, tagName: "ACTION_CHAIN_JSON") else { return [] }
+        guard
+            let json = robustJSONParse(content) as? [String: Any],
+            let actions = json["actions"] as? [[String: Any]]
+        else { return [] }
+        return actions.map { item in
+            NativePanelState.ActionLog(
+                type: (item["type"] as? String) ?? "ACTION",
+                output: (item["output"] as? String) ?? "",
+                success: (item["success"] as? Bool) ?? false
+            )
+        }
+    }
+
+    static func extractMediaItems(from message: NativePanelState.Message) -> [NativePanelState.MediaItem] {
+        if let mediaItems = message.mediaItems, !mediaItems.isEmpty {
+            return mediaItems
+        }
+        guard let content = extractFirstTagContent(in: message.content, tagName: "MEDIA_ATTACHMENTS_JSON") else { return [] }
+        guard
+            let json = robustJSONParse(content) as? [String: Any],
+            let attachments = json["attachments"] as? [[String: Any]]
+        else { return [] }
+        return attachments.enumerated().map { index, item in
+            NativePanelState.MediaItem(
+                id: "tag-media-\(index)",
+                type: (item["type"] as? String) ?? "unknown",
+                url: item["url"] as? String,
+                caption: item["caption"] as? String,
+                videoUrl: item["videoUrl"] as? String,
+                title: item["title"] as? String,
+                description: item["description"] as? String,
+                thumbnailUrl: item["thumbnailUrl"] as? String,
+                source: item["source"] as? String,
+                videoId: item["videoId"] as? String,
+                diagramId: item["diagramId"] as? String,
+                code: item["code"] as? String,
+                chartId: item["chartId"] as? String,
+                chartDataJSON: item["chartDataJSON"] as? String,
+                chartOptionsJSON: item["chartOptionsJSON"] as? String
+            )
+        }
+    }
+
+    private static func deduplicated(_ commands: [CommandInfo]) -> [CommandInfo] {
+        var seen = Set<String>()
+        var unique: [CommandInfo] = []
+        for command in commands {
+            let signature = "\(command.type):\(command.value)"
+            guard !seen.contains(signature) else { continue }
+            seen.insert(signature)
+            unique.append(command)
+        }
+        return unique
+    }
+
+    private static func buildCommand(type: String, value: String, reason: String?, risk: String?, originalMatch: String, index: Int) -> CommandInfo? {
+        guard let commandType = AICommandType(rawValue: type.uppercased()) else { return nil }
+        return CommandInfo(
+            type: commandType.rawValue,
+            value: value,
+            category: commandType.category,
+            riskLevel: (risk?.isEmpty == false ? risk! : commandType.defaultRisk),
+            reason: reason,
+            originalMatch: originalMatch,
+            index: index
+        )
+    }
+
+    private static func extractJSONCommands(from content: String) -> [CommandInfo] {
+        var commands: [CommandInfo] = []
+
+        for pattern in jsonCommandPatterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let nsRange = NSRange(content.startIndex..., in: content)
+            for match in regex.matches(in: content, range: nsRange) {
+                guard let matchRange = Range(match.range, in: content) else { continue }
+                let rawMatch = String(content[matchRange])
+                let jsonText = stripMarkdownFences(rawMatch)
+                if let parsed = robustJSONParse(jsonText) {
+                    commands.append(contentsOf: buildCommands(from: parsed, originalMatch: rawMatch, index: match.range.location))
+                } else if let fallbackRegex = try? NSRegularExpression(pattern: #"(?is)"type"\s*:\s*"([^"]+)"\s*,\s*"value"\s*:\s*"([\s\S]*?)"(?=\s*\})"#) {
+                    let fallbackRange = NSRange(rawMatch.startIndex..., in: rawMatch)
+                    for fallbackMatch in fallbackRegex.matches(in: rawMatch, range: fallbackRange) {
+                        guard
+                            let typeRange = Range(fallbackMatch.range(at: 1), in: rawMatch),
+                            let valueRange = Range(fallbackMatch.range(at: 2), in: rawMatch)
+                        else { continue }
+
+                        let type = String(rawMatch[typeRange]).uppercased()
+                        let value = String(rawMatch[valueRange])
+                            .replacingOccurrences(of: #"\\n"#, with: "\n", options: .regularExpression)
+                            .replacingOccurrences(of: #"\""#, with: "\"")
+                        if let command = buildCommand(type: type, value: value, reason: nil, risk: nil, originalMatch: rawMatch, index: match.range.location) {
+                            commands.append(command)
+                        }
+                    }
+                }
+            }
+        }
+
+        return deduplicated(commands)
+    }
+
+    private static func buildCommands(from parsed: Any, originalMatch: String, index: Int) -> [CommandInfo] {
+        guard
+            let json = parsed as? [String: Any],
+            let commandArray = json["commands"] as? [[String: Any]]
+        else { return [] }
+
+        return commandArray.compactMap { item in
+            let type = ((item["type"] as? String) ?? (item["command"] as? String) ?? "").uppercased()
+            let rawValue = item["value"] ?? item["url"] ?? item["query"] ?? ""
+            let value: String
+            if let stringValue = rawValue as? String {
+                value = stringValue
+            } else if JSONSerialization.isValidJSONObject(rawValue) {
+                let data = try? JSONSerialization.data(withJSONObject: rawValue, options: [])
+                value = data.flatMap { String(data: $0, encoding: .utf8) } ?? "\(rawValue)"
+            } else {
+                value = "\(rawValue)"
+            }
+            let reason = item["reason"] as? String
+            let risk = item["risk"] as? String
+            return buildCommand(type: type, value: value, reason: reason, risk: risk, originalMatch: originalMatch, index: index)
+        }
+    }
+
+    private static func normalizeValue(type: String, rawValue: String) -> (value: String, reason: String?, risk: String?) {
+        if rawValueCommands.contains(type) {
+            return (rawValue, nil, nil)
+        }
+
+        let parts = rawValue
+            .split(separator: "|", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let value = parts.first ?? ""
+        let reason = parts.first(where: { $0.lowercased().hasPrefix("reason:") })?
+            .split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            .dropFirst()
+            .first
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            ?? (parts.count > 1 ? parts[1] : nil)
+        let risk = parts.first(where: { $0.lowercased().hasPrefix("risk:") })?
+            .split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            .dropFirst()
+            .first
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        return (value, reason, risk)
+    }
+
+    private static func maskedContent(from text: String) -> String {
+        var result = text
+        let patterns = [
+            #"(?s)```[\s\S]*?```"#,
+            #"`.*?`"#,
+            #"(?is)<(think|thinking|thought)>[\s\S]*?</\1>"#,
+        ]
+        for pattern in patterns {
+            result = replaceMatchesWithSpaces(in: result, pattern: pattern)
+        }
+
+        result = result
+            .components(separatedBy: .newlines)
+            .map { line in
+                let pipeCount = line.filter { $0 == "|" }.count
+                return pipeCount >= 3 ? String(repeating: " ", count: line.count) : line
+            }
+            .joined(separator: "\n")
+        return result
+    }
+
+    private static func replaceMatchesWithSpaces(in text: String, pattern: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let mutable = NSMutableString(string: text)
+        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        for match in matches.reversed() {
+            let replacement = String(repeating: " ", count: match.range.length)
+            mutable.replaceCharacters(in: match.range, with: replacement)
+        }
+        return mutable as String
+    }
+
+    private static func robustJSONParse(_ text: String) -> Any? {
+        let strategies = [
+            text,
+            stripMarkdownFences(text),
+            stripLLMPrefixes(text),
+            stripLLMPrefixes(stripMarkdownFences(text)),
+        ]
+
+        for candidate in strategies {
+            if let parsed = tryParseJSON(candidate) {
+                return parsed
+            }
+        }
+
+        if let codeBlock = extractJSONFromMarkdown(text), let parsed = tryParseJSON(codeBlock) {
+            return parsed
+        }
+
+        return nil
+    }
+
+    private static func tryParseJSON(_ text: String) -> Any? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data)
+    }
+
+    private static func stripMarkdownFences(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: #"^```(?:json)?\s*\n?"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\n?```\s*$"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func stripLLMPrefixes(_ text: String) -> String {
+        let prefixes = [
+            #"^(?:here(?:'s| is) the(?: JSON)?:?\s*)"#,
+            #"^(?:here(?:'s| is) (?:your |the )?(?:response|result|data):?\s*)"#,
+            #"^(?:sure[,]?\s*(?:here(?:'s| is))?)\s*"#,
+            #"^(?:of course[,]?\s*(?:here(?:'s| is))?)\s*"#,
+            #"^(?:here you go[,]?\s*)"#,
+            #"^(?:as requested[,]?\s*)"#,
+            #"^(?:✅\s*)*"#,
+        ]
+        var result = text
+        for prefix in prefixes {
+            result = result.replacingOccurrences(of: prefix, with: "", options: [.regularExpression, .caseInsensitive])
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func extractJSONFromMarkdown(_ text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: #"(?is)```(?:json)?\s*([\s\S]*?)```"#),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range(at: 1), in: text) else {
+            return nil
+        }
+        return String(text[range])
+    }
+
+    private static func extractAllTagContents(in text: String, tagName: String) -> [String] {
+        let pattern = #"(?is)\[?\s*"# + NSRegularExpression.escapedPattern(for: tagName) + #"\s*\]?\s*([\s\S]*?)\[?\s*/"# + NSRegularExpression.escapedPattern(for: tagName) + #"\s*\]?"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+            guard let range = Range(match.range(at: 1), in: text) else { return nil }
+            return String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    private static func extractFirstTagContent(in text: String, tagName: String) -> String? {
+        extractAllTagContents(in: text, tagName: tagName).first
+    }
+
+    private static func extractRegexCaptureGroups(in text: String, pattern: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+            guard let range = Range(match.range(at: 1), in: text) else { return nil }
+            return String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
 }
 
