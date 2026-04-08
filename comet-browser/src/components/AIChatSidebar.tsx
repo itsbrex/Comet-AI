@@ -1125,7 +1125,8 @@ I couldn't schedule the task. The background service may not be running. Please 
                 clearTimeout(timeout);
                 resolve({ commands: q, timedOut: false });
               } else if (!isResolved) {
-                setTimeout(checkStatus, 500);
+                // Check immediately instead of waiting 500ms
+                setTimeout(checkStatus, 0);
               }
               return q;
             });
@@ -1497,19 +1498,58 @@ I couldn't schedule the task. The background service may not be running. Please 
           break;
         }
 
-        case 'ORGANIZE_TABS': {
+case 'ORGANIZE_TABS': {
           const organizeStepId = addThinkingStep('AI is Classifying Tabs...');
           try {
-            const tabsToClassify = store.tabs.map(t => ({ id: t.id, title: t.title, url: t.url || '' }));
+            const tabs = store.tabs;
+            const tabsToClassify = tabs.map(t => ({ id: t.id, title: t.title, url: t.url || '' }));
+            
+            const urlCounts = new Map<string, string[]>();
+            const closedDuplicates: string[] = [];
+            
+            tabs.forEach(t => {
+              const url = t.url || '';
+              if (url) {
+                const normalized = url.replace(/\/$/, '').toLowerCase();
+                const existing = urlCounts.get(normalized) || [];
+                existing.push(t.id);
+                urlCounts.set(normalized, existing);
+              }
+            });
+            
+            for (const [, tabIds] of urlCounts) {
+              if (tabIds.length > 1) {
+                for (let i = 1; i < tabIds.length; i++) {
+                  store.removeTab(tabIds[i]);
+                  closedDuplicates.push(tabIds[i]);
+                }
+              }
+            }
+            
             const result = await (window as any).electronAPI.classifyTabsAi({ tabs: tabsToClassify });
             if (result.success && result.classifications) {
               const classifications = result.classifications;
+              const groupedTabs = new Map<string, string[]>();
+              
               Object.entries(classifications).forEach(([tabId, groupName]) => {
-                store.groupTabs([tabId], groupName as string);
+                const existing = groupedTabs.get(groupName as string) || [];
+                existing.push(tabId);
+                groupedTabs.set(groupName as string, existing);
               });
-              const uniqueGroups = new Set(Object.values(classifications)).size;
-              output = `Successfully organized ${tabsToClassify.length} tabs into ${uniqueGroups} groups.`;
-              resolveThinkingStep(organizeStepId, 'done', 'Tabs organized');
+              
+              for (const [groupName, tabIds] of groupedTabs) {
+                if (tabIds.length > 0) {
+                  store.groupTabs(tabIds, groupName);
+                }
+              }
+              
+              const uniqueGroups = groupedTabs.size;
+              const totalClosed = closedDuplicates.length;
+              const action = totalClosed > 0 
+                ? `Organized ${tabs.length} tabs into ${uniqueGroups} groups and closed ${totalClosed} duplicate.`
+                : `Successfully organized ${tabs.length} tabs into ${uniqueGroups} groups.`;
+              output = action;
+              resolveThinkingStep(organizeStepId, 'done', action);
             } else {
               output = `Organization failed: ${result.error}`;
               resolveThinkingStep(organizeStepId, 'error', result.error);

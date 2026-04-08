@@ -4407,6 +4407,10 @@ ipcMain.on('set-mcp-server-port', (event, port) => {
 ipcMain.handle('extract-page-content', async () => {
   const view = tabViews.get(activeTabId);
   if (!view) return { error: 'No active view' };
+  
+  // Small delay to let page settle before reading
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
   try {
     const content = await view.webContents.executeJavaScript(`
       (() => {
@@ -4504,18 +4508,30 @@ ipcMain.handle('extract-secure-dom', async () => {
         }];
       }
         
+// Extract all links with their titles for web search and navigation
+        const links = [];
+        for (const a of document.querySelectorAll('a[href]')) {
+          const href = a.href;
+          const title = a.textContent?.trim() || a.title || '';
+          const visibleText = a.innerText?.trim() || '';
+          if (href && (title || visibleText) && !href.startsWith('javascript:') && !href.startsWith('mailto:')) {
+            links.push({ href, title: title || visibleText, text: visibleText });
+          }
+        }
+        
         const main = document.querySelector('main, article, [role="main"], #content, #main, .content') || document.body;
         const elements = [];
         for (const child of main.children) {
           elements.push(...extractElements(child));
         }
         
-        const content = elements.map(e => e.text).filter(Boolean).join('\\n');
+        const content = elements.map(e => e.text).filter(Boolean).join('\n');
         const fullText = document.body.innerText || content;
         
         return {
           content: sanitizeText(fullText),
           elements,
+          links,
           url: window.location.href,
           title: document.title,
           scriptsRemoved: document.querySelectorAll('script').length,
@@ -4528,6 +4544,7 @@ ipcMain.handle('extract-secure-dom', async () => {
     return {
       content: result.content || '',
       elements: result.elements || [],
+      links: result.links || [],
       metadata: {
         url: result.url || '',
         title: result.title || '',

@@ -25,6 +25,7 @@ declare global {
             extractSecureDOM: () => Promise<{
                 content: string;
                 elements: Array<{ tag: string; text: string; xpath: string; children: any[] }>;
+                links: Array<{ href: string; title: string; text: string }>;
                 metadata: {
                     url: string;
                     title: string;

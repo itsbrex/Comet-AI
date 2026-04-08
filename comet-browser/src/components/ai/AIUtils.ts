@@ -324,6 +324,10 @@ export function buildCleanPDFContent(
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;600&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -439,6 +443,14 @@ export function buildCleanPDFContent(
   </div>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      // Initialize mermaid
+      if (typeof mermaid !== 'undefined') {
+        mermaid.initialize({ startOnLoad: false, theme: 'default' });
+        document.querySelectorAll('.mermaid').forEach(function(el) {
+          mermaid.run({ nodes: [el] }).catch(function(e) { console.error('Mermaid error:', e); });
+        });
+      }
+      // Initialize KaTeX
       if (typeof renderMathInElement !== 'undefined') {
         renderMathInElement(document.body, {
           delimiters: [
