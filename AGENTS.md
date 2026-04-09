@@ -651,5 +651,23 @@ window.electronAPI.plugins.scan(directory)
 
 ---
 
-*Last Updated: 2026-04-06*
-*Status: Component Documentation - COMPLETED*
+## ✅ COMPLETED THIS SESSION (2026-04-09)
+
+### Release Workflow Optimization + v0.2.8 Stable
+
+**Status:** ✅ COMPLETE
+
+**Files Modified:**
+- `.github/workflows/release.yml` - Restricted "Publish Release" workflow to tags only (removed push to main trigger)
+- `comet-browser/package.json` - Updated version to `0.2.8`
+- `AGENTS.md` - Updated documentation
+
+**Completed Tasks:**
+- ✅ Fixed workflow so it no longer runs on every commit to `main`
+- ✅ Bumped version to `0.2.8` for stable release
+- ✅ Tagged and pushed `v0.2.8-stable` to GitHub
+
+---
+
+*Last Updated: 2026-04-09*
+*Status: v0.2.8 Release Ready - COMPLETED*
