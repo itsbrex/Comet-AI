@@ -32,6 +32,8 @@ Most browsers are built for monetization. Comet is built for **control**.
 - 🔍 **Secure DOM Reading** — Filtered page extraction with injection detection
 - 🌐 **In-page DOM Search** — AI can search within current page content
 - ⏰ **Background Scheduling** — Schedule tasks like "generate PDF at 8am daily"
+- 🔄 **Automatic latest-model fetching** — Official live model catalogs for Gemini, OpenAI, Claude, Groq, and xAI
+- 🍎 **Apple Intelligence support on macOS** — Native Swift bridge with readiness checks, local summaries, and image generation
 
 ---
 
@@ -76,7 +78,7 @@ Full documentation is available at [browser.ponsrischool.in](https://browser.pon
 - **Cron Expression Support** — Daily, hourly, weekdays, custom intervals
 - **Background Service** — Tasks run even when browser is closed
 - **Mobile Notifications** — Get notified on desktop or mobile when tasks complete
-- **Model Selection** — Choose AI model per task (Gemini, Claude, local Ollama)
+- **Model Selection** — Choose AI model per task (Gemini, Claude, Azure OpenAI, local Ollama)
 
 ### 🌐 Browser Capabilities
 - Full Chromium-based browsing via Electron BrowserView
@@ -131,12 +133,52 @@ Full documentation is available at [browser.ponsrischool.in](https://browser.pon
 ### 🤖 AI Provider Support
 | Provider | Type | Notes |
 |----------|------|-------|
-| Google Gemini | Cloud | Default recommended |
-| OpenAI GPT | Cloud | GPT-4 and above |
-| Anthropic Claude | Cloud | Strong for long context |
-| Groq | Cloud | Fastest inference |
+| Google Gemini | Cloud | Official model catalog fetch + auto-latest recommendation |
+| OpenAI GPT | Cloud | Official model catalog fetch + auto-latest recommendation |
+| Microsoft Azure OpenAI | Cloud | Official Microsoft backend, cross-platform |
+| Anthropic Claude | Cloud | Official model catalog fetch + auto-latest recommendation |
+| Groq | Cloud | Official model catalog fetch + auto-latest recommendation |
+| xAI Grok | Cloud | Official model catalog fetch + auto-latest recommendation |
 | Ollama | Local | Full privacy, no API key |
+| Apple Intelligence | Native macOS | Swift bridge with readiness checks, summary + image generation on supported Macs |
 | Microsoft Copilot | Companion (Windows) | Launchable from setup/welcome, no Comet API key required |
+
+Azure OpenAI setup note:
+- Use your Azure OpenAI v1 base URL, for example `https://YOUR-RESOURCE.openai.azure.com/openai/v1`
+- Enter your Azure API key and your model/deployment name in Comet settings
+
+### 🍎 Apple Intelligence on macOS
+
+Comet now includes a **native Swift Apple Intelligence bridge** for macOS, built in the same spirit as the existing Swift native panel system.
+
+What is included now:
+- **Foundation Models summary bridge** for summarizing current page text or pasted text from inside Comet settings
+- **Image Playground / ImageCreator bridge** for macOS-only local image generation
+- **GUI readiness checks** that detect unsupported Macs, disabled Apple Intelligence, and not-ready model states before use
+- **Packaged helper build step** so macOS distributions can ship the Apple helper in `bin/`
+- **Apple Intelligence Lab** in settings for quick testing and validation
+
+Why this uses Swift:
+- Apple Intelligence APIs are native Apple frameworks, so Comet talks to them through a small Swift helper instead of trying to force them through the web runtime.
+- This matches Comet's existing native macOS architecture for Swift UI panels and helpers.
+
+Current status:
+- The helper compiles and the bridge is integrated into Electron.
+- **Runtime availability still depends on the Mac, macOS version, Apple Intelligence enablement, and Apple's framework/runtime state.**
+- Comet now checks readiness before use and shows clear GUI states when Apple Intelligence is unsupported, disabled, or still getting ready.
+- On unsupported Macs, or when Apple Intelligence/image creation is not available at runtime, Comet fails gracefully and keeps cloud/local providers available.
+
+Advanced Apple-native paths we can build on:
+- **Writing Tools** for editor-native summarization and rewrite flows in custom text surfaces
+- **App Intents assistant schemas** for exposing Comet actions/content to Siri and Apple Intelligence
+- **ImagePlaygroundViewController** when we want Apple-controlled system image UI instead of only helper-driven generation
+
+Official Apple references:
+- [Apple Intelligence](https://developer.apple.com/apple-intelligence/)
+- [Foundation Models](https://developer.apple.com/documentation/FoundationModels)
+- [Generating content and performing tasks with Foundation Models](https://developer.apple.com/documentation/FoundationModels/generating-content-and-performing-tasks-with-foundation-models)
+- [Image Playground](https://developer.apple.com/documentation/ImagePlayground)
+- [App intent domains](https://developer.apple.com/documentation/appintents/app-intent-domains)
 
 ### 🪟 Microsoft Copilot on Windows
 
@@ -144,10 +186,11 @@ Comet now surfaces a **Windows Copilot companion path** in the welcome flow and 
 
 Important:
 - **Supported today:** launch the official Microsoft Copilot experience from Comet on Windows and use it alongside Comet.
-- **Not fully native yet:** Comet's own AI sidebar is still powered by providers like Ollama, Gemini, OpenAI, Anthropic, or Groq.
-- **Why:** Microsoft Copilot is an official app/service, but this repo does **not** yet ship a first-party Microsoft Copilot provider wired directly into Comet's sidebar request pipeline.
+- **Native Microsoft backend now available:** Comet's own AI sidebar can also use **Microsoft Azure OpenAI** directly.
+- **Not fully native yet for Copilot itself:** the Microsoft Copilot app/service is still a separate path from Comet's sidebar provider pipeline.
+- **Why:** this repo now ships a first-party Microsoft backend through Azure OpenAI, but it does **not** yet ship a first-party Microsoft Copilot app provider wired directly into Comet's sidebar request pipeline.
 
-If you want Comet's built-in sidebar AI to answer directly inside Comet right now, configure one of the supported providers above. If you want a **no-key Windows assistant**, use the Copilot companion flow below.
+If you want Comet's built-in sidebar AI to answer directly inside Comet right now, configure one of the supported providers above, including Azure OpenAI. If you want a **no-key Windows assistant**, use the Copilot companion flow below.
 
 #### What Microsoft says
 
@@ -182,10 +225,11 @@ If you want responses to appear **inside Comet's sidebar chat**, you currently n
 - Ollama
 - Gemini
 - OpenAI
+- Azure OpenAI
 - Anthropic
 - Groq
 
-This is because the sidebar currently calls Comet's internal provider system, not the Microsoft Copilot desktop app.
+This is because the sidebar currently calls Comet's internal provider system, including Azure OpenAI, not the Microsoft Copilot desktop app.
 
 #### Current limitation for "Copilot inside the sidebar"
 
@@ -200,7 +244,7 @@ That limitation is intentional in the docs so we do not mislead users.
 
 If you are documenting this feature elsewhere in the app or website, use wording like:
 
-> "Comet can launch Microsoft Copilot on Windows as a companion, and Comet's built-in sidebar continues to use supported providers such as Ollama, Gemini, OpenAI, Anthropic, or Groq."
+> "Comet can launch Microsoft Copilot on Windows as a companion, and Comet's built-in sidebar continues to use supported providers such as Ollama, Gemini, OpenAI, Azure OpenAI, Anthropic, or Groq."
 
 #### Future direction
 
@@ -308,6 +352,10 @@ npm run dev          # Next.js frontend
 npm run electron-start  # Electron shell
 ```
 
+macOS native note:
+- Comet can build native Swift helpers for macOS features such as native panels and Apple Intelligence.
+- For distributable macOS builds, the Apple helper is included through the `build-macos-apple-intelligence-helper` step used by `electron:build:mac` and `dist:mac`.
+
 ### Mobile (Android)
 
 ```bash
@@ -353,6 +401,8 @@ flutter run
 - **Plugin System Documentation** - Plugin marketplace with SDK, manifest format, security verification, and development guides
 - **Deep Links Reference** - URL schemes (`comet-ai://`), web URLs, route reference, and cross-platform support
 - **Structured Changelog** - Created proper CHANGELOG.md and RELEASE_NOTES.md files
+- **Official live model catalogs** - Comet now fetches current models directly from Gemini, OpenAI, Anthropic, Groq, and xAI instead of relying only on hardcoded model strings
+- **Apple Intelligence bridge for macOS** - Added a Swift helper path for native on-device summaries and image generation experiments on supported Macs, with GUI readiness/error states before use
 
 ## 📝 v0.2.7 Highlights
 - **Hardened Authentication Flow**: Re-engineered Electron auth handling to properly catch custom `comet-browser://` deep links using `did-fail-load` for robust auto-closing during Google/Firebase sign-in.

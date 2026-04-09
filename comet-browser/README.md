@@ -115,6 +115,7 @@ The AI sees **structured DOM data** for speed and reliability, with **OCR fallba
 Supports latest models via API or local inference:
 
 - OpenAI (GPT series)
+- Microsoft Azure OpenAI
 - Anthropic (Claude series)
 - Google (Gemini series)
 - Groq (ultra-fast inference)
@@ -123,6 +124,7 @@ Supports latest models via API or local inference:
 Hybrid routing:
 - ⚡ Groq → speed
 - 🧠 Ollama → privacy
+- 🏢 Azure OpenAI → Microsoft-managed cloud backend
 
 ---
 
@@ -423,6 +425,7 @@ Comet v0.2.4 introduces a comprehensive restructuring of command parsing with de
 ### 1. Prerequisites
 *   **Node.js** (v18+)
 *   **Ollama** (Optional, for Local AI: [Download](https://ollama.com))
+*   **Azure OpenAI** (Optional, for Microsoft-managed cloud AI: Azure API key + `https://YOUR-RESOURCE.openai.azure.com/openai/v1`)
 *   **NirCmd** (Optional, for Windows Volume Control: [Download](https://www.nirsoft.net/utils/nircmd.html))
 
 ### 2. Installation

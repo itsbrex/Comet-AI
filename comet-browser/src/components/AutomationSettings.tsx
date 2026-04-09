@@ -134,6 +134,7 @@ const AutomationSettings = () => {
       case 'google': defaultModel = store.geminiModel; break;
       case 'ollama': defaultModel = store.ollamaModel; break;
       case 'openai': defaultModel = store.openaiModel; break;
+      case 'azure-openai': defaultModel = store.azureOpenaiModel; break;
       case 'anthropic': defaultModel = store.anthropicModel; break;
       case 'groq': defaultModel = store.groqModel; break;
       case 'xai': defaultModel = store.xaiModel; break;
@@ -142,7 +143,7 @@ const AutomationSettings = () => {
     if (defaultModel && !editingTask) {
       setForm(f => ({ ...f, model: defaultModel }));
     }
-  }, [form.provider, showForm, editingTask, store.geminiModel, store.ollamaModel, store.openaiModel, store.anthropicModel, store.groqModel, store.xaiModel]);
+  }, [form.provider, showForm, editingTask, store.geminiModel, store.ollamaModel, store.openaiModel, store.azureOpenaiModel, store.anthropicModel, store.groqModel, store.xaiModel]);
 
   const showFeedback = (msg: string) => {
     setFeedback(msg);
@@ -221,6 +222,7 @@ const AutomationSettings = () => {
       provider: store.aiProvider || 'google',
       model: store.aiProvider === 'google' ? store.geminiModel :
              store.aiProvider === 'ollama' ? store.ollamaModel :
+             store.aiProvider === 'azure-openai' ? store.azureOpenaiModel :
              store.aiProvider === 'anthropic' ? store.anthropicModel :
              store.aiProvider === 'openai' ? store.openaiModel :
              store.aiProvider === 'groq' ? store.groqModel : '',
@@ -621,6 +623,7 @@ const AutomationSettings = () => {
                           <option value="ollama" className="bg-[#0a0a14]">Local Ollama</option>
                           <option value="anthropic" className="bg-[#0a0a14]">Anthropic</option>
                           <option value="openai" className="bg-[#0a0a14]">OpenAI</option>
+                          <option value="azure-openai" className="bg-[#0a0a14]">Microsoft Azure OpenAI</option>
                           <option value="groq" className="bg-[#0a0a14]">Groq</option>
                         </select>
                         <input

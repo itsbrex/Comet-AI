@@ -161,12 +161,18 @@ export default function Home() {
   const [settingsSection, setSettingsSection] = useState('profile');
 
   // Helper to open settings and disable browser
-  const openSettingsPanel = (section: string = 'profile') => {
-    if (isMacOS && useAppStore.getState().macNativeUtilityPanelMode === 'swiftui') {
+  const openSettingsPanel = (section: string = 'profile', options: { preferElectron?: boolean } = {}) => {
+    const preferElectron = options.preferElectron === true;
+    const canUseNativeUtilityPanel = section === 'profile' || section === 'downloads' || section === 'clipboard';
+
+    if (isMacOS && !preferElectron && canUseNativeUtilityPanel && useAppStore.getState().macNativeUtilityPanelMode === 'swiftui') {
       window.electronAPI?.showMacNativePanel?.(section === 'downloads' ? 'downloads' : section === 'clipboard' ? 'clipboard' : 'settings');
+      setShowSettings(false);
+      setIsBrowserDisabled(false);
       return;
     }
     setSettingsSection(section);
+    store.setSettingsSection(section);
     setShowSettings(true);
     setIsBrowserDisabled(true);
   };
@@ -706,6 +712,7 @@ export default function Home() {
       case 'google-flash': return getRecommendedGeminiModel('google-flash');
       case 'google': return store.geminiModel || getRecommendedGeminiModel('google');
       case 'openai': return store.openaiModel || 'gpt-4o';
+      case 'azure-openai': return store.azureOpenaiModel || 'gpt-4.1-mini';
       case 'anthropic': return store.anthropicModel || 'claude-3-5-sonnet-latest';
       case 'xai': return store.xaiModel || 'grok-2-latest';
       case 'groq': return store.groqModel || 'llama-3.3-70b-versatile';
@@ -714,6 +721,7 @@ export default function Home() {
     }
   }, [
     store.anthropicModel,
+    store.azureOpenaiModel,
     store.geminiModel,
     store.groqModel,
     store.openaiModel,
@@ -1064,16 +1072,12 @@ export default function Home() {
             }
             break;
           case 'open-settings':
-            if (isMacOS && useAppStore.getState().macNativeUtilityPanelMode === 'swiftui') {
-              window.electronAPI.showMacNativePanel?.('settings');
-            } else {
-              setShowSettings(true);
-            }
+            openSettingsPanel('profile');
             break;
           case 'new-incognito-tab': store.addIncognitoTab(); break;
           case 'toggle-spotlight': setShowSpotlightSearch(prev => !prev); break;
           case 'cycle-theme': cycleTheme(); break;
-          case 'open-history': openSettingsPanel('history'); break;
+          case 'open-history': openSettingsPanel('history', { preferElectron: true }); break;
           case 'clear-history': store.clearHistory(); break;
           case 'open-downloads':
             if (isMacOS && useAppStore.getState().macNativeUtilityPanelMode === 'swiftui') {
@@ -1082,8 +1086,8 @@ export default function Home() {
               setShowDownloads(true);
             }
             break;
-          case 'open-extensions': openSettingsPanel('extensions'); break;
-          case 'open-bookmarks': openSettingsPanel('vault'); break;
+          case 'open-extensions': openSettingsPanel('extensions', { preferElectron: true }); break;
+          case 'open-bookmarks': openSettingsPanel('vault', { preferElectron: true }); break;
           case 'open-workspace': store.setActiveView('workspace'); break;
           case 'open-webstore': store.setActiveView('webstore'); break;
           case 'open-ai-chat':
@@ -1119,8 +1123,7 @@ export default function Home() {
       });
 
       const cleanupSettings = window.electronAPI.on('set-settings-section', (section: string) => {
-        store.setSettingsSection(section);
-        setShowSettings(true);
+        openSettingsPanel(section, { preferElectron: true });
       });
 
       return () => {

@@ -736,14 +736,16 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   }, []);
 
   const isAiSetup = useCallback(() => {
+    if (aiProvider === 'copilot') return true;
     if (aiProvider === 'ollama' && ollamaBaseUrl) return true;
     if (aiProvider === 'gemini' && geminiApiKey) return true;
     if (aiProvider === 'google' && geminiApiKey) return true;
     if (aiProvider === 'openai' && openaiApiKey) return true;
+    if (aiProvider === 'azure-openai' && store.azureOpenaiApiKey && store.azureOpenaiEndpoint) return true;
     if (aiProvider === 'anthropic' && anthropicApiKey) return true;
     if (aiProvider === 'groq' && groqApiKey) return true;
     return false;
-  }, [aiProvider, ollamaBaseUrl, geminiApiKey, openaiApiKey, anthropicApiKey, groqApiKey]);
+  }, [aiProvider, ollamaBaseUrl, geminiApiKey, openaiApiKey, anthropicApiKey, groqApiKey, store.azureOpenaiApiKey, store.azureOpenaiEndpoint]);
 
   // Scheduling handler
   const handleSchedulingConfirm = useCallback(async (config: any) => {
@@ -850,10 +852,13 @@ I couldn't schedule the task. The background service may not be running. Please 
     {
       model: normalizedProvider === 'ollama' ? (ollamaModel || 'llama3')
         : normalizedProvider === 'google' ? (geminiModel || 'gemini-2.0-flash')
+          : normalizedProvider === 'azure-openai' ? (store.azureOpenaiModel || 'gpt-4.1-mini')
           : undefined,
-      baseUrl: normalizedProvider === 'ollama' ? ollamaBaseUrl : undefined,
+      baseUrl: normalizedProvider === 'ollama'
+        ? ollamaBaseUrl
+        : normalizedProvider === 'azure-openai' ? store.azureOpenaiEndpoint : undefined,
     }
-  ), [localLlmMode, normalizedProvider, ollamaModel, ollamaBaseUrl, geminiModel]);
+  ), [localLlmMode, normalizedProvider, ollamaModel, ollamaBaseUrl, geminiModel, store.azureOpenaiEndpoint, store.azureOpenaiModel]);
 
   const getStreamingResponse = useCallback(async (history: ChatMessage[], messageId?: string): Promise<any> => {
     return new Promise((resolve) => {
@@ -912,6 +917,30 @@ I couldn't schedule the task. The background service may not be running. Please 
   const handleSendMessage = useCallback(async (customContent?: string) => {
     const rawContent = (customContent ?? inputMessage).trim();
     if (!rawContent && attachments.length === 0) return;
+
+    if (aiProvider === 'copilot') {
+      setMessages(prev => [
+        ...prev,
+        { id: createMessageId('user'), role: 'user', content: rawContent },
+        {
+          id: createMessageId('model'),
+          role: 'model',
+          content: `Microsoft Copilot companion mode is selected.\n\nI can open the official Copilot path for you, but Comet's in-sidebar chat is not wired directly to Copilot yet. To chat inside Comet, switch to Ollama, Gemini, OpenAI, Anthropic, or Groq in provider settings.`
+        } as ExtendedChatMessage
+      ]);
+
+      if (!customContent) {
+        setInputMessage('');
+        setAttachments([]);
+      }
+
+      try {
+        await window.electronAPI?.openExternalUrl?.('https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app');
+      } catch (error) {
+        console.warn('[AI Sidebar] Failed to open Copilot companion link:', error);
+      }
+      return;
+    }
 
     // Show setup guide if AI is not configured. After first show, don't block—
     if (!isAiSetup()) {
@@ -3902,6 +3931,7 @@ I've successfully executed the following real tasks:
   const currentActiveModel = aiProvider === 'ollama' ? ollamaModel :
     aiProvider === 'gemini' ? geminiModel :
       aiProvider === 'openai' ? store.openaiModel :
+        aiProvider === 'azure-openai' ? store.azureOpenaiModel :
         aiProvider === 'anthropic' ? store.anthropicModel :
           aiProvider === 'groq' ? store.groqModel : aiProvider;
 

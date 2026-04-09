@@ -82,15 +82,22 @@ class FlutterBridgeServer {
       case 'ocr:click': {
         if (!this.ocr) throw new Error('OCR service not available');
         ws.send(JSON.stringify({ type: 'ocr:status', status: 'scanning' }));
-        const words = await this.ocr.captureAndOcr();
-        ws.send(JSON.stringify({ type: 'ocr:result', words: words.slice(0, 50) }));
+        const recognition = await this.ocr.captureAndOcr();
+        ws.send(JSON.stringify({
+          type: 'ocr:result',
+          provider: recognition.provider,
+          words: (recognition.words || []).slice(0, 50),
+          lines: (recognition.lines || []).slice(0, 25),
+        }));
         break;
       }
 
       case 'screen:describe': {
         if (!this.ocr || !this.ai) throw new Error('OCR/AI not available');
-        const words = await this.ocr.captureAndOcr();
-        const context = words.map(w => w.text).join(' ');
+        const recognition = await this.ocr.captureAndOcr();
+        const context = (recognition.lines?.length ? recognition.lines : recognition.words || [])
+          .map((item) => item.text)
+          .join(' ');
         const description = await this.ai.chat({
           model: 'gemini-2.5-flash-preview',
           message: `Describe what's on this screen briefly in 1-2 sentences: ${context.slice(0, 2000)}`,

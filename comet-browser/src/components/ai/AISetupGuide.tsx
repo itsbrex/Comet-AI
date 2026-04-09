@@ -56,6 +56,7 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
     theme,
     setTheme,
     aiProvider,
+    setAIProvider,
     openaiApiKey,
     geminiApiKey,
     anthropicApiKey,
@@ -82,6 +83,7 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
 
   const isAiConfigured = useMemo(() => {
     // Check if the SPECIFICALLY SELECTED provider is actually configured
+    if (aiProvider === 'copilot') return true;
     if (aiProvider === 'ollama') return !!ollamaBaseUrl;
     if (aiProvider === 'openai') return !!openaiApiKey && openaiApiKey.length > 5;
     if (aiProvider === 'google' || aiProvider === 'gemini') return !!geminiApiKey && geminiApiKey.length > 5;
@@ -314,6 +316,13 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAIProvider('copilot')}
+                      className="px-4 py-2 rounded-xl bg-sky-400/15 border border-sky-400/20 text-[10px] font-black uppercase tracking-[0.2em] text-sky-100 transition-all hover:bg-sky-400/25"
+                    >
+                      Select Copilot
+                    </button>
                     <button
                       type="button"
                       onClick={() => openExternal('https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app')}

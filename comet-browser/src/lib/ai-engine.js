@@ -42,11 +42,13 @@ class CometAiEngine {
   constructor() {
     this.keys = {};
     this.ollamaBaseUrl = 'http://127.0.0.1:11434';
+    this.azureOpenaiBaseUrl = '';
   }
 
   configure(keys) {
     this.keys = { ...this.keys, ...keys };
     if (keys.OLLAMA_BASE_URL) this.ollamaBaseUrl = keys.OLLAMA_BASE_URL;
+    if (keys.AZURE_OPENAI_BASE_URL) this.azureOpenaiBaseUrl = keys.AZURE_OPENAI_BASE_URL;
   }
 
   _getKey(name) {
@@ -84,15 +86,16 @@ class CometAiEngine {
     return 'ollama';
   }
 
-  async chat({ message, model, systemPrompt, history, onChunk }) {
-    const provider = this._inferProvider(model);
-    console.log(`[AiEngine] Chat → model="${model || 'default'}" → provider="${provider}"`);
+  async chat({ message, model, systemPrompt, history, onChunk, provider }) {
+    const resolvedProvider = provider || this._inferProvider(model);
+    console.log(`[AiEngine] Chat → model="${model || 'default'}" → provider="${resolvedProvider}"`);
 
-    switch (provider) {
+    switch (resolvedProvider) {
       case 'ollama':    return this._chatOllama({ message, model, systemPrompt, history, onChunk });
       case 'gemini':    return this._chatGemini({ message, model, systemPrompt, history, onChunk });
       case 'groq':      return this._chatGroq({ message, model, systemPrompt, history, onChunk });
       case 'openai':    return this._chatOpenAI({ message, model, systemPrompt, history, onChunk });
+      case 'azure-openai': return this._chatAzureOpenAI({ message, model, systemPrompt, history, onChunk });
       case 'anthropic': return this._chatAnthropic({ message, model, systemPrompt, history, onChunk });
       default:          return this._chatOllama({ message, model, systemPrompt, history, onChunk });
     }
@@ -311,6 +314,57 @@ class CometAiEngine {
     if (!res.ok) {
       const err = await res.text();
       throw new Error(`OpenAI API error ${res.status}: ${err}`);
+    }
+
+    if (onChunk) {
+      for await (const line of streamToLines(res.body)) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.substring(6).trim();
+        if (jsonStr === '[DONE]') break;
+        try {
+          const json = JSON.parse(jsonStr);
+          const content = json.choices?.[0]?.delta?.content;
+          if (content) onChunk(content);
+        } catch (e) {}
+      }
+      return '';
+    } else {
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || '';
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Azure OpenAI (OpenAI-compatible v1 endpoint)
+  // -------------------------------------------------------------------------
+  async _chatAzureOpenAI({ message, model, systemPrompt, history, onChunk }) {
+    const apiKey = this._getKey('AZURE_OPENAI_API_KEY');
+    const baseUrl = this.azureOpenaiBaseUrl || this._getKey('AZURE_OPENAI_BASE_URL');
+    if (!apiKey) throw new Error('AZURE_OPENAI_API_KEY not configured');
+    if (!baseUrl) throw new Error('AZURE_OPENAI_BASE_URL not configured');
+
+    const messages = [];
+    if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+    for (const h of (history || [])) messages.push(h);
+    messages.push({ role: 'user', content: message });
+
+    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': apiKey,
+      },
+      body: JSON.stringify({
+        model: model || 'gpt-4.1-mini',
+        messages,
+        max_tokens: 8192,
+        stream: !!onChunk,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Azure OpenAI API error ${res.status}: ${err}`);
     }
 
     if (onChunk) {

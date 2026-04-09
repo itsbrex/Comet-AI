@@ -5,12 +5,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     X, MousePointer, Sparkles, Send, Loader2, Eye, Zap, Target
 } from 'lucide-react';
-import Tesseract from 'tesseract.js';
 
 interface OCRResult {
     text: string;
     bbox: { x0: number; y0: number; x1: number; y1: number };
     confidence: number;
+    centerX?: number;
+    centerY?: number;
+    role?: string;
 }
 
 interface CrossAppOCRProps {
@@ -27,6 +29,7 @@ const CrossAppOCR: React.FC<CrossAppOCRProps> = ({ isActive, onClose }) => {
     const [isAIThinking, setIsAIThinking] = useState(false);
     const [hoveredElement, setHoveredElement] = useState<OCRResult | null>(null);
     const [clickHistory, setClickHistory] = useState<string[]>([]);
+    const [ocrProvider, setOcrProvider] = useState<string>('loading');
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     useEffect(() => {
@@ -49,35 +52,38 @@ const CrossAppOCR: React.FC<CrossAppOCRProps> = ({ isActive, onClose }) => {
 
                 if (result.success && result.image) {
                     setScreenshot(result.image);
-                    await performOCR(result.image);
+                    await performOCR();
                 }
             }
         } catch (error) {
             console.error('Screen capture error:', error);
+            setAiResponse('Failed to capture screen for cross-app OCR.');
         } finally {
             setIsProcessing(false);
         }
     };
 
-    const performOCR = async (imageData: string) => {
+    const performOCR = async () => {
         setIsProcessing(true);
 
         try {
-            const { data } = await Tesseract.recognize(imageData, 'eng', {
-                logger: (m: any) => console.log(m)
-            });
+            if (!window.electronAPI?.ocrCaptureWords) {
+                setAiResponse('Native OCR API is not available in this build.');
+                return;
+            }
 
-            const results: OCRResult[] = ((data as any).words || [])
-                .filter((word: any) => word.confidence > 60)
-                .map((word: any) => ({
-                    text: word.text,
-                    bbox: word.bbox,
-                    confidence: word.confidence
-                }));
+            const result = await window.electronAPI.ocrCaptureWords();
+            if (!result.success) {
+                setAiResponse(result.error || 'Native OCR failed.');
+                return;
+            }
 
+            setOcrProvider(result.provider || 'unknown');
+            const results = (result.lines?.length ? result.lines : result.words || []) as OCRResult[];
             setOcrResults(results);
         } catch (error) {
             console.error('OCR error:', error);
+            setAiResponse('Error analyzing the screen.');
         } finally {
             setIsProcessing(false);
         }
@@ -95,24 +101,21 @@ const CrossAppOCR: React.FC<CrossAppOCRProps> = ({ isActive, onClose }) => {
 
             if (clickMatch) {
                 const targetText = clickMatch[1].toLowerCase();
+                const result = await window.electronAPI.ocrClick(targetText, true);
 
-                // Find matching OCR result
-                const match = ocrResults.find(result =>
-                    result.text.toLowerCase().includes(targetText) ||
-                    targetText.includes(result.text.toLowerCase())
-                );
+                if (result.success) {
+                    setAiResponse(`Clicked "${result.clickedText || targetText}" using ${result.method || 'native OCR'}.`);
+                    setClickHistory(prev => [...prev, `Clicked: ${result.clickedText || targetText}`]);
 
-                if (match) {
-                    await performClick(match);
-                    setAiResponse(`✅ Clicked on "${match.text}" at position (${Math.round(match.bbox.x0)}, ${Math.round(match.bbox.y0)})`);
-                    setClickHistory(prev => [...prev, `Clicked: ${match.text}`]);
+                    if (typeof result.x === 'number' && typeof result.y === 'number') {
+                        drawClickIndicator(result.x, result.y);
+                    }
                 } else {
-                    setAiResponse(`❌ Could not find "${targetText}" on screen. Available elements: ${ocrResults.slice(0, 5).map(r => r.text).join(', ')}...`);
+                    setAiResponse(result.error || `Could not find "${targetText}" on screen.`);
                 }
             } else {
                 // General AI query about screen content
-                const screenContent = ocrResults.map(r => r.text).join(' ');
-                setAiResponse(`📋 Screen contains: ${ocrResults.length} text elements. Top elements: ${ocrResults.slice(0, 10).map(r => r.text).join(', ')}...`);
+                setAiResponse(`Screen contains ${ocrResults.length} visible text targets via ${ocrProvider}. Top items: ${ocrResults.slice(0, 10).map(r => r.text).join(', ')}.`);
             }
         } catch (error) {
             console.error('AI query error:', error);
@@ -125,8 +128,8 @@ const CrossAppOCR: React.FC<CrossAppOCRProps> = ({ isActive, onClose }) => {
     const performClick = async (element: OCRResult) => {
         if (!window.electronAPI) return;
 
-        const centerX = (element.bbox.x0 + element.bbox.x1) / 2;
-        const centerY = (element.bbox.y0 + element.bbox.y1) / 2;
+        const centerX = element.centerX ?? (element.bbox.x0 + element.bbox.x1) / 2;
+        const centerY = element.centerY ?? (element.bbox.y0 + element.bbox.y1) / 2;
 
         try {
             await window.electronAPI.performCrossAppClick({
@@ -258,7 +261,7 @@ const CrossAppOCR: React.FC<CrossAppOCRProps> = ({ isActive, onClose }) => {
                                 <div>
                                     <h3 className="text-white font-semibold">Cross-App Control</h3>
                                     <p className="text-white/60 text-xs">
-                                        {ocrResults.length} clickable elements detected
+                                        {ocrResults.length} targets detected via {ocrProvider}
                                     </p>
                                 </div>
                             </div>

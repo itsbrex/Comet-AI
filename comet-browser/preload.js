@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // BrowserView related APIs
   getIsOnline: () => ipcRenderer.invoke('get-is-online'),
   getPlatform: () => ipcRenderer.invoke('get-platform'), // Use IPC for consistency
+  getAppleIntelligenceStatus: () => ipcRenderer.invoke('apple-intelligence-status'),
+  summarizeWithAppleIntelligence: (text) => ipcRenderer.invoke('apple-intelligence-summary', text),
+  generateAppleIntelligenceImage: (payload) => ipcRenderer.invoke('apple-intelligence-generate-image', payload),
   onAddNewTab: (callback) => {
     const subscription = (event, url) => callback(url);
     ipcRenderer.on('add-new-tab', subscription);
@@ -107,6 +110,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // LLM & Memory APIs
   getAvailableLLMProviders: () => ipcRenderer.invoke('llm-get-available-providers'),
+  getProviderModels: (providerId, options) => ipcRenderer.invoke('llm-get-provider-models', providerId, options),
   setActiveLLMProvider: (providerId) => ipcRenderer.invoke('llm-set-active-provider', providerId),
   configureLLMProvider: (providerId, options) => ipcRenderer.invoke('llm-configure-provider', providerId, options),
   getStoredApiKeys: () => ipcRenderer.invoke('get-stored-api-keys'),

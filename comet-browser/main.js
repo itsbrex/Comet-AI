@@ -197,10 +197,22 @@ const { RagService } = require('./src/lib/rag-service.js');
 const { VoiceService } = require('./src/lib/voice-service.js');
 const { WorkflowRecorder } = require('./src/lib/workflow-recorder.js');
 const { PopSearchService, popSearchService } = require('./src/lib/pop-search-service.js');
-const { getRecommendedGeminiModel } = require('./src/lib/modelRegistry.js');
 const { WebSearchProvider } = require('./src/lib/web-search-service.js');
 const { MacNativePanelManager } = require('./src/lib/macos-native-panels.js');
 const { PluginManager, pluginManager } = require('./src/lib/plugin-manager.js');
+const {
+  generateAppleIntelligenceImage,
+  getAppleIntelligenceStatus,
+  summarizeWithAppleIntelligence,
+} = require('./src/lib/apple-intelligence.js');
+const {
+  CATALOG_TTL_MS,
+  fetchProviderModelCatalog,
+  getProviderApiKeyStoreKey,
+  getProviderFallbackModel,
+  getProviderLabel,
+  getProviderModelStoreKey,
+} = require('./src/lib/provider-model-discovery.js');
 const webSearchProvider = new WebSearchProvider();
 
 // Core modules - Architecture refactoring (extracted from main.js)
@@ -215,6 +227,18 @@ ipcMain.handle('get-app-version', () => {
 
 ipcMain.handle('get-platform', () => {
    return process.platform;
+});
+
+ipcMain.handle('apple-intelligence-status', async () => {
+  return getAppleIntelligenceStatus();
+});
+
+ipcMain.handle('apple-intelligence-summary', async (event, text) => {
+  return summarizeWithAppleIntelligence(text);
+});
+
+ipcMain.handle('apple-intelligence-generate-image', async (event, { prompt, outputPath } = {}) => {
+  return generateAppleIntelligenceImage(prompt, outputPath);
 });
 
 ipcMain.handle('get-app-icon', async (event, appPath) => {
@@ -530,6 +554,8 @@ const normalizeSettingsSection = (section = 'profile') => {
     case 'layout':
     case 'appearance':
       return 'appearance';
+    case 'performance':
+      return 'performance';
     case 'automation':
       return 'automation';
     case 'privacy':
@@ -539,8 +565,24 @@ const normalizeSettingsSection = (section = 'profile') => {
     case 'sync':
     case 'mobile':
       return 'sync';
+    case 'vault':
+      return 'vault';
     case 'extensions':
       return 'extensions';
+    case 'plugins':
+      return 'plugins';
+    case 'integrations':
+      return 'integrations';
+    case 'tabs':
+      return 'tabs';
+    case 'mcp':
+      return 'mcp';
+    case 'ambient-music':
+      return 'ambient-music';
+    case 'languages':
+      return 'languages';
+    case 'about':
+      return 'about';
     case 'search':
     case 'shortcuts':
     case 'system':
@@ -548,7 +590,7 @@ const normalizeSettingsSection = (section = 'profile') => {
     case 'updates':
     case 'history':
     case 'profile':
-      return section;
+      return `${section}`;
     case 'downloads':
       return 'downloads';
     case 'clipboard':
@@ -573,12 +615,13 @@ const openSettingsSection = (section, options = {}) => {
       return;
     }
 
-    if (nativePrefs.utilityMode === 'swiftui') {
+    const canUseNativeUtilityPanel = normalizedSection === 'profile' || normalizedSection === 'downloads' || normalizedSection === 'clipboard';
+    if (nativePrefs.utilityMode === 'swiftui' && canUseNativeUtilityPanel) {
       const panelMode = normalizedSection === 'downloads'
-      ? 'downloads'
-      : normalizedSection === 'clipboard'
-        ? 'clipboard'
-        : 'settings';
+        ? 'downloads'
+        : normalizedSection === 'clipboard'
+          ? 'clipboard'
+          : 'settings';
       nativeMacPanelManager.show(panelMode, { relaunchIfRunning: true }).catch((error) => {
         console.error('[MacNativeUI] Failed to open native utility panel:', error);
       });
@@ -618,6 +661,20 @@ const triggerShortcut = (action) => {
   console.log('[triggerShortcut] No window for:', action);
 };
 
+const getShortcutMap = () => {
+  const shortcuts = store.get('shortcuts') || [];
+  return new Map(
+    shortcuts
+      .filter((shortcut) => shortcut && shortcut.action && typeof shortcut.accelerator === 'string')
+      .map((shortcut) => [shortcut.action, shortcut.accelerator])
+  );
+};
+
+const menuAccelerator = (action, fallback) => {
+  const shortcut = getShortcutMap().get(action);
+  return shortcut && shortcut.trim() ? shortcut : fallback;
+};
+
 const openGuide = () => {
   const candidates = [
     path.join(process.resourcesPath || __dirname, 'Guide.html'),
@@ -632,6 +689,12 @@ const openGuide = () => {
   } else {
     sendToActiveWindow('add-new-tab', 'https://www.comet.ai/guide');
   }
+};
+
+const openDocumentationPage = (slug = '') => {
+  const baseUrl = 'https://browser.ponsrischool.in';
+  const url = slug ? `${baseUrl}${slug}` : baseUrl;
+  sendToActiveWindow('add-new-tab', url);
 };
 
 const registerWindow = (win) => {
@@ -734,13 +797,13 @@ const buildApplicationMenu = () => {
       label: 'File',
       submenu: [
         { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: () => createWindow() },
-        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => triggerShortcut('new-tab') },
-        { label: 'New Incognito Tab', accelerator: 'CmdOrCtrl+Shift+N', click: () => triggerShortcut('new-incognito-tab') },
+        { label: 'New Tab', accelerator: menuAccelerator('new-tab', 'CmdOrCtrl+T'), click: () => triggerShortcut('new-tab') },
+        { label: 'New Incognito Tab', accelerator: menuAccelerator('new-incognito-tab', 'CmdOrCtrl+Shift+N'), click: () => triggerShortcut('new-incognito-tab') },
         { type: 'separator' },
         { label: 'Save Page As...', accelerator: 'CmdOrCtrl+S', click: () => sendToActiveWindow('save-page-offline') },
         { label: 'Print...', accelerator: 'CmdOrCtrl+P', click: () => sendToActiveWindow('print-page') },
         { type: 'separator' },
-        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => triggerShortcut('close-tab') },
+        { label: 'Close Tab', accelerator: menuAccelerator('close-tab', 'CmdOrCtrl+W'), click: () => triggerShortcut('close-tab') },
         { label: 'Close Window', role: 'close' },
         ...(!isMac ? [{ type: 'separator' }, { role: 'quit' }] : [])
       ]
@@ -780,10 +843,10 @@ const buildApplicationMenu = () => {
         { type: 'separator' },
         { role: 'togglefullscreen' },
         { type: 'separator' },
-        { label: 'Toggle Comet Sidebar', accelerator: 'CmdOrCtrl+Shift+S', click: () => triggerShortcut('toggle-sidebar') },
+        { label: 'Toggle Comet Sidebar', accelerator: menuAccelerator('toggle-sidebar', 'CmdOrCtrl+Shift+S'), click: () => triggerShortcut('toggle-sidebar') },
         {
-          label: 'Cycle theme',
-          accelerator: 'CmdOrCtrl+Shift+T',
+          label: 'Cycle Theme',
+          accelerator: menuAccelerator('cycle-theme', 'CmdOrCtrl+Shift+T'),
           click: () => triggerShortcut('cycle-theme')
         }
       ]
@@ -791,7 +854,7 @@ const buildApplicationMenu = () => {
     {
       label: 'History',
       submenu: [
-        { label: 'Show Full History', accelerator: 'CmdOrCtrl+Y', click: () => triggerShortcut('open-history') },
+        { label: 'Show Full History', accelerator: menuAccelerator('open-history', 'CmdOrCtrl+Y'), click: () => openSettingsSection('history', { preferElectron: true }) },
         { type: 'separator' },
         { label: 'Recently Closed', role: 'recentDocuments' },
         { type: 'separator' },
@@ -799,11 +862,11 @@ const buildApplicationMenu = () => {
       ]
     },
     {
-      label: 'AI Hub',
+      label: 'AI',
       submenu: [
-        { label: 'AI Chat Sidebar', accelerator: 'CmdOrCtrl+Option+C', click: () => triggerShortcut('open-ai-chat') },
-        { label: 'Toggle AI Assistant', accelerator: 'CmdOrCtrl+Option+A', click: () => triggerShortcut('toggle-ai-assist') },
-        { label: 'Show AI Overview', accelerator: 'CmdOrCtrl+Option+O', click: () => triggerShortcut('toggle-ai-overview') },
+        { label: 'AI Chat Sidebar', accelerator: menuAccelerator('open-ai-chat', 'CmdOrCtrl+Option+C'), click: () => triggerShortcut('open-ai-chat') },
+        { label: 'Toggle AI Assistant', accelerator: menuAccelerator('toggle-ai-assist', 'CmdOrCtrl+Option+A'), click: () => triggerShortcut('toggle-ai-assist') },
+        { label: 'Show AI Overview', accelerator: menuAccelerator('toggle-ai-overview', 'CmdOrCtrl+Option+O'), click: () => triggerShortcut('toggle-ai-overview') },
         { type: 'separator' },
         ...(isMac ? [
           {
@@ -851,56 +914,63 @@ const buildApplicationMenu = () => {
           },
           { type: 'separator' },
         ] : []),
-        { label: 'Spotlight Search', accelerator: 'CmdOrCtrl+Space', click: () => triggerShortcut('toggle-spotlight') },
+        { label: 'Spotlight Search', accelerator: menuAccelerator('toggle-spotlight', 'CmdOrCtrl+Shift+Space'), click: () => triggerShortcut('toggle-spotlight') },
+        { label: 'Global Search', accelerator: menuAccelerator('spotlight-search', 'Alt+Space'), click: () => triggerShortcut('spotlight-search') },
+        { label: 'Pop Search', accelerator: menuAccelerator('pop-search', 'CmdOrCtrl+Alt+S'), click: () => triggerShortcut('pop-search') },
         { label: 'Agent Task Input', accelerator: 'CmdOrCtrl+Option+Space', click: () => sendToActiveWindow('focus-ai-input') },
         { type: 'separator' },
-        { label: 'Scheduling Center', click: () => openSettingsSection('automation') },
-        { label: 'Model Intelligence', click: () => openSettingsSection('performance') }
+        { label: 'Scheduling Center', click: () => openSettingsSection('automation', { preferElectron: true }) },
+        { label: 'Model Intelligence', click: () => openSettingsSection('performance', { preferElectron: true }) },
+        { label: 'Provider Settings', click: () => openSettingsSection('api-keys', { preferElectron: true }) }
       ]
     },
     {
-      label: 'Workspace',
+      label: 'Panels',
       submenu: [
-        { label: 'Workspace Dashboard', accelerator: 'CmdOrCtrl+Option+W', click: () => triggerShortcut('open-workspace') },
-        { label: 'Media Studio', accelerator: 'CmdOrCtrl+Option+M', click: () => triggerShortcut('open-media-studio') },
-        { label: 'PDF Workspace', accelerator: 'CmdOrCtrl+Option+P', click: () => triggerShortcut('open-pdf-workspace') },
-        { label: 'Presenton', accelerator: 'CmdOrCtrl+Option+L', click: () => triggerShortcut('open-presenton') },
+        { label: 'Workspace Dashboard', accelerator: menuAccelerator('open-workspace', 'CmdOrCtrl+Option+W'), click: () => triggerShortcut('open-workspace') },
+        { label: 'Media Studio', accelerator: menuAccelerator('open-media-studio', 'CmdOrCtrl+Option+M'), click: () => triggerShortcut('open-media-studio') },
+        { label: 'PDF Workspace', accelerator: menuAccelerator('open-pdf-workspace', 'CmdOrCtrl+Option+P'), click: () => triggerShortcut('open-pdf-workspace') },
+        { label: 'Presenton', accelerator: menuAccelerator('open-presenton', 'CmdOrCtrl+Option+L'), click: () => triggerShortcut('open-presenton') },
         { type: 'separator' },
+        { label: 'Downloads', accelerator: menuAccelerator('open-downloads', 'CmdOrCtrl+Shift+J'), click: () => triggerShortcut('open-downloads') },
+        { label: 'Clipboard Manager', accelerator: menuAccelerator('open-clipboard', 'CmdOrCtrl+Option+V'), click: () => triggerShortcut('open-clipboard') },
+        { label: 'Unified Cart', accelerator: menuAccelerator('open-cart', 'CmdOrCtrl+Option+U'), click: () => triggerShortcut('open-cart') },
+        { label: 'Camera Studio', accelerator: menuAccelerator('open-camera', 'CmdOrCtrl+Option+I'), click: () => triggerShortcut('open-camera') },
+        { type: 'separator' },
+        { label: 'Password Manager', accelerator: menuAccelerator('open-password-manager', 'CmdOrCtrl+Option+K'), click: () => triggerShortcut('open-password-manager') },
+        { label: 'Vault & Autofill', accelerator: menuAccelerator('open-bookmarks', 'CmdOrCtrl+Option+B'), click: () => triggerShortcut('open-bookmarks') },
+        { label: 'Extensions Manager', accelerator: menuAccelerator('open-extensions', 'CmdOrCtrl+Option+E'), click: () => triggerShortcut('open-extensions') },
         { label: 'Web Store', click: () => triggerShortcut('open-webstore') },
-        { label: 'Extensions manager', click: () => triggerShortcut('open-extensions') },
-        { type: 'separator' },
-        { label: 'Unified Cart', accelerator: 'CmdOrCtrl+Option+U', click: () => triggerShortcut('open-cart') }
-      ]
-    },
-    {
-      label: 'Tools',
-      submenu: [
-        { label: 'Password Manager', accelerator: 'CmdOrCtrl+Option+K', click: () => triggerShortcut('open-password-manager') },
-        { label: 'Clipboard Manager', accelerator: 'CmdOrCtrl+Option+V', click: () => triggerShortcut('open-clipboard') },
-        { label: 'Vault & Autofill', click: () => triggerShortcut('open-bookmarks') },
         { type: 'separator' },
         { label: 'P2P File Sync', click: () => triggerShortcut('open-p2p-sync') },
         { label: 'Proxy Firewall', click: () => triggerShortcut('open-proxy-firewall') },
-        { label: 'Coding Dashboard', click: () => triggerShortcut('open-coding-dashboard') },
-        { type: 'separator' },
-        { label: 'Downloads', accelerator: 'CmdOrCtrl+Shift+J', click: () => triggerShortcut('open-downloads') },
-        { label: 'Camera Studio', click: () => triggerShortcut('open-camera') }
+        { label: 'Coding Dashboard', click: () => triggerShortcut('open-coding-dashboard') }
       ]
     },
     {
       label: 'Settings',
       submenu: [
-        { label: 'General Preferences', accelerator: 'CmdOrCtrl+,', click: () => openSettingsSection('profile') },
-        { label: 'Appearance & Themes', click: () => openSettingsSection('appearance') },
-        { label: 'Search Engine', click: () => openSettingsSection('search') },
+        { label: 'General Preferences', accelerator: menuAccelerator('open-settings', 'CmdOrCtrl+,'), click: () => openSettingsSection('profile') },
+        { label: 'Appearance & Themes', click: () => openSettingsSection('appearance', { preferElectron: true }) },
+        { label: 'Performance', click: () => openSettingsSection('performance', { preferElectron: true }) },
+        { label: 'Search Engine', click: () => openSettingsSection('search', { preferElectron: true }) },
+        { label: 'API Keys & Providers', click: () => openSettingsSection('api-keys', { preferElectron: true }) },
         { type: 'separator' },
-        { label: 'Privacy & Security', click: () => openSettingsSection('privacy') },
+        { label: 'Privacy & Security', click: () => openSettingsSection('privacy', { preferElectron: true }) },
         { label: 'macOS Permissions', click: () => openSettingsSection('permissions') },
-        { label: 'Keyboard Shortcuts', click: () => openSettingsSection('shortcuts') },
+        { label: 'Keyboard Shortcuts', click: () => openSettingsSection('shortcuts', { preferElectron: true }) },
+        { label: 'History', click: () => openSettingsSection('history', { preferElectron: true }) },
         { type: 'separator' },
-        { label: 'System Configuration', click: () => openSettingsSection('system') },
-        { label: 'Sync & Cloud', click: () => openSettingsSection('sync') },
-        { label: 'Advanced Logs', click: () => openSettingsSection('admin') }
+        { label: 'Automation', click: () => openSettingsSection('automation', { preferElectron: true }) },
+        { label: 'Sync & Cloud', click: () => openSettingsSection('sync', { preferElectron: true }) },
+        { label: 'Extensions', click: () => openSettingsSection('extensions', { preferElectron: true }) },
+        { label: 'Plugins', click: () => openSettingsSection('plugins', { preferElectron: true }) },
+        { label: 'MCP Servers', click: () => openSettingsSection('mcp', { preferElectron: true }) },
+        { label: 'System Configuration', click: () => openSettingsSection('system', { preferElectron: true }) },
+        { label: 'Advanced Logs', click: () => openSettingsSection('admin', { preferElectron: true }) },
+        { type: 'separator' },
+        { label: 'About Comet', click: () => openSettingsSection('about', { preferElectron: true }) },
+        { label: 'Updates', click: () => openSettingsSection('updates', { preferElectron: true }) }
       ]
     },
     {
@@ -910,8 +980,8 @@ const buildApplicationMenu = () => {
         { role: 'minimize' },
         { role: 'zoom' },
         { type: 'separator' },
-        { label: 'Cycle Next Tab', accelerator: 'Ctrl+Tab', click: () => triggerShortcut('next-tab') },
-        { label: 'Cycle Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: () => triggerShortcut('prev-tab') },
+        { label: 'Cycle Next Tab', accelerator: menuAccelerator('next-tab', 'CmdOrCtrl+]'), click: () => triggerShortcut('next-tab') },
+        { label: 'Cycle Previous Tab', accelerator: menuAccelerator('prev-tab', 'CmdOrCtrl+['), click: () => triggerShortcut('prev-tab') },
         { type: 'separator' },
         { role: 'front' }
       ]
@@ -920,11 +990,19 @@ const buildApplicationMenu = () => {
       label: 'Help',
       role: 'help',
       submenu: [
-        { label: 'Documentation', click: () => triggerShortcut('open-documentation') },
-        { label: 'Interactive Guide', accelerator: 'CmdOrCtrl+Shift+/', click: () => openGuide() },
+        { label: 'Documentation Home', accelerator: menuAccelerator('open-documentation', 'CmdOrCtrl+Shift+/'), click: () => openDocumentationPage() },
+        { label: 'AI Commands', click: () => openDocumentationPage('/docs/ai-commands') },
+        { label: 'Automation Guide', click: () => openDocumentationPage('/docs/automation') },
+        { label: 'Native API Reference', click: () => openDocumentationPage('/docs/native-api') },
+        { label: 'Plugins & SDK', click: () => openDocumentationPage('/docs/plugins') },
+        { label: 'Component Docs', click: () => openDocumentationPage('/docs/components') },
+        { type: 'separator' },
+        { label: 'Interactive Guide', click: () => openGuide() },
+        { label: 'Shortcut & Menu Guide', click: () => openSettingsSection('shortcuts', { preferElectron: true }) },
+        { label: 'Welcome & Setup', click: () => openSettingsSection('about', { preferElectron: true }) },
         { type: 'separator' },
         { label: 'Report Issue...', click: () => sendToActiveWindow('add-new-tab', 'https://github.com/Preet3627/Comet-AI/issues') },
-        { label: 'Check for Updates', click: () => openSettingsSection('updates') }
+        { label: 'Check for Updates', click: () => openSettingsSection('updates', { preferElectron: true }) }
       ]
     }
   ];
@@ -1862,8 +1940,7 @@ const prepareLLM = async (messages, options = {}) => {
     const apiKey = config.apiKey || store.get('gemini_api_key');
     if (!apiKey) throw new Error('Google Gemini API Key is missing.');
 
-    const recommendedModel = getRecommendedGeminiModel(providerId);
-    const modelName = options.model || config.model || store.get('gemini_model') || recommendedModel;
+    const modelName = options.model || config.model || store.get('gemini_model') || getConfiguredProviderModel(providerId);
 
     const google = createGoogleGenerativeAI({ apiKey });
 
@@ -1876,28 +1953,40 @@ const prepareLLM = async (messages, options = {}) => {
     const apiKey = config.apiKey || store.get('openai_api_key');
     if (!apiKey) throw new Error('OpenAI API Key is missing.');
     const openai = createOpenAI({ apiKey });
-    modelInstance = openai(options.model || config.model || store.get('openai_model') || 'gpt-4o');
+    modelInstance = openai(options.model || config.model || store.get('openai_model') || getConfiguredProviderModel('openai'));
+  }
+  else if (providerId === 'azure-openai') {
+    const { createOpenAI } = await import('@ai-sdk/openai');
+    const apiKey = config.apiKey || store.get('azure_openai_api_key');
+    const baseURL = options.baseUrl || config.baseUrl || store.get('azure_openai_endpoint');
+    if (!apiKey) throw new Error('Azure OpenAI API Key is missing.');
+    if (!baseURL) throw new Error('Azure OpenAI base URL is missing.');
+    const azureOpenAI = createOpenAI({ apiKey, baseURL });
+    modelInstance = azureOpenAI(options.model || config.model || store.get('azure_openai_model') || 'gpt-4.1-mini');
   }
   else if (providerId === 'anthropic') {
     const { createAnthropic } = await import('@ai-sdk/anthropic');
     const apiKey = config.apiKey || store.get('anthropic_api_key');
     if (!apiKey) throw new Error('Anthropic API Key is missing.');
     const anthropic = createAnthropic({ apiKey });
-    modelInstance = anthropic(options.model || config.model || store.get('anthropic_model') || 'claude-3-5-sonnet-latest');
+    modelInstance = anthropic(options.model || config.model || store.get('anthropic_model') || getConfiguredProviderModel('anthropic'));
   }
   else if (providerId === 'xai') {
     const { createXai } = await import('@ai-sdk/xai');
     const apiKey = config.apiKey || store.get('xai_api_key');
     if (!apiKey) throw new Error('xAI API Key is missing.');
     const xai = createXai({ apiKey });
-    modelInstance = xai(options.model || config.model || store.get('xai_model') || 'grok-2-latest');
+    modelInstance = xai(options.model || config.model || store.get('xai_model') || getConfiguredProviderModel('xai'));
   }
   else if (providerId === 'groq') {
     const { createGroq } = await import('@ai-sdk/groq');
     const apiKey = config.apiKey || store.get('groq_api_key');
     if (!apiKey) throw new Error('Groq API Key is missing.');
     const groq = createGroq({ apiKey });
-    modelInstance = groq(options.model || config.model || store.get('groq_model') || 'llama-3.3-70b-versatile');
+    modelInstance = groq(options.model || config.model || store.get('groq_model') || getConfiguredProviderModel('groq'));
+  }
+  else if (providerId === 'copilot') {
+    throw new Error('Microsoft Copilot is available in Comet as a Windows companion selection, but native in-sidebar Copilot generation is not wired yet.');
   }
   else {
     throw new Error(`Unsupported provider: ${providerId}`);
@@ -2054,12 +2143,13 @@ const llmStreamHandler = async (event, messages, options = {}) => {
           case 'ollama': model = store.get('ollama_model') || 'llama3'; break;
           case 'gemini':
           case 'google':
-          case 'google-flash': model = store.get('gemini_model') || 'gemini-2.0-flash'; break;
-          case 'openai': model = store.get('openai_model') || 'gpt-4o'; break;
-          case 'anthropic': model = store.get('anthropic_model') || 'claude-3-5-sonnet-latest'; break;
-          case 'groq': model = store.get('groq_model') || 'llama-3.3-70b-versatile'; break;
-          case 'xai': model = store.get('xai_model') || 'grok-2-latest'; break;
-          default: model = store.get('gemini_model') || 'gemini-2.0-flash'; // safe default
+          case 'google-flash': model = getConfiguredProviderModel(providerId === 'gemini' ? 'google' : providerId); break;
+          case 'openai': model = getConfiguredProviderModel('openai'); break;
+          case 'azure-openai': model = store.get('azure_openai_model') || 'gpt-4.1-mini'; break;
+          case 'anthropic': model = getConfiguredProviderModel('anthropic'); break;
+          case 'groq': model = getConfiguredProviderModel('groq'); break;
+          case 'xai': model = getConfiguredProviderModel('xai'); break;
+          default: model = getConfiguredProviderModel('google'); // safe default
         }
       }
 
@@ -2085,13 +2175,17 @@ const llmStreamHandler = async (event, messages, options = {}) => {
         engineKeys.GEMINI_API_KEY = apiKey;
       }
       if (providerId === 'openai') engineKeys.OPENAI_API_KEY = store.get('openai_api_key') || '';
+      if (providerId === 'azure-openai') {
+        engineKeys.AZURE_OPENAI_API_KEY = store.get('azure_openai_api_key') || '';
+        engineKeys.AZURE_OPENAI_BASE_URL = options.baseUrl || store.get('azure_openai_endpoint') || '';
+      }
       if (providerId === 'anthropic') engineKeys.ANTHROPIC_API_KEY = store.get('anthropic_api_key') || '';
       if (providerId === 'groq') engineKeys.GROQ_API_KEY = store.get('groq_api_key') || '';
       if (providerId === 'ollama') engineKeys.OLLAMA_BASE_URL = options.baseUrl || store.get('ollama_base_url') || 'http://127.0.0.1:11434';
       if (Object.keys(engineKeys).length > 0) cometAiEngine.configure(engineKeys);
 
       await cometAiEngine.chat({
-        message, model, systemPrompt, history,
+        message, model, systemPrompt, history, provider: providerId,
         onChunk: (chunk) => {
           if (!event.sender.isDestroyed()) {
             event.sender.send('llm-chat-stream-part', { type: 'text-delta', textDelta: chunk });
@@ -4038,10 +4132,9 @@ function mapOcrCoordsToScreenCoords(ocrResult, captureRegion) {
 }
 
 /**
- * find-and-click-text: Captures the primary screen, runs OCR, finds target text, and clicks it.
- * Uses Tesseract.js for OCR and robotjs for mouse simulation.
- * NOTE: On macOS, Accessibility permission is required for robotjs to control the mouse.
- * On Windows/Linux, may require running with appropriate privileges.
+ * find-and-click-text: resolves a visible cross-app target and clicks it.
+ * Uses the shared OCR service, which now prefers native OS providers first
+ * and falls back to Tesseract only when native extraction is unavailable.
  */
 ipcMain.handle('find-and-click-text', async (event, targetText) => {
   if (!targetText || typeof targetText !== 'string' || targetText.trim().length === 0) {
@@ -4053,97 +4146,24 @@ ipcMain.handle('find-and-click-text', async (event, targetText) => {
     return { success: false, error: permission.error };
   }
 
-  const searchText = targetText.trim().toLowerCase();
-
   try {
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const { width, height } = primaryDisplay.size;
-    const scaleFactor = primaryDisplay.scaleFactor || 1;
-    const thumbnailSize = {
-      width: Math.min(4096, Math.round(width * scaleFactor)),
-      height: Math.min(4096, Math.round(height * scaleFactor))
-    };
-
-    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize });
-    const primaryDisplayId = String(primaryDisplay.id);
-    const primaryScreenSource = sources.find(s => s.display_id === primaryDisplayId);
-
-    if (!primaryScreenSource || !primaryScreenSource.thumbnail) {
-      return { success: false, error: 'Could not capture primary screen.' };
+    if (!tesseractOcrService) {
+      return { success: false, error: 'OCR service not initialized.' };
     }
 
-    const tempDir = app.getPath('temp');
-    const tempPath = path.join(tempDir, `comet-ocr-${Date.now()}.png`);
+    const result = await tesseractOcrService.ocrClick(
+      targetText.trim(),
+      cometAiEngine,
+      robotService,
+      permissionStore
+    );
 
-    try {
-      const pngBuffer = primaryScreenSource.thumbnail.toPNG();
-      fs.writeFileSync(tempPath, pngBuffer);
-    } catch (writeErr) {
-      console.error('[Main] Failed to write temp image:', writeErr);
-      return { success: false, error: 'Failed to prepare image for OCR.' };
+    if (!result.success) {
+      return result;
     }
 
-    if (!tesseractWorker) {
-      console.log('[Main] Initializing Tesseract.js worker on-demand...');
-      try {
-        tesseractWorker = await createWorker('eng');
-        console.log('[Main] Tesseract.js worker initialized.');
-      } catch (e) {
-        console.error('[Main] Failed to initialize Tesseract worker:', e);
-        try { fs.unlinkSync(tempPath); } catch (e) { }
-        tesseractWorker = null; // Ensure it's null so we retry next time
-        return { success: false, error: 'OCR worker initialization failed.' };
-      }
-    }
-
-    const captureRegion = { x: 0, y: 0, width: thumbnailSize.width, height: thumbnailSize.height };
-
-    let data;
-    try {
-      const result = await tesseractWorker.recognize(tempPath);
-      data = result.data;
-    } catch (workerError) {
-      console.error('[Main] Tesseract recognition failed:', workerError);
-      // Force re-initialization next time
-      try { await tesseractWorker.terminate(); } catch (e) { }
-      tesseractWorker = null;
-      try { fs.unlinkSync(tempPath); } catch (e) { }
-      return { success: false, error: 'OCR failed. Please try again.' };
-    }
-
-    try { fs.unlinkSync(tempPath); } catch (e) { }
-
-    const words = data?.words || [];
-    let bestMatch = null;
-
-    for (const word of words) {
-      const text = (word.text || '').toLowerCase();
-      if (text.includes(searchText) || searchText.includes(text)) {
-        bestMatch = word;
-        break;
-      }
-    }
-
-    if (!bestMatch) {
-      return { success: false, error: `Text "${targetText}" not found on screen.`, foundText: data?.text?.substring(0, 200) };
-    }
-
-    const screenCoords = mapOcrCoordsToScreenCoords(bestMatch, captureRegion);
-    const centerX = Math.round(screenCoords.x + screenCoords.width / 2);
-    const centerY = Math.round(screenCoords.y + screenCoords.height / 2);
-
-    if (!robot) {
-      return { success: false, error: 'Find & Click requires robotjs. Run: npm install robotjs, then electron-rebuild.' };
-    }
-
-    try {
-      await performRobotClick({ x: centerX, y: centerY });
-      console.log(`[Main] Find-and-click: clicked at (${centerX}, ${centerY}) for "${targetText}" with robust helper`);
-      return { success: true, x: centerX, y: centerY };
-    } catch (robotErr) {
-      console.error('[Main] robotjs error (may need Accessibility permission on macOS):', robotErr);
-      return { success: false, error: `Could not simulate click. ${process.platform === 'darwin' ? 'Ensure Accessibility permission is granted.' : robotErr.message}` };
-    }
+    console.log(`[Main] Find-and-click resolved "${targetText}" via ${result.method || 'ocr'}`);
+    return result;
   } catch (error) {
     console.error('[Main] find-and-click-text failed:', error);
     return { success: false, error: error.message };
@@ -4195,13 +4215,15 @@ ipcMain.handle('load-vector-store', async () => {
 });
 
 const llmProviders = [
-  { id: 'google', name: 'Google Gemini (3.1/2.0)' },
-  { id: 'google-flash', name: 'Google Gemini 3.0 Flash (Fast)' },
-  { id: 'openai', name: 'OpenAI (o1/o3/GPT-4o)' },
-  { id: 'anthropic', name: 'Anthropic Claude (3.7/3.5)' },
-  { id: 'xai', name: 'xAI Grok (4/3)' },
-  { id: 'groq', name: 'Groq (LPU Speed)' },
-  { id: 'ollama', name: 'Ollama (Local AI)' }
+  { id: 'google', name: 'Google Gemini (Auto Latest)' },
+  { id: 'google-flash', name: 'Google Gemini Flash (Auto Latest)' },
+  { id: 'openai', name: 'OpenAI (Auto Latest)' },
+  { id: 'azure-openai', name: 'Microsoft Azure OpenAI' },
+  { id: 'anthropic', name: 'Anthropic Claude (Auto Latest)' },
+  { id: 'xai', name: 'xAI Grok (Auto Latest)' },
+  { id: 'groq', name: 'Groq (Auto Latest)' },
+  { id: 'ollama', name: 'Ollama (Local AI)' },
+  { id: 'copilot', name: 'Microsoft Copilot (Windows Companion)' }
 ];
 let activeLlmProvider = store.get('active_llm_provider') || 'ollama';
 const llmConfigs = {
@@ -4212,31 +4234,135 @@ const llmConfigs = {
   },
   google: {
     apiKey: store.get('gemini_api_key') || '',
-    model: store.get('gemini_model') || 'gemini-2.0-pro-exp-02-05'
+    model: store.get('gemini_model') || getProviderFallbackModel('google')
   },
   'google-flash': {
     apiKey: store.get('gemini_api_key') || '',
-    model: store.get('gemini_model') || 'gemini-2.0-flash'
+    model: store.get('gemini_model') || getProviderFallbackModel('google-flash')
   },
   openai: {
     apiKey: store.get('openai_api_key') || '',
-    model: store.get('openai_model') || 'gpt-4o'
+    model: store.get('openai_model') || getProviderFallbackModel('openai')
+  },
+  'azure-openai': {
+    apiKey: store.get('azure_openai_api_key') || '',
+    baseUrl: store.get('azure_openai_endpoint') || '',
+    model: store.get('azure_openai_model') || 'gpt-4.1-mini'
   },
   anthropic: {
     apiKey: store.get('anthropic_api_key') || '',
-    model: store.get('anthropic_model') || 'claude-3-5-sonnet-latest'
+    model: store.get('anthropic_model') || getProviderFallbackModel('anthropic')
   },
   xai: {
     apiKey: store.get('xai_api_key') || '',
-    model: store.get('xai_model') || 'grok-2-latest'
+    model: store.get('xai_model') || getProviderFallbackModel('xai')
   },
   groq: {
     apiKey: store.get('groq_api_key') || '',
-    model: store.get('groq_model') || 'llama-3.3-70b-versatile'
+    model: store.get('groq_model') || getProviderFallbackModel('groq')
   }
 };
 
+const LLM_MODEL_CATALOG_STORE_KEY = 'llm_model_catalogs_v1';
+
+function getCachedProviderCatalogs() {
+  const cached = store.get(LLM_MODEL_CATALOG_STORE_KEY);
+  return cached && typeof cached === 'object' ? cached : {};
+}
+
+function saveCachedProviderCatalog(providerId, catalog) {
+  const cachedCatalogs = getCachedProviderCatalogs();
+  cachedCatalogs[providerId] = catalog;
+  store.set(LLM_MODEL_CATALOG_STORE_KEY, cachedCatalogs);
+}
+
+function getConfiguredProviderApiKey(providerId) {
+  const storeKey = getProviderApiKeyStoreKey(providerId);
+  return (storeKey && store.get(storeKey)) || llmConfigs[providerId]?.apiKey || '';
+}
+
+function getRecommendedProviderModel(providerId) {
+  const cachedCatalogs = getCachedProviderCatalogs();
+  return cachedCatalogs[providerId]?.recommendedModel || getProviderFallbackModel(providerId);
+}
+
+function getConfiguredProviderModel(providerId) {
+  if (providerId === 'ollama') {
+    return store.get('ollama_model') || llmConfigs.ollama.model || 'deepseek-r1:1.5b';
+  }
+
+  if (providerId === 'azure-openai') {
+    return store.get('azure_openai_model') || llmConfigs['azure-openai'].model || 'gpt-4.1-mini';
+  }
+
+  const storeKey = getProviderModelStoreKey(providerId);
+  const configuredModel = (storeKey && store.get(storeKey)) || llmConfigs[providerId]?.model;
+  return configuredModel || getRecommendedProviderModel(providerId);
+}
+
+async function getProviderModelCatalog(providerId, options = {}) {
+  const forceRefresh = options.forceRefresh === true;
+  const cachedCatalogs = getCachedProviderCatalogs();
+  const cachedCatalog = cachedCatalogs[providerId];
+
+  if (
+    !forceRefresh &&
+    cachedCatalog &&
+    cachedCatalog.fetchedAt &&
+    Date.now() - cachedCatalog.fetchedAt < CATALOG_TTL_MS
+  ) {
+    return cachedCatalog;
+  }
+
+  if (!llmConfigs[providerId]) {
+    return {
+      success: false,
+      providerId,
+      providerName: getProviderLabel(providerId),
+      models: [],
+      recommendedModel: getProviderFallbackModel(providerId),
+      error: `Provider ${providerId} is not configured.`,
+    };
+  }
+
+  try {
+    const catalog = await fetchProviderModelCatalog(providerId, {
+      apiKey: getConfiguredProviderApiKey(providerId),
+    });
+
+    if (catalog.success) {
+      saveCachedProviderCatalog(providerId, catalog);
+      return catalog;
+    }
+
+    if (cachedCatalog && !forceRefresh) {
+      return cachedCatalog;
+    }
+
+    return catalog;
+  } catch (error) {
+    if (cachedCatalog && !forceRefresh) {
+      return {
+        ...cachedCatalog,
+        warning: error.message,
+      };
+    }
+
+    return {
+      success: false,
+      providerId,
+      providerName: getProviderLabel(providerId),
+      models: [],
+      recommendedModel: getProviderFallbackModel(providerId),
+      error: error.message,
+    };
+  }
+}
+
 ipcMain.handle('llm-get-available-providers', () => llmProviders);
+ipcMain.handle('llm-get-provider-models', async (event, providerId, options = {}) => {
+  return getProviderModelCatalog(providerId, options);
+});
 ipcMain.handle('llm-set-active-provider', (event, providerId) => {
   activeLlmProvider = providerId;
   store.set('active_llm_provider', providerId);
@@ -4253,6 +4379,11 @@ ipcMain.handle('llm-configure-provider', (event, providerId, options) => {
   if (providerId === 'openai') {
     if (options.apiKey) store.set('openai_api_key', options.apiKey);
     if (options.model) store.set('openai_model', options.model);
+  }
+  if (providerId === 'azure-openai') {
+    if (options.apiKey) store.set('azure_openai_api_key', options.apiKey);
+    if (options.baseUrl) store.set('azure_openai_endpoint', options.baseUrl);
+    if (options.model) store.set('azure_openai_model', options.model);
   }
   if (providerId === 'anthropic') {
     if (options.apiKey) store.set('anthropic_api_key', options.apiKey);
@@ -4279,10 +4410,18 @@ ipcMain.handle('llm-configure-provider', (event, providerId, options) => {
 ipcMain.handle('get-stored-api-keys', () => {
   return {
     openai_api_key: store.get('openai_api_key') || '',
+    openai_model: getConfiguredProviderModel('openai'),
+    azure_openai_api_key: store.get('azure_openai_api_key') || '',
+    azure_openai_endpoint: store.get('azure_openai_endpoint') || '',
+    azure_openai_model: store.get('azure_openai_model') || 'gpt-4.1-mini',
     gemini_api_key: store.get('gemini_api_key') || '',
+    gemini_model: getConfiguredProviderModel('google'),
     anthropic_api_key: store.get('anthropic_api_key') || '',
+    anthropic_model: getConfiguredProviderModel('anthropic'),
     groq_api_key: store.get('groq_api_key') || '',
+    groq_model: getConfiguredProviderModel('groq'),
     xai_api_key: store.get('xai_api_key') || '',
+    xai_model: getConfiguredProviderModel('xai'),
     ollama_base_url: store.get('ollama_base_url') || 'http://127.0.0.1:11434',
     ollama_model: store.get('ollama_model') || 'deepseek-r1:1.5b',
     ollama_enabled: store.get('ollama_enabled') !== false,
@@ -8186,6 +8325,8 @@ app.whenReady().then(async () => {
   ipcMain.on('update-shortcuts', (event, shortcuts) => {
     // Unregister all existing shortcuts to prevent conflicts
     globalShortcut.unregisterAll();
+    store.set('shortcuts', shortcuts);
+    buildApplicationMenu();
 
     // Only register these actions as GLOBAL shortcuts (intercepting in other apps)
     const GLOBAL_SAFE_ACTIONS = [
@@ -9222,6 +9363,24 @@ app.whenReady().then(async () => {
     let shouldDelete = false;
 
     if (!tempFile) {
+      if (!bounds && tesseractOcrService) {
+        try {
+          const recognition = await tesseractOcrService.captureAndOcr(undefined, { preferNative: useNative });
+          return {
+            success: true,
+            provider: recognition.provider,
+            strategy: recognition.strategy,
+            text: (recognition.lines?.length ? recognition.lines : recognition.words || [])
+              .map((item) => item.text)
+              .join('\n'),
+            words: recognition.words || [],
+            lines: recognition.lines || [],
+          };
+        } catch (serviceError) {
+          console.warn('[Main] Shared OCR service failed, falling back to legacy handler:', serviceError.message);
+        }
+      }
+
       tempFile = path.join(os.tmpdir(), `ocr_${Date.now()}.png`);
       shouldDelete = true;
     }
@@ -9495,8 +9654,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('ocr-capture-words', async (event, displayId) => {
     if (!tesseractOcrService) return { success: false, error: 'OCR service not initialized' };
     try {
-      const words = await tesseractOcrService.captureAndOcr(displayId);
-      return { success: true, words };
+      const result = await tesseractOcrService.captureAndOcr(displayId);
+      return { success: true, ...result };
     } catch (e) { return { success: false, error: e.message }; }
   });
 
@@ -9751,10 +9910,10 @@ app.whenReady().then(async () => {
   });
 
   // --- AI Engine (direct chat for automation tasks) ---
-  ipcMain.handle('ai-engine-chat', async (event, { message, model, systemPrompt, history }) => {
+  ipcMain.handle('ai-engine-chat', async (event, { message, model, provider, systemPrompt, history }) => {
     if (!cometAiEngine) return { success: false, error: 'AI engine not initialized' };
     try {
-      const response = await cometAiEngine.chat({ message, model, systemPrompt, history });
+      const response = await cometAiEngine.chat({ message, model, provider, systemPrompt, history });
       return { success: true, response };
     } catch (e) { return { success: false, error: e.message }; }
   });
@@ -9765,6 +9924,8 @@ app.whenReady().then(async () => {
     if (keys.GEMINI_API_KEY) store.set('gemini_api_key', keys.GEMINI_API_KEY);
     if (keys.GROQ_API_KEY) store.set('groq_api_key', keys.GROQ_API_KEY);
     if (keys.OPENAI_API_KEY) store.set('openai_api_key', keys.OPENAI_API_KEY);
+    if (keys.AZURE_OPENAI_API_KEY) store.set('azure_openai_api_key', keys.AZURE_OPENAI_API_KEY);
+    if (keys.AZURE_OPENAI_BASE_URL) store.set('azure_openai_endpoint', keys.AZURE_OPENAI_BASE_URL);
     if (keys.ANTHROPIC_API_KEY) store.set('anthropic_api_key', keys.ANTHROPIC_API_KEY);
     return { success: true };
   });
@@ -10263,6 +10424,7 @@ ${tabData}`;
     console.log('[Main] Updating global shortcuts');
     store.set('shortcuts', shortcuts);
     registerGlobalShortcuts(shortcuts);
+    buildApplicationMenu();
   });
 
   // Auto-update IPC handlers

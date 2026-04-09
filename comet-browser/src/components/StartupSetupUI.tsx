@@ -85,6 +85,15 @@ const providerCards = [
   },
 ];
 
+const copilotProviderCard = {
+  id: 'copilot',
+  title: 'Microsoft Copilot',
+  description: 'Windows companion path with no Comet API key required.',
+  cta: 'Use Copilot',
+  accent: 'from-sky-300/18 to-cyan-300/5',
+  link: 'https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app',
+};
+
 const openExternal = async (url: string) => {
   if (window.electronAPI?.openExternalUrl) {
     await window.electronAPI.openExternalUrl(url);
@@ -110,6 +119,7 @@ export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
 
   const goNext = () => setStep((current) => Math.min(current + 1, 4));
   const goBack = () => setStep((current) => Math.max(current - 1, 1));
+  const availableProviderCards = isWindows ? [...providerCards, copilotProviderCard] : providerCards;
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#061019]/94 p-6 text-white backdrop-blur-3xl">
@@ -288,10 +298,10 @@ export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
 
                 {wantsAI ? (
                   <div className="grid gap-4 lg:grid-cols-3">
-                    {providerCards.map((provider) => (
+                    {availableProviderCards.map((provider) => (
                       <div key={provider.id} className={`rounded-[28px] border border-white/10 bg-gradient-to-br ${provider.accent} p-5`}>
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/10 text-white">
-                          {provider.id === 'ollama' ? <Monitor size={20} /> : <Cloud size={20} />}
+                          {provider.id === 'ollama' || provider.id === 'copilot' ? <Monitor size={20} /> : <Cloud size={20} />}
                         </div>
                         <h4 className="mt-5 text-lg font-semibold">{provider.title}</h4>
                         <p className="mt-2 text-sm leading-6 text-white/62">{provider.description}</p>
@@ -322,7 +332,7 @@ export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
                   </div>
                 ) : (
                   <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6 text-sm leading-7 text-white/62">
-                    Built-in AI is off for now. You can still finish setup and configure Ollama or cloud providers later from settings.
+                    Built-in AI is off for now. You can still finish setup and configure Ollama, cloud providers, or the Windows Copilot companion later from settings.
                   </div>
                 )}
 

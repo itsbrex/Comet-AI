@@ -352,6 +352,12 @@ final class NativePanelViewModel: ObservableObject {
         }
     }
 
+    func openExternalURL(_ urlString: String) {
+        recordInteraction()
+        guard let url = URL(string: urlString) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     func copyClipboardItem(_ text: String) {
         recordInteraction()
         Task {
@@ -4485,7 +4491,48 @@ struct CometNativePanelsApp: App {
         .commands {
             CommandGroup(replacing: .newItem) { }
             CommandGroup(after: .appInfo) {
-                Menu("Comet Settings") {
+                Menu("Comet") {
+                    Section("Panels") {
+                        Button("AI Sidebar") {
+                            viewModel.openPanel(.sidebar)
+                        }
+                        Button("Action Chain") {
+                            viewModel.openPanel(.actionChain)
+                        }
+                        Button("Command Center") {
+                            viewModel.openPanel(.menu)
+                        }
+                        Button("Downloads") {
+                            viewModel.openPanel(.downloads)
+                        }
+                        Button("Clipboard") {
+                            viewModel.openPanel(.clipboard)
+                        }
+                        Button("Approval Prompt") {
+                            viewModel.openPanel(.permissions)
+                        }
+                    }
+                    Section("Settings") {
+                        Button("General Preferences") {
+                            viewModel.openSettings(target: "profile")
+                        }
+                        .keyboardShortcut(",", modifiers: .command)
+                        Button("History") {
+                            viewModel.openSettings(target: "history")
+                        }
+                        Button("Keyboard Shortcuts") {
+                            viewModel.openSettings(target: "shortcuts")
+                        }
+                        Button("Appearance") {
+                            viewModel.openSettings(target: "appearance")
+                        }
+                        Button("Automation") {
+                            viewModel.openSettings(target: "automation")
+                        }
+                        Button("Permissions") {
+                            viewModel.openSettings(target: "permissions")
+                        }
+                    }
                     Section("AI Providers") {
                         Button("OpenAI API Key") {
                             viewModel.openSettings(target: "openai")
@@ -4499,21 +4546,8 @@ struct CometNativePanelsApp: App {
                         Button("Ollama Models") {
                             viewModel.openSettings(target: "ollama")
                         }
-                    }
-                    Section("Appearance") {
-                        Button("Theme & Colors") {
-                            viewModel.openSettings(target: "appearance")
-                        }
-                        Button("Sidebar Layout") {
-                            viewModel.openSettings(target: "layout")
-                        }
-                    }
-                    Section("Automation") {
-                        Button("Permissions & Safety") {
-                            viewModel.openSettings(target: "permissions")
-                        }
-                        Button("Scheduled Tasks") {
-                            viewModel.openSettings(target: "automation")
+                        Button("Microsoft Copilot Companion") {
+                            viewModel.openExternalURL("https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app")
                         }
                     }
                     Section("Sync & Connect") {
@@ -4529,7 +4563,23 @@ struct CometNativePanelsApp: App {
                         viewModel.openSettings(target: "all")
                     }
                 }
-                .keyboardShortcut(",", modifiers: .command)
+                Menu("Documentation") {
+                    Button("Documentation Home") {
+                        viewModel.openExternalURL("https://browser.ponsrischool.in")
+                    }
+                    Button("AI Commands") {
+                        viewModel.openExternalURL("https://browser.ponsrischool.in/docs/ai-commands")
+                    }
+                    Button("Automation Guide") {
+                        viewModel.openExternalURL("https://browser.ponsrischool.in/docs/automation")
+                    }
+                    Button("Plugins & SDK") {
+                        viewModel.openExternalURL("https://browser.ponsrischool.in/docs/plugins")
+                    }
+                    Button("Native API Reference") {
+                        viewModel.openExternalURL("https://browser.ponsrischool.in/docs/native-api")
+                    }
+                }
             }
         }
     }

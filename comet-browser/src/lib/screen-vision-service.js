@@ -117,11 +117,12 @@ class ScreenVisionService {
   }
 
   async analyzeAndAct(question, tesseractService, robotService, permissionStore) {
-    const [visionDesc, ocrWords] = await Promise.all([
+    const [visionDesc, recognition] = await Promise.all([
       this.describe(question).catch(e => `Vision failed: ${e.message}`),
-      tesseractService.captureAndOcr().catch(e => []),
+      tesseractService.captureAndOcr().catch(() => ({ words: [], lines: [] })),
     ]);
 
+    const ocrWords = recognition.words || [];
     const ocrContext = ocrWords.slice(0, 50).map(w => `"${w.text}" at (${w.centerX},${w.centerY})`).join(', ');
 
     const analysis = await this.aiEngine.chat({

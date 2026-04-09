@@ -1,7 +1,7 @@
 // LLMProviderSettings component
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { LLMProviderOptions } from '@/lib/llm/providers/base';
 import SearchEngineSettings from './SearchEngineSettings';
 import ThemeSettings from './ThemeSettings';
@@ -9,7 +9,7 @@ import BackendSettings from './BackendSettings';
 import { motion, AnimatePresence } from 'framer-motion';
 import { OpenAICompatibleProvider } from '@/lib/llm/providers/openai-compatible';
 import { useAppStore } from '@/store/useAppStore';
-import { Cpu, Cloud, Settings, Save, Shield, Database, ChevronDown, Check, Sparkles, Puzzle, FolderOpen } from 'lucide-react';
+import { Cpu, Cloud, Settings, Save, Shield, Database, ChevronDown, Check, Sparkles, Puzzle, FolderOpen, ExternalLink, Monitor, RefreshCw } from 'lucide-react';
 import { getGeminiModelMetadata, getRecommendedGeminiModel } from '@/lib/modelRegistry';
 
 interface LLMProviderSettingsProps {
@@ -30,11 +30,54 @@ interface LLMProviderSettingsProps {
   setShowSettings: (show: boolean) => void; // New prop for setting visibility
 }
 
+interface ProviderCatalog {
+  success: boolean;
+  providerId: string;
+  providerName?: string;
+  docsUrl?: string;
+  models: Array<{
+    id: string;
+    label?: string;
+    ownedBy?: string;
+    created?: number | null;
+    contextWindow?: number | null;
+    description?: string;
+    inputTokenLimit?: number | null;
+    outputTokenLimit?: number | null;
+  }>;
+  recommendedModel?: string;
+  fetchedAt?: number;
+  requiresApiKey?: boolean;
+  warning?: string;
+  error?: string;
+}
+
 const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProviderSettingsProps) => {
   const store = useAppStore();
   const [providers, setProviders] = useState<{ id: string; name: string }[]>([]);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [providerCatalogs, setProviderCatalogs] = useState<Record<string, ProviderCatalog>>({});
+  const [catalogLoading, setCatalogLoading] = useState<Record<string, boolean>>({});
+  const [isMac, setIsMac] = useState(false);
+  const [appleStatus, setAppleStatus] = useState<{
+    success: boolean;
+    available?: boolean;
+    supportsSummaries?: boolean;
+    supportsImageGeneration?: boolean;
+    summaryAvailable?: boolean;
+    imageAvailable?: boolean;
+    summaryReason?: string;
+    imageReason?: string;
+    osVersion?: string;
+    error?: string;
+  } | null>(null);
+  const [appleSummaryInput, setAppleSummaryInput] = useState('');
+  const [appleSummaryResult, setAppleSummaryResult] = useState('');
+  const [appleImagePrompt, setAppleImagePrompt] = useState('A cinematic Comet-AI hero illustration with a glowing browser cockpit on a Mac desktop');
+  const [appleImagePath, setAppleImagePath] = useState<string | null>(null);
+  const [appleBusy, setAppleBusy] = useState<'summary' | 'image' | null>(null);
+  const [appleUiError, setAppleUiError] = useState<string | null>(null);
   const geminiPreferences = useMemo(() => {
     const providerId = activeProviderId === 'google-flash' ? 'google-flash' : 'google';
     return {
@@ -42,6 +85,50 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
       metadata: getGeminiModelMetadata(providerId),
     };
   }, [activeProviderId]);
+  const activeCatalog = activeProviderId ? providerCatalogs[activeProviderId] : undefined;
+
+  const openExternal = async (url: string) => {
+    if (window.electronAPI?.openExternalUrl) {
+      await window.electronAPI.openExternalUrl(url);
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const refreshAppleStatus = useCallback(async () => {
+    if (!window.electronAPI) return;
+
+    try {
+      const status = await window.electronAPI.getAppleIntelligenceStatus();
+      setAppleStatus(status);
+      return status;
+    } catch (error: any) {
+      const failedStatus = { success: false, error: error?.message || 'Failed to read Apple Intelligence status' };
+      setAppleStatus(failedStatus);
+      return failedStatus;
+    }
+  }, []);
+
+  const loadProviderCatalog = useCallback(async (providerId: string, forceRefresh = false) => {
+    if (!window.electronAPI || providerId === 'ollama' || providerId === 'azure-openai' || providerId === 'copilot') {
+      return;
+    }
+
+    setCatalogLoading(prev => ({ ...prev, [providerId]: true }));
+    try {
+      const catalog = await window.electronAPI.getProviderModels(providerId, { forceRefresh });
+      setProviderCatalogs(prev => ({ ...prev, [providerId]: catalog }));
+      if (catalog.error && forceRefresh) {
+        props.setError(catalog.error);
+      }
+    } catch (error: any) {
+      if (forceRefresh) {
+        props.setError(error?.message || `Failed to refresh ${providerId} models`);
+      }
+    } finally {
+      setCatalogLoading(prev => ({ ...prev, [providerId]: false }));
+    }
+  }, [props]);
 
   // Use store.aiProvider as source of truth
   useEffect(() => {
@@ -70,6 +157,41 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
     fetchProviders();
   }, [store.aiProvider]);
 
+  useEffect(() => {
+    if (!activeProviderId) return;
+    if (activeProviderId === 'google' || activeProviderId === 'google-flash') {
+      if (!store.geminiApiKey) return;
+    }
+    if (activeProviderId === 'openai' && !store.openaiApiKey) return;
+    if (activeProviderId === 'anthropic' && !store.anthropicApiKey) return;
+    if (activeProviderId === 'groq' && !store.groqApiKey) return;
+    if (activeProviderId === 'xai' && !store.xaiApiKey) return;
+
+    void loadProviderCatalog(activeProviderId);
+  }, [
+    activeProviderId,
+    loadProviderCatalog,
+    store.anthropicApiKey,
+    store.geminiApiKey,
+    store.groqApiKey,
+    store.openaiApiKey,
+    store.xaiApiKey,
+  ]);
+
+  useEffect(() => {
+    const loadAppleStatus = async () => {
+      if (!window.electronAPI) return;
+      const platform = await window.electronAPI.getPlatform();
+      const mac = platform === 'darwin';
+      setIsMac(mac);
+      if (!mac) return;
+
+      await refreshAppleStatus();
+    };
+
+    void loadAppleStatus();
+  }, [refreshAppleStatus]);
+
   const handleProviderChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newProviderId = e.target.value;
     setActiveProviderId(newProviderId);
@@ -79,28 +201,216 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
     }
   };
 
+  const renderCatalogControls = (
+    providerId: string,
+    currentModel: string,
+    setModel: (model: string) => void,
+    placeholder: string
+  ) => {
+    const catalog = providerCatalogs[providerId];
+    const loading = !!catalogLoading[providerId];
+    const hasModels = !!catalog?.models?.length;
+
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-[9px] text-white/30 uppercase font-bold">Live Model Catalog</label>
+          <button
+            type="button"
+            onClick={() => void loadProviderCatalog(providerId, true)}
+            className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[8px] font-black uppercase tracking-[0.25em] text-white/60 transition hover:bg-white/10"
+          >
+            <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
+
+        <select
+          className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-deep-space-accent-neon/50 transition-all font-bold"
+          value={currentModel || catalog?.recommendedModel || ''}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setModel(e.target.value)}
+          disabled={!hasModels}
+        >
+          {hasModels ? (
+            catalog.models.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.label || model.id}
+              </option>
+            ))
+          ) : (
+            <option value="">{catalog?.requiresApiKey ? 'Add API key to fetch live models' : 'No live models available yet'}</option>
+          )}
+        </select>
+
+        <div className="space-y-1 rounded-xl border border-white/5 bg-white/[0.03] p-3 text-[9px] text-white/55">
+          <p>
+            Recommended: <strong className="text-white">{catalog?.recommendedModel || placeholder}</strong>
+          </p>
+          {catalog?.fetchedAt && (
+            <p>Last sync: {new Date(catalog.fetchedAt).toLocaleString()}</p>
+          )}
+          {catalog?.warning && <p className="text-amber-300/80">{catalog.warning}</p>}
+          {catalog?.error && !catalog.requiresApiKey && <p className="text-rose-300/80">{catalog.error}</p>}
+          {catalog?.docsUrl && (
+            <button
+              type="button"
+              onClick={() => void openExternal(catalog.docsUrl!)}
+              className="inline-flex items-center gap-1 text-deep-space-accent-neon hover:text-deep-space-accent-neon/80 transition"
+            >
+              <ExternalLink size={10} />
+              Official models docs
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[9px] text-white/30 uppercase font-bold">Manual Override</label>
+          <input
+            type="text"
+            placeholder={placeholder}
+            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+            value={currentModel || ''}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setModel(e.target.value)}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const updateAppleFailureState = useCallback((message: string, kind: 'summary' | 'image') => {
+    setAppleUiError(message);
+    setAppleStatus(prev => ({
+      ...(prev || { success: false }),
+      success: false,
+      ...(kind === 'summary'
+        ? { summaryAvailable: false, summaryReason: message }
+        : { imageAvailable: false, imageReason: message }),
+    }));
+  }, []);
+
+  const canUseAppleSummary = !!appleStatus?.supportsSummaries && !!appleStatus?.summaryAvailable;
+  const canUseAppleImage = !!appleStatus?.supportsImageGeneration && !!appleStatus?.imageAvailable;
+  const appleSummaryStatusText = appleStatus?.summaryReason || (canUseAppleSummary ? 'Ready' : 'Not supported');
+  const appleImageStatusText = appleStatus?.imageReason || (canUseAppleImage ? 'Ready' : 'Not supported');
+
+  const runAppleSummary = async (text: string) => {
+    if (!window.electronAPI) return;
+    if (!canUseAppleSummary) {
+      updateAppleFailureState(appleSummaryStatusText || 'Apple Intelligence summaries are not available on this Mac.', 'summary');
+      return;
+    }
+
+    setAppleUiError(null);
+    setAppleBusy('summary');
+    setAppleSummaryResult('');
+    try {
+      const result = await window.electronAPI.summarizeWithAppleIntelligence(text);
+      if (result.success && result.summary) {
+        setAppleSummaryResult(result.summary);
+      } else {
+        const message = result.summaryReason || result.error || 'Apple Intelligence summary failed';
+        updateAppleFailureState(message, 'summary');
+        props.setError(message);
+      }
+    } catch (error: any) {
+      const message = error?.message || 'Apple Intelligence summary failed';
+      updateAppleFailureState(message, 'summary');
+      props.setError(message);
+    } finally {
+      setAppleBusy(null);
+    }
+  };
+
+  const handleApplePageSummary = async () => {
+    if (!window.electronAPI) return;
+    if (!canUseAppleSummary) {
+      updateAppleFailureState(appleSummaryStatusText || 'Apple Intelligence summaries are not available on this Mac.', 'summary');
+      return;
+    }
+    try {
+      const result = await window.electronAPI.extractPageContent();
+      if (!result?.content) {
+        const message = result?.error || 'No active page content available to summarize.';
+        setAppleUiError(message);
+        props.setError(message);
+        return;
+      }
+      await runAppleSummary(result.content);
+    } catch (error: any) {
+      const message = error?.message || 'Failed to extract page content for Apple Intelligence.';
+      setAppleUiError(message);
+      props.setError(message);
+    }
+  };
+
+  const handleAppleImage = async () => {
+    if (!window.electronAPI || !appleImagePrompt.trim()) return;
+    if (!canUseAppleImage) {
+      updateAppleFailureState(appleImageStatusText || 'Apple image generation is not available on this Mac.', 'image');
+      return;
+    }
+
+    setAppleUiError(null);
+    setAppleBusy('image');
+    setAppleImagePath(null);
+    try {
+      const result = await window.electronAPI.generateAppleIntelligenceImage({ prompt: appleImagePrompt.trim() });
+      if (result.success && result.imagePath) {
+        setAppleImagePath(result.imagePath);
+      } else {
+        const message = result.imageReason || result.error || 'Apple Intelligence image generation failed';
+        updateAppleFailureState(message, 'image');
+        props.setError(message);
+      }
+    } catch (error: any) {
+      const message = error?.message || 'Apple Intelligence image generation failed';
+      updateAppleFailureState(message, 'image');
+      props.setError(message);
+    } finally {
+      setAppleBusy(null);
+    }
+  };
+
 
   const handleSaveConfig = async () => {
     if (!activeProviderId) return;
+
+    if (activeProviderId === 'copilot') {
+      if (window.electronAPI) {
+        await window.electronAPI.configureLLMProvider('copilot', { mode: 'companion' });
+      }
+      setFeedback('Copilot Companion Ready');
+      setTimeout(() => {
+        props.setShowSettings(false);
+      }, 1500);
+      setTimeout(() => setFeedback(null), 3000);
+      return;
+    }
 
     let config: LLMProviderOptions = {};
     if (activeProviderId === 'ollama') {
       config = { baseUrl: store.ollamaBaseUrl, model: store.ollamaModel, localLlmMode: store.localLlmMode };
     } else if (activeProviderId === 'google' || activeProviderId === 'google-flash') {
       const providerId = activeProviderId === 'google-flash' ? 'google-flash' : 'google';
-      const recommendedModel = getRecommendedGeminiModel(providerId);
+      const recommendedModel = providerCatalogs[activeProviderId]?.recommendedModel || getRecommendedGeminiModel(providerId);
       config = {
         apiKey: store.geminiApiKey,
         model: providerId === 'google-flash' ? recommendedModel : (store.geminiModel || recommendedModel)
       };
     } else if (activeProviderId === 'openai') {
-      config = { apiKey: store.openaiApiKey, model: store.openaiModel || 'gpt-4o' };
+      config = { apiKey: store.openaiApiKey, model: store.openaiModel || providerCatalogs.openai?.recommendedModel || 'gpt-5.1' };
+    } else if (activeProviderId === 'azure-openai') {
+      config = {
+        apiKey: store.azureOpenaiApiKey,
+        baseUrl: store.azureOpenaiEndpoint,
+        model: store.azureOpenaiModel || 'gpt-4.1-mini'
+      };
     } else if (activeProviderId === 'anthropic') {
-      config = { apiKey: store.anthropicApiKey, model: store.anthropicModel || 'claude-3-5-sonnet-latest' };
+      config = { apiKey: store.anthropicApiKey, model: store.anthropicModel || providerCatalogs.anthropic?.recommendedModel || 'claude-sonnet-4-0' };
     } else if (activeProviderId === 'xai') {
-      config = { apiKey: store.xaiApiKey, model: store.xaiModel || 'grok-2-latest' };
+      config = { apiKey: store.xaiApiKey, model: store.xaiModel || providerCatalogs.xai?.recommendedModel || 'grok-4-latest' };
     } else if (activeProviderId === 'groq') {
-      config = { apiKey: store.groqApiKey, model: store.groqModel || 'llama-3.3-70b-versatile' };
+      config = { apiKey: store.groqApiKey, model: store.groqModel || providerCatalogs.groq?.recommendedModel || 'llama-3.3-70b-versatile' };
     }
 
     if (window.electronAPI) {
@@ -187,6 +497,36 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
 
                 <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
                   <div className="space-y-4">
+                    {activeProviderId === 'copilot' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 text-sky-300 mb-1">
+                          <Monitor size={16} />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-sky-300">Microsoft Copilot Companion</span>
+                        </div>
+                        <div className="rounded-2xl border border-sky-400/15 bg-sky-400/5 p-4 text-xs leading-6 text-white/65">
+                          Use this on Windows if you want an official Copilot companion path without entering a Comet API key. Comet keeps the selection in settings, but Comet&apos;s in-sidebar chat still runs on native providers like Ollama, Gemini, OpenAI, Anthropic, or Groq.
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <button
+                            type="button"
+                            onClick={() => openExternal('https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app')}
+                            className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-white transition-all hover:bg-white/10"
+                          >
+                            Open Copilot
+                            <ExternalLink size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openExternal('https://blogs.windows.com/windowsdeveloper/2024/05/21/unlock-a-new-era-of-innovation-with-windows-copilot-runtime-and-copilot-pcs/')}
+                            className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-white transition-all hover:bg-white/10"
+                          >
+                            Runtime Docs
+                            <ExternalLink size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {activeProviderId === 'ollama' && (
                       <div className="space-y-4">
                         <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
@@ -426,17 +766,11 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setGeminiApiKey(e.target.value)}
                           />
                         </div>
-                        {activeProviderId !== 'google-flash' && (
-                          <div className="space-y-1">
-                            <label className="text-[9px] text-white/30 uppercase font-bold">Model Override</label>
-                            <input
-                              type="text"
-                              placeholder={`e.g. ${geminiPreferences.metadata.id}`}
-                              className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
-                              value={store.geminiModel || ''}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setGeminiModel(e.target.value)}
-                            />
-                          </div>
+                        {renderCatalogControls(
+                          activeProviderId,
+                          store.geminiModel || '',
+                          (model) => store.setGeminiModel(model),
+                          `e.g. ${activeCatalog?.recommendedModel || geminiPreferences.metadata.id}`
                         )}
                         <div className="space-y-2 p-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] text-white/80">
                           <div className="flex items-center justify-between">
@@ -477,14 +811,47 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setOpenaiApiKey(e.target.value)}
                           />
                         </div>
+                        {renderCatalogControls('openai', store.openaiModel || '', (model) => store.setOpenaiModel(model), 'e.g. gpt-5.1')}
+                      </div>
+                    )}
+
+                    {activeProviderId === 'azure-openai' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 text-deep-space-accent-neon mb-1">
+                          <Cloud size={16} className="text-cyan-300" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-deep-space-accent-neon">Microsoft Azure OpenAI</span>
+                        </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] text-white/30 uppercase font-bold">Model</label>
+                          <label className="text-[9px] text-white/30 uppercase font-bold">API Key</label>
+                          <input
+                            type="password"
+                            placeholder="Azure OpenAI key"
+                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+                            value={store.azureOpenaiApiKey || ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setAzureOpenaiApiKey(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-white/30 uppercase font-bold">Base URL</label>
                           <input
                             type="text"
-                            placeholder="e.g. gpt-4o"
+                            placeholder="https://YOUR-RESOURCE.openai.azure.com/openai/v1"
                             className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
-                            value={store.openaiModel || ''}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setOpenaiModel(e.target.value)}
+                            value={store.azureOpenaiEndpoint || ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setAzureOpenaiEndpoint(e.target.value)}
+                          />
+                          <p className="text-[8px] text-white/35">
+                            Use the Azure OpenAI v1 base URL for your resource.
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-white/30 uppercase font-bold">Model / Deployment</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. gpt-4.1-mini"
+                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
+                            value={store.azureOpenaiModel || ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setAzureOpenaiModel(e.target.value)}
                           />
                         </div>
                       </div>
@@ -506,16 +873,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setAnthropicApiKey(e.target.value)}
                           />
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] text-white/30 uppercase font-bold">Model</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. claude-3-5-sonnet-latest"
-                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
-                            value={store.anthropicModel || ''}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setAnthropicModel(e.target.value)}
-                          />
-                        </div>
+                        {renderCatalogControls('anthropic', store.anthropicModel || '', (model) => store.setAnthropicModel(model), 'e.g. claude-sonnet-4-0')}
                       </div>
                     )}
 
@@ -535,16 +893,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setXaiApiKey(e.target.value)}
                           />
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] text-white/30 uppercase font-bold">Model</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. grok-2-latest"
-                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
-                            value={store.xaiModel || ''}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setXaiModel(e.target.value)}
-                          />
-                        </div>
+                        {renderCatalogControls('xai', store.xaiModel || '', (model) => store.setXaiModel(model), 'e.g. grok-4-latest')}
                       </div>
                     )}
 
@@ -564,16 +913,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setGroqApiKey(e.target.value)}
                           />
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] text-white/30 uppercase font-bold">Model</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. llama-3.3-70b-versatile"
-                            className="w-full bg-black/20 border border-white/5 rounded-lg px-3 py-2.5 text-xs text-white placeholder:text-white/10 outline-none"
-                            value={store.groqModel || ''}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setGroqModel(e.target.value)}
-                          />
-                        </div>
+                        {renderCatalogControls('groq', store.groqModel || '', (model) => store.setGroqModel(model), 'e.g. llama-3.3-70b-versatile')}
                       </div>
                     )}
                   </div>
@@ -585,6 +925,120 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                     <Save size={12} />
                     {feedback || 'Save Intelligence Config'}
                   </button>
+
+                  {isMac && (
+                    <div className="mt-4 space-y-3 rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Monitor size={14} className="text-sky-300" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-sky-300">Apple Intelligence Lab</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void refreshAppleStatus()}
+                          className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[8px] font-black uppercase tracking-[0.25em] text-white/60 transition hover:bg-white/10"
+                        >
+                          <RefreshCw size={10} className={appleBusy ? 'animate-spin' : ''} />
+                          Refresh
+                        </button>
+                      </div>
+                      <div className={`rounded-xl border p-3 text-[9px] ${appleStatus?.available || canUseAppleImage ? 'border-emerald-400/15 bg-emerald-400/5 text-white/70' : 'border-amber-400/15 bg-amber-400/5 text-white/70'}`}>
+                        <p>Overall: {appleStatus?.available || canUseAppleImage ? 'Partially or fully available on this Mac' : appleStatus?.error || 'Apple Intelligence not supported or not enabled'}</p>
+                        <p>macOS: {appleStatus?.osVersion || 'Checking runtime version...'}</p>
+                        <p>Summary status: {canUseAppleSummary ? 'Ready' : appleSummaryStatusText}</p>
+                        <p>Image status: {canUseAppleImage ? 'Ready' : appleImageStatusText}</p>
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void openExternal('https://developer.apple.com/apple-intelligence/')}
+                            className="inline-flex items-center gap-1 text-deep-space-accent-neon hover:text-deep-space-accent-neon/80 transition"
+                          >
+                            <ExternalLink size={10} />
+                            Apple docs
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void openExternal('https://developer.apple.com/documentation/FoundationModels')}
+                            className="inline-flex items-center gap-1 text-deep-space-accent-neon hover:text-deep-space-accent-neon/80 transition"
+                          >
+                            <ExternalLink size={10} />
+                            Foundation Models
+                          </button>
+                        </div>
+                      </div>
+
+                      {appleUiError && (
+                        <div className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-[10px] text-rose-100">
+                          {appleUiError}
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <label className="text-[9px] text-white/30 uppercase font-bold">Apple Summary Input</label>
+                        <textarea
+                          placeholder="Paste text here or summarize the current page with one click."
+                          className="h-20 w-full resize-none rounded-xl border border-white/5 bg-black/20 px-3 py-2.5 text-xs text-white placeholder:text-white/15 outline-none"
+                          value={appleSummaryInput}
+                          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAppleSummaryInput(e.target.value)}
+                        />
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <button
+                            type="button"
+                            onClick={handleApplePageSummary}
+                            disabled={appleBusy !== null || !canUseAppleSummary}
+                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-white transition hover:bg-white/10 disabled:opacity-50"
+                          >
+                            {appleBusy === 'summary' ? 'Summarizing…' : 'Summarize Current Page'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void runAppleSummary(appleSummaryInput)}
+                            disabled={appleBusy !== null || !appleSummaryInput.trim() || !canUseAppleSummary}
+                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-white transition hover:bg-white/10 disabled:opacity-50"
+                          >
+                            Summarize Pasted Text
+                          </button>
+                        </div>
+                        {appleSummaryResult && (
+                          <div className="rounded-xl border border-sky-400/15 bg-sky-400/5 p-3 text-[11px] leading-5 text-white/80 whitespace-pre-wrap">
+                            {appleSummaryResult}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 border-t border-white/5 pt-3">
+                        <label className="text-[9px] text-white/30 uppercase font-bold">Apple Image Prompt</label>
+                        <input
+                          type="text"
+                          className="w-full rounded-xl border border-white/5 bg-black/20 px-3 py-2.5 text-xs text-white placeholder:text-white/15 outline-none"
+                          value={appleImagePrompt}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAppleImagePrompt(e.target.value)}
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={handleAppleImage}
+                            disabled={appleBusy !== null || !appleImagePrompt.trim() || !canUseAppleImage}
+                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-white transition hover:bg-white/10 disabled:opacity-50"
+                          >
+                            {appleBusy === 'image' ? 'Generating…' : 'Generate Mac Image'}
+                          </button>
+                          {appleImagePath && (
+                            <button
+                              type="button"
+                              onClick={() => window.electronAPI?.openFile?.(appleImagePath)}
+                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-white transition hover:bg-white/10"
+                            >
+                              Open Image
+                            </button>
+                          )}
+                        </div>
+                        {appleImagePath && (
+                          <p className="text-[9px] text-white/55 break-all">{appleImagePath}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

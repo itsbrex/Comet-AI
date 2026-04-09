@@ -99,6 +99,8 @@ export interface BrowserState {
     // AI settings
     enableAIAssist: boolean;
     openaiApiKey: string;
+    azureOpenaiApiKey: string;
+    azureOpenaiEndpoint: string;
     geminiApiKey: string;
     aiProvider: string;
     ollamaBaseUrl: string;
@@ -109,6 +111,10 @@ export interface BrowserState {
     setOpenaiApiKey: (key: string) => void;
     openaiModel: string;
     setOpenaiModel: (model: string) => void;
+    azureOpenaiModel: string;
+    setAzureOpenaiApiKey: (key: string) => void;
+    setAzureOpenaiEndpoint: (endpoint: string) => void;
+    setAzureOpenaiModel: (model: string) => void;
     setGeminiApiKey: (key: string) => void;
     geminiModel: string;
     setGeminiModel: (model: string) => void;
@@ -385,14 +391,17 @@ export const useAppStore = create<BrowserState>()(
             // AI settings
             enableAIAssist: false,
             openaiApiKey: '',
-            openaiModel: 'gpt-4o',
+            openaiModel: 'gpt-5.1',
+            azureOpenaiApiKey: '',
+            azureOpenaiEndpoint: '',
+            azureOpenaiModel: 'gpt-4.1-mini',
             geminiApiKey: '',
             anthropicApiKey: '',
-            anthropicModel: 'claude-3-5-sonnet-latest',
+            anthropicModel: 'claude-sonnet-4-0',
             groqApiKey: '',
             groqModel: 'llama-3.3-70b-versatile',
             xaiApiKey: '',
-            xaiModel: 'grok-2-latest',
+            xaiModel: 'grok-4-latest',
             aiProvider: 'ollama',
             ollamaBaseUrl: 'http://127.0.0.1:11434',
             ollamaModel: 'deepseek-r1:1.5b',
@@ -730,6 +739,26 @@ export const useAppStore = create<BrowserState>()(
                     window.electronAPI.configureLLMProvider('openai', { model });
                 }
             },
+            setAzureOpenaiApiKey: (key: string) => {
+                set({ azureOpenaiApiKey: key });
+                if (window.electronAPI) {
+                    window.electronAPI.savePersistentData('azure_openai_api_key', key);
+                    window.electronAPI.configureLLMProvider('azure-openai', { apiKey: key });
+                }
+            },
+            setAzureOpenaiEndpoint: (endpoint: string) => {
+                set({ azureOpenaiEndpoint: endpoint });
+                if (window.electronAPI) {
+                    window.electronAPI.savePersistentData('azure_openai_endpoint', endpoint);
+                    window.electronAPI.configureLLMProvider('azure-openai', { baseUrl: endpoint });
+                }
+            },
+            setAzureOpenaiModel: (model: string) => {
+                set({ azureOpenaiModel: model });
+                if (window.electronAPI) {
+                    window.electronAPI.configureLLMProvider('azure-openai', { model });
+                }
+            },
             setGeminiApiKey: (key: string) => {
                 set({ geminiApiKey: key });
                 if (window.electronAPI) {
@@ -939,14 +968,20 @@ export const useAppStore = create<BrowserState>()(
 
             // Shortcuts
             updateShortcut: (action, accelerator) => {
-                set((state) => ({
-                    shortcuts: state.shortcuts.map(s =>
-                        s.action === action ? { ...s, accelerator } : s
-                    )
-                }));
-                // Call main process to update global shortcut
+                let nextShortcuts: BrowserState['shortcuts'] = [];
+                set((state) => {
+                    const exists = state.shortcuts.some((shortcut) => shortcut.action === action);
+                    nextShortcuts = exists
+                        ? state.shortcuts.map((shortcut) =>
+                            shortcut.action === action ? { ...shortcut, accelerator } : shortcut
+                        )
+                        : [...state.shortcuts, { action: action as Shortcut['action'], accelerator }];
+
+                    return { shortcuts: nextShortcuts };
+                });
+
                 if (window.electronAPI) {
-                    window.electronAPI.updateShortcuts([{ action, accelerator }]);
+                    window.electronAPI.updateShortcuts(nextShortcuts);
                 }
             },
             setHasSeenWelcomePage: (seen) => set({ hasSeenWelcomePage: seen }),
@@ -1208,21 +1243,53 @@ if (typeof window !== 'undefined' && window.electronAPI) {
                 useAppStore.getState().setOpenaiApiKey(keys.openai_api_key);
                 window.electronAPI.configureLLMProvider('openai', { apiKey: keys.openai_api_key });
             }
+            if (keys.openai_model) {
+                useAppStore.getState().setOpenaiModel(keys.openai_model);
+                window.electronAPI.configureLLMProvider('openai', { model: keys.openai_model });
+            }
+            if (keys.azure_openai_api_key) {
+                useAppStore.getState().setAzureOpenaiApiKey(keys.azure_openai_api_key);
+                window.electronAPI.configureLLMProvider('azure-openai', { apiKey: keys.azure_openai_api_key });
+            }
+            if (keys.azure_openai_endpoint) {
+                useAppStore.getState().setAzureOpenaiEndpoint(keys.azure_openai_endpoint);
+                window.electronAPI.configureLLMProvider('azure-openai', { baseUrl: keys.azure_openai_endpoint });
+            }
+            if (keys.azure_openai_model) {
+                useAppStore.getState().setAzureOpenaiModel(keys.azure_openai_model);
+                window.electronAPI.configureLLMProvider('azure-openai', { model: keys.azure_openai_model });
+            }
             if (keys.gemini_api_key) {
                 useAppStore.getState().setGeminiApiKey(keys.gemini_api_key);
                 window.electronAPI.configureLLMProvider('google', { apiKey: keys.gemini_api_key });
+            }
+            if (keys.gemini_model) {
+                useAppStore.getState().setGeminiModel(keys.gemini_model);
+                window.electronAPI.configureLLMProvider('google', { model: keys.gemini_model });
             }
             if (keys.anthropic_api_key) {
                 useAppStore.getState().setAnthropicApiKey(keys.anthropic_api_key);
                 window.electronAPI.configureLLMProvider('anthropic', { apiKey: keys.anthropic_api_key });
             }
+            if (keys.anthropic_model) {
+                useAppStore.getState().setAnthropicModel(keys.anthropic_model);
+                window.electronAPI.configureLLMProvider('anthropic', { model: keys.anthropic_model });
+            }
             if (keys.groq_api_key) {
                 useAppStore.getState().setGroqApiKey(keys.groq_api_key);
                 window.electronAPI.configureLLMProvider('groq', { apiKey: keys.groq_api_key });
             }
+            if (keys.groq_model) {
+                useAppStore.getState().setGroqModel(keys.groq_model);
+                window.electronAPI.configureLLMProvider('groq', { model: keys.groq_model });
+            }
             if (keys.xai_api_key) {
                 useAppStore.getState().setXaiApiKey(keys.xai_api_key);
                 window.electronAPI.configureLLMProvider('xai', { apiKey: keys.xai_api_key });
+            }
+            if (keys.xai_model) {
+                useAppStore.getState().setXaiModel(keys.xai_model);
+                window.electronAPI.configureLLMProvider('xai', { model: keys.xai_model });
             }
             if (keys.ollama_base_url) {
                 useAppStore.getState().setOllamaBaseUrl(keys.ollama_base_url);

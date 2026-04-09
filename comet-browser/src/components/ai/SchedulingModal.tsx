@@ -97,6 +97,7 @@ export default function SchedulingModal({
       model: store.aiProvider === 'google' ? store.geminiModel :
              store.aiProvider === 'ollama' ? store.ollamaModel :
              store.aiProvider === 'openai' ? store.openaiModel :
+             store.aiProvider === 'azure-openai' ? store.azureOpenaiModel :
              store.aiProvider === 'anthropic' ? store.anthropicModel :
              store.aiProvider === 'groq' ? store.groqModel : 'gemini-2.0-flash',
     },

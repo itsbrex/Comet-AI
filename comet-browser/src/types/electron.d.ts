@@ -7,6 +7,9 @@ declare global {
             // BrowserView related APIs
             getIsOnline: () => Promise<boolean>;
             getPlatform: () => string;
+            getAppleIntelligenceStatus: () => Promise<{ success: boolean; available?: boolean; supportsSummaries?: boolean; supportsImageGeneration?: boolean; summaryAvailable?: boolean; imageAvailable?: boolean; summaryReason?: string; imageReason?: string; osVersion?: string; error?: string }>;
+            summarizeWithAppleIntelligence: (text: string) => Promise<{ success: boolean; available?: boolean; summaryAvailable?: boolean; summaryReason?: string; osVersion?: string; summary?: string; error?: string }>;
+            generateAppleIntelligenceImage: (payload: { prompt: string; outputPath?: string }) => Promise<{ success: boolean; available?: boolean; imageAvailable?: boolean; imageReason?: string; osVersion?: string; imagePath?: string; error?: string }>;
             onAiQueryDetected: (callback: (query: string) => void) => () => void;
             createView: (args: { tabId: string; url: string }) => void;
             activateView: (args: { tabId: string; bounds: { x: number; y: number; width: number; height: number } }) => void;
@@ -79,6 +82,27 @@ declare global {
 
             // LLM & Memory APIs
             getAvailableLLMProviders: () => Promise<{ id: string; name: string }[]>;
+            getProviderModels: (providerId: string, options?: { forceRefresh?: boolean }) => Promise<{
+                success: boolean;
+                providerId: string;
+                providerName?: string;
+                docsUrl?: string;
+                models: Array<{
+                    id: string;
+                    label?: string;
+                    ownedBy?: string;
+                    created?: number | null;
+                    contextWindow?: number | null;
+                    description?: string;
+                    inputTokenLimit?: number | null;
+                    outputTokenLimit?: number | null;
+                }>;
+                recommendedModel?: string;
+                fetchedAt?: number;
+                requiresApiKey?: boolean;
+                warning?: string;
+                error?: string;
+            }>;
             setActiveLLMProvider: (providerId: string) => Promise<boolean>;
             configureLLMProvider: (providerId: string, options: any) => Promise<boolean>;
             getStoredApiKeys: () => Promise<any>;
@@ -379,10 +403,13 @@ declare global {
             // Desktop Automation v2 — Tesseract OCR
             ocrCaptureWords: (displayId?: string) => Promise<{
                 success: boolean;
+                provider?: string;
+                strategy?: string;
                 words?: Array<{ text: string; confidence: number; bbox: { x0: number; y0: number; x1: number; y1: number }; centerX: number; centerY: number }>;
+                lines?: Array<{ text: string; confidence: number; bbox: { x0: number; y0: number; x1: number; y1: number }; centerX: number; centerY: number }>;
                 error?: string;
             }>;
-            ocrClick: (target: string, useAi?: boolean) => Promise<{ success: boolean; clickedText?: string; method?: string; error?: string }>;
+            ocrClick: (target: string, useAi?: boolean) => Promise<{ success: boolean; clickedText?: string; method?: string; provider?: string; x?: number; y?: number; score?: number; error?: string }>;
             ocrScreenText: (displayId?: string) => Promise<{ success: boolean; text?: string; error?: string }>;
 
             // Desktop Automation v2 — Screen Vision AI
@@ -391,7 +418,7 @@ declare global {
             visionCaptureBase64: () => Promise<{ success: boolean; image?: string; error?: string }>;
 
             // Desktop Automation v2 — AI Engine
-            aiEngineChat: (opts: { message: string; model?: string; systemPrompt?: string; history?: Array<{ role: string; content: string }> }) => Promise<{ success: boolean; response?: string; error?: string }>;
+            aiEngineChat: (opts: { message: string; model?: string; provider?: string; systemPrompt?: string; history?: Array<{ role: string; content: string }> }) => Promise<{ success: boolean; response?: string; error?: string }>;
             aiEngineConfigure: (keys: Record<string, string>) => Promise<{ success: boolean }>;
 
             // Flutter Bridge
