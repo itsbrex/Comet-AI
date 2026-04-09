@@ -1,10 +1,6 @@
 name: 🏷️ Auto Release on Tag
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
-      - 'v*.*.*-*'
   workflow_dispatch:
     inputs:
       force:

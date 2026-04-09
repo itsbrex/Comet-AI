@@ -2,15 +2,6 @@ name: Build All Platforms (Stable)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - develop
-    tags:
-      - 'v*.*.*'
-  pull_request:
-    branches:
-      - main
 
 permissions:
   contents: write
