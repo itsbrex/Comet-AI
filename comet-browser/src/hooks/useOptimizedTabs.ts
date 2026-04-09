@@ -1,11 +1,19 @@
 // Hook for optimized tab management with suspension and lazy loading
 import { useEffect, useMemo, useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '@/store/useAppStore';
 import { tabOptimizer } from '@/lib/TabOptimizer';
+import { selectOptimizedTabsStore } from '@/store/selectors';
 
 export const useOptimizedTabs = () => {
-  const store = useAppStore();
-  const { tabs, activeTabId, performanceMode, performanceModeSettings } = store;
+  const {
+    tabs,
+    activeTabId,
+    performanceMode,
+    performanceModeSettings,
+    setActiveTab,
+    updateTab,
+  } = useAppStore(useShallow(selectOptimizedTabsStore));
 
   // Track recent tab access for optimizer
   const recentTabIds = useMemo(() => {
@@ -70,15 +78,15 @@ export const useOptimizedTabs = () => {
     tabs.forEach(tab => {
       const shouldBeActive = activeTabIds.includes(tab.id);
       if (shouldBeActive && tab.isSuspended) {
-        store.updateTab(tab.id, { isSuspended: false });
+        updateTab(tab.id, { isSuspended: false });
         if (window.electronAPI) window.electronAPI.resumeTab?.(tab.id);
       } else if (!shouldBeActive && !tab.isSuspended) {
         // Suspend if not in active tabs list
-        store.updateTab(tab.id, { isSuspended: true });
+        updateTab(tab.id, { isSuspended: true });
         if (window.electronAPI) window.electronAPI.suspendTab?.(tab.id);
       }
     });
-  }, [tabs, activeTabIds, store]);
+  }, [tabs, activeTabIds, updateTab]);
 
   // Only render active tab (others are suspended/unloaded)
   const shouldRenderTab = useCallback((tabId: string) => {
@@ -87,10 +95,10 @@ export const useOptimizedTabs = () => {
 
   // Update tab last accessed time when switched
   const handleTabSwitch = useCallback((tabId: string) => {
-    store.setActiveTab(tabId);
+    setActiveTab(tabId);
     // Note: setActiveTab now updates lastAccessed and isSuspended in the store
     if (window.electronAPI) window.electronAPI.resumeTab?.(tabId);
-  }, [store]);
+  }, [setActiveTab]);
 
   // Check if tab is suspended
   const isTabSuspended = useCallback((tabId: string) => {

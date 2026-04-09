@@ -1,317 +1,449 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useAppStore } from '@/store/useAppStore';
-import { Cpu, Globe, Key, Settings2, ShieldCheck, ArrowRight, Check, Play, DownloadCloud, Sparkles, ChevronLeft, Terminal, Activity, Zap } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  ArrowRight,
+  Bot,
+  Check,
+  ChevronLeft,
+  Cloud,
+  ExternalLink,
+  Monitor,
+  MoonStar,
+  Palette,
+  ShieldCheck,
+  Sparkles,
+  SunMedium,
+  Wifi,
+} from 'lucide-react';
+
 import { useAppVersion } from '@/lib/useAppVersion';
+import { useAppStore } from '@/store/useAppStore';
+
+type ThemeChoice = 'system' | 'light' | 'dark' | 'vibrant';
+
+const themeOptions: Array<{
+  id: ThemeChoice;
+  title: string;
+  description: string;
+  preview: string;
+  icon: React.ReactNode;
+}> = [
+  {
+    id: 'system',
+    title: 'System',
+    description: 'Follow the look of your operating system automatically.',
+    preview: 'linear-gradient(135deg, #111827 0%, #f8fafc 100%)',
+    icon: <Monitor size={16} />,
+  },
+  {
+    id: 'light',
+    title: 'Light',
+    description: 'A bright, polished workspace for daytime research and docs.',
+    preview: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)',
+    icon: <SunMedium size={16} />,
+  },
+  {
+    id: 'dark',
+    title: 'Dark',
+    description: 'Minimal contrast-first theme for long sessions and focus.',
+    preview: 'linear-gradient(135deg, #020617 0%, #0f172a 100%)',
+    icon: <MoonStar size={16} />,
+  },
+  {
+    id: 'vibrant',
+    title: 'Vibrant',
+    description: 'A richer gradient look that still keeps the UI disciplined.',
+    preview: 'linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%)',
+    icon: <Sparkles size={16} />,
+  },
+];
+
+const providerCards = [
+  {
+    id: 'ollama',
+    title: 'Local Ollama',
+    description: 'Keep prompts and responses on your machine with local models.',
+    cta: 'Use Ollama',
+    accent: 'from-sky-400/20 to-sky-400/5',
+    link: 'https://ollama.com/download',
+  },
+  {
+    id: 'google',
+    title: 'Gemini API',
+    description: 'Quick cloud setup if you want Comet AI chat working right away.',
+    cta: 'Use Gemini',
+    accent: 'from-emerald-400/18 to-emerald-400/5',
+    link: 'https://aistudio.google.com/app/apikey',
+  },
+  {
+    id: 'openai',
+    title: 'OpenAI API',
+    description: 'Connect GPT models for strong general chat and coding help.',
+    cta: 'Use OpenAI',
+    accent: 'from-violet-400/18 to-violet-400/5',
+    link: 'https://platform.openai.com/api-keys',
+  },
+];
+
+const openExternal = async (url: string) => {
+  if (window.electronAPI?.openExternalUrl) {
+    await window.electronAPI.openExternalUrl(url);
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+};
 
 export const StartupSetupUI = ({ onComplete }: { onComplete: () => void }) => {
   const store = useAppStore();
-  const [step, setStep] = useState(1);
-  const [wantsAI, setWantsAI] = useState<boolean | null>(null);
   const versionLabel = `v${useAppVersion()}`;
+  const [step, setStep] = useState(1);
+  const [wantsAI, setWantsAI] = useState(true);
+  const isWindows = useMemo(() => {
+    if (typeof navigator === 'undefined') return false;
+    return /win/i.test(navigator.userAgent) || navigator.platform.toLowerCase().includes('win');
+  }, []);
 
   const finishSetup = () => {
     store.setHasCompletedStartupSetup(true);
     onComplete();
   };
 
-  const steps = [
-    { title: 'Intelligence', icon: <Cpu size={14} /> },
-    { title: 'Neural Core', icon: <Zap size={14} /> },
-    { title: 'Synchronization', icon: <Globe size={14} /> }
-  ];
+  const goNext = () => setStep((current) => Math.min(current + 1, 4));
+  const goBack = () => setStep((current) => Math.max(current - 1, 1));
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-[#020205]/95 backdrop-blur-3xl flex items-center justify-center p-6 text-primary-text font-sans selection:bg-sky-500/30">
-      {/* Background Decor */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_0%,rgba(56,189,248,0.1)_0%,transparent_70%)]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-sky-500/5 blur-[150px] rounded-full" />
-      </div>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#061019]/94 p-6 text-white backdrop-blur-3xl">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.14),transparent_38%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(14,165,233,0.08),transparent_24%)]" />
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.98, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="relative w-full max-w-2xl bg-black/40 border border-white/5 rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] overflow-hidden"
+        initial={{ opacity: 0, y: 16, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        className="relative z-10 w-full max-w-4xl overflow-hidden rounded-[36px] border border-white/10 bg-[#0a1720]/92 shadow-[0_40px_140px_rgba(0,0,0,0.35)]"
       >
-        {/* Header with Step Indicator */}
-        <div className="px-10 pt-10 pb-6 border-b border-white/5 bg-white/[0.01]">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-400/20 flex items-center justify-center text-sky-400 shadow-[0_0_20px_rgba(56,189,248,0.1)]">
-                <Settings2 size={24} />
+        <div className="border-b border-white/10 bg-white/[0.03] px-8 py-7">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-sky-300/20 bg-sky-300/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-sky-100/85">
+                <Palette size={14} />
+                Setup guide
               </div>
-              <div>
-                <h2 className="text-xl font-black uppercase tracking-tighter text-white italic">Comet Initializer</h2>
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <p className="text-[10px] text-white/30 font-black uppercase tracking-[0.2em]">Protocol Sequence {step}/3</p>
-                </div>
-              </div>
+              <h2 className="text-3xl font-semibold tracking-[-0.03em]">Make Comet feel ready before the first tab opens.</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-7 text-white/55">
+                Choose how much AI you want, pick a theme, review Windows Copilot and provider options, then finish with sync and security basics.
+              </p>
             </div>
-            {step > 1 && (
-              <button 
-                onClick={() => setStep(step - 1)}
-                className="p-3 rounded-xl hover:bg-white/5 text-white/40 hover:text-white transition-all flex items-center gap-2 group"
-              >
-                <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Return</span>
-              </button>
-            )}
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/40">Build</p>
+              <p className="mt-1 text-sm font-semibold text-white/80">{versionLabel}</p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {steps.map((s, i) => (
-              <React.Fragment key={i}>
-                <div className={`flex items-center gap-2 transition-all duration-500 ${step > i ? 'opacity-100' : 'opacity-20'}`}>
-                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${step > i ? 'bg-sky-500 text-black' : 'bg-white/10 text-white'}`}>
-                    {step > i + 1 ? <Check size={12} /> : s.icon}
+          <div className="mt-6 grid gap-3 sm:grid-cols-4">
+            {['Workspace', 'Theme', 'AI Access', 'Sync'].map((label, index) => {
+              const stepNumber = index + 1;
+              const active = step === stepNumber;
+              const done = step > stepNumber;
+
+              return (
+                <div
+                  key={label}
+                  className={`rounded-2xl border px-4 py-3 transition ${active ? 'border-sky-300/30 bg-sky-300/10' : 'border-white/10 bg-white/[0.03]'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/45">{label}</span>
+                    <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${done || active ? 'bg-white text-slate-900' : 'bg-white/8 text-white/55'}`}>
+                      {done ? <Check size={14} /> : stepNumber}
+                    </span>
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white hidden sm:inline">{s.title}</span>
                 </div>
-                {i < steps.length - 1 && <div className={`flex-1 h-[2px] rounded-full mx-2 transition-all duration-700 ${step > i + 1 ? 'bg-sky-500' : 'bg-white/5'}`} />}
-              </React.Fragment>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        <div className="p-10">
+        <div className="px-8 py-8">
           <AnimatePresence mode="wait">
             {step === 1 && (
-              <motion.div 
-                key="step1"
-                initial={{ opacity: 0, x: 20 }}
+              <motion.div
+                key="workspace"
+                initial={{ opacity: 0, x: 24 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-8"
+                exit={{ opacity: 0, x: -24 }}
+                className="space-y-6"
               >
-                <div className="space-y-3">
-                  <h3 className="text-2xl font-black text-white tracking-tight uppercase italic">Cognitive Integration</h3>
-                  <p className="text-white/40 text-sm leading-relaxed font-medium">
-                    Activate the Comet Neural Agent to enable autonomous research, workspace automation, and proactive assistance.
-                  </p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWantsAI(true);
+                      store.setEnableAIAssist(true);
+                    }}
+                    className={`rounded-[28px] border p-6 text-left transition ${wantsAI ? 'border-sky-300/35 bg-sky-300/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.05]'}`}
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/8 text-sky-200">
+                      <Bot size={22} />
+                    </div>
+                    <h3 className="mt-5 text-xl font-semibold tracking-[-0.02em]">Use Comet AI</h3>
+                    <p className="mt-2 text-sm leading-7 text-white/58">
+                      Turn on the in-browser assistant so setup can point you to Ollama or provider keys next.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWantsAI(false);
+                      store.setEnableAIAssist(false);
+                    }}
+                    className={`rounded-[28px] border p-6 text-left transition ${!wantsAI ? 'border-white/20 bg-white/[0.08]' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.05]'}`}
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/8 text-white/75">
+                      <ShieldCheck size={22} />
+                    </div>
+                    <h3 className="mt-5 text-xl font-semibold tracking-[-0.02em]">Start simple</h3>
+                    <p className="mt-2 text-sm leading-7 text-white/58">
+                      Skip built-in AI for now and keep Comet as a focused browser while you finish the rest of onboarding.
+                    </p>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <button
-                    onClick={() => { setWantsAI(true); store.setEnableAIAssist(true); setStep(2); }}
-                    className="group relative p-8 rounded-[2rem] border border-sky-400/20 bg-sky-500/[0.03] hover:bg-sky-500/[0.08] hover:border-sky-400/50 transition-all duration-500 text-left overflow-hidden"
-                  >
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-30 transition-opacity">
-                      <Sparkles size={64} />
-                    </div>
-                    <div className="relative z-10 space-y-6">
-                      <div className="w-14 h-14 rounded-2xl bg-sky-400/20 flex items-center justify-center text-sky-400 shadow-2xl group-hover:scale-110 transition-transform duration-500">
-                        <Cpu size={32} />
+                <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/42">What changes</p>
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    {[
+                      'The theme selector now lives in setup instead of only settings.',
+                      'Windows users get an official Copilot companion path with no Comet API key needed.',
+                      'You can still finish setup even if you want to connect AI later.',
+                    ].map((item) => (
+                      <div key={item} className="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm leading-6 text-white/62">
+                        {item}
                       </div>
-                      <div>
-                        <h4 className="font-black text-white text-lg uppercase tracking-tight italic">Evolve Workspace</h4>
-                        <p className="text-[10px] text-sky-400/60 mt-1 uppercase tracking-[0.2em] font-black underline decoration-2 underline-offset-4">Full Neural Link</p>
-                      </div>
-                    </div>
-                  </button>
-                  
-                  <button
-                    onClick={() => { setWantsAI(false); store.setEnableAIAssist(false); finishSetup(); }}
-                    className="group relative p-8 rounded-[2rem] border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 transition-all duration-500 text-left overflow-hidden"
-                  >
-                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                      <Globe size={64} />
-                    </div>
-                    <div className="relative z-10 space-y-6">
-                      <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-white/20 group-hover:text-white/60 group-hover:bg-white/10 transition-all duration-500">
-                        <Globe size={32} />
-                      </div>
-                      <div>
-                        <h4 className="font-black text-white text-lg uppercase tracking-tight italic">Classic Only</h4>
-                        <p className="text-[10px] text-white/20 mt-1 uppercase tracking-[0.2em] font-black">Traditional Node</p>
-                      </div>
-                    </div>
-                  </button>
+                    ))}
+                  </div>
                 </div>
               </motion.div>
             )}
 
-            {step === 2 && wantsAI && (
-              <motion.div 
-                key="step2"
-                initial={{ opacity: 0, x: 20 }}
+            {step === 2 && (
+              <motion.div
+                key="theme"
+                initial={{ opacity: 0, x: 24 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-8"
+                exit={{ opacity: 0, x: -24 }}
+                className="space-y-6"
               >
-                <div className="space-y-3">
-                  <h3 className="text-2xl font-black text-white tracking-tight uppercase italic">Engine Configuration</h3>
-                  <p className="text-white/40 text-sm leading-relaxed font-medium">
-                    Bridge your neural link via secure cloud endpoints or deploy a local Ollama node for maximum privacy.
-                  </p>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/42">Pick your theme</p>
+                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">Choose the look you want before you land in the app.</h3>
                 </div>
 
-                <div className="space-y-4 max-h-[380px] overflow-y-auto pr-4 custom-scrollbar">
-                  {/* Ollama Section */}
-                  <div className="p-6 rounded-[2rem] bg-indigo-500/[0.03] border border-indigo-500/10 hover:border-indigo-500/30 transition-all group">
-                    <div className="flex items-start justify-between mb-6">
-                      <div className="flex gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-white/5 p-2 border border-white/10">
-                          <img src="/ai-logos/ollama.png" className="w-full h-full object-contain filter invert opacity-60" alt="Ollama" />
-                        </div>
-                        <div>
-                          <h4 className="font-black text-white uppercase italic tracking-tight">Local Ollama</h4>
-                          <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mt-1">Zero-Trust Privacy</p>
-                        </div>
-                      </div>
-                      <a href="https://ollama.com" target="_blank" rel="noreferrer" className="px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-xl text-[10px] font-black text-indigo-400 uppercase tracking-widest transition-all">
-                        Deploy Node
-                      </a>
-                    </div>
-                    
-                    <div className="flex gap-3">
-                      <div className="relative flex-1 group/input">
-                         <Terminal size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within/input:text-indigo-400 transition-colors" />
-                         <input 
-                            type="text" 
-                            value={store.ollamaBaseUrl}
-                            onChange={(e) => store.setOllamaBaseUrl(e.target.value)}
-                            placeholder="http://127.0.0.1:11434"
-                            className="w-full bg-black/40 border border-white/5 rounded-2xl px-12 py-3 text-sm focus:outline-none focus:border-indigo-500/50 transition-all font-mono"
-                          />
-                      </div>
-                      <button 
-                        onClick={() => { store.setAIProvider('ollama'); setStep(3); }}
-                        className="px-6 py-3 bg-indigo-500 hover:bg-indigo-400 text-black font-black uppercase tracking-widest text-[10px] rounded-2xl shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {themeOptions.map((option) => {
+                    const active = store.theme === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => store.setTheme(option.id)}
+                        className={`rounded-[26px] border p-5 text-left transition ${active ? 'border-sky-300/35 bg-sky-300/10 shadow-[0_20px_60px_rgba(56,189,248,0.15)]' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.05]'}`}
                       >
-                        Mount
+                        <div
+                          className="h-24 rounded-2xl border border-white/10"
+                          style={{ background: option.preview }}
+                        />
+                        <div className="mt-4 flex items-center justify-between">
+                          <span className="flex items-center gap-2 text-sm font-semibold text-white">
+                            {option.icon}
+                            {option.title}
+                          </span>
+                          {active && <Check size={16} className="text-sky-200" />}
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-white/56">{option.description}</p>
                       </button>
-                    </div>
-                  </div>
-
-                  {/* Provider List */}
-                  {[
-                    { id: 'google', name: 'Gemini Pro', icon: '/ai-logos/gemini.svg', color: 'sky' },
-                    { id: 'openai', name: 'GPT-4o', icon: '/ai-logos/chatgpt.png', color: 'emerald' },
-                    { id: 'groq', name: 'Groq LPU', icon: '/ai-logos/Grok.png', color: 'amber' },
-                  ].map(provider => (
-                    <div key={provider.id} className="p-6 rounded-[2rem] bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group">
-                      <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-4">
-                          <img src={provider.icon} className="w-8 h-8 object-contain opacity-40 group-hover:opacity-100 transition-opacity" alt={provider.name} />
-                          <h4 className="font-black text-white uppercase italic tracking-tight">{provider.name}</h4>
-                        </div>
-                        <span className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em]">Cloud Node</span>
-                      </div>
-                      <div className="flex gap-3">
-                        <div className="relative flex-1">
-                           <Key size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/10" />
-                           <input 
-                              type="password" 
-                              value={provider.id === 'google' ? store.geminiApiKey : provider.id === 'openai' ? store.openaiApiKey : store.groqApiKey}
-                              onChange={(e) => {
-                                if (provider.id === 'google') store.setGeminiApiKey(e.target.value);
-                                if (provider.id === 'openai') store.setOpenaiApiKey(e.target.value);
-                                if (provider.id === 'groq') store.setGroqApiKey(e.target.value);
-                              }}
-                              placeholder="Access Token..."
-                              className="w-full bg-black/20 border border-white/5 rounded-2xl px-12 py-3 text-sm focus:outline-none focus:border-white/20 transition-all font-mono"
-                            />
-                        </div>
-                        <button 
-                          onClick={() => { store.setAIProvider(provider.id); setStep(3); }}
-                          className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl border border-white/10 transition-all active:scale-95"
-                        >
-                          Link
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex items-center justify-between pt-4">
-                  <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
-                    <Activity size={12} className="text-emerald-400" />
-                    <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Nodes Active</span>
-                  </div>
-                  <button onClick={() => finishSetup()} className="text-[10px] font-black text-white/20 hover:text-white uppercase tracking-[0.3em] transition-colors">
-                    Skip Link Protocol
-                  </button>
+                    );
+                  })}
                 </div>
               </motion.div>
             )}
 
             {step === 3 && (
-              <motion.div 
-                key="step3"
-                initial={{ opacity: 0, x: 20 }}
+              <motion.div
+                key="ai-access"
+                initial={{ opacity: 0, x: 24 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-8"
+                exit={{ opacity: 0, x: -24 }}
+                className="space-y-6"
               >
-                <div className="space-y-3">
-                  <h3 className="text-2xl font-black text-white tracking-tight uppercase italic">Synchronization</h3>
-                  <p className="text-white/40 text-sm leading-relaxed font-medium">
-                    Connect your mobile devices for seamless clipboard sync, remote control, and file sharing.
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="p-6 rounded-[2rem] bg-emerald-500/[0.03] border border-emerald-500/10 hover:border-emerald-500/30 transition-all">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-                          <Globe size={24} />
-                        </div>
-                        <div>
-                          <h4 className="font-black text-white uppercase italic tracking-tight">WiFi Sync</h4>
-                          <p className="text-[10px] text-emerald-400/60 mt-1 font-black uppercase tracking-widest">Local Network Discovery</p>
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-white/40 text-xs">
-                      Pair with mobile app via QR code to enable clipboard sync, remote control, and file transfer.
-                    </p>
+                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/42">AI access</p>
+                    <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">Choose how you want to power the assistant.</h3>
                   </div>
-
-                  <div className="p-6 rounded-[2rem] bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-white/40">
-                          <ShieldCheck size={24} />
-                        </div>
-                        <div>
-                          <h4 className="font-black text-white uppercase italic tracking-tight">Cloud Backup</h4>
-                          <p className="text-[10px] text-white/20 mt-1 font-black uppercase tracking-widest">Optional</p>
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-white/20 text-xs">
-                      Sync settings and data to cloud for cross-device continuity.
-                    </p>
+                  <div className="rounded-2xl border border-amber-300/18 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50/82">
+                    Comet still needs Ollama or provider keys for its built-in chat. Windows Copilot below is a companion path today.
                   </div>
                 </div>
 
-                <button 
+                {wantsAI ? (
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    {providerCards.map((provider) => (
+                      <div key={provider.id} className={`rounded-[28px] border border-white/10 bg-gradient-to-br ${provider.accent} p-5`}>
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/10 text-white">
+                          {provider.id === 'ollama' ? <Monitor size={20} /> : <Cloud size={20} />}
+                        </div>
+                        <h4 className="mt-5 text-lg font-semibold">{provider.title}</h4>
+                        <p className="mt-2 text-sm leading-6 text-white/62">{provider.description}</p>
+                        <div className="mt-5 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              store.setAIProvider(provider.id);
+                              if (provider.id === 'ollama' && !store.ollamaBaseUrl) {
+                                store.setOllamaBaseUrl('http://127.0.0.1:11434');
+                              }
+                            }}
+                            className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+                          >
+                            {provider.cta}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openExternal(provider.link)}
+                            className="flex items-center gap-2 rounded-xl border border-white/12 bg-white/8 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/12"
+                          >
+                            Open link
+                            <ExternalLink size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6 text-sm leading-7 text-white/62">
+                    Built-in AI is off for now. You can still finish setup and configure Ollama or cloud providers later from settings.
+                  </div>
+                )}
+
+                {isWindows && (
+                  <div className="rounded-[30px] border border-sky-300/20 bg-sky-300/10 p-6">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="max-w-2xl">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-sky-50/70">Windows companion</p>
+                        <h4 className="mt-2 text-xl font-semibold tracking-[-0.02em]">Use Microsoft Copilot on Windows without adding a Comet API key.</h4>
+                        <p className="mt-2 text-sm leading-7 text-sky-50/80">
+                          Microsoft says the Copilot app is already installed on many Windows 11 PCs, and if not, it can be installed free from the Microsoft Store. We also link the official Copilot Runtime developer docs for Windows AI work.
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={() => openExternal('https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app')}
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+                        >
+                          Open Copilot
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openExternal('https://blogs.windows.com/windowsdeveloper/2024/05/21/unlock-a-new-era-of-innovation-with-windows-copilot-runtime-and-copilot-pcs/')}
+                          className="rounded-2xl border border-white/14 bg-white/8 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/14"
+                        >
+                          Copilot Runtime docs
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {step === 4 && (
+              <motion.div
+                key="sync"
+                initial={{ opacity: 0, x: 24 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -24 }}
+                className="space-y-6"
+              >
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/42">Final checks</p>
+                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">You are ready to open Comet.</h3>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  {[
+                    {
+                      icon: <Wifi size={18} />,
+                      title: 'WiFi sync',
+                      body: 'Pair with mobile later for clipboard sync, remote control, and automation follow-up.',
+                    },
+                    {
+                      icon: <ShieldCheck size={18} />,
+                      title: 'Permission manager',
+                      body: 'Low, medium, and high-risk actions now route through a single approval flow.',
+                    },
+                    {
+                      icon: <Palette size={18} />,
+                      title: 'Theme saved',
+                      body: `Current theme: ${store.theme}. You can change it anytime in Appearance settings.`,
+                    },
+                  ].map((item) => (
+                    <div key={item.title} className="rounded-[26px] border border-white/10 bg-white/[0.04] p-5">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/8 text-sky-200">
+                        {item.icon}
+                      </div>
+                      <h4 className="mt-4 text-lg font-semibold">{item.title}</h4>
+                      <p className="mt-2 text-sm leading-6 text-white/58">{item.body}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
                   onClick={finishSetup}
-                  className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-widest text-sm rounded-2xl shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                  className="flex w-full items-center justify-center gap-2 rounded-[24px] bg-white px-5 py-4 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
                 >
-                  Complete Setup
+                  Finish setup
+                  <ArrowRight size={16} />
                 </button>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        {/* Footer info */}
-        <div className="px-10 py-6 bg-white/[0.01] border-t border-white/5 flex items-center justify-between">
-          <div className="text-[9px] font-black text-white/10 uppercase tracking-[0.4em]">COMET SYSTEM {versionLabel}</div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1">
-              <span className="w-1 h-1 rounded-full bg-sky-500" />
-              <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Secure</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-1 h-1 rounded-full bg-purple-500" />
-              <span className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Neural</span>
-            </div>
+        <div className="flex items-center justify-between border-t border-white/10 bg-white/[0.02] px-8 py-5">
+          <button
+            type="button"
+            onClick={goBack}
+            disabled={step === 1}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition ${step === 1 ? 'cursor-default text-white/20' : 'text-white/65 hover:bg-white/6 hover:text-white'}`}
+          >
+            <ChevronLeft size={16} />
+            Back
+          </button>
+
+          <div className="flex items-center gap-2">
+            {[1, 2, 3, 4].map((item) => (
+              <div
+                key={item}
+                className={`h-2 rounded-full transition-all ${step === item ? 'w-10 bg-white' : 'w-2 bg-white/18'}`}
+              />
+            ))}
           </div>
+
+          {step < 4 ? (
+            <button
+              type="button"
+              onClick={goNext}
+              className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+            >
+              Next
+              <ArrowRight size={16} />
+            </button>
+          ) : (
+            <div className="w-[88px]" />
+          )}
         </div>
       </motion.div>
     </div>

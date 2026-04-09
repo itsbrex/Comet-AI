@@ -1,9 +1,23 @@
-#  Comet AI Browser (v0.2.7.1)!      [Made with Love in India](https://madewithlove.org.in/badge.svg)
+#  Comet AI Browser (v0.2.8)!      [Made with Love in India](https://madewithlove.org.in/badge.svg)
 
-### v0.2.7.1 Patch (2026-04-06)
+### Performance Pass (2026-04-09)
+- **Action Chain Queue**: Replaced the renderer busy-wait loop with an event-driven queue completion flow, eliminating the `setTimeout(..., 0)` spin that could spike CPU during long action chains
+- **Centralized Store Selectors**: Added shared Zustand selectors in `src/store/selectors.ts` so `AIChatSidebar`, `ClientOnlyPage`, and `useOptimizedTabs` no longer subscribe to the full app store
+- **Duplicate Approval Listener Cleanup**: Merged repeated shell-approval and high-risk mobile approval listeners into a single path to avoid duplicate prompts and conflicting state updates
+- **Native macOS Sync Throttling**: Debounced `updateNativeMacUIState` snapshots so large message/action payloads are not rebuilt and sent on every tiny render
+- **Shared AIChatSidebar Helpers**: Centralized queue-settlement and command-signature helpers to reduce repeated inline logic in the action-chain executor
+
+### v0.2.8 Nebula (2026-04-08)
+- **Automation Layer**: Cross-platform native automation (macOS/Windows/Linux)
+- **Plugin System**: Full plugin SDK with lifecycle management
+- **Jest Test Suite**: 79 passing tests with coverage
+- **GitHub Actions**: Updated to Node 20, npm ci
+- **Secure DOM Parser**: Fast, reliable page analysis + OCR fallback
 - **TypeScript Compilation Fixes**: Fixed all TS errors for `npm run dev`
 - **Plugin API Types**: Added complete type definitions for plugins interface
 - **Regex Compatibility**: Replaced ES2018 flags with compatible patterns
+- **AIChatSidebar Modularization**: Split into AIChatSidebar/ subdirectory with types.ts, helpers.ts
+- **Core Refactoring**: Extracted network-security.js, window-manager.js, command-executor.js
 
 ### v0.2.6 New Features
 - **On-Demand Skill Loading**: Document generation skills (PDF/DOCX/PPTX) now load dynamically when needed, reducing AI context size by ~150 lines
@@ -26,7 +40,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.7.1--stable-green)]()
+[![Version](https://img.shields.io/badge/Version-0.2.8--stable-green)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 ![Maintained](https://img.shields.io/badge/Maintained-Yes-green)
 ![Hardware](https://img.shields.io/badge/Tested_On-i5--8250U_|_8GB-orange)
@@ -49,7 +63,7 @@
 
 Unlike traditional AI browsers that rely only on model guardrails, Comet enforces **architectural isolation**:
 
-- 🔍 OCR-only visual perception  
+- 🔍 Secure DOM Parser + Visual Sandbox  
 - 🔥 Syntactic command firewall  
 - 🔐 Human-authorized native execution  
 
@@ -77,12 +91,12 @@ Comet is for developers, researchers, and power users who want programmable brow
 Comet includes a multimodal browser-level agent.
 
 ### Perception System
-- Screen capture
-- Tesseract.js OCR
-- DOM-aware snapshotting
-- Vision models (Claude / Gemini)
+- **Secure DOM Parser** (Primary) - Fast, reliable structured data extraction with XSS prevention
+- **DOM Search Display** - Visual element highlighting and metadata
+- **OCR Engine** (Fallback) - Tesseract.js for screenshots and cross-app text recognition
+- Vision models (Claude / Gemini) for complex visual reasoning
 
-The AI sees **pixels, not executable HTML.**
+The AI sees **structured DOM data** for speed and reliability, with **OCR fallback** for screenshots, external apps, and visual verification.
 
 ### Action Engine
 
@@ -117,14 +131,27 @@ Hybrid routing:
 Comet does **not** claim LLM immunity.  
 It enforces **system-level isolation.**
 
-### 1️⃣ Visual Sandbox (OCR-Only)
-The agent perceives pages via screenshots + OCR.  
-It does not execute or parse raw HTML/JS.
+### 1️⃣ Secure DOM Parser + OCR Fallback
+The agent perceives pages via **structured DOM extraction** with secure parsing (primary).  
+OCR with **Tesseract.js** provides fallback for screenshots and cross-app text.
+
+**SecureDOMReader** features:
+- XSS prevention and sanitization
+- Structured data extraction (text, links, images, tables)
+- DOM search with element highlighting
+- Fast regex-based parsing with fallback support
+
+**OCR Fallback** (for external apps, screenshots, visual verification):
+- Tesseract.js text recognition
+- Cross-app element detection
+- Screenshot analysis
+- Vision model integration
 
 Prevents:
 - Hidden prompt injection
 - Script payload attacks
 - DOM manipulation exploits
+- HTML/JS injection attacks
 
 ---
 
@@ -194,7 +221,60 @@ Optimization Techniques:
 - Lazy model loading  
 - Sandboxed tab processes  
 
+### Performance Work Completed
+
+- Action-chain execution now waits on command completion events instead of spinning the renderer in a zero-delay loop
+- Renderer-heavy surfaces use centralized selectors rather than subscribing to the entire Zustand store
+- macOS native bridge state sync is batched to reduce repeated serialization during chat streaming
+- Duplicate approval listeners were removed so shell/high-risk flows no longer register redundant handlers
+
 Efficient engineering > expensive hardware.
+
+---
+
+## 🏗️ Architecture & Modularization
+
+### Codebase Structure
+
+```
+comet-browser/src/
+├── main.js                    # Main Electron process (orchestrator)
+├── preload.js                 # Context bridge (secure IPC)
+├── components/
+│   ├── AIChatSidebar.tsx      # Main chat UI (4,419 lines)
+│   ├── AIChatSidebar/         # Modularized sub-components
+│   │   ├── types.ts          # Type definitions
+│   │   └── helpers.ts        # Utility functions
+│   └── ...
+├── store/
+│   ├── useAppStore.ts         # Global app state
+│   └── selectors.ts           # Centralized performant selectors
+├── core/                      # Extracted core modules
+│   ├── network-security.js    # Security config
+│   ├── window-manager.js      # Window lifecycle
+│   └── command-executor.js    # Command handlers
+├── automation/               # Cross-platform automation
+│   ├── index.js              # Main automation layer
+│   ├── mac.js                # macOS native
+│   ├── win.js                # Windows native
+│   ├── linux.js              # Linux native
+│   └── fallback.js           # RobotJS fallback
+├── lib/                      # Services & utilities
+│   ├── SecureDOMReader.js    # DOM parsing
+│   ├── DOMSearchDisplay.js   # Element search
+│   ├── plugin-manager.js     # Plugin system
+│   └── ...
+├── workers/
+│   └── task-queue.js         # Background tasks
+└── service/                  # Background service
+    └── ...                   # 12 service files
+```
+
+### Modularization Benefits
+- **AIChatSidebar**: Split into `types.ts`, `helpers.ts` for better maintainability
+- **Core Modules**: `network-security.js`, `window-manager.js`, `command-executor.js` extracted
+- **Automation Layer**: Platform-specific backends with unified interface
+- **Plugin System**: Full SDK with lifecycle management
 
 ---
 
@@ -230,8 +310,19 @@ Mobile agent trigger:
 
 Framework: Electron + Next.js
 
-- RobotJS permission-gated automation
-- Tesseract OCR screen targeting
+### Automation Layer (Cross-Platform)
+Comet uses **native OS automation** with platform-specific backends:
+
+| Platform | Backend | Features |
+|----------|---------|----------|
+| **macOS** | `src/automation/mac.js` | AppleScript, native bridges |
+| **Windows** | `src/automation/win.js` | PowerShell, Win32 API |
+| **Linux** | `src/automation/linux.js` | xdotool, xte, X11 |
+| **Fallback** | `src/automation/fallback.js` | RobotJS conditional loader |
+
+### Additional Features
+- Secure DOM Parser for fast, reliable page analysis
+- OCR fallback with Tesseract.js for cross-app automation
 - Raycast integration (macOS)
 - MCP Desktop servers (FileSystem / NativeApp)
 - Keyboard shortcuts:

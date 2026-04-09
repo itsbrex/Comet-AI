@@ -16,8 +16,10 @@ class PermissionStore {
       requireDeviceUnlockForManualApproval: true,
       requireDeviceUnlockForVaultAccess: true,
       autoApprovedCommands: [],
+      autoApprovedActions: [],
     };
     this.autoApprovedCommands = new Set();
+    this.autoApprovedActions = new Set();
   }
 
   async load() {
@@ -39,6 +41,7 @@ class PermissionStore {
         const settings = JSON.parse(fs.readFileSync(this.settingsPath, 'utf-8'));
         this.settings = { ...this.settings, ...settings };
         this._syncAutoApprovedCommands();
+        this._syncAutoApprovedActions();
       }
     } catch (e) {
       console.warn('[PermissionStore] Failed to load:', e.message);
@@ -59,8 +62,19 @@ class PermissionStore {
     this.settings.autoApprovedCommands = [...this.autoApprovedCommands];
   }
 
+  _syncAutoApprovedActions() {
+    this.autoApprovedActions = new Set(
+      Array.isArray(this.settings.autoApprovedActions)
+        ? this.settings.autoApprovedActions.map(action => this._normalizeActionType(action))
+        : []
+    );
+    this.settings.autoApprovedActions = [...this.autoApprovedActions];
+  }
+
   updateSettings(newSettings) {
     this.settings = { ...this.settings, ...newSettings };
+    this._syncAutoApprovedCommands();
+    this._syncAutoApprovedActions();
     this._saveSettings();
   }
 
@@ -89,6 +103,22 @@ class PermissionStore {
     return [...this.autoApprovedCommands];
   }
 
+  setAutoAction(actionType, enabled) {
+    const key = this._normalizeActionType(actionType);
+    if (!key) return;
+    if (enabled) {
+      this.autoApprovedActions.add(key);
+    } else {
+      this.autoApprovedActions.delete(key);
+    }
+    this.settings.autoApprovedActions = [...this.autoApprovedActions];
+    this._saveSettings();
+  }
+
+  getAutoApprovedActions() {
+    return [...this.autoApprovedActions];
+  }
+
   isAutoExecutable(riskLevel) {
     if (riskLevel === 'low' && this.settings.autoApproveLowRisk) return true;
     if (riskLevel === 'medium' && this.settings.autoApproveMidRisk) return true;
@@ -101,9 +131,32 @@ class PermissionStore {
     return this.isAutoExecutable(riskLevel);
   }
 
+  canAutoExecuteAction(actionType, riskLevel) {
+    const normalizedRisk = this._normalizeRisk(riskLevel);
+    if (normalizedRisk === 'high') return false;
+
+    const key = this._normalizeActionType(actionType);
+    if (this.autoApprovedActions.has(key)) return true;
+    return this.isAutoExecutable(normalizedRisk);
+  }
+
   _normalizeCommand(command) {
     if (!command) return '';
     return command.trim().split(/\s+/)[0].toLowerCase();
+  }
+
+  _normalizeActionType(actionType) {
+    if (!actionType) return '';
+    return `${actionType}`.trim().toUpperCase();
+  }
+
+  _normalizeRisk(riskLevel) {
+    const normalized = `${riskLevel || 'medium'}`.trim().toLowerCase();
+    if (normalized === 'critical') return 'high';
+    if (normalized === 'low' || normalized === 'medium' || normalized === 'high') {
+      return normalized;
+    }
+    return 'medium';
   }
 
   _save() {

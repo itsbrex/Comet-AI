@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Foundation
+import LocalAuthentication
 import QuartzCore
 import WebKit
 
@@ -215,6 +216,16 @@ struct NativePanelState: Codable {
     let clipboardItems: [String]?
     let preferences: Preferences?
     let pendingApproval: ApprovalState?
+    let terminalLogs: [TerminalLog]?
+    let actionLogs: [ActionLog]?
+
+    struct TerminalLog: Codable, Identifiable {
+        var id: String { "\(command)-\(timestamp)" }
+        let command: String
+        let output: String
+        let success: Bool
+        let timestamp: Double
+    }
 
     static func empty(mode: PanelMode) -> NativePanelState {
         NativePanelState(
@@ -233,7 +244,9 @@ struct NativePanelState: Codable {
             downloads: [],
             clipboardItems: [],
             preferences: .defaults,
-            pendingApproval: nil
+            pendingApproval: nil,
+            terminalLogs: [],
+            actionLogs: []
         )
     }
 }
@@ -267,6 +280,25 @@ final class NativePanelViewModel: ObservableObject {
         let trimmed = promptText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         recordInteraction()
+        let optimisticMessage = NativePanelState.Message(
+            id: "swift-user-\(UUID().uuidString)",
+            role: "user",
+            content: trimmed,
+            timestamp: Date().timeIntervalSince1970 * 1000,
+            thinkText: nil,
+            isOcr: false,
+            ocrLabel: nil,
+            ocrText: nil,
+            actionLogs: nil,
+            mediaItems: nil
+        )
+        updateLocalState(
+            messages: state.messages + [optimisticMessage],
+            inputDraft: "",
+            isLoading: true
+        )
+        statusText = "Sending to Comet"
+        promptText = ""
         Task {
             isSending = true
             defer { isSending = false }
@@ -275,10 +307,11 @@ final class NativePanelViewModel: ObservableObject {
                     "prompt": trimmed,
                     "source": "swiftui-sidebar"
                 ])
-                promptText = ""
                 statusText = "Sent to Comet"
+                await refreshState()
             } catch {
                 statusText = "Send failed"
+                updateLocalState(isLoading: false)
             }
         }
     }
@@ -287,7 +320,10 @@ final class NativePanelViewModel: ObservableObject {
         recordInteraction()
         Task {
             do {
-                _ = try await sendJSONRequest(path: "/native-mac-ui/panels/open", body: ["mode": mode.rawValue])
+                _ = try await sendJSONRequest(path: "/native-mac-ui/panels/open", body: [
+                    "mode": mode.rawValue,
+                    "relaunchIfRunning": true
+                ])
             } catch {
                 statusText = "Unable to open panel"
             }
@@ -417,13 +453,14 @@ final class NativePanelViewModel: ObservableObject {
         }
     }
 
-    func respondToApproval(_ requestId: String, allowed: Bool) {
+    func respondToApproval(_ requestId: String, allowed: Bool, deviceUnlockValidated: Bool = false) {
         recordInteraction()
         Task {
             do {
                 _ = try await sendJSONRequest(path: "/native-mac-ui/approval/respond", body: [
                     "requestId": requestId,
-                    "allowed": allowed
+                    "allowed": allowed,
+                    "deviceUnlockValidated": deviceUnlockValidated
                 ])
                 statusText = allowed ? "Approved" : "Denied"
                 await refreshState()
@@ -433,12 +470,34 @@ final class NativePanelViewModel: ObservableObject {
         }
     }
 
+    func verifyDeviceOwnerApproval(reason: String, command: String, risk: String) async -> (approved: Bool, error: String?) {
+        let context = LAContext()
+        context.localizedCancelTitle = "Deny"
+        context.localizedFallbackTitle = "Use Mac Password"
+
+        var authError: NSError?
+        let policy = LAPolicy.deviceOwnerAuthentication
+        guard context.canEvaluatePolicy(policy, error: &authError) else {
+            return (false, authError?.localizedDescription ?? "Touch ID or Mac password authentication is unavailable.")
+        }
+
+        return await withCheckedContinuation { continuation in
+            let summary = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+            let localizedReason = summary.isEmpty
+                ? "Approve this \(risk) risk action: \(command). Confirm with Touch ID or your Mac password."
+                : summary
+            context.evaluatePolicy(policy, localizedReason: localizedReason) { approved, error in
+                continuation.resume(returning: (approved, (error as NSError?)?.localizedDescription))
+            }
+        }
+    }
+
     private func startPolling() {
         pollTask?.cancel()
         pollTask = Task {
             while !Task.isCancelled {
                 await refreshState()
-                try? await Task.sleep(nanoseconds: 850_000_000)
+                try? await Task.sleep(nanoseconds: 250_000_000)
             }
         }
     }
@@ -486,6 +545,34 @@ final class NativePanelViewModel: ObservableObject {
         request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
         let (data, _) = try await URLSession.shared.data(for: request)
         return data
+    }
+
+    private func updateLocalState(
+        messages: [NativePanelState.Message]? = nil,
+        inputDraft: String? = nil,
+        isLoading: Bool? = nil
+    ) {
+        let current = state
+        state = NativePanelState(
+            mode: current.mode,
+            updatedAt: Date().timeIntervalSince1970 * 1000,
+            inputDraft: inputDraft ?? current.inputDraft,
+            isLoading: isLoading ?? current.isLoading,
+            error: current.error,
+            themeAppearance: current.themeAppearance,
+            messages: messages ?? current.messages,
+            actionChain: current.actionChain,
+            currentCommandIndex: current.currentCommandIndex,
+            activityTags: current.activityTags,
+            conversations: current.conversations,
+            activeConversationId: current.activeConversationId,
+            downloads: current.downloads,
+            clipboardItems: current.clipboardItems,
+            preferences: current.preferences,
+            pendingApproval: current.pendingApproval,
+            terminalLogs: current.terminalLogs,
+            actionLogs: current.actionLogs
+        )
     }
 
     private func recordInteraction(expandOnly: Bool = false) {
@@ -540,6 +627,18 @@ final class NativePanelsAppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+enum WindowPlacementCoordinator {
+    private static var placedWindowNumbers = Set<Int>()
+
+    static func markPlaced(window: NSWindow) {
+        placedWindowNumbers.insert(window.windowNumber)
+    }
+
+    static func needsPlacement(for window: NSWindow) -> Bool {
+        !placedWindowNumbers.contains(window.windowNumber)
+    }
+}
+
 struct WindowConfigurator: NSViewRepresentable {
     let mode: PanelMode
     let compactSidebar: Bool
@@ -567,11 +666,12 @@ struct WindowConfigurator: NSViewRepresentable {
         window.titlebarSeparatorStyle = .none
         window.toolbar = nil
         window.isMovableByWindowBackground = true
-        window.level = .floating
-        window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
+        window.level = mode == .sidebar ? .floating : .modalPanel
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .moveToActiveSpace, .transient]
         window.backgroundColor = .clear
         window.isOpaque = false
         window.hasShadow = true
+        window.hidesOnDeactivate = false
         window.styleMask.insert(.fullSizeContentView)
         window.styleMask.insert(.resizable)
         window.contentView?.wantsLayer = true
@@ -591,6 +691,11 @@ struct WindowConfigurator: NSViewRepresentable {
                 window.animator().setContentSize(NSSize(width: targetSize.width, height: targetSize.height))
             }
         }
+        if WindowPlacementCoordinator.needsPlacement(for: window) {
+            let anchoredFrame = resolvedFrame(for: window, targetSize: targetSize)
+            window.setFrame(anchoredFrame, display: true)
+            WindowPlacementCoordinator.markPlaced(window: window)
+        }
         window.standardWindowButton(.closeButton)?.isHidden = false
         window.standardWindowButton(.miniaturizeButton)?.isHidden = false
         window.standardWindowButton(.zoomButton)?.isHidden = false
@@ -600,6 +705,8 @@ struct WindowConfigurator: NSViewRepresentable {
             window.representedURL = URL(fileURLWithPath: iconPath)
             NSApp.applicationIconImage = icon
         }
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -632,6 +739,15 @@ struct WindowConfigurator: NSViewRepresentable {
             return CGSize(width: 360, height: 250)
         }
         return mode.defaultSize
+    }
+
+    private func resolvedFrame(for window: NSWindow, targetSize: CGSize) -> NSRect {
+        let screen = window.screen ?? NSScreen.main ?? NSScreen.screens.first
+        let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: targetSize.width, height: targetSize.height)
+        let margin: CGFloat = mode == .sidebar ? 24 : 28
+        let x = max(visibleFrame.minX + 16, visibleFrame.maxX - targetSize.width - margin)
+        let y = max(visibleFrame.minY + 16, visibleFrame.maxY - targetSize.height - margin)
+        return NSRect(x: x, y: y, width: targetSize.width, height: targetSize.height)
     }
 }
 
@@ -687,7 +803,7 @@ struct PanelShell<Content: View>: View {
                     .stroke(palette.stroke, lineWidth: 1)
             )
             .shadow(color: palette.shadow, radius: mode == .sidebar ? 22 : 36, x: 0, y: mode == .sidebar ? 10 : 18)
-            .padding(mode == .sidebar ? 0 : 14)
+            .padding(0)
             .ignoresSafeArea()
         }
         .background(WindowConfigurator(mode: mode, compactSidebar: viewModel.compactSidebar, iconPath: viewModel.configuration.iconPath))
@@ -867,6 +983,7 @@ struct SidebarPanelView: View {
         let visibleMessages = filteredMessages
         let activityTags = Array((viewModel.state.activityTags ?? []).prefix(6))
         let conversations = Array((viewModel.state.conversations ?? []).sorted(by: { $0.updatedAt > $1.updatedAt }).prefix(8))
+        let latestAnimatedMessageId = visibleMessages.last(where: { $0.role != "user" })?.id
         let showQuickActions = preferences.sidebarShowQuickActions ?? true
         let showSessions = preferences.sidebarShowSessions ?? true
         let showSearchTags = preferences.sidebarShowSearchTags ?? true
@@ -987,7 +1104,11 @@ struct SidebarPanelView: View {
                             }
 
                             ForEach(visibleMessages) { message in
-                                MessageBubbleView(message: message, appearance: viewModel.state.themeAppearance)
+                                MessageBubbleView(
+                                    message: message,
+                                    appearance: viewModel.state.themeAppearance,
+                                    animateContent: latestAnimatedMessageId == message.id && message.role != "user"
+                                )
                             }
 
                             if viewModel.state.isLoading {
@@ -1145,6 +1266,50 @@ struct ActionChainPanelView: View {
                 .padding(.horizontal, 18)
 
                 Divider().overlay(palette.stroke)
+
+                if let terminalLogs = viewModel.state.terminalLogs, !terminalLogs.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "terminal").font(.system(size: 11, weight: .bold))
+                            Text("TERMINAL OUTPUT")
+                                .font(.system(size: 10, weight: .black, design: .rounded))
+                                .foregroundStyle(palette.secondaryText)
+                            Spacer()
+                            Text("\(terminalLogs.count)")
+                                .font(.system(size: 9, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.secondary)
+                        }
+                        .foregroundStyle(palette.secondaryText)
+                        .padding(.horizontal, 18)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(terminalLogs.suffix(6)) { log in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack(spacing: 4) {
+                                            Circle()
+                                                .fill(log.success ? Color.green : Color.red)
+                                                .frame(width: 6, height: 6)
+                                            Text(log.command)
+                                                .font(.system(size: 9, weight: .bold, design: .rounded))
+                                                .foregroundStyle(palette.primaryText)
+                                                .lineLimit(1)
+                                        }
+                                        Text(log.output.prefix(30))
+                                            .font(.system(size: 8, design: .rounded))
+                                            .foregroundStyle(palette.secondaryText)
+                                            .lineLimit(1)
+                                    }
+                                    .padding(8)
+                                    .background(palette.mutedSurface)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                            .padding(.horizontal, 18)
+                        }
+                    }
+                    .padding(.vertical, 12)
+                }
 
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
@@ -1761,6 +1926,8 @@ struct ClipboardPanelView: View {
 struct PermissionsPanelView: View {
     @ObservedObject var viewModel: NativePanelViewModel
     @State private var pinText = ""
+    @State private var isUnlockingApproval = false
+    @State private var approvalError: String?
 
     var body: some View {
         PanelShell(mode: .permissions, viewModel: viewModel) {
@@ -1776,11 +1943,41 @@ struct PermissionsPanelView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         if let approval = viewModel.state.pendingApproval {
-                            ApprovalCard(approval: approval, pinText: $pinText, onAllow: {
-                                viewModel.respondToApproval(approval.requestId, allowed: true)
-                            }, onDeny: {
-                                viewModel.respondToApproval(approval.requestId, allowed: false)
-                            })
+                            ApprovalCard(
+                                approval: approval,
+                                pinText: $pinText,
+                                isUnlocking: isUnlockingApproval,
+                                errorMessage: approvalError,
+                                onAllow: {
+                                    approvalError = nil
+                                    Task {
+                                        var deviceUnlockValidated = false
+                                        if approval.requiresDeviceUnlock == true {
+                                            isUnlockingApproval = true
+                                            let verification = await viewModel.verifyDeviceOwnerApproval(
+                                                reason: approval.reason,
+                                                command: approval.command,
+                                                risk: approval.risk
+                                            )
+                                            isUnlockingApproval = false
+                                            guard verification.approved else {
+                                                approvalError = verification.error ?? "Touch ID or Mac password verification was cancelled."
+                                                return
+                                            }
+                                            deviceUnlockValidated = true
+                                        }
+                                        viewModel.respondToApproval(
+                                            approval.requestId,
+                                            allowed: true,
+                                            deviceUnlockValidated: deviceUnlockValidated
+                                        )
+                                    }
+                                },
+                                onDeny: {
+                                    approvalError = nil
+                                    viewModel.respondToApproval(approval.requestId, allowed: false)
+                                }
+                            )
                         } else {
                             EmptyStateCard(title: "No active approval", description: "When Comet needs approval for a shell or automation action, the live request will appear here.", appearance: viewModel.state.themeAppearance)
                         }
@@ -1993,6 +2190,8 @@ struct CustomThemeEditor: View {
 struct ApprovalCard: View {
     let approval: NativePanelState.ApprovalState
     @Binding var pinText: String
+    let isUnlocking: Bool
+    let errorMessage: String?
     let onAllow: () -> Void
     let onDeny: () -> Void
 
@@ -2064,6 +2263,26 @@ struct ApprovalCard: View {
                     .foregroundStyle(.white)
             }
 
+            if approval.requiresDeviceUnlock == true {
+                HStack(spacing: 8) {
+                    Image(systemName: "touchid")
+                        .font(.system(size: 14, weight: .bold))
+                    Text(isUnlocking ? "Waiting for Touch ID or Mac password…" : "This approval will verify with Touch ID or your Mac password before the command runs.")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                }
+                .foregroundStyle(Color.cyan.opacity(0.9))
+            }
+
+            if let errorMessage, !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color.red.opacity(0.92))
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.red.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+
             HStack(spacing: 10) {
                 Button("Deny", action: onDeny)
                     .buttonStyle(.plain)
@@ -2074,7 +2293,7 @@ struct ApprovalCard: View {
                     .background(Color.white.opacity(0.08))
                     .clipShape(Capsule())
 
-                Button("Allow", action: onAllow)
+                Button(approval.requiresDeviceUnlock == true ? (isUnlocking ? "Unlocking…" : "Allow with Touch ID") : "Allow", action: onAllow)
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundStyle(.black)
@@ -2082,7 +2301,7 @@ struct ApprovalCard: View {
                     .padding(.vertical, 10)
                     .background(canApprove ? colorForRisk : Color.gray.opacity(0.4))
                     .clipShape(Capsule())
-                    .disabled(!canApprove)
+                    .disabled(!canApprove || isUnlocking)
             }
         }
         .padding(16)
@@ -2291,6 +2510,7 @@ struct StatusPill: View {
 struct MessageBubbleView: View {
     let message: NativePanelState.Message
     let appearance: String
+    let animateContent: Bool
 
     var body: some View {
         let palette = PanelPalette(appearance: appearance)
@@ -2320,7 +2540,11 @@ struct MessageBubbleView: View {
             }
 
             if !visibleContent.isEmpty {
-                MarkdownMessageText(content: visibleContent, appearance: appearance)
+                AnimatedMarkdownMessageText(
+                    content: visibleContent,
+                    appearance: appearance,
+                    animate: animateContent
+                )
             }
 
             if let ocrText, !ocrText.isEmpty {
@@ -2351,6 +2575,81 @@ struct MessageBubbleView: View {
             guard !value.isEmpty, !seen.contains(value) else { return false }
             seen.insert(value)
             return true
+        }
+    }
+}
+
+struct AnimatedMarkdownMessageText: View {
+    let content: String
+    let appearance: String
+    let animate: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var visibleLength = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            MarkdownMessageText(content: visibleContent, appearance: appearance)
+
+            if showCaret {
+                HStack(spacing: 6) {
+                    Capsule()
+                        .fill(PanelPalette(appearance: appearance).accent)
+                        .frame(width: 10, height: 18)
+                    Text("Comet is writing")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(PanelPalette(appearance: appearance).secondaryText)
+                }
+                .transition(.opacity)
+            }
+        }
+        .task(id: animationKey) {
+            await animateToLatestContent()
+        }
+    }
+
+    private var animationKey: String {
+        "\(content.count)-\(animate)-\(reduceMotion)"
+    }
+
+    private var visibleContent: String {
+        if !animate || reduceMotion {
+            return content
+        }
+        return String(content.prefix(visibleLength))
+    }
+
+    private var showCaret: Bool {
+        animate && !reduceMotion && visibleLength < content.count
+    }
+
+    @MainActor
+    private func animateToLatestContent() async {
+        if !animate || reduceMotion {
+            visibleLength = content.count
+            return
+        }
+
+        if visibleLength > content.count {
+            visibleLength = content.count
+        }
+
+        while visibleLength < content.count {
+            let remaining = content.count - visibleLength
+            let step: Int
+            switch remaining {
+            case 321...:
+                step = 28
+            case 161...320:
+                step = 14
+            case 61...160:
+                step = 6
+            default:
+                step = 2
+            }
+
+            visibleLength = min(content.count, visibleLength + step)
+            try? await Task.sleep(nanoseconds: 18_000_000)
         }
     }
 }
@@ -3730,6 +4029,12 @@ struct RootPanelView: View {
     @ObservedObject var viewModel: NativePanelViewModel
 
     var body: some View {
+        mainContent
+            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: viewModel.configuration.mode)
+    }
+    
+    @ViewBuilder
+    var mainContent: some View {
         switch viewModel.configuration.mode {
         case .sidebar:
             SidebarPanelView(viewModel: viewModel)

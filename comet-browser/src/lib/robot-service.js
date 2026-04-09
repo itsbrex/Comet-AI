@@ -1,10 +1,10 @@
 const { screen, dialog, BrowserWindow } = require('electron');
+const { automationLayer, PLATFORM } = require('../automation');
 
-const ACTION_TYPES = ['click', 'type', 'key', 'scroll'];
+const ACTION_TYPES = ['click', 'type', 'key', 'scroll', 'move'];
 const BUTTONS = ['left', 'right', 'middle'];
 const MODIFIERS = ['command', 'control', 'alt', 'shift'];
 const SCROLL_DIRS = ['up', 'down', 'left', 'right'];
-
 const ALWAYS_CONFIRM_ACTIONS = ['click', 'type', 'key'];
 
 class RobotService {
@@ -13,28 +13,37 @@ class RobotService {
     this.lastAction = 0;
     this.MIN_DELAY_MS = 300;
     this.killFlag = false;
-    this.robot = null;
-    this._initRobot();
+    this.automation = automationLayer;
+    this._initPromise = null;
+    this._init();
   }
 
-  _initRobot() {
-    try {
-      this.robot = require('robotjs');
-    } catch (e) {
-      try {
-        this.robot = require('@jitsi/robotjs');
-      } catch (e2) {
-        console.warn('[RobotService] robotjs not available:', e.message);
-      }
+  _init() {
+    this._initPromise = this.automation.initialize();
+  }
+
+  async _ensureInitialized() {
+    if (this._initPromise) {
+      await this._initPromise;
+      this._initPromise = null;
     }
-    if (this.robot) {
-      this.robot.setMouseDelay(2);
-      this.robot.setKeyboardDelay(2);
-    }
+  }
+
+  async initialize() {
+    await this._ensureInitialized();
+    return this.automation.isAvailable;
   }
 
   get isAvailable() {
-    return this.robot !== null;
+    return this.automation.isAvailable;
+  }
+
+  get backend() {
+    return this.automation.backend;
+  }
+
+  get platform() {
+    return PLATFORM;
   }
 
   kill() {
@@ -59,14 +68,17 @@ class RobotService {
     const action = { type: raw.type, reason: String(raw.reason || 'No reason provided') };
 
     switch (raw.type) {
-      case 'click': {
+      case 'click':
+      case 'move': {
         action.x = Math.round(Number(raw.x));
         action.y = Math.round(Number(raw.y));
         if (!Number.isFinite(action.x) || !Number.isFinite(action.y) || action.x < 0 || action.y < 0) {
           throw new Error(`Invalid coordinates: (${raw.x}, ${raw.y})`);
         }
-        action.button = BUTTONS.includes(raw.button) ? raw.button : 'left';
-        action.double = Boolean(raw.double);
+        if (raw.type === 'click') {
+          action.button = BUTTONS.includes(raw.button) ? raw.button : 'left';
+          action.double = Boolean(raw.double);
+        }
         break;
       }
       case 'type': {
@@ -121,6 +133,9 @@ class RobotService {
       case 'scroll':
         message = `Scroll ${action.direction} (${action.amount}x) at (${action.x}, ${action.y})`;
         break;
+      case 'move':
+        message = `Move mouse to (${action.x}, ${action.y})`;
+        break;
     }
 
     const focusedWindow = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
@@ -140,31 +155,21 @@ class RobotService {
   }
 
   async _robustClick(x, y, button = 'left', double = false, maxRetries = 3) {
-    if (!this.robot) {
-      throw new Error('robotjs not available');
-    }
-
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const currentPos = this.robot.getMousePos();
+        const currentPos = this.automation.getMousePos();
         if (currentPos.x !== x || currentPos.y !== y) {
-          this.robot.moveMouse(x, y);
+          this.automation.moveMouse(x, y);
           await sleep(50);
         }
         
         await sleep(30);
-        
-        if (double) {
-          this.robot.doubleClick(button);
-        } else {
-          this.robot.mouseClick(button);
-        }
-        
+        this.automation.click(x, y, button, double);
         await sleep(20);
         
-        const posAfter = this.robot.getMousePos();
+        const posAfter = this.automation.getMousePos();
         if (posAfter.x === x && posAfter.y === y) {
           return { success: true, verified: true };
         }
@@ -186,8 +191,10 @@ class RobotService {
   }
 
   async execute(raw, opts = {}) {
-    if (!this.robot) {
-      throw new Error('robotjs not available. Install with: npm install robotjs');
+    await this._ensureInitialized();
+
+    if (!this.automation.isAvailable) {
+      throw new Error(`Automation not available. Backend: ${this.automation.backend}`);
     }
 
     if (this.killFlag) {
@@ -200,7 +207,7 @@ class RobotService {
       throw new Error('Robot permission not granted. Enable in Settings > Permissions.');
     }
 
-    if (action.type === 'click' || action.type === 'scroll') {
+    if (action.type === 'click' || action.type === 'scroll' || action.type === 'move') {
       this._validateCoords(action.x, action.y);
     }
 
@@ -214,6 +221,7 @@ class RobotService {
 
     this.perms.logAudit(`robot.execute: ${action.type} — ${action.reason}`);
 
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const now = Date.now();
     if (now - this.lastAction < this.MIN_DELAY_MS) {
       await sleep(this.MIN_DELAY_MS);
@@ -237,15 +245,16 @@ class RobotService {
         result.verified = clickResult.verified;
         break;
       case 'type':
-        this.robot.typeString(action.text);
+        this.automation.typeText(action.text);
         break;
       case 'key':
-        this.robot.keyTap(action.key, action.modifiers || []);
+        this.automation.keyTap(action.key, action.modifiers || []);
         break;
       case 'scroll':
-        this.robot.moveMouse(action.x, action.y);
-        await sleep(30);
-        this.robot.scrollMouse(action.amount, action.direction);
+        this.automation.scroll(action.x, action.y, action.direction, action.amount);
+        break;
+      case 'move':
+        this.automation.moveMouse(action.x, action.y);
         break;
     }
 
@@ -270,8 +279,14 @@ class RobotService {
     }
     return results;
   }
-}
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  moveMouse(x, y) {
+    this.automation.moveMouse(x, y);
+  }
+
+  getMousePos() {
+    return this.automation.getMousePos();
+  }
+}
 
 module.exports = { RobotService };

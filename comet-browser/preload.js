@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   typeText: (selector, text) => ipcRenderer.invoke('type-text', { selector, text }),
   fillForm: (data) => ipcRenderer.invoke('fill-form', data),
   openExternalApp: (appNameOrPath) => ipcRenderer.invoke('open-external-app', appNameOrPath),
+  openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
   searchApplications: (query) => ipcRenderer.invoke('search-applications', query),
   getSuggestions: (query) => ipcRenderer.invoke('get-suggestions', query),
   onAudioStatusChanged: (callback) => {
@@ -485,7 +486,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // v2 Automation APIs
   permGrant: (key, level, description, sessionOnly) =>
     ipcRenderer.invoke('perm-grant', { key, level, description, sessionOnly }),
+  permRevoke: (key) => ipcRenderer.invoke('perm-revoke', key),
+  permRevokeAll: () => ipcRenderer.invoke('perm-revoke-all'),
   permCheck: (key) => ipcRenderer.invoke('perm-check', key),
+  permList: () => ipcRenderer.invoke('perm-list'),
+  permAuditLog: (limit) => ipcRenderer.invoke('perm-audit-log', limit),
+  getSecuritySettings: () => ipcRenderer.invoke('security-settings-get'),
+  updateSecuritySettings: (settings) => ipcRenderer.invoke('security-settings-update', settings),
+  setAutoApprovalCommand: (payload) => ipcRenderer.invoke('permission-auto-command', payload),
+  getAutoApprovedCommands: () => ipcRenderer.invoke('permission-auto-commands'),
+  setAutoApprovalAction: (payload) => ipcRenderer.invoke('permission-auto-action', payload),
+  getAutoApprovedActions: () => ipcRenderer.invoke('permission-auto-actions'),
+  generateHighRiskQr: (actionId) => ipcRenderer.invoke('generate-high-risk-qr', actionId),
+  onMobileApproveHighRisk: (callback) => {
+    const subscription = (event, data) => callback(data);
+    ipcRenderer.on('mobile-approve-high-risk', subscription);
+    return () => ipcRenderer.removeListener('mobile-approve-high-risk', subscription);
+  },
+  submitShellApprovalResponse: (requestId, allowed, deviceUnlockValidated = false) =>
+    ipcRenderer.send('automation-shell-approval-response', { requestId, allowed, deviceUnlockValidated }),
 
   robotExecute: (action) => ipcRenderer.invoke('robot-execute', action),
   robotExecuteSequence: (actions, options) =>

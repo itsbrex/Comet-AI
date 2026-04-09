@@ -276,7 +276,7 @@ declare global {
             translateWebsite: (args: { targetLanguage: string; method?: 'google' | 'chrome-ai' }) => Promise<{ success?: boolean; error?: string }>;
             onTriggerTranslationDialog: (callback: () => void) => () => void;
             onAutomationShellApproval: (callback: (payload: { requestId: string; command: string; risk: string; reason?: string; highRiskQr?: string; requiresDeviceUnlock?: boolean }) => void) => () => void;
-            respondAutomationShellApproval: (response: { requestId: string; allowed: boolean }) => void;
+            respondAutomationShellApproval: (response: { requestId: string; allowed: boolean; deviceUnlockValidated?: boolean }) => void;
             toggleAdblocker: (enable: boolean) => void;
             translateText: (args: { text: string; to: string; from?: string }) => Promise<{ success: boolean; translated?: string; error?: string }>;
             openSettingsPopup: (section?: string) => void;
@@ -350,10 +350,12 @@ declare global {
             permCheck: (key: string) => Promise<{ granted: boolean }>;
             permList: () => Promise<Array<{ key: string; level: string; granted_at: number; expires_at: number | null; description: string }>>;
             permAuditLog: (limit?: number) => Promise<Array<{ entry: string; timestamp: number }>>;
-            getSecuritySettings: () => Promise<{ autoApproveLowRisk: boolean; autoApproveMidRisk: boolean; requireDeviceUnlockForManualApproval: boolean; requireDeviceUnlockForVaultAccess: boolean; autoApprovedCommands: string[] }>;
-            updateSecuritySettings: (settings: { autoApproveLowRisk?: boolean; autoApproveMidRisk?: boolean; requireDeviceUnlockForManualApproval?: boolean; requireDeviceUnlockForVaultAccess?: boolean }) => Promise<{ success: boolean; settings: { autoApproveLowRisk: boolean; autoApproveMidRisk: boolean; requireDeviceUnlockForManualApproval: boolean; requireDeviceUnlockForVaultAccess: boolean; autoApprovedCommands: string[] } }>;
+            getSecuritySettings: () => Promise<{ autoApproveLowRisk: boolean; autoApproveMidRisk: boolean; requireDeviceUnlockForManualApproval: boolean; requireDeviceUnlockForVaultAccess: boolean; autoApprovedCommands: string[]; autoApprovedActions: string[] }>;
+            updateSecuritySettings: (settings: { autoApproveLowRisk?: boolean; autoApproveMidRisk?: boolean; requireDeviceUnlockForManualApproval?: boolean; requireDeviceUnlockForVaultAccess?: boolean; autoApprovedActions?: string[]; autoApprovedCommands?: string[] }) => Promise<{ success: boolean; settings: { autoApproveLowRisk: boolean; autoApproveMidRisk: boolean; requireDeviceUnlockForManualApproval: boolean; requireDeviceUnlockForVaultAccess: boolean; autoApprovedCommands: string[]; autoApprovedActions: string[] } }>;
             setAutoApprovalCommand: (payload: { command: string; enabled: boolean }) => Promise<{ success: boolean; commands: string[] }>;
             getAutoApprovedCommands: () => Promise<{ commands: string[] }>;
+            setAutoApprovalAction: (payload: { actionType: string; enabled: boolean }) => Promise<{ success: boolean; actions: string[] }>;
+            getAutoApprovedActions: () => Promise<{ actions: string[] }>;
 
             // Desktop Automation v2 — Robot Service
             robotExecute: (action: {
@@ -464,7 +466,7 @@ declare global {
             runScheduledTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
             deleteScheduledTask: (taskId: string) => Promise<{ success: boolean; error?: string }>;
             onAutomationShellApproval: (callback: (payload: { requestId: string, command: string, risk: string, reason: string, highRiskQr?: string, requiresDeviceUnlock?: boolean }) => void) => () => void;
-            submitShellApprovalResponse: (requestId: string, allowed: boolean) => void;
+            submitShellApprovalResponse: (requestId: string, allowed: boolean, deviceUnlockValidated?: boolean) => void;
 
             // Auto-update APIs
             checkForUpdates: () => Promise<{ updateAvailable?: boolean; updateInfo?: any }>;

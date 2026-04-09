@@ -8,7 +8,30 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run unit tests
+        run: npm test
+      
+      - name: Run lint
+        run: npm run lint || true
+
   build:
+    needs: test
     strategy:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
@@ -17,19 +40,19 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
       
       - name: Install system dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libx11-dev libxtst-dev libpng-dev libjpeg-dev
+          sudo apt-get install -y libx11-dev libxtst-dev libpng-dev libjpeg-dev libx11-xcb-dev libxcb-dri3-dev libdrm-dev libgbm-dev libasound2-dev
       
       - name: Install system dependencies (macOS)
         if: matrix.os == 'macos-latest'
@@ -37,11 +60,7 @@ jobs:
           brew install pkg-config cairo pango libpng jpeg giflib librsvg
       
       - name: Install dependencies
-        run: npm install
-      
-      - name: Install robotjs
-        run: npm install robotjs --build-from-source
-        continue-on-error: true
+        run: npm ci
       
       - name: Build Next.js app
         run: npm run build
@@ -74,7 +93,7 @@ jobs:
         run: npm run electron:build:linux
       
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: comet-browser-${{ matrix.os }}
           path: |

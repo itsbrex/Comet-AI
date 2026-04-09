@@ -136,6 +136,82 @@ Full documentation is available at [browser.ponsrischool.in](https://browser.pon
 | Anthropic Claude | Cloud | Strong for long context |
 | Groq | Cloud | Fastest inference |
 | Ollama | Local | Full privacy, no API key |
+| Microsoft Copilot | Companion (Windows) | Launchable from setup/welcome, no Comet API key required |
+
+### 🪟 Microsoft Copilot on Windows
+
+Comet now surfaces a **Windows Copilot companion path** in the welcome flow and setup flow so Windows users can get to Microsoft Copilot quickly without pasting an API key into Comet first.
+
+Important:
+- **Supported today:** launch the official Microsoft Copilot experience from Comet on Windows and use it alongside Comet.
+- **Not fully native yet:** Comet's own AI sidebar is still powered by providers like Ollama, Gemini, OpenAI, Anthropic, or Groq.
+- **Why:** Microsoft Copilot is an official app/service, but this repo does **not** yet ship a first-party Microsoft Copilot provider wired directly into Comet's sidebar request pipeline.
+
+If you want Comet's built-in sidebar AI to answer directly inside Comet right now, configure one of the supported providers above. If you want a **no-key Windows assistant**, use the Copilot companion flow below.
+
+#### What Microsoft says
+
+These official Microsoft resources are the best starting point:
+- Microsoft Support: [Getting started with Microsoft Copilot](https://support.microsoft.com/en-us/topic/getting-started-with-microsoft-copilot-8fde147f-726e-4790-9503-70790ddcac73)
+- Microsoft Windows Developer Blog: [Unlock a new era of innovation with Windows Copilot Runtime and Copilot+ PCs](https://blogs.windows.com/windowsdeveloper/2024/05/21/unlock-a-new-era-of-innovation-with-windows-copilot-runtime-and-copilot-pcs/)
+- Microsoft Developer: [Microsoft Foundry on Windows / Windows AI APIs](https://developer.microsoft.com/windows/ai/)
+
+Microsoft Support says the Copilot app is already present on many Windows 11 PCs, and if it is missing, users can install it for free from the Microsoft Store.
+
+#### Option A: Use Copilot on Windows with no Comet API key
+
+This is the easiest setup for Windows users.
+
+1. Install or open Comet AI on Windows.
+2. Open the **Welcome Screen** or go to **Settings → About** and relaunch onboarding.
+3. Open **Setup Guide**.
+4. Go to the **AI Access** step.
+5. Use the **Open Copilot** button.
+6. If Copilot is not already installed, install it from Microsoft's official flow.
+7. Keep using Comet for browsing, downloads, search, permissions, and automation approval.
+8. Use Microsoft Copilot as your companion assistant on the same machine with no Comet-side API key.
+
+This mode is best for users who want:
+- zero API-key setup
+- official Microsoft Copilot on Windows
+- Comet for browser control, tabs, downloads, automation, and gated actions
+
+#### Option B: Use Comet's AI sidebar directly
+
+If you want responses to appear **inside Comet's sidebar chat**, you currently need to configure one of Comet's native providers:
+- Ollama
+- Gemini
+- OpenAI
+- Anthropic
+- Groq
+
+This is because the sidebar currently calls Comet's internal provider system, not the Microsoft Copilot desktop app.
+
+#### Current limitation for "Copilot inside the sidebar"
+
+At the moment, the following is **not implemented**:
+- sending sidebar prompts directly to the Microsoft Copilot app
+- using the Microsoft Copilot Windows app as a drop-in `aiProvider` inside Comet
+- claiming full in-sidebar Copilot support without a Microsoft-supported API/runtime bridge
+
+That limitation is intentional in the docs so we do not mislead users.
+
+#### Recommended user-facing wording
+
+If you are documenting this feature elsewhere in the app or website, use wording like:
+
+> "Comet can launch Microsoft Copilot on Windows as a companion, and Comet's built-in sidebar continues to use supported providers such as Ollama, Gemini, OpenAI, Anthropic, or Groq."
+
+#### Future direction
+
+A true "Copilot in Comet sidebar" integration would likely require one of these paths:
+- an official Microsoft API or SDK that allows app-to-app Copilot prompting
+- a supported Windows AI / Copilot Runtime bridge for third-party apps
+- a provider implementation in Comet that Microsoft explicitly permits and documents
+
+Until that exists, the safest and most honest experience is:
+- **Companion mode for Microsoft Copilot on Windows**
+- **Native sidebar mode for Comet-supported providers**
 
 ### 🔧 Real Capabilities Demo
 

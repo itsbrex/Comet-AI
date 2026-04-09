@@ -1,185 +1,209 @@
+/**
+ * Gmail Integration Service (JavaScript wrapper)
+ * Connect Gmail for email management, OTP capture, and email AI
+ */
+
 const { google } = require('googleapis');
-const { app, ipcMain } = require('electron'); // Import app and ipcMain for Electron-specific functionality
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 
-const CREDENTIALS_PATH = path.join(app.getPath('userData'), 'gmail-credentials.json');
-const TOKEN_PATH = path.join(app.getPath('userData'), 'gmail-token.json');
+const CREDENTIALS_PATH = path.join(__dirname, '..', '..', 'credentials', 'gmail-credentials.json');
+const TOKEN_PATH = path.join(__dirname, '..', '..', 'credentials', 'gmail-token.json');
 
-let oAuth2Client = null;
+let gmailInstance = null;
+let oauth2Client = null;
 
-const getOAuth2Client = () => {
-  if (oAuth2Client) return oAuth2Client;
-
-  let credentials = {};
-  if (fs.existsSync(CREDENTIALS_PATH)) {
-    credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf-8'));
-    const data = credentials.installed || credentials.web;
-    oAuth2Client = new google.auth.OAuth2(data.client_id, data.client_secret, data.redirect_uris[0]);
-  } else {
-    // Fallback to electron-store (synced from landing page)
-    const Store = require('electron-store');
-    const store = new Store();
-    const clientId = store.get('google_client_id');
-    const clientSecret = store.get('google_client_secret');
-    const redirectUri = store.get('google_redirect_uri') || 'https://browser.ponsrischool.in/oauth2callback';
-
-    if (clientId && clientSecret) {
-      console.log('[Gmail] Using credentials from electron-store');
-      oAuth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
-    } else {
-      console.warn('Gmail API credentials not found in file or store.');
-      return null;
+async function loadCredentials() {
+    if (!fs.existsSync(CREDENTIALS_PATH)) {
+        throw new Error('Gmail credentials not found. Please set up credentials at: ' + CREDENTIALS_PATH);
     }
-  }
+    return JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf8'));
+}
 
-  // Load token if it exists
-  if (fs.existsSync(TOKEN_PATH)) {
-    const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
-    oAuth2Client.setCredentials(token);
-  }
-  return oAuth2Client;
-};
+async function loadToken() {
+    if (fs.existsSync(TOKEN_PATH)) {
+        return JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+    }
+    return null;
+}
 
-const authorize = async () => {
-  const client = getOAuth2Client();
-  if (!client) throw new Error('OAuth2 client not initialized. Missing credentials.');
+async function saveToken(token) {
+    const dir = path.dirname(TOKEN_PATH);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(token));
+}
 
-  if (client.credentials.access_token) {
-    console.log('Using existing Gmail token.');
-    return client;
-  }
+async function authorize() {
+    const credentials = await loadCredentials();
+    const token = await loadToken();
+    
+    oauth2Client = new google.auth.OAuth2(
+        credentials.client_id,
+        credentials.client_secret,
+        credentials.redirect_uris[0]
+    );
 
-  const authUrl = client.generateAuthUrl({
-    access_type: 'offline',
-    scope: ['https://www.googleapis.com/auth/gmail.modify', 'https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.labels'],
-  });
+    if (token) {
+        oauth2Client.setCredentials(token);
+        return { success: true, authorized: true };
+    }
 
-  // Open authUrl in browser (or in a new Electron window)
-  console.log('Authorize this app by visiting this URL:', authUrl);
-  // In Electron, you'd typically open this in a new BrowserWindow
-  ipcMain.emit('open-auth-window', authUrl); // This needs to be handled in main.js
-
-  return new Promise((resolve, reject) => {
-    ipcMain.once('gmail-oauth-code', async (event, code) => {
-      try {
-        const { tokens } = await client.getToken(code);
-        client.setCredentials(tokens);
-        fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
-        console.log('Gmail token stored to', TOKEN_PATH);
-        resolve(client);
-      } catch (error) {
-        reject(new Error('Error retrieving access token: ' + error.message));
-      }
+    const authUrl = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send']
     });
-  });
-};
 
-const getGmailService = async () => {
-  const client = await authorize();
-  return google.gmail({ version: 'v1', auth: client });
-};
+    return { success: true, authorized: false, authUrl };
+}
 
-async function listMessages(query = 'in:inbox', maxResults = 10) {
-  try {
-    const gmail = await getGmailService();
-    const res = await gmail.users.messages.list({
-      userId: 'me',
-      q: query,
-      maxResults: maxResults,
+async function getGmailMessages(query = '', maxResults = 10) {
+    if (!oauth2Client) {
+        await authorize();
+    }
+
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    
+    const response = await gmail.users.messages.list({
+        userId: 'me',
+        q: query,
+        maxResults: maxResults
     });
-    return res.data.messages || [];
-  } catch (error) {
-    console.error('Failed to list Gmail messages:', error);
-    throw error;
-  }
+
+    const messages = [];
+    if (response.data.messages) {
+        for (const msg of response.data.messages) {
+            const full = await gmail.users.messages.get({
+                userId: 'me',
+                id: msg.id,
+                format: 'full'
+            });
+            messages.push(parseMessage(full.data));
+        }
+    }
+
+    return messages;
+}
+
+async function listMessages(query = '', maxResults = 10) {
+    return getGmailMessages(query, maxResults);
 }
 
 async function getMessage(messageId) {
-  try {
-    const gmail = await getGmailService();
-    const res = await gmail.users.messages.get({
-      userId: 'me',
-      id: messageId,
-      format: 'full', // 'full', 'metadata', 'raw'
+    if (!oauth2Client) {
+        await authorize();
+    }
+
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    const response = await gmail.users.messages.get({
+        userId: 'me',
+        id: messageId,
+        format: 'full'
     });
-    return res.data;
-  } catch (error) {
-    console.error(`Failed to get Gmail message ${messageId}:`, error);
-    throw error;
-  }
+
+    return parseMessage(response.data);
 }
 
 async function sendMessage(to, subject, body, threadId = null) {
-  try {
-    const gmail = await getGmailService();
-    const emailContent = [
-      `To: ${to}`,
-      `Subject: ${subject}`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=utf-8',
-      '',
-      body,
-    ].join('\n');
+    if (!oauth2Client) {
+        await authorize();
+    }
 
-    const encodedEmail = Buffer.from(emailContent)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    const message = {
-      raw: encodedEmail,
-      threadId: threadId
-    };
-
-    const res = await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: message,
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    
+    const message = createMimeMessage(to, subject, body, threadId);
+    
+    const response = await gmail.users.messages.send({
+        userId: 'me',
+        requestBody: {
+            raw: Buffer.from(message).toString('base64url')
+        }
     });
-    return res.data;
-  } catch (error) {
-    console.error('Failed to send Gmail message:', error);
-    throw error;
-  }
+
+    return response.data;
 }
 
 async function addLabelToMessage(messageId, labelName) {
-  try {
-    const gmail = await getGmailService();
-    // Ensure the label exists, create if not
-    let labelId = null;
-    const labelsRes = await gmail.users.labels.list({ userId: 'me' });
-    const existingLabel = labelsRes.data.labels.find(label => label.name === labelName);
-
-    if (existingLabel) {
-      labelId = existingLabel.id;
-    } else {
-      const createLabelRes = await gmail.users.labels.create({
-        userId: 'me',
-        requestBody: { name: labelName },
-      });
-      labelId = createLabelRes.data.id;
+    if (!oauth2Client) {
+        await authorize();
     }
 
-    const res = await gmail.users.messages.modify({
-      userId: 'me',
-      id: messageId,
-      requestBody: {
-        addLabelIds: [labelId],
-      },
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    
+    // Create label if it doesn't exist
+    let labelId;
+    const labelRes = await gmail.users.labels.list({ userId: 'me' });
+    const existingLabel = labelRes.data.labels?.find(l => l.name === labelName);
+    
+    if (existingLabel) {
+        labelId = existingLabel.id;
+    } else {
+        const newLabel = await gmail.users.labels.create({
+            userId: 'me',
+            requestBody: { name: labelName }
+        });
+        labelId = newLabel.data.id;
+    }
+
+    // Add label to message
+    await gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        requestBody: { addLabelIds: [labelId] }
     });
-    return res.data;
-  } catch (error) {
-    console.error(`Failed to add label to message ${messageId}:`, error);
-    throw error;
-  }
+
+    return { success: true, labelId };
+}
+
+function parseMessage(message) {
+    const headers = message.payload?.headers || [];
+    
+    return {
+        id: message.id,
+        threadId: message.threadId,
+        from: headers.find(h => h.name.toLowerCase() === 'from')?.value || '',
+        to: headers.find(h => h.name.toLowerCase() === 'to')?.value || '',
+        subject: headers.find(h => h.name.toLowerCase() === 'subject')?.value || '',
+        body: getBody(message.payload),
+        date: new Date(parseInt(message.internalDate)),
+        labels: message.labelIds || [],
+        hasAttachments: message.payload?.parts?.some(p => p.filename) || false,
+        isRead: !message.labelIds?.includes('UNREAD')
+    };
+}
+
+function getBody(payload) {
+    if (payload.body?.data) {
+        return Buffer.from(payload.body.data, 'base64').toString('utf8');
+    }
+    if (payload.parts) {
+        for (const part of payload.parts) {
+            if (part.mimeType === 'text/plain' && part.body?.data) {
+                return Buffer.from(part.body.data, 'base64').toString('utf8');
+            }
+        }
+    }
+    return '';
+}
+
+function createMimeMessage(to, subject, body, threadId) {
+    const lines = [
+        `To: ${to}`,
+        `Subject: ${subject}`,
+        threadId ? `References: ${threadId}` : '',
+        threadId ? `In-Reply-To: ${threadId}` : '',
+        '',
+        body
+    ];
+    return lines.filter(l => l).join('\r\n');
 }
 
 module.exports = {
-  authorize,
-  listMessages,
-  getMessage,
-  sendMessage,
-  addLabelToMessage,
+    authorize,
+    getGmailMessages,
+    listMessages,
+    getMessage,
+    sendMessage,
+    addLabelToMessage
 };

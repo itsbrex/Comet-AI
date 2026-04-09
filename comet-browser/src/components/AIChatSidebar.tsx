@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Maximize2, Minimize2, FileText, Download, Wifi, WifiOff, X,
   ChevronLeft, ChevronRight, ChevronDown, Zap, Send, Paperclip,
@@ -27,8 +28,8 @@ import dracula from 'react-syntax-highlighter/dist/cjs/styles/prism/dracula';
 import ThinkingPanel, { type ThinkingStep } from './ai/ThinkingPanel';
 import CollapsibleOCRMessage from './ai/CollapsibleOCRMessage';
 import MessageActions from './ai/MessageActions';
-import ClickPermissionModal from './ai/ClickPermissionModal';
 import ConversationHistoryPanel, { type Conversation, type ChatMessage } from './ai/ConversationHistoryPanel';
+import { useAIActionSecurityManager } from './ai/useAIActionSecurityManager';
 import {
   robustJSONParse,
   extractAIReasoning,
@@ -72,90 +73,25 @@ import { actionLogsStore, type ActionLog } from '@/lib/ActionLogsStore';
 import { buildFrontendReasoningOptions, type LlmMode } from '@/lib/aiReasoningOptions';
 import { getRecommendedGeminiModel } from '@/lib/modelRegistry';
 import firebaseService from '@/lib/FirebaseService';
+import { selectAIChatSidebarStore } from '@/store/selectors';
 
 // ---------------------------------------------------------------------------
-// Types
+// Types (imported from types.ts)
 // ---------------------------------------------------------------------------
 
-type MediaItem = {
-  type: 'image';
-  url: string;
-  caption?: string;
-} | {
-  type: 'video';
-  videoUrl: string;
-  title: string;
-  description?: string;
-  thumbnailUrl?: string;
-  source: 'youtube' | 'other';
-  videoId?: string;
-} | {
-  type: 'mermaid';
-  diagramId: string;
-  code: string;
-} | {
-  type: 'flowchart';
-  diagramId: string;
-  code: string;
-} | {
-  type: 'chart';
-  chartId: string;
-  data: {
-    labels?: string[];
-    datasets: Array<{
-      label?: string;
-      data: number[];
-      backgroundColor?: string | string[];
-      borderColor?: string | string[];
-      borderWidth?: number;
-      fill?: boolean;
-    }>;
-  };
-  options?: {
-    type?: 'bar' | 'line' | 'pie' | 'doughnut' | 'radar' | 'scatter';
-    title?: string;
-    colors?: string[];
-  };
-};
-
-type ExtendedChatMessage = ChatMessage & {
-  attachments?: string[];
-  isOcr?: boolean;
-  ocrLabel?: string;
-  ocrText?: string;
-  thinkingSteps?: ThinkingStep[];
-  thinkText?: string;
-  actionLogs?: { type: string, output: string, success: boolean }[];
-  mediaItems?: MediaItem[];
-};
-
-type VisualStage = 'idle' | 'fetching' | 'capturing';
-
-const buildConversationTitle = (messages: ExtendedChatMessage[]): string => {
-  const snippet = messages.find((m) => m.role === 'user')?.content
-    ?? messages.find((m) => m.role === 'model')?.content
-    ?? '';
-  const cleaned = snippet
-    .replace(/\\s+/g, ' ')
-    .trim()
-    .slice(0, 80);
-  if (cleaned.length > 0) return cleaned;
-  return `Conversation • ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-};
-
-interface Attachment {
-  type: 'image' | 'pdf';
-  data: string;
-  ocrText?: string;
-  filename: string;
-}
-
-type RefusedIntent = 'credential_login' | 'session_export' | 'file_exfiltration';
-interface RefusedIntentRecord {
-  intent: RefusedIntent;
-  site?: string;
-  timestamp: number;
-}
+import {
+  type MediaItem,
+  type ExtendedChatMessage,
+  type VisualStage,
+  type Attachment,
+  type RefusedIntent,
+  type RefusedIntentRecord,
+} from './AIChatSidebar/types';
+import {
+  areCommandsSettled,
+  buildConversationTitle,
+  getCommandAttemptSignature,
+} from './AIChatSidebar/helpers';
 
 interface AIChatSidebarProps {
   studentMode: boolean;
@@ -183,6 +119,115 @@ interface AIChatSidebarProps {
   bridgeOnly?: boolean;
 }
 
+const renderMarkdownContent = (content: string) => (
+  <ReactMarkdown
+    remarkPlugins={[remarkGfm, remarkMath]}
+    rehypePlugins={[rehypeKatex]}
+    components={{
+      code({ className, children, ...rest }) {
+        const match = /language-(\w+)/.exec(className || '');
+        const codeContent = String(children).replace(/\n$/, '');
+
+        return match ? (
+          <div className="my-5 rounded-3xl overflow-hidden border border-white/5 shadow-2xl">
+            <SyntaxHighlighter
+              style={dracula as any}
+              language={match[1]}
+              PreTag="div"
+              customStyle={{ margin: 0, padding: '1.5rem', fontSize: '11px' }}
+            >
+              {codeContent}
+            </SyntaxHighlighter>
+          </div>
+        ) : (
+          <code className="bg-white/10 px-2 py-0.5 rounded-lg text-[12px] font-mono text-sky-300" {...rest}>
+            {children}
+          </code>
+        );
+      }
+    }}
+  >
+    {content}
+  </ReactMarkdown>
+);
+
+const StreamingMarkdownMessage: React.FC<{
+  content: string;
+  animate: boolean;
+}> = ({ content, animate }) => {
+  const shouldReduceMotion = useReducedMotion();
+  const [visibleLength, setVisibleLength] = useState(() => (
+    animate && !shouldReduceMotion ? 0 : content.length
+  ));
+
+  useEffect(() => {
+    if (!animate || shouldReduceMotion) {
+      setVisibleLength(content.length);
+      return;
+    }
+
+    setVisibleLength((current) => {
+      if (content.length < current) {
+        return content.length;
+      }
+      return current;
+    });
+
+    let cancelled = false;
+    let timerId: number | null = null;
+
+    const tick = () => {
+      if (cancelled) return;
+      setVisibleLength((current) => {
+        if (current >= content.length) {
+          return current;
+        }
+
+        const remaining = content.length - current;
+        const step = remaining > 320 ? 28
+          : remaining > 160 ? 14
+            : remaining > 60 ? 6
+              : 2;
+        const next = Math.min(content.length, current + step);
+
+        if (next < content.length) {
+          timerId = window.setTimeout(tick, 18);
+        }
+
+        return next;
+      });
+    };
+
+    timerId = window.setTimeout(tick, 18);
+
+    return () => {
+      cancelled = true;
+      if (timerId !== null) {
+        window.clearTimeout(timerId);
+      }
+    };
+  }, [animate, content, shouldReduceMotion]);
+
+  const displayedContent = animate && !shouldReduceMotion
+    ? content.slice(0, visibleLength)
+    : content;
+  const showCaret = animate && !shouldReduceMotion && visibleLength < content.length;
+
+  return (
+    <div className="space-y-2">
+      {displayedContent ? renderMarkdownContent(displayedContent) : null}
+      {showCaret ? (
+        <motion.span
+          aria-hidden="true"
+          className="inline-flex h-4 w-2 rounded-full bg-sky-400/80 shadow-[0_0_14px_rgba(56,189,248,0.45)]"
+          animate={{ opacity: [1, 0.2, 1] }}
+          transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      ) : null}
+    </div>
+  );
+};
+
 // ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
@@ -192,8 +237,13 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS = 2;
   const ACTION_CHAIN_MAX_COMMANDS_PER_PASS = 6;
   const ACTION_CHAIN_MAX_SAME_COMMAND_ATTEMPTS = 2;
+  const createMessageId = useCallback((prefix = 'msg') => (
+    typeof window !== 'undefined' && window.crypto?.randomUUID
+      ? `${prefix}-${window.crypto.randomUUID()}`
+      : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  ), []);
   const router = useRouter();
-  const store = useAppStore();
+  const store = useAppStore(useShallow(selectAIChatSidebarStore));
   const {
     aiProvider, ollamaBaseUrl, ollamaModel, openaiApiKey, localLLMBaseUrl,
     localLLMModel, geminiApiKey, anthropicApiKey, groqApiKey,
@@ -272,6 +322,12 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [currentCommandIndex, setCurrentCommandIndex] = useState(0);
   const processingQueueRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const commandQueueRef = useRef<AICommand[]>([]);
+  const currentCommandIndexRef = useRef(0);
+  const commandQueueWaiterRef = useRef<{
+    resolve: (result: { commands: AICommand[]; timedOut: boolean }) => void;
+    timeoutId: number;
+  } | null>(null);
 
   // Reasoning steps
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
@@ -284,6 +340,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tesseractWorkerRef = useRef<Tesseract.Worker | null>(null);
   const refusedIntentsRef = useRef<RefusedIntentRecord[]>([]);
+  const activeStreamingMessageIdRef = useRef<string | null>(null);
 
   // UI state
   const [showRagPanel, setShowRagPanel] = useState(false);
@@ -364,7 +421,6 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   }, [currentUrl, setActiveView, setMessages, store]);
   const persistTimeoutRef = useRef<number | null>(null);
 
-  const [permissionPending, setPermissionPending] = useState<any | null>(null);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [shiftTabGlow, setShiftTabGlow] = useState(false);
@@ -372,9 +428,15 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [showTerminal, setShowTerminal] = useState(false);
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const terminalLogIdCounter = useRef(0);
+  const nativeMacSyncTimeoutRef = useRef<number | null>(null);
   const isDevMode = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
   const [lastSidebarInteractionAt, setLastSidebarInteractionAt] = useState(() => Date.now());
   const [isIdleMinimized, setIsIdleMinimized] = useState(false);
+  const {
+    pendingPermission: permissionPending,
+    requestPermission: requestActionPermission,
+    approvalModal,
+  } = useAIActionSecurityManager();
 
   const markSidebarInteraction = useCallback(() => {
     setLastSidebarInteractionAt(Date.now());
@@ -588,26 +650,48 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     : setLocalShowSchedulingModal;
 
   useEffect(() => {
-    if (!window.electronAPI?.onAutomationShellApproval || !window.electronAPI?.respondAutomationShellApproval) return;
-    const cleanup = window.electronAPI.onAutomationShellApproval((payload) => {
-      setPermissionPending({
-        resolve: (allowed: boolean) => {
-          window.electronAPI.respondAutomationShellApproval({ requestId: payload.requestId, allowed });
-        },
-        mobileApproved: false,
-        context: {
-          action: payload.command || 'Shell command',
-          what: payload.command,
-          reason: payload.reason || 'A pending automation needs your approval.',
-          risk: payload.risk || 'medium',
-          actionType: 'SHELL_COMMAND',
-          target: payload.command,
-          highRiskQr: payload.highRiskQr,
-          requiresDeviceUnlock: !!payload.requiresDeviceUnlock,
-        },
-      });
+    commandQueueRef.current = commandQueue;
+    currentCommandIndexRef.current = currentCommandIndex;
+
+    if (commandQueueWaiterRef.current && areCommandsSettled(commandQueue)) {
+      const waiter = commandQueueWaiterRef.current;
+      commandQueueWaiterRef.current = null;
+      window.clearTimeout(waiter.timeoutId);
+      waiter.resolve({ commands: commandQueue, timedOut: false });
+    }
+  }, [commandQueue, currentCommandIndex]);
+
+  const waitForCommandQueueCompletion = useCallback((timeoutMs = 120000) => {
+    if (areCommandsSettled(commandQueueRef.current)) {
+      return Promise.resolve({ commands: commandQueueRef.current, timedOut: false });
+    }
+
+    if (commandQueueWaiterRef.current) {
+      window.clearTimeout(commandQueueWaiterRef.current.timeoutId);
+      commandQueueWaiterRef.current.resolve({ commands: commandQueueRef.current, timedOut: true });
+      commandQueueWaiterRef.current = null;
+    }
+
+    return new Promise<{ commands: AICommand[]; timedOut: boolean }>((resolve) => {
+      const timeoutId = window.setTimeout(() => {
+        if (commandQueueWaiterRef.current?.timeoutId === timeoutId) {
+          commandQueueWaiterRef.current = null;
+        }
+        resolve({ commands: commandQueueRef.current, timedOut: true });
+      }, timeoutMs);
+
+      commandQueueWaiterRef.current = { resolve, timeoutId };
     });
-    return cleanup;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (commandQueueWaiterRef.current) {
+        window.clearTimeout(commandQueueWaiterRef.current.timeoutId);
+        commandQueueWaiterRef.current.resolve({ commands: commandQueueRef.current, timedOut: true });
+        commandQueueWaiterRef.current = null;
+      }
+    };
   }, []);
 
   // Detect Python availability once (used for optional QA guidance)
@@ -637,32 +721,6 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
   const resolveThinkingStep = useCallback((id: string, status: 'done' | 'error', detail?: string) => {
     setThinkingSteps((prev) => prev.map((s) => s.id === id ? { ...s, status, detail: detail ?? s.detail } : s));
-  }, []);
-
-  const requestActionPermission = useCallback(async (
-    actionType: string, action: string, target: string, what: string, reason: string,
-    risk: 'low' | 'medium' | 'high' | 'critical' = 'low'
-  ): Promise<boolean> => {
-    // 1. If low risk, auto-approve
-    if (risk === 'low') return true;
-
-    // 2. Check if user already granted this action permanently
-    const permKey = `${actionType}:${target || what}`;
-    if (window.electronAPI?.permCheck) {
-      const res = await window.electronAPI.permCheck(permKey);
-      if (res.granted) {
-        console.log(`[Permission] Pre-authorized via store: ${permKey}`);
-        return true;
-      }
-    }
-
-    let highRiskQr = null;
-    if (risk === 'high' && window.electronAPI?.generateHighRiskQr) {
-      highRiskQr = await window.electronAPI.generateHighRiskQr(Math.random().toString(36).substring(7));
-    }
-    return new Promise((resolve) => {
-      setPermissionPending({ resolve, mobileApproved: false, context: { actionType, action, target, what, reason, risk, highRiskQr } });
-    });
   }, []);
 
   const preloadCometIconLocal = useCallback(async (): Promise<void> => {
@@ -797,30 +855,48 @@ I couldn't schedule the task. The background service may not be running. Please 
     }
   ), [localLlmMode, normalizedProvider, ollamaModel, ollamaBaseUrl, geminiModel]);
 
-  const getStreamingResponse = useCallback(async (history: ChatMessage[]): Promise<any> => {
+  const getStreamingResponse = useCallback(async (history: ChatMessage[], messageId?: string): Promise<any> => {
     return new Promise((resolve) => {
       let fullText = '';
       let fullThought = '';
+      let animationFrame: number | null = null;
+
+      const flushStreamText = () => {
+        animationFrame = null;
+        setMessages((prev) => {
+          const updated = [...prev];
+          const targetIndex = messageId
+            ? updated.findIndex((message) => message.id === messageId)
+            : updated.length - 1;
+          const lastMessage = targetIndex >= 0 ? updated[targetIndex] : null;
+          if (lastMessage && lastMessage.role === 'model') {
+            updated[targetIndex] = { ...lastMessage, content: fullText };
+          }
+          return updated;
+        });
+      };
 
       const cleanup = window.electronAPI.onChatStreamPart((part: any) => {
         if (part.type === 'text-delta') {
           fullText += (part.textDelta || '');
-          setMessages((prev) => {
-            const lastMessage = prev[prev.length - 1];
-            if (lastMessage && lastMessage.role === 'model') {
-              const updated = [...prev];
-              updated[prev.length - 1] = { ...lastMessage, content: fullText };
-              return updated;
-            }
-            return prev;
-          });
+          if (animationFrame === null) {
+            animationFrame = window.requestAnimationFrame(flushStreamText);
+          }
         } else if (part.type === 'reasoning-delta') {
           fullThought += (part.reasoningDelta || '');
           setThinkingText(fullThought.trim());
         } else if (part.type === 'error') {
+          if (animationFrame !== null) {
+            window.cancelAnimationFrame(animationFrame);
+            flushStreamText();
+          }
           cleanup();
           resolve({ error: part.error });
         } else if (part.type === 'finish') {
+          if (animationFrame !== null) {
+            window.cancelAnimationFrame(animationFrame);
+          }
+          flushStreamText();
           cleanup();
           resolve({ text: fullText, thought: fullThought });
         }
@@ -838,15 +914,15 @@ I couldn't schedule the task. The background service may not be running. Please 
     if (!rawContent && attachments.length === 0) return;
 
     // Show setup guide if AI is not configured. After first show, don't block—
-    // let the user try anyway (they may have set a key via store directly).
     if (!isAiSetup()) {
       if (!hasSeenNeuralSetup) {
         setHasSeenNeuralSetup(true);
         setShowSetupGuide(true);
       }
-      // Still fall through and attempt to send — the error from main.js will explain
     }
 
+    // INSTANT feedback - show user message immediately
+    setMessages(prev => [...prev, { id: createMessageId('user'), role: 'user', content: rawContent }]);
     if (!customContent) { setInputMessage(''); setAttachments([]); }
     setIsLoading(true);
     setIsThinking(true);
@@ -857,7 +933,7 @@ I couldn't schedule the task. The background service may not be running. Please 
     // Security Checks
     const threatCheck = checkThreat(rawContent);
     if (threatCheck.blocked) {
-      setMessages(prev => [...prev, { role: 'user', content: rawContent }, { role: 'model', content: threatCheck.response ?? '' }] as ExtendedChatMessage[]);
+      setMessages(prev => [...prev, { id: createMessageId('assistant'), role: 'model', content: threatCheck.response ?? '' }] as ExtendedChatMessage[]);
       setIsLoading(false); setIsThinking(false); return;
     }
 
@@ -901,7 +977,7 @@ I couldn't schedule the task. The background service may not be running. Please 
         status: 'pending',
         timestamp: Date.now()
       };
-      setMessages(prev => [...prev, userMessage, { role: 'model', content: '✨ **Unlocking Neural Potential...**' }]);
+      setMessages(prev => [...prev, { role: 'model', content: '✨ **Unlocking Neural Potential...**' }]);
       setCommandQueue([capCmd]);
       setCurrentCommandIndex(0);
       setIsLoading(false);
@@ -909,7 +985,6 @@ I couldn't schedule the task. The background service may not be running. Please 
       return;
     }
 
-    setMessages(prev => [...prev, userMessage]);
     if (wasProtected) setMessages(prev => [...prev, { role: 'model', content: '🛡️ **AI Fortress Active**: Sensitive data protected.' }]);
 
     try {
@@ -923,8 +998,6 @@ I couldn't schedule the task. The background service may not be running. Please 
       resolveThinkingStep(ragId, 'done', `${contextItems.length} memories recovered`);
 
       // ✅ NEW: Pre-flight live search — run BEFORE the LLM call
-      // If the query is about news/prices/events/current data, fetch real results NOW
-      // and inject them into the LLM context so it cannot hallucinate.
       let liveSearchContext = '';
       if (queryRequiresSearch(protectedContent)) {
         const preflightId = addThinkingStep('🔍 Fetching live data before answering...');
@@ -997,8 +1070,10 @@ I couldn't schedule the task. The background service may not be running. Please 
         iterations++;
         const aiId = addThinkingStep(iterations === 1 ? 'LLM Processing...' : `Action Chain Synthesis & Evaluation (Step ${iterations})...`);
 
-        setMessages(prev => [...prev, { role: 'model', content: '' }] as ExtendedChatMessage[]);
-        const response = await getStreamingResponse(currentHistory);
+        const responseMessageId = createMessageId('assistant');
+        activeStreamingMessageIdRef.current = responseMessageId;
+        setMessages(prev => [...prev, { id: responseMessageId, role: 'model', content: '' }] as ExtendedChatMessage[]);
+        const response = await getStreamingResponse(currentHistory, responseMessageId);
         resolveThinkingStep(aiId, response.error ? 'error' : 'done');
 
         if (response.error) throw new Error(response.error);
@@ -1025,7 +1100,7 @@ I couldn't schedule the task. The background service may not be running. Please 
             return false;
           }
 
-          const signature = `${command.type}:${command.value.replace(/\s+/g, ' ').trim().toLowerCase()}`;
+          const signature = getCommandAttemptSignature(command);
           const seenAttempts = (commandAttemptCounts.get(signature) || 0) + 1;
           commandAttemptCounts.set(signature, seenAttempts);
 
@@ -1047,16 +1122,23 @@ I couldn't schedule the task. The background service may not be running. Please 
         setMessages(prev => {
           if (prev.length === 0) return prev;
           const updated = [...prev];
-          const lastIdx = updated.length - 1;
-          if (updated[lastIdx].role === 'model') {
-            updated[lastIdx] = {
-              ...updated[lastIdx],
-              content: trimmedResponseText,
-              thinkText: response.thought // 🚀 PERSIST reasoning for exports/copy
-            };
-          }
+              const targetIndex = responseMessageId
+                ? updated.findIndex((message) => message.id === responseMessageId)
+                : updated.length - 1;
+              if (targetIndex >= 0 && updated[targetIndex].role === 'model') {
+                updated[targetIndex] = {
+                  ...updated[targetIndex],
+                  content: trimmedResponseText,
+                  thinkText: response.thought // 🚀 PERSIST reasoning for exports/copy
+                };
+              }
           return updated;
         });
+        window.setTimeout(() => {
+          if (activeStreamingMessageIdRef.current === responseMessageId) {
+            activeStreamingMessageIdRef.current = null;
+          }
+        }, 1200);
 
         if (commands.length === 0) {
           if (!trimmedResponseText || invalidCommands.length > 0 || skippedCommands.length > 0) {
@@ -1113,26 +1195,7 @@ I couldn't schedule the task. The background service may not be running. Please 
         setCommandQueue(aiCommands);
         setCurrentCommandIndex(0);
 
-        const finalCommandResult = await new Promise<{ commands: AICommand[]; timedOut: boolean }>((resolve) => {
-          const timeout = setTimeout(() => resolve({ commands: [], timedOut: true }), 120000);
-          let isResolved = false;
-          const checkStatus = () => {
-            if (isResolved) return;
-            setCommandQueue(q => {
-              const allDone = q.length === 0 || q.every(c => c.status === 'completed' || c.status === 'failed');
-              if (allDone && !isResolved) {
-                isResolved = true;
-                clearTimeout(timeout);
-                resolve({ commands: q, timedOut: false });
-              } else if (!isResolved) {
-                // Check immediately instead of waiting 500ms
-                setTimeout(checkStatus, 0);
-              }
-              return q;
-            });
-          };
-          checkStatus();
-        });
+        const finalCommandResult = await waitForCommandQueueCompletion(120000);
 
         resolveThinkingStep(cmdId, 'done');
 
@@ -1228,7 +1291,7 @@ I couldn't schedule the task. The background service may not be running. Please 
       setIsLoading(false);
       setIsThinking(false);
     }
-  }, [inputMessage, attachments, messages, aiProvider, currentUrl, addThinkingStep, resolveThinkingStep, getStreamingResponse, isAiSetup, fetchRealSearchContext, buildActionChainClarification]);
+  }, [inputMessage, attachments, messages, aiProvider, currentUrl, addThinkingStep, resolveThinkingStep, getStreamingResponse, isAiSetup, fetchRealSearchContext, buildActionChainClarification, waitForCommandQueueCompletion, createMessageId]);
 
   const processNextCommand = useCallback(async () => {
     console.log('[AI] processNextCommand called, current index:', currentCommandIndex, 'queue length:', commandQueue.length);
@@ -1239,13 +1302,27 @@ I couldn't schedule the task. The background service may not be running. Please 
 
     processingQueueRef.current = true;
     const command = commandQueue[currentCommandIndex];
+    const COMMAND_TIMEOUT = 10000;
 
     setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
 
+    let commandResult: { output: string; error?: string } = { output: '' };
+
+    const executeWithTimeout = async (fn: () => Promise<void>) => {
+      const timeoutPromise = new Promise<{ output: string; error: string }>((_, reject) => 
+        setTimeout(() => reject(new Error(`Command timed out after ${COMMAND_TIMEOUT}ms`)), COMMAND_TIMEOUT)
+      );
+      try {
+        await fn();
+        commandResult.output = 'completed';
+      } catch (e: any) {
+        commandResult = { output: '', error: e.message };
+      }
+    };
+
     try {
       let output = '';
-
-      switch (command.type) {
+        switch (command.type) {
         case 'WAIT': {
           const ms = parseInt(command.value) || 2000;
           output = `Waiting for ${ms}ms...`;
@@ -1286,6 +1363,21 @@ I couldn't schedule the task. The background service may not be running. Please 
           const selector = command.value.split('|')[0].trim();
           const clickStepId = addThinkingStep(`Clicking element: ${selector}...`);
           try {
+            setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'awaiting_permission' } : cmd));
+            const confirmed = await requestActionPermission({
+              actionType: 'CLICK_ELEMENT',
+              action: 'Click Element',
+              target: selector,
+              what: selector,
+              reason: command.reason || 'The AI wants to click a page element in the current tab.',
+              risk: 'medium',
+            });
+            if (!confirmed) {
+              output = `Click denied for element: ${selector}`;
+              resolveThinkingStep(clickStepId, 'error', 'Permission denied');
+              break;
+            }
+            setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
             const res = await window.electronAPI.clickElement(selector);
             if (res.success) {
               output = `Successfully clicked element: ${selector}`;
@@ -1306,6 +1398,21 @@ I couldn't schedule the task. The background service may not be running. Please 
           const [x, y] = coords.split(',').map(s => parseInt(s.trim()));
           const clickAtStepId = addThinkingStep(`Clicking at (${x}, ${y})...`);
           try {
+            setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'awaiting_permission' } : cmd));
+            const confirmed = await requestActionPermission({
+              actionType: 'CLICK_AT',
+              action: 'Click Screen Coordinates',
+              target: `${x},${y}`,
+              what: `(${x}, ${y})`,
+              reason: command.reason || 'The AI wants to click a specific point on screen.',
+              risk: 'medium',
+            });
+            if (!confirmed) {
+              output = `Click denied at coordinates (${x}, ${y})`;
+              resolveThinkingStep(clickAtStepId, 'error', 'Permission denied');
+              break;
+            }
+            setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
             const res = await window.electronAPI.performClick({ x, y });
             if (res.success) {
               output = `Clicked at coordinates (${x}, ${y})`;
@@ -1325,6 +1432,21 @@ I couldn't schedule the task. The background service may not be running. Please 
           const textToFind = command.value.split('|')[0].trim();
           const findClickStepId = addThinkingStep(`Finding and clicking: "${textToFind}"...`);
           try {
+            setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'awaiting_permission' } : cmd));
+            const confirmed = await requestActionPermission({
+              actionType: 'FIND_AND_CLICK',
+              action: 'Find And Click',
+              target: textToFind,
+              what: textToFind,
+              reason: command.reason || 'The AI wants to search the screen for text and click it.',
+              risk: 'medium',
+            });
+            if (!confirmed) {
+              output = `Find-and-click denied for "${textToFind}"`;
+              resolveThinkingStep(findClickStepId, 'error', 'Permission denied');
+              break;
+            }
+            setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
             const res = await window.electronAPI.findAndClickText(textToFind);
             if (res.success) {
               output = `Found and clicked text: "${textToFind}"`;
@@ -1346,6 +1468,21 @@ I couldn't schedule the task. The background service may not be running. Please 
           const value = parts[1];
           const fillStepId = addThinkingStep(`Filling form element ${selector}...`);
           try {
+            setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'awaiting_permission' } : cmd));
+            const confirmed = await requestActionPermission({
+              actionType: 'FILL_FORM',
+              action: 'Fill Form Field',
+              target: selector,
+              what: selector,
+              reason: command.reason || 'The AI wants to type into a page form field.',
+              risk: 'medium',
+            });
+            if (!confirmed) {
+              output = `Form fill denied for ${selector}`;
+              resolveThinkingStep(fillStepId, 'error', 'Permission denied');
+              break;
+            }
+            setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
             const res = await window.electronAPI.typeText(selector, value);
             if (res.success) {
               output = `Filled ${selector} with value: ${value}`;
@@ -1473,27 +1610,52 @@ I couldn't schedule the task. The background service may not be running. Please 
         }
 
         case 'READ_PAGE_CONTENT': {
-          await waitForActiveTabToSettle(20000);
-          const res = await window.electronAPI.extractPageContent();
-          if (res.content) {
-            const scrubbed = scrubbedContent(res.content);
-            output = `Page content read successfully (${scrubbed.length} chars):\n${scrubbed.substring(0, 4000)}...`;
-            await BrowserAI.addToVectorMemory(scrubbed, { type: 'page_content', url: currentUrl });
+          try {
+            await waitForActiveTabToSettle(20000);
+            const res = await window.electronAPI.extractPageContent();
+            if (res.content) {
+              const scrubbed = scrubbedContent(res.content);
+              output = `Page content read (${scrubbed.length} chars):\n${scrubbed.substring(0, 4000)}...`;
+              await BrowserAI.addToVectorMemory(scrubbed, { type: 'page_content', url: currentUrl });
+              searchContextStore.addPageContent(currentUrl, currentUrl, scrubbed);
+              setMessages(prev => {
+                const last = prev[prev.length - 1];
+                if (last && last.role === 'model') {
+                  const updated = [...prev];
+                  updated[prev.length - 1] = { ...last, isOcr: true, ocrLabel: 'PAGE_CONTENT', ocrText: scrubbed };
+                  return updated;
+                }
+                return [...prev, { role: 'model', content: '', isOcr: true, ocrLabel: 'PAGE_CONTENT', ocrText: scrubbed } as ExtendedChatMessage];
+              });
+            } else {
+              output = `Error reading page: ${res.error || 'No content'}`;
+            }
+          } catch (e: any) {
+            output = `Error reading page: ${e.message}`;
+          }
+          break;
+        }
 
-            // Store in context for reuse
-            searchContextStore.addPageContent(currentUrl, currentUrl, scrubbed);
-
-            setMessages(prev => {
-              const last = prev[prev.length - 1];
-              if (last && last.role === 'model') {
-                const updated = [...prev];
-                updated[prev.length - 1] = { ...last, isOcr: true, ocrLabel: 'PAGE_CONTENT', ocrText: scrubbed };
-                return updated;
+        case 'OCR_SCREEN': {
+          try {
+            const stepId = addThinkingStep('Capturing screen for OCR...');
+            if (!window.electronAPI.ocrScreenText) {
+              output = 'OCR screen not available';
+              resolveThinkingStep(stepId, 'error', output);
+            } else {
+              const ocrRes = await window.electronAPI.ocrScreenText();
+              const ocrText = typeof ocrRes === 'string' ? ocrRes : ((ocrRes as any)?.text || '');
+              if (ocrText) {
+                output = `OCR screen (${ocrText.length} chars):\n${ocrText.substring(0, 4000)}...`;
+                await BrowserAI.addToVectorMemory(ocrText, { type: 'ocr_screen', url: currentUrl });
+                searchContextStore.addPageContent(currentUrl, currentUrl, ocrText);
+              } else {
+                output = 'No OCR text detected';
               }
-              return [...prev, { role: 'model', content: '', isOcr: true, ocrLabel: 'PAGE_CONTENT', ocrText: scrubbed } as ExtendedChatMessage];
-            });
-          } else {
-            output = `Error reading page: ${res.error}`;
+              resolveThinkingStep(stepId, 'done', output);
+            }
+          } catch (e: any) {
+            output = `OCR error: ${e.message}`;
           }
           break;
         }
@@ -1670,15 +1832,45 @@ case 'ORGANIZE_TABS': {
           break;
         }
 
-        case 'SET_VOLUME':
+        case 'SET_VOLUME': {
+          setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'awaiting_permission' } : cmd));
+          const confirmed = await requestActionPermission({
+            actionType: 'SET_VOLUME',
+            action: 'Set Volume',
+            target: command.value,
+            what: `${command.value}%`,
+            reason: command.reason || 'The AI wants to change the system volume.',
+            risk: 'medium',
+          });
+          if (!confirmed) {
+            output = 'Volume change denied by user.';
+            break;
+          }
+          setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
           await window.electronAPI.setVolume(parseInt(command.value));
           output = `System volume adjusted to ${command.value}%`;
           break;
+        }
 
-        case 'SET_BRIGHTNESS':
+        case 'SET_BRIGHTNESS': {
+          setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'awaiting_permission' } : cmd));
+          const confirmed = await requestActionPermission({
+            actionType: 'SET_BRIGHTNESS',
+            action: 'Set Brightness',
+            target: command.value,
+            what: `${command.value}%`,
+            reason: command.reason || 'The AI wants to change the display brightness.',
+            risk: 'medium',
+          });
+          if (!confirmed) {
+            output = 'Brightness change denied by user.';
+            break;
+          }
+          setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
           await window.electronAPI.setBrightness(parseInt(command.value));
           output = `Screen brightness adjusted to ${command.value}%`;
           break;
+        }
 
         case 'SHELL_COMMAND': {
           setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
@@ -1706,12 +1898,16 @@ case 'ORGANIZE_TABS': {
 
         case 'OPEN_APP': {
           setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'awaiting_permission' } : cmd));
-          const confirmed = await requestActionPermission(
-            'OPEN_APP', 'Open Application', command.value, command.value,
-            'The AI wants to launch an external application.', 'medium'
-          );
-          setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
+          const confirmed = await requestActionPermission({
+            actionType: 'OPEN_APP',
+            action: 'Open Application',
+            target: command.value,
+            what: command.value,
+            reason: 'The AI wants to launch an external application.',
+            risk: 'medium',
+          });
           if (confirmed) {
+            setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'executing' } : cmd));
             await window.electronAPI.openExternalApp(command.value);
             output = `Application ${command.value} launched.`;
           } else {
@@ -3091,40 +3287,27 @@ I've successfully executed the following real tasks:
           output = `Operation ${command.type} completed.`;
       }
 
-      setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'completed', output } : cmd));
+      if (commandResult.error) {
+        output = commandResult.error;
+        setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'failed', error: output } : cmd));
+      } else {
+        setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'completed', output } : cmd));
+      }
 
       setMessages(prev => {
         const last = prev[prev.length - 1];
         if (last && last.role === 'model') {
           const updated = [...prev];
           const actionLogs = last.actionLogs || [];
-          updated[prev.length - 1] = {
-            ...last,
-            actionLogs: [...actionLogs, { type: command.type, output, success: true }]
-          };
+          updated[prev.length - 1] = { ...last, actionLogs: [...actionLogs, { type: command.type, output, success: !commandResult.error }] };
           return updated;
         }
         return prev;
       });
-
     } catch (err: any) {
+      const errorOutput = err.message;
       setCommandQueue(prev => prev.map((cmd, i) => i === currentCommandIndex ? { ...cmd, status: 'failed', error: err.message } : cmd));
-
-      setMessages(prev => {
-        const last = prev[prev.length - 1];
-        if (last && last.role === 'model') {
-          const updated = [...prev];
-          const actionLogs = last.actionLogs || [];
-          updated[prev.length - 1] = {
-            ...last,
-            actionLogs: [...actionLogs, { type: command.type, output: err.message, success: false }]
-          };
-          return updated;
-        }
-        return prev;
-      });
     } finally {
-      await new Promise(resolve => setTimeout(resolve, 2000));
       processingQueueRef.current = false;
       setCurrentCommandIndex(prev => prev + 1);
     }
@@ -3395,11 +3578,8 @@ I've successfully executed the following real tasks:
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.shiftKey && e.key === 'Tab' && permissionPending && permissionPending.context?.risk !== 'high') {
-        e.preventDefault();
         setShiftTabGlow(true);
         setTimeout(() => setShiftTabGlow(false), 900);
-        permissionPending.resolve(true);
-        setPermissionPending(null);
       }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
@@ -3426,27 +3606,6 @@ I've successfully executed the following real tasks:
         unsub();
         unsubProgress();
       };
-    }
-  }, []);
-
-  useEffect(() => {
-    if (window.electronAPI && window.electronAPI.onMobileApproveHighRisk) {
-      const unsub = window.electronAPI.onMobileApproveHighRisk((data: { pin: string, id: string }) => {
-        setPermissionPending((currentPending: any) => {
-          if (currentPending && currentPending.context.risk === 'high') {
-            try {
-              const qrData = JSON.parse(currentPending.context.highRiskQr || '{}');
-              if (qrData.pin === data.pin && qrData.token === data.id) {
-                return { ...currentPending, mobileApproved: true };
-              }
-            } catch (e) {
-              console.error("Failed to parse high risk QR data", e);
-            }
-          }
-          return currentPending;
-        });
-      });
-      return () => unsub();
     }
   }, []);
 
@@ -3483,7 +3642,7 @@ I've successfully executed the following real tasks:
     if (messages.length > 0 || isLoading) {
       markSidebarInteraction();
     }
-  }, [messages.length, latestMessageContent, isLoading, markSidebarInteraction]);
+  }, [messages.length, isLoading]);
 
   useEffect(() => {
     if (!store.macNativeSidebarAutoMinimize || props.bridgeOnly) {
@@ -3544,7 +3703,8 @@ I've successfully executed the following real tasks:
     if (!window.electronAPI?.onNativeMacPrompt) return;
     const cleanup = window.electronAPI.onNativeMacPrompt((payload: { prompt: string }) => {
       if (payload?.prompt) {
-        handleSendMessage(payload.prompt);
+        console.log('[NativeMacPrompt] Received prompt:', payload.prompt.substring(0, 50));
+        handleSendMessage(payload.prompt).catch(err => console.error('[NativeMacPrompt] Error:', err));
       }
     });
     return cleanup;
@@ -3605,151 +3765,125 @@ I've successfully executed the following real tasks:
   useEffect(() => {
     if (!window.electronAPI?.updateNativeMacUIState) return;
 
-    const snapshotMessages = messages.slice(-20).map((message, index) => ({
-      id: message.id || `${message.role}-${index}-${Date.now()}`,
-      role: message.role,
-      content: `${message.content || ''}`.slice(0, 12000),
-      timestamp: Date.now(),
-      thinkText: message.thinkText ? message.thinkText.slice(0, 8000) : null,
-      isOcr: !!message.isOcr,
-      ocrLabel: message.ocrLabel ? `${message.ocrLabel}`.slice(0, 120) : null,
-      ocrText: message.ocrText ? message.ocrText.slice(0, 12000) : null,
-      actionLogs: Array.isArray(message.actionLogs)
-        ? message.actionLogs.slice(0, 24).map((log) => ({
-          type: `${log.type || ''}`.slice(0, 120),
-          output: `${log.output || ''}`.slice(0, 4000),
-          success: !!log.success,
-        }))
-        : [],
-      mediaItems: Array.isArray(message.mediaItems)
-        ? message.mediaItems.slice(0, 12).map((item) => {
-          if (item.type === 'image') {
-            return {
-              type: item.type,
-              url: item.url,
-              caption: item.caption || null,
-            };
-          }
-
-          if (item.type === 'video') {
-            return {
-              type: item.type,
-              videoUrl: item.videoUrl,
-              title: item.title,
-              description: item.description || null,
-              thumbnailUrl: item.thumbnailUrl || null,
-              source: item.source,
-              videoId: item.videoId || null,
-            };
-          }
-
-          if (item.type === 'mermaid' || item.type === 'flowchart') {
-            return {
-              type: item.type,
-              diagramId: item.diagramId,
-              code: item.code,
-            };
-          }
-
-          return {
-            type: item.type,
-            chartId: item.chartId,
-            chartDataJSON: JSON.stringify(item.data || {}),
-            chartOptionsJSON: JSON.stringify(item.options || {}),
-          };
-        })
-        : [],
-    }));
-
-    const snapshotActionChain = commandQueue.slice(0, 24).map((command) => ({
-      id: command.id,
-      type: command.type,
-      value: command.value,
-      status: command.status,
-      category: command.category,
-      riskLevel: command.riskLevel,
-    }));
-
-    const snapshotConversations = conversations.slice(0, 20).map((conversation) => ({
-      id: conversation.id,
-      title: conversation.title,
-      updatedAt: conversation.updatedAt,
-    }));
-
-    const snapshotActivityTags = Array.from(new Set(
-      searchContextStore.getRecentContexts(6).map((context) => {
-        switch (context.type) {
-          case 'web_search':
-            return context.query ? `Searched for: ${context.query}` : 'Searched the web';
-          case 'page_content':
-            return `Read: ${context.title || context.url || 'Current page'}`;
-          case 'ocr':
-            return `OCR: ${context.query || 'Screen capture'}`;
-          case 'dom':
-            return context.query ? `Scanned DOM: ${context.query}` : `Scanned DOM: ${context.url || 'Current page'}`;
-          default:
-            return '';
-        }
-      }).filter(Boolean)
-    )).slice(0, 8);
-
-    if (isLoading) {
-      snapshotActivityTags.unshift('Comet is thinking');
+    if (nativeMacSyncTimeoutRef.current) {
+      window.clearTimeout(nativeMacSyncTimeoutRef.current);
     }
 
-    window.electronAPI.updateNativeMacUIState({
-      inputDraft: inputMessage,
-      isLoading,
-      error,
-      currentCommandIndex,
-      themeAppearance: resolvedTheme === 'light' ? 'light' : 'dark',
-      messages: snapshotMessages,
-      actionChain: snapshotActionChain,
-      conversations: snapshotConversations,
-      activeConversationId,
-      activityTags: Array.from(new Set(snapshotActivityTags)).slice(0, 8),
-    });
-  }, [messages, commandQueue, conversations, activeConversationId, currentCommandIndex, inputMessage, isLoading, error, resolvedTheme]);
+    nativeMacSyncTimeoutRef.current = window.setTimeout(() => {
+      const snapshotMessages = messages.slice(-20).map((message, index) => ({
+        id: message.id || `${message.role}-${index}`,
+        role: message.role,
+        content: `${message.content || ''}`.slice(0, 12000),
+        timestamp: index,
+        thinkText: message.thinkText ? message.thinkText.slice(0, 8000) : null,
+        isOcr: !!message.isOcr,
+        ocrLabel: message.ocrLabel ? `${message.ocrLabel}`.slice(0, 120) : null,
+        ocrText: message.ocrText ? message.ocrText.slice(0, 12000) : null,
+        actionLogs: Array.isArray(message.actionLogs)
+          ? message.actionLogs.slice(0, 24).map((log) => ({
+            type: `${log.type || ''}`.slice(0, 120),
+            output: `${log.output || ''}`.slice(0, 4000),
+            success: !!log.success,
+          }))
+          : [],
+        mediaItems: Array.isArray(message.mediaItems)
+          ? message.mediaItems.slice(0, 12).map((item) => {
+            if (item.type === 'image') {
+              return {
+                type: item.type,
+                url: item.url,
+                caption: item.caption || null,
+              };
+            }
 
-  // Remote Approval Listener (from mobile)
-  useEffect(() => {
-    if (!window.electronAPI?.onAutomationShellApproval) return;
-    const cleanup = window.electronAPI.onAutomationShellApproval((payload: any) => {
-      console.log('[AI] Automation Shell Approval required:', payload);
-      setPermissionPending({
-        resolve: (allowed: boolean) => {
-          window.electronAPI.submitShellApprovalResponse(payload.requestId, allowed);
-        },
-        mobileApproved: false,
-        context: {
-          actionType: 'SHELL_COMMAND',
-          action: 'Shell Command Approval',
-          target: payload.command,
-          what: payload.command,
-          reason: payload.reason || 'An automated task needs to execute this shell command.',
-          risk: (payload.risk as any) || 'medium',
-          highRiskQr: payload.highRiskQr,
-          requiresDeviceUnlock: payload.requiresDeviceUnlock
-        }
-      });
-    });
-    return cleanup;
-  }, []);
+            if (item.type === 'video') {
+              return {
+                type: item.type,
+                videoUrl: item.videoUrl,
+                title: item.title,
+                description: item.description || null,
+                thumbnailUrl: item.thumbnailUrl || null,
+                source: item.source,
+                videoId: item.videoId || null,
+              };
+            }
 
-  useEffect(() => {
-    let approveCleanup: (() => void) | undefined;
-    if (window.electronAPI?.onMobileApproveHighRisk) {
-      approveCleanup = window.electronAPI.onMobileApproveHighRisk((data: { pin: string; id: string }) => {
-        console.log('[Remote-Approval] Received for', data.id);
-        if (permissionPending) {
-          permissionPending.resolve(true);
-        }
+            if (item.type === 'mermaid' || item.type === 'flowchart') {
+              return {
+                type: item.type,
+                diagramId: item.diagramId,
+                code: item.code,
+              };
+            }
+
+            return {
+              type: item.type,
+              chartId: item.chartId,
+              chartDataJSON: JSON.stringify(item.data || {}),
+              chartOptionsJSON: JSON.stringify(item.options || {}),
+            };
+          })
+          : [],
+      }));
+
+      const snapshotActionChain = commandQueue.slice(0, 24).map((command) => ({
+        id: command.id,
+        type: command.type,
+        value: command.value,
+        status: command.status,
+        category: command.category,
+        riskLevel: command.riskLevel,
+      }));
+
+      const snapshotConversations = conversations.slice(0, 20).map((conversation) => ({
+        id: conversation.id,
+        title: conversation.title,
+        updatedAt: conversation.updatedAt,
+      }));
+
+      const snapshotActivityTags = Array.from(new Set(
+        searchContextStore.getRecentContexts(6).map((context) => {
+          switch (context.type) {
+            case 'web_search':
+              return context.query ? `Searched for: ${context.query}` : 'Searched the web';
+            case 'page_content':
+              return `Read: ${context.title || context.url || 'Current page'}`;
+            case 'ocr':
+              return `OCR: ${context.query || 'Screen capture'}`;
+            case 'dom':
+              return context.query ? `Scanned DOM: ${context.query}` : `Scanned DOM: ${context.url || 'Current page'}`;
+            default:
+              return '';
+          }
+        }).filter(Boolean)
+      )).slice(0, 8);
+
+      if (isLoading) {
+        snapshotActivityTags.unshift('Comet is thinking');
+      }
+
+      window.electronAPI.updateNativeMacUIState({
+        inputDraft: inputMessage,
+        isLoading,
+        error,
+        currentCommandIndex,
+        themeAppearance: resolvedTheme === 'light' ? 'light' : 'dark',
+        messages: snapshotMessages,
+        actionChain: snapshotActionChain,
+        conversations: snapshotConversations,
+        activeConversationId,
+        activityTags: Array.from(new Set(snapshotActivityTags)).slice(0, 8),
       });
-    }
+      nativeMacSyncTimeoutRef.current = null;
+    }, 120);
+
     return () => {
-      if (approveCleanup) approveCleanup();
+      if (nativeMacSyncTimeoutRef.current) {
+        window.clearTimeout(nativeMacSyncTimeoutRef.current);
+        nativeMacSyncTimeoutRef.current = null;
+      }
     };
-  }, [permissionPending]);
+  }, [messages, commandQueue, conversations, activeConversationId, currentCommandIndex, inputMessage, isLoading, error, resolvedTheme]);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -3931,7 +4065,7 @@ I've successfully executed the following real tasks:
             initial={{ opacity: 0, y: 30, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 30, scale: 0.97 }}
-            className="absolute bottom-[180px] left-4 right-4 z-[9000] rounded-2xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] bg-[#09090f]"
+            className="absolute bottom-4 left-4 z-[9000] rounded-2xl overflow-hidden border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] bg-[#09090f] w-80 max-w-[320px]"
             style={{ maxHeight: '220px' }}
           >
             <div className="flex items-center justify-between px-4 py-2 bg-[#111118] border-b border-white/5">
@@ -3964,30 +4098,7 @@ I've successfully executed the following real tasks:
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {permissionPending && (
-          <div className="absolute inset-0 z-[10001] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
-            <ClickPermissionModal
-              context={permissionPending.context}
-              highRiskApproved={!!permissionPending.mobileApproved}
-              onAllow={async (alwaysAllow) => {
-                const ctx = permissionPending.context;
-                if (alwaysAllow && window.electronAPI?.permGrant) {
-                  const permKey = `${ctx.actionType}:${ctx.target || ctx.what}`;
-                  await window.electronAPI.permGrant(permKey, 'execute', ctx.action, false);
-                  if (ctx.actionType === 'SHELL_COMMAND' && ctx.risk !== 'high' && window.electronAPI?.setAutoApprovalCommand) {
-                    const autoCommand = ctx.target || ctx.what || ctx.action;
-                    await window.electronAPI.setAutoApprovalCommand({ command: autoCommand, enabled: true });
-                  }
-                }
-                permissionPending.resolve(true);
-                setPermissionPending(null);
-              }}
-              onDeny={() => { permissionPending.resolve(false); setPermissionPending(null); }}
-            />
-          </div>
-        )}
-      </AnimatePresence>
+      <AnimatePresence>{approvalModal}</AnimatePresence>
 
       {/* Header */}
       <header className={`px-5 flex flex-col justify-center border-b backdrop-blur-2xl sticky top-0 z-[50] transition-[height,padding] duration-500 ${isIdleMinimized ? 'h-[64px]' : 'h-[76px]'}`} style={{ ...sidebarShellStyle, borderColor: 'color-mix(in srgb, var(--border-color) 35%, transparent)' }}>
@@ -4116,7 +4227,7 @@ I've successfully executed the following real tasks:
 
             return (
               <motion.div
-                key={i}
+                key={msg.id || `${msg.role}-${i}`}
                 layout
                 initial={{ opacity: 0, y: 20, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -4141,32 +4252,10 @@ I've successfully executed the following real tasks:
                     </div>
                   )}
                   {displayContent && (
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={{
-                      code({ node, className, children, ...rest }) {
-                        const match = /language-(\w+)/.exec(className || '');
-                        const codeContent = String(children).replace(/\n$/, '');
-
-                        return match ? (
-                          <div className="my-5 rounded-3xl overflow-hidden border border-white/5 shadow-2xl">
-                            <SyntaxHighlighter
-                              style={dracula as any}
-                              language={match[1]}
-                              PreTag="div"
-                              customStyle={{ margin: 0, padding: '1.5rem', fontSize: '11px' }}
-                            >
-                              {codeContent}
-                            </SyntaxHighlighter>
-                          </div>
-                        ) : (
-                          <code className="bg-white/10 px-2 py-0.5 rounded-lg text-[12px] font-mono text-sky-300" {...rest}>
-                            {children}
-                          </code>
-                        );
-                      }
-
-                    }}>
-                      {displayContent}
-                    </ReactMarkdown>
+                    <StreamingMarkdownMessage
+                      content={displayContent}
+                      animate={msg.role === 'model' && msg.id === activeStreamingMessageIdRef.current}
+                    />
                   )}
                   {msg.isOcr && msg.ocrText && (
                     <CollapsibleOCRMessage label={msg.ocrLabel || 'SCREENSHOT_ANALYSIS'} content={msg.ocrText} />

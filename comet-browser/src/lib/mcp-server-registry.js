@@ -33,7 +33,10 @@ class McpManager {
       console.log(`[MCP-Manager] Successfully connected to ${id}`);
       return true;
     } catch (error) {
-      console.error(`[MCP-Manager] Connection failed for ${id}:`, error);
+      const isConfigured = url || command;
+      if (isConfigured) {
+        console.warn(`[MCP-Manager] ${id} unavailable: ${error.message || 'connection failed'}`);
+      }
       this.clients.set(id, { status: 'offline', error: error.message, config });
       return false;
     }

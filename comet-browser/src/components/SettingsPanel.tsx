@@ -953,6 +953,7 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
                                     <button
                                         onClick={() => {
                                             store.setHasSeenWelcomePage(false);
+                                            store.setHasCompletedStartupSetup(false);
                                             onClose();
                                         }}
                                         className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 hover:border-sky-500/40 transition-all group"
@@ -969,6 +970,7 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
 
                                     <button
                                         onClick={() => {
+                                            store.setHasSeenWelcomePage(true);
                                             store.setHasCompletedStartupSetup(false);
                                             onClose();
                                         }}

@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '@/store/useAppStore';
 import { BrowserAI } from '@/lib/BrowserAI';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -51,6 +52,7 @@ import TitleBar from '@/components/TitleBar';
 import { useOptimizedTabs } from '@/hooks/useOptimizedTabs';
 import { VirtualizedTabBar } from '@/components/VirtualizedTabBar';
 import { TabSwitcherOverlay } from '@/components/TabSwitcherOverlay';
+import { selectClientOnlyPageStore } from '@/store/selectors';
 
 type AiOverviewSource = { text: string; metadata: any };
 interface AiOverviewState {
@@ -150,7 +152,7 @@ const MusicVisualizer = ({ color = 'rgb', isPlaying = false }: { color?: string,
 // HOME PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Home() {
-  const store = useAppStore();
+  const store = useAppStore(useShallow(selectClientOnlyPageStore));
   const { shouldRenderTab, isTabSuspended } = useOptimizedTabs();
   const isMacOS = typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgent);
   const [showClipboard, setShowClipboard] = useState(false);

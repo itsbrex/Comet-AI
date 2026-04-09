@@ -180,8 +180,9 @@ Available commands (prefer JSON format):
 
 📸 SCREENSHOT ATTACHMENT - For PDF/DOCX/PPTX, attach current browser view using images array with type:screenshot. Or use inline tag in content: [CAPTURE_SCREEN] or [CAPTURE_SCREEN|caption:Description]
 
-- [READ_PAGE_CONTENT]:
-- [SCREENSHOT_AND_ANALYZE]:
+- [READ_PAGE_CONTENT]: ← FAST - uses browser DOM (recommended for text)
+- [OCR_SCREEN]: ← SLOW - uses screen OCR (for images/visual content)
+- [SCREENSHOT_AND_ANALYZE]: ← combines screenshot + OCR
 - [SET_VOLUME]:50
 - [OPEN_APP]:Calculator
 - [CLICK_ELEMENT]:#selector | reason

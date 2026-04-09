@@ -33,7 +33,8 @@ export const COMMAND_REGISTRY = {
     NAVIGATE: { desc: 'Go to a specific URL', example: '[NAVIGATE: https://google.com]' },
     SEARCH: { desc: 'Search using default engine', example: '[SEARCH: AI news]' },
     WEB_SEARCH: { desc: 'Real-time web search with RAG', example: '[WEB_SEARCH: today stock prices]' },
-    READ_PAGE_CONTENT: { desc: 'Read text from active tab', example: '[READ_PAGE_CONTENT]' },
+    READ_PAGE_CONTENT: { desc: 'Read DOM text from active tab (FAST)', example: '[READ_PAGE_CONTENT]' },
+    OCR_SCREEN: { desc: 'OCR screen/visual content (SLOW)', example: '[OCR_SCREEN]' },
     LIST_OPEN_TABS: { desc: 'List all open browser tabs', example: '[LIST_OPEN_TABS]' },
     CREATE_PDF_JSON: { desc: 'Create PDF using structured JSON (PREFERRED)', example: '[CREATE_PDF_JSON: {"title":"Report", "pages":[...]}]' },
     CREATE_FILE_JSON: { desc: 'Create PDF/PPTX/DOCX using structured JSON', example: '[CREATE_FILE_JSON: {"format":"pptx","title":"Report","slides":[...]}]' },
@@ -153,6 +154,16 @@ function extractCommandsFromStructuredPayload(payload: any, originalMatch: strin
 
 function extractJSONCommands(content: string): ParsedCommand[] {
     const commands: ParsedCommand[] = [];
+    const seenTypes = new Set<string>();
+
+    const SINGLE_RUN_COMMANDS = new Set(['CREATE_PDF_JSON', 'CREATE_FILE_JSON', 'GENERATE_PDF', 'CREATE_PDF']);
+    const takeCommand = (cmd: ParsedCommand) => {
+        if (SINGLE_RUN_COMMANDS.has(cmd.type)) {
+            if (seenTypes.has(cmd.type)) return false;
+            seenTypes.add(cmd.type);
+        }
+        return true;
+    };
 
     const candidatePatterns = [
         /\{[\s\S]*?"commands"\s*:\s*\[[\s\S]*?\][\s\S]*?\}/g,
@@ -172,7 +183,8 @@ function extractJSONCommands(content: string): ParsedCommand[] {
 
             const robustResult = robustJSONParse(rawCandidate);
             if (robustResult.success) {
-                commands.push(...extractCommandsFromStructuredPayload(robustResult.data, match[0], match.index));
+                const extracted = extractCommandsFromStructuredPayload(robustResult.data, match[0], match.index);
+                extracted.forEach(cmd => { if (takeCommand(cmd)) commands.push(cmd); });
             } else {
                 const fbRegex = /"type"\s*:\s*"([^"]+)"[\s\S]*?"(?:value|url|query|args)"\s*:\s*"([\s\S]*?)"(?=\s*[},])/g;
                 let fbMatch;
@@ -180,12 +192,8 @@ function extractJSONCommands(content: string): ParsedCommand[] {
                     const cmdType = fbMatch[1].toUpperCase();
                     const cmdValue = fbMatch[2].replace(/\\n/g, '\n').replace(/\\"/g, '"');
                     if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
-                        commands.push({
-                            type: cmdType,
-                            value: cmdValue,
-                            originalMatch: match[0],
-                            index: match.index,
-                        });
+                        const cmd = { type: cmdType, value: cmdValue, originalMatch: match[0], index: match.index };
+                        if (takeCommand(cmd)) commands.push(cmd);
                     }
                 }
             }

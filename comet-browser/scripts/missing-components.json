@@ -1,0 +1,407 @@
+[
+  {
+    "name": "helpers.ts",
+    "path": "AIChatSidebar/helpers.ts",
+    "lines": 27,
+    "description": "Helpers",
+    "tags": [
+      "AI",
+      "macOS"
+    ],
+    "lastModified": "2026-04-08"
+  },
+  {
+    "name": "types.ts",
+    "path": "AIChatSidebar/types.ts",
+    "lines": 145,
+    "description": "Types",
+    "tags": [
+      "AI",
+      "PDF",
+      "OCR"
+    ],
+    "lastModified": "2026-04-08"
+  },
+  {
+    "name": "index.js",
+    "path": "index.js",
+    "lines": 148,
+    "description": "Index",
+    "tags": [
+      "Node.js",
+      "Automation",
+      "macOS",
+      "Windows",
+      "Linux"
+    ],
+    "lastModified": "2026-04-08"
+  },
+  {
+    "name": "CloudSyncService.js",
+    "path": "CloudSyncService.js",
+    "lines": 771,
+    "description": "*/",
+    "tags": [
+      "Node.js",
+      "Security",
+      "AI",
+      "macOS"
+    ],
+    "lastModified": "2026-04-08"
+  },
+  {
+    "name": "FirebaseService.js",
+    "path": "FirebaseService.js",
+    "lines": 355,
+    "description": "*/",
+    "tags": [
+      "macOS"
+    ],
+    "lastModified": "2026-04-08"
+  },
+  {
+    "name": "KeyboardShortcutService.ts",
+    "path": "KeyboardShortcutService.ts",
+    "lines": 84,
+    "description": "Keyboard Shortcut Service",
+    "tags": [
+      "macOS"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "P2PFileSyncService.js",
+    "path": "P2PFileSyncService.js",
+    "lines": 819,
+    "description": "File Sync Service",
+    "tags": [
+      "Node.js",
+      "Core",
+      "AI",
+      "Sync",
+      "PDF",
+      "macOS"
+    ],
+    "lastModified": "2026-04-08"
+  },
+  {
+    "name": "PDFCommandParser.ts",
+    "path": "PDFCommandParser.ts",
+    "lines": 231,
+    "description": "*",
+    "tags": [
+      "Security",
+      "AI",
+      "PDF",
+      "macOS"
+    ],
+    "lastModified": "2026-03-24"
+  },
+  {
+    "name": "SearchContextStore.ts",
+    "path": "SearchContextStore.ts",
+    "lines": 215,
+    "description": "*",
+    "tags": [
+      "OCR",
+      "macOS"
+    ],
+    "lastModified": "2026-03-24"
+  },
+  {
+    "name": "SecurityValidator.js",
+    "path": "SecurityValidator.js",
+    "lines": 329,
+    "description": "Security Validator",
+    "tags": [
+      "Node.js",
+      "Security",
+      "AI",
+      "OCR",
+      "Plugin",
+      "macOS"
+    ],
+    "lastModified": "2026-04-08"
+  },
+  {
+    "name": "SyncMethodManager.js",
+    "path": "SyncMethodManager.js",
+    "lines": 325,
+    "description": "*/",
+    "tags": [
+      "Sync",
+      "macOS"
+    ],
+    "lastModified": "2026-04-08"
+  },
+  {
+    "name": "WebSearchService.ts",
+    "path": "WebSearchService.ts",
+    "lines": 35,
+    "description": "Web Search Service",
+    "tags": [
+      "macOS"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "appVersion.ts",
+    "path": "appVersion.ts",
+    "lines": 11,
+    "description": "Simple static version constant sourced from package.json (build-time)",
+    "tags": [
+      "Plugin",
+      "macOS"
+    ],
+    "lastModified": "2026-03-30"
+  },
+  {
+    "name": "constants.ts",
+    "path": "constants.ts",
+    "lines": 39,
+    "description": "Constants",
+    "tags": [
+      "macOS"
+    ],
+    "lastModified": "2026-04-03"
+  },
+  {
+    "name": "firebase.config.ts",
+    "path": "firebase.config.ts",
+    "lines": 12,
+    "description": "src/lib/firebase.config.ts",
+    "tags": [
+      "macOS"
+    ],
+    "lastModified": "2026-03-29"
+  },
+  {
+    "name": "firebase.ts",
+    "path": "firebase.ts",
+    "lines": 41,
+    "description": "Firebase",
+    "tags": [
+      "macOS"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "firebaseConfigStorage.js",
+    "path": "firebaseConfigStorage.js",
+    "lines": 43,
+    "description": "Config Storage",
+    "tags": [
+      "macOS"
+    ],
+    "lastModified": "2026-04-08"
+  },
+  {
+    "name": "firebaseConfigStorage.ts",
+    "path": "firebaseConfigStorage.ts",
+    "lines": 51,
+    "description": "Utility to store and retrieve Firebase config from localStorage",
+    "tags": [
+      "macOS"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "gmailService.js",
+    "path": "gmailService.js",
+    "lines": 185,
+    "description": "GmailService",
+    "tags": [
+      "Node.js",
+      "Core",
+      "macOS"
+    ],
+    "lastModified": "2026-03-09"
+  },
+  {
+    "name": "LLMOrchestrator.ts",
+    "path": "llm/LLMOrchestrator.ts",
+    "lines": 65,
+    "description": "src/lib/llm/LLMOrchestrator.ts",
+    "tags": [
+      "AI",
+      "macOS"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "base.js",
+    "path": "llm/providers/base.js",
+    "lines": 4,
+    "description": "Base",
+    "tags": [],
+    "lastModified": "2026-04-08"
+  },
+  {
+    "name": "base.ts",
+    "path": "llm/providers/base.ts",
+    "lines": 34,
+    "description": "src/lib/llm/providers/base.ts",
+    "tags": [
+      "AI",
+      "macOS"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "claude.ts",
+    "path": "llm/providers/claude.ts",
+    "lines": 50,
+    "description": "src/lib/llm/providers/claude.ts",
+    "tags": [
+      "AI",
+      "macOS"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "gemini.ts",
+    "path": "llm/providers/gemini.ts",
+    "lines": 47,
+    "description": "src/lib/llm/providers/gemini.ts",
+    "tags": [
+      "AI",
+      "macOS"
+    ],
+    "lastModified": "2026-03-15"
+  },
+  {
+    "name": "groq.ts",
+    "path": "llm/providers/groq.ts",
+    "lines": 58,
+    "description": "src/lib/llm/providers/groq.ts",
+    "tags": [
+      "AI",
+      "macOS"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "ollama.ts",
+    "path": "llm/providers/ollama.ts",
+    "lines": 52,
+    "description": "src/lib/llm/providers/ollama.ts",
+    "tags": [
+      "AI",
+      "macOS"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "openai-compatible.ts",
+    "path": "llm/providers/openai-compatible.ts",
+    "lines": 70,
+    "description": "src/lib/llm/providers/openai-compatible.ts",
+    "tags": [
+      "AI",
+      "macOS"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "modelRegistry.js",
+    "path": "modelRegistry.js",
+    "lines": 34,
+    "description": "ModelRegistry",
+    "tags": [
+      "AI"
+    ],
+    "lastModified": "2026-04-08"
+  },
+  {
+    "name": "LinuxIntegration.ts",
+    "path": "platform/LinuxIntegration.ts",
+    "lines": 318,
+    "description": "*",
+    "tags": [
+      "Node.js",
+      "AI",
+      "PDF",
+      "macOS",
+      "Linux"
+    ],
+    "lastModified": "2026-03-26"
+  },
+  {
+    "name": "MacOSIntegration.ts",
+    "path": "platform/MacOSIntegration.ts",
+    "lines": 246,
+    "description": "*",
+    "tags": [
+      "Core",
+      "AI",
+      "PDF",
+      "Plugin",
+      "macOS"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "WindowsIntegration.ts",
+    "path": "platform/WindowsIntegration.ts",
+    "lines": 255,
+    "description": "*",
+    "tags": [
+      "Node.js",
+      "AI",
+      "PDF",
+      "macOS",
+      "Windows"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "detector.ts",
+    "path": "platform/detector.ts",
+    "lines": 62,
+    "description": "*",
+    "tags": [
+      "Node.js",
+      "macOS",
+      "Windows",
+      "Linux"
+    ],
+    "lastModified": "2026-03-08"
+  },
+  {
+    "name": "plugin-manager.js",
+    "path": "plugin-manager.js",
+    "lines": 442,
+    "description": "Plugin Manager",
+    "tags": [
+      "Node.js",
+      "AI",
+      "Plugin",
+      "macOS"
+    ],
+    "lastModified": "2026-04-06"
+  },
+  {
+    "name": "plugin-sdk.js",
+    "path": "plugin-sdk.js",
+    "lines": 168,
+    "description": "Plugin Sdk",
+    "tags": [
+      "Core",
+      "AI",
+      "Plugin",
+      "macOS"
+    ],
+    "lastModified": "2026-04-06"
+  },
+  {
+    "name": "useAppVersion.ts",
+    "path": "useAppVersion.ts",
+    "lines": 31,
+    "description": "App Version",
+    "tags": [
+      "React",
+      "macOS"
+    ],
+    "lastModified": "2026-03-30"
+  }
+]

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Sparkles, Cloud, Cpu, Shield, Key, 
   ChevronRight, ChevronLeft, ExternalLink, 
-  Check, Wifi, Info, Globe, AlertCircle, Download, X
+  Check, Wifi, Info, Globe, AlertCircle, Download, X, Monitor
 } from 'lucide-react';
 
 import { useAppStore } from '@/store/useAppStore';
@@ -43,6 +43,14 @@ const themeOptions: ThemeOption[] = [
   { id: 'dark', label: 'Neural Night', description: 'Neon-on-black that you already know and love.', badge: 'Classic' },
 ];
 
+const openExternal = async (url: string) => {
+  if (window.electronAPI?.openExternalUrl) {
+    await window.electronAPI.openExternalUrl(url);
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+};
+
 const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
   const {
     theme,
@@ -65,6 +73,11 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
   const timezone = useMemo(() => {
     if (typeof Intl === 'undefined') return 'UTC';
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  }, []);
+
+  const isWindows = useMemo(() => {
+    if (typeof navigator === 'undefined') return false;
+    return /win/i.test(navigator.userAgent) || navigator.platform.toLowerCase().includes('win');
   }, []);
 
   const isAiConfigured = useMemo(() => {
@@ -286,6 +299,38 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
                   </motion.a>
                 ))}
               </div>
+
+              {isWindows && (
+                <div className="rounded-2xl border border-sky-400/15 bg-sky-400/5 p-4 space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center border border-white/5 shadow-inner text-sky-300">
+                      <Monitor size={18} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-[11px] font-black text-white uppercase tracking-widest">Windows Copilot Companion</div>
+                      <p className="mt-2 text-[10px] text-white/45 leading-relaxed">
+                        No Comet API key is needed to open the official Copilot app on Windows. Use this as a companion app today, while Comet&apos;s built-in agent still relies on Ollama or provider keys.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => openExternal('https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app')}
+                      className="px-4 py-2 rounded-xl bg-white text-black text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:bg-slate-100"
+                    >
+                      Open Copilot
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openExternal('https://blogs.windows.com/windowsdeveloper/2024/05/21/unlock-a-new-era-of-innovation-with-windows-copilot-runtime-and-copilot-pcs/')}
+                      className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-[0.2em] text-white/70 transition-all hover:bg-white/10 hover:text-white"
+                    >
+                      View Copilot Runtime
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex items-start gap-4">
                 <Shield size={18} className="text-amber-500/60 flex-shrink-0 mt-0.5" />

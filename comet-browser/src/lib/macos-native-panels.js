@@ -75,13 +75,18 @@ class MacNativePanelManager {
     return !!child && !child.killed && child.exitCode === null;
   }
 
-  async show(mode) {
+  async show(mode, options = {}) {
     if (process.platform !== 'darwin') {
       throw new Error('Native macOS panels are only available on macOS.');
     }
 
     if (this.isRunning(mode)) {
-      return { success: true, reused: true };
+      if (options.relaunchIfRunning) {
+        this.close(mode);
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      } else {
+        return { success: true, reused: true };
+      }
     }
 
     const target = await resolveNativePanelLaunchTarget();

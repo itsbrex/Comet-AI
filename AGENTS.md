@@ -19,15 +19,15 @@
 **Status:** ✅ COMPLETE
 
 **Files Created:**
-- `Landing_Page/landing-page-v-0.1.0aplha/public/sitemap.xml` - XML sitemap for all doc pages
-- `Landing_Page/landing-page-v-0.1.0aplha/public/llms.txt` - Plain text index for AI/LLM crawlers
-- `Landing_Page/landing-page-v-0.1.0aplha/public/.well-known/ai-plugin.json` - AI plugin manifest
-- `Landing_Page/landing-page-v-0.1.0aplha/src/app/llms.txt/route.ts` - Dynamic llms.txt generation
-- `Landing_Page/landing-page-v-0.1.0aplha/src/app/docs/metadata.ts` - Doc-specific metadata helpers
-- `Landing_Page/landing-page-v-0.1.0aplha/public/robots.txt` - Updated for AI crawlers (GPTBot, ClaudeBot, Gemini, Perplexity, etc.)
+- `Landing_Page/public/sitemap.xml` - XML sitemap for all doc pages
+- `Landing_Page/public/llms.txt` - Plain text index for AI/LLM crawlers
+- `Landing_Page/public/.well-known/ai-plugin.json` - AI plugin manifest
+- `Landing_Page/src/app/llms.txt/route.ts` - Dynamic llms.txt generation
+- `Landing_Page/src/app/docs/metadata.ts` - Doc-specific metadata helpers
+- `Landing_Page/public/robots.txt` - Updated for AI crawlers (GPTBot, ClaudeBot, Gemini, Perplexity, etc.)
 
 **Files Modified:**
-- `Landing_Page/landing-page-v-0.1.0aplha/src/app/layout.tsx` - Enhanced JSON-LD structured data (SoftwareApplication, TechArticle, CollectionPage schemas)
+- `Landing_Page/src/app/layout.tsx` - Enhanced JSON-LD structured data (SoftwareApplication, TechArticle, CollectionPage schemas)
 
 **Features Implemented:**
 - Full AI crawler support (ChatGPT, Claude, Gemini, Perplexity, etc.)
@@ -43,12 +43,12 @@
 **Status:** ✅ COMPLETE
 
 **Files Created:**
-- `Landing_Page/landing-page-v-0.1.0aplha/src/lib/search-index.ts` - Full search index with 40+ indexed items
-- `Landing_Page/landing-page-v-0.1.0aplha/src/app/api/search/route.ts` - Search API endpoint
-- `Landing_Page/landing-page-v-0.1.0aplha/src/components/docs/SearchModal.tsx` - Full-featured search modal UI
+- `Landing_Page/src/lib/search-index.ts` - Full search index with 40+ indexed items
+- `Landing_Page/src/app/api/search/route.ts` - Search API endpoint
+- `Landing_Page/src/components/docs/SearchModal.tsx` - Full-featured search modal UI
 
 **Files Modified:**
-- `Landing_Page/landing-page-v-0.1.0aplha/src/app/docs/layout.tsx` - Integrated search modal with ⌘K shortcut
+- `Landing_Page/src/app/docs/layout.tsx` - Integrated search modal with ⌘K shortcut
 
 **Features:**
 - Fuzzy search across all documentation

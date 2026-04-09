@@ -203,6 +203,11 @@ const { MacNativePanelManager } = require('./src/lib/macos-native-panels.js');
 const { PluginManager, pluginManager } = require('./src/lib/plugin-manager.js');
 const webSearchProvider = new WebSearchProvider();
 
+// Core modules - Architecture refactoring (extracted from main.js)
+const { NetworkSecurityManager } = require('./src/core/network-security.js');
+const { WindowManager, windowManager } = require('./src/core/window-manager.js');
+const { CommandExecutor } = require('./src/core/command-executor.js');
+
 // ✅ NEW: Relocate essential system IPC handlers to the top to prevent "no handler registered" errors
 ipcMain.handle('get-app-version', () => {
   return app.getVersion() || '1.0.0';
@@ -227,190 +232,34 @@ let cometAiEngine = null;
 let robotService = null;
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const DEFAULT_NETWORK_SECURITY_CONFIG = {
-  firewallLevel: 'standard',
-  proxyMode: 'system',
-  proxyRules: '',
-  proxyBypassRules: '<local>;localhost;127.0.0.1;::1;*.ponsrischool.in;ponsrischool.in',
-  enableSecureDns: false,
-  dnsProvider: 'cloudflare',
-  customDnsTemplate: '',
-  blockAds: true,
-  blockTrackers: true,
-  blockMalware: true,
-  upgradeInsecureRequests: false,
-  sendDoNotTrack: true,
-  preventWebRtcLeaks: true,
-  customBlockedDomains: '',
-};
+// Initialize core modules - Architecture refactoring
+const networkSecurityManager = new NetworkSecurityManager(store);
+const commandExecutor = new CommandExecutor({
+  permissionStore,
+  store,
+});
 
-const DNS_PROVIDER_TEMPLATES = {
-  cloudflare: 'https://cloudflare-dns.com/dns-query',
-  google: 'https://dns.google/dns-query',
-  quad9: 'https://dns.quad9.net/dns-query',
-};
-
-const TRACKER_HOSTS = [
-  'google-analytics.com',
-  'googletagmanager.com',
-  'doubleclick.net',
-  'facebook.net',
-  'hotjar.com',
-  'segment.io',
-  'mixpanel.com',
-  'amplitude.com',
-];
-
-const AD_HOSTS = [
-  'doubleclick.net',
-  'googlesyndication.com',
-  'adservice.google.com',
-  'ads.yahoo.com',
-  'taboola.com',
-  'outbrain.com',
-];
-
-const MALWARE_HOSTS = [
-  'coinhive.com',
-  'cryptoloot.pro',
-  'coinimp.com',
-  'webmine.cz',
-];
-
-let networkSecurityConfig = normalizeNetworkSecurityConfig(store.get('networkSecurityConfig'));
-
-function normalizeNetworkSecurityConfig(config = {}) {
-  const merged = {
-    ...DEFAULT_NETWORK_SECURITY_CONFIG,
-    ...(config && typeof config === 'object' ? config : {}),
-  };
-
-  return {
-    ...merged,
-    firewallLevel: ['standard', 'strict', 'paranoid'].includes(merged.firewallLevel) ? merged.firewallLevel : 'standard',
-    proxyMode: ['system', 'direct', 'fixed_servers', 'auto_detect'].includes(merged.proxyMode) ? merged.proxyMode : 'system',
-    dnsProvider: ['cloudflare', 'google', 'quad9', 'custom'].includes(merged.dnsProvider) ? merged.dnsProvider : 'cloudflare',
-    proxyRules: `${merged.proxyRules || ''}`.trim(),
-    proxyBypassRules: `${merged.proxyBypassRules || ''}`.trim(),
-    customDnsTemplate: `${merged.customDnsTemplate || ''}`.trim(),
-    customBlockedDomains: `${merged.customBlockedDomains || ''}`.trim(),
-    enableSecureDns: !!merged.enableSecureDns,
-    blockAds: !!merged.blockAds,
-    blockTrackers: !!merged.blockTrackers,
-    blockMalware: !!merged.blockMalware,
-    upgradeInsecureRequests: !!merged.upgradeInsecureRequests,
-    sendDoNotTrack: !!merged.sendDoNotTrack,
-    preventWebRtcLeaks: merged.preventWebRtcLeaks !== false,
-  };
-}
-
-function getSecureDnsTemplate(config = networkSecurityConfig) {
-  if (!config.enableSecureDns) {
-    return '';
-  }
-
-  if (config.dnsProvider === 'custom') {
-    return config.customDnsTemplate;
-  }
-
-  return DNS_PROVIDER_TEMPLATES[config.dnsProvider] || '';
-}
-
-function applyStartupNetworkSecuritySwitches(config = networkSecurityConfig) {
-  const dnsTemplate = getSecureDnsTemplate(config);
-  if (dnsTemplate) {
-    app.commandLine.appendSwitch('dns-over-https-mode', 'secure');
-    app.commandLine.appendSwitch('dns-over-https-templates', dnsTemplate);
-  }
-
-  if (config.preventWebRtcLeaks) {
-    app.commandLine.appendSwitch('force-webrtc-ip-handling-policy', 'disable_non_proxied_udp');
-    app.commandLine.appendSwitch('enforce-webrtc-ip-permission-check');
-  }
-}
+// Network Security - Now managed by NetworkSecurityManager (src/core/network-security.js)
+// Keeping backwards compatibility aliases for existing code references
+const networkSecurityConfig = networkSecurityManager.getConfig();
 
 function matchesBlockedHost(hostname, patterns = []) {
   const host = `${hostname || ''}`.toLowerCase();
   return patterns.some((pattern) => host === pattern || host.endsWith(`.${pattern}`));
 }
 
-function getCustomBlockedDomains(config = networkSecurityConfig) {
-  return `${config.customBlockedDomains || ''}`
+function getCustomBlockedDomains() {
+  return networkSecurityManager.getConfig().customBlockedDomains
     .split(/[\n,\s]+/)
     .map((item) => item.trim().toLowerCase())
     .filter(Boolean);
 }
 
-function isPrivateHostname(hostname = '') {
-  const host = `${hostname || ''}`.toLowerCase();
-  return (
-    host === 'localhost' ||
-    host === '127.0.0.1' ||
-    host === '::1' ||
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
-  );
-}
-
-function shouldUpgradeRequestToHttps(targetUrl, config = networkSecurityConfig) {
-  if (!config.upgradeInsecureRequests) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(targetUrl);
-    return parsed.protocol === 'http:' && !isPrivateHostname(parsed.hostname);
-  } catch {
-    return false;
-  }
-}
-
-function buildProxyConfig(config = networkSecurityConfig) {
-  if (config.proxyMode === 'fixed_servers' && config.proxyRules) {
-    return {
-      mode: 'fixed_servers',
-      proxyRules: config.proxyRules,
-      proxyBypassRules: config.proxyBypassRules || DEFAULT_NETWORK_SECURITY_CONFIG.proxyBypassRules,
-    };
-  }
-
-  if (config.proxyMode === 'direct') {
-    return { mode: 'direct' };
-  }
-
-  if (config.proxyMode === 'auto_detect') {
-    return { mode: 'auto_detect' };
-  }
-
-  return { mode: 'system' };
-}
-
-async function applyProxyConfigToSession(targetSession) {
-  if (!targetSession || typeof targetSession.setProxy !== 'function') {
-    return;
-  }
-
-  try {
-    await targetSession.setProxy(buildProxyConfig(networkSecurityConfig));
-    if (typeof targetSession.closeAllConnections === 'function') {
-      targetSession.closeAllConnections().catch(() => { });
-    }
-  } catch (error) {
-    console.warn('[NetworkSecurity] Failed to apply proxy config:', error.message);
-  }
-}
-
 async function applyNetworkSecurityConfig(nextConfig = {}) {
-  networkSecurityConfig = normalizeNetworkSecurityConfig({
-    ...networkSecurityConfig,
-    ...nextConfig,
-  });
-
-  store.set('networkSecurityConfig', networkSecurityConfig);
+  const config = networkSecurityManager.updateConfig(nextConfig);
 
   if (!app.isReady()) {
-    return networkSecurityConfig;
+    return config;
   }
 
   const uniqueSessions = new Set([session.defaultSession]);
@@ -420,11 +269,20 @@ async function applyNetworkSecurityConfig(nextConfig = {}) {
     }
   }
 
-  await Promise.all([...uniqueSessions].map((targetSession) => applyProxyConfigToSession(targetSession)));
-  return networkSecurityConfig;
+  await Promise.all([...uniqueSessions].map((targetSession) => 
+    networkSecurityManager.applyToSession(targetSession)
+  ));
+  return config;
 }
 
-applyStartupNetworkSecuritySwitches(networkSecurityConfig);
+function applyProxyConfigToSession(targetSession) {
+  const config = networkSecurityManager.getConfig();
+  if (config) {
+    networkSecurityManager.applyToSession(targetSession);
+  }
+}
+
+networkSecurityManager.applyStartupSettings(app);
 
 const performRobotClick = async ({ x, y, button = 'left', doubleClick = false }) => {
   if (robotService) {
@@ -548,27 +406,37 @@ const getTopWindow = () => {
 };
 
 const sendToActiveWindow = (channel, ...args) => {
-  const target = getTopWindow();
-  if (target && !target.isDestroyed()) {
-    target.webContents.send(channel, ...args);
-    return target;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, ...args);
+    return mainWindow;
+  }
+  for (const win of openWindows) {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send(channel, ...args);
+      return win;
+    }
   }
   return null;
 };
 
 const deliverNativeMacUiEvent = async (channel, payload = {}) => {
-  const target = sendToActiveWindow(channel, payload);
-  if (target) {
+  // Use main.js's window tracking directly
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, payload);
     return { delivered: true, createdWindow: false };
   }
 
-  const win = await createWindow();
-  win.webContents.once('did-finish-load', () => {
-    if (!win.isDestroyed()) {
+  // Fallback - convert Set to array
+  const wins = openWindows instanceof Set ? Array.from(openWindows) : openWindows;
+  for (const win of wins) {
+    if (win && !win.isDestroyed()) {
       win.webContents.send(channel, payload);
+      return { delivered: true, createdWindow: false };
     }
-  });
-  return { delivered: true, createdWindow: true };
+  }
+
+  console.log('[deliverNativeMacUiEvent] No window found, mainWindow:', mainWindow ? 'exists' : 'null', 'openWindows:', openWindows.size);
+  return { delivered: false, error: 'No window available' };
 };
 
 const getMacNativeUiPreferences = () => {
@@ -598,7 +466,7 @@ const setMacNativeUiPreferences = (updates = {}) => {
   if (isMac) {
     if (updates.sidebarMode) {
       if (nextPreferences.sidebarMode === 'swiftui') {
-        nativeMacPanelManager.show('sidebar').catch((error) => {
+        nativeMacPanelManager.show('sidebar', { relaunchIfRunning: true }).catch((error) => {
           console.error('[MacNativeUI] Failed to open SwiftUI sidebar:', error);
         });
       } else {
@@ -626,17 +494,25 @@ const setMacNativeUiPreferences = (updates = {}) => {
   return nextPreferences;
 };
 
-const createNativeMacUiSnapshot = () => ({
-  ...nativeMacUiState,
-  themeAppearance: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
-  messages: Array.isArray(nativeMacUiState.messages) ? nativeMacUiState.messages : [],
-  actionChain: Array.isArray(nativeMacUiState.actionChain) ? nativeMacUiState.actionChain : [],
-  activityTags: Array.isArray(nativeMacUiState.activityTags) ? nativeMacUiState.activityTags : [],
-  conversations: Array.isArray(nativeMacUiState.conversations) ? nativeMacUiState.conversations : [],
-  downloads: Array.isArray(nativeMacUiState.downloads) ? nativeMacUiState.downloads : [],
-  clipboardItems: Array.isArray(nativeMacUiState.clipboardItems) ? nativeMacUiState.clipboardItems : [],
-  preferences: getMacNativeUiPreferences(),
-});
+const createNativeMacUiSnapshot = () => {
+  const recentMessages = Array.isArray(nativeMacUiState.messages) ? nativeMacUiState.messages : [];
+  const lastMsg = recentMessages[recentMessages.length - 1];
+  const actionLogs = lastMsg?.actionLogs || [];
+  
+  return {
+    ...nativeMacUiState,
+    themeAppearance: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
+    messages: recentMessages,
+    actionChain: Array.isArray(nativeMacUiState.actionChain) ? nativeMacUiState.actionChain : [],
+    activityTags: Array.isArray(nativeMacUiState.activityTags) ? nativeMacUiState.activityTags : [],
+    conversations: Array.isArray(nativeMacUiState.conversations) ? nativeMacUiState.conversations : [],
+    downloads: Array.isArray(nativeMacUiState.downloads) ? nativeMacUiState.downloads : [],
+    clipboardItems: Array.isArray(nativeMacUiState.clipboardItems) ? nativeMacUiState.clipboardItems : [],
+    actionLogs: actionLogs.slice(-20),
+    terminalLogs: actionLogs.map(l => ({ command: l.type, output: l.output, success: l.success })),
+    preferences: getMacNativeUiPreferences(),
+  };
+};
 
 const normalizeMacNativePanelMode = (mode = 'sidebar') => {
   const allowedModes = new Set(['sidebar', 'action-chain', 'menu', 'settings', 'downloads', 'clipboard', 'permissions']);
@@ -691,7 +567,7 @@ const openSettingsSection = (section, options = {}) => {
   if (isMac && !preferElectron) {
     const nativePrefs = getMacNativeUiPreferences();
     if (normalizedSection === 'permissions' && nativePrefs.permissionMode === 'swiftui') {
-      nativeMacPanelManager.show('permissions').catch((error) => {
+      nativeMacPanelManager.show('permissions', { relaunchIfRunning: true }).catch((error) => {
         console.error('[MacNativeUI] Failed to open native permissions panel:', error);
       });
       return;
@@ -703,7 +579,7 @@ const openSettingsSection = (section, options = {}) => {
       : normalizedSection === 'clipboard'
         ? 'clipboard'
         : 'settings';
-      nativeMacPanelManager.show(panelMode).catch((error) => {
+      nativeMacPanelManager.show(panelMode, { relaunchIfRunning: true }).catch((error) => {
         console.error('[MacNativeUI] Failed to open native utility panel:', error);
       });
       return;
@@ -728,7 +604,18 @@ const openSettingsSection = (section, options = {}) => {
 };
 
 const triggerShortcut = (action) => {
-  sendToActiveWindow('execute-shortcut', action);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('execute-shortcut', action);
+    return;
+  }
+  if (openWindows.size > 0) {
+    const firstWin = Array.from(openWindows)[0];
+    if (firstWin && !firstWin.isDestroyed()) {
+      firstWin.webContents.send('execute-shortcut', action);
+      return;
+    }
+  }
+  console.log('[triggerShortcut] No window for:', action);
 };
 
 const openGuide = () => {
@@ -750,6 +637,7 @@ const openGuide = () => {
 const registerWindow = (win) => {
   openWindows.add(win);
   mainWindow = win;
+  windowManager.setMainWindow(win);
   win.on('focus', () => {
     if (!win.isDestroyed()) mainWindow = win;
   });
@@ -2571,20 +2459,18 @@ async function createWindow() {
     try {
       const parsed = new URL(details.url);
       const hostname = parsed.hostname.toLowerCase();
-      const customDomains = getCustomBlockedDomains();
-      const shouldBlock =
-        (networkSecurityConfig.blockTrackers && matchesBlockedHost(hostname, TRACKER_HOSTS)) ||
-        (networkSecurityConfig.blockAds && matchesBlockedHost(hostname, AD_HOSTS)) ||
-        (networkSecurityConfig.blockMalware && matchesBlockedHost(hostname, MALWARE_HOSTS)) ||
-        matchesBlockedHost(hostname, customDomains);
 
-      if (shouldBlock) {
+      if (networkSecurityManager.isHostBlocked(hostname)) {
         return callback({ cancel: true });
       }
 
-      if (shouldUpgradeRequestToHttps(details.url)) {
-        parsed.protocol = 'https:';
-        return callback({ redirectURL: parsed.toString() });
+      const config = networkSecurityManager.getConfig();
+      if (config.upgradeInsecureRequests && parsed.protocol === 'http:') {
+        const { isPrivateHostname } = require('./src/core/network-security.js');
+        if (!isPrivateHostname(parsed.hostname)) {
+          parsed.protocol = 'https:';
+          return callback({ redirectURL: parsed.toString() });
+        }
       }
     } catch {
       // ignore malformed URLs
@@ -2595,7 +2481,7 @@ async function createWindow() {
 
   session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['*://*/*'] }, (details, callback) => {
     const requestHeaders = { ...(details.requestHeaders || {}) };
-    if (networkSecurityConfig.sendDoNotTrack) {
+    if (networkSecurityManager.getConfig().sendDoNotTrack) {
       requestHeaders.DNT = '1';
       requestHeaders['Sec-GPC'] = '1';
     }
@@ -2702,7 +2588,7 @@ ipcMain.handle('test-gemini-api', async (event, apiKey) => {
   }
 });
 
-const gmailService = require('./src/lib/gmailService.js');
+const gmailService = require('./src/lib/GmailService.js');
 
 ipcMain.handle('get-gmail-messages', async () => {
   return await gmailService.getGmailMessages();
@@ -2721,7 +2607,7 @@ ipcMain.on('save-ai-response', (event, content) => {
 // Gmail and Google Services
 
 ipcMain.handle('gmail-authorize', async () => {
-  const { authorize } = require('./src/lib/gmailService.js');
+  const { authorize } = require('./src/lib/GmailService.js');
   try {
     await authorize();
     return { success: true };
@@ -2732,7 +2618,7 @@ ipcMain.handle('gmail-authorize', async () => {
 
 
 ipcMain.handle('gmail-list-messages', async (event, query, maxResults) => {
-  const { listMessages } = require('./src/lib/gmailService.js');
+  const { listMessages } = require('./src/lib/GmailService.js');
   try {
     const messages = await listMessages(query, maxResults);
     return { success: true, messages };
@@ -2742,7 +2628,7 @@ ipcMain.handle('gmail-list-messages', async (event, query, maxResults) => {
 });
 
 ipcMain.handle('gmail-get-message', async (event, messageId) => {
-  const { getMessage } = require('./src/lib/gmailService.js');
+  const { getMessage } = require('./src/lib/GmailService.js');
   try {
     const message = await getMessage(messageId);
     return { success: true, message };
@@ -2752,7 +2638,7 @@ ipcMain.handle('gmail-get-message', async (event, messageId) => {
 });
 
 ipcMain.handle('gmail-send-message', async (event, to, subject, body, threadId) => {
-  const { sendMessage } = require('./src/lib/gmailService.js');
+  const { sendMessage } = require('./src/lib/GmailService.js');
   try {
     const result = await sendMessage(to, subject, body, threadId);
     return { success: true, result };
@@ -2762,7 +2648,7 @@ ipcMain.handle('gmail-send-message', async (event, to, subject, body, threadId) 
 });
 
 ipcMain.handle('gmail-add-label-to-message', async (event, messageId, labelName) => {
-  const { addLabelToMessage } = require('./src/lib/gmailService.js');
+  const { addLabelToMessage } = require('./src/lib/GmailService.js');
   try {
     const result = await addLabelToMessage(messageId, labelName);
     return { success: true, result };
@@ -3102,7 +2988,7 @@ ipcMain.handle('show-mac-native-panel', async (event, mode = 'sidebar') => {
 
   try {
     const panelMode = normalizeMacNativePanelMode(`${mode || 'sidebar'}`);
-    const result = await nativeMacPanelManager.show(panelMode);
+    const result = await nativeMacPanelManager.show(panelMode, { relaunchIfRunning: true });
     return { success: true, ...result };
   } catch (error) {
     return { success: false, error: error.message };
@@ -3847,7 +3733,9 @@ const tabLastActive = new Map();
 ipcMain.on('suspend-tab', (event, tabId) => {
   const view = tabViews.get(tabId);
   if (view) {
-    view.webContents.destroy();
+    if (view.webContents && !view.webContents.isDestroyed()) {
+      view.webContents.destroy();
+    }
     tabViews.delete(tabId);
     suspendedTabs.add(tabId);
     if (mainWindow) {
@@ -3928,7 +3816,9 @@ ipcMain.on('destroy-view', (event, tabId) => {
       mainWindow.removeBrowserView(view);
       activeTabId = null;
     }
-    view.webContents.destroy();
+    if (view.webContents && !view.webContents.isDestroyed()) {
+      view.webContents.destroy();
+    }
     tabViews.delete(tabId);
     audibleTabs.delete(tabId);
     if (mainWindow) {
@@ -4156,6 +4046,11 @@ function mapOcrCoordsToScreenCoords(ocrResult, captureRegion) {
 ipcMain.handle('find-and-click-text', async (event, targetText) => {
   if (!targetText || typeof targetText !== 'string' || targetText.trim().length === 0) {
     return { success: false, error: 'Target text is required.' };
+  }
+
+  const permission = checkAiActionPermission('FIND_AND_CLICK', targetText.trim(), 'medium');
+  if (!permission.allowed) {
+    return { success: false, error: permission.error };
   }
 
   const searchText = targetText.trim().toLowerCase();
@@ -4406,7 +4301,9 @@ ipcMain.on('set-mcp-server-port', (event, port) => {
 
 ipcMain.handle('extract-page-content', async () => {
   const view = tabViews.get(activeTabId);
-  if (!view) return { error: 'No active view' };
+  if (!view || !view.webContents || view.webContents.isDestroyed()) {
+    return { error: 'No active view' };
+  }
   
   // Small delay to let page settle before reading
   await new Promise(resolve => setTimeout(resolve, 500));
@@ -4873,7 +4770,9 @@ async function generateShellApprovalQR(command) {
 }
 
 async function requestShellApproval(command, riskLevel, reason, options = {}) {
-  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { allowed: false, deviceUnlockValidated: false };
+  }
   const requestId = `shell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const qrPayload = await generateShellApprovalQR(command);
   const payload = {
@@ -4898,14 +4797,14 @@ async function requestShellApproval(command, riskLevel, reason, options = {}) {
 
   try {
     if (useNativePermissionPanel) {
-      await nativeMacPanelManager.show('permissions');
+      await nativeMacPanelManager.show('permissions', { relaunchIfRunning: true });
     } else {
       mainWindow.webContents.send('automation-shell-approval', payload);
     }
   } catch (error) {
     console.error('[Main] Failed to send shell approval request:', error);
     nativeMacUiState.pendingApproval = null;
-    return false;
+    return { allowed: false, deviceUnlockValidated: false };
   }
 
   return new Promise((resolve) => {
@@ -4913,14 +4812,21 @@ async function requestShellApproval(command, riskLevel, reason, options = {}) {
       if (shellApprovalResolvers.has(requestId)) {
         shellApprovalResolvers.delete(requestId);
         nativeMacUiState.pendingApproval = null;
-        resolve(false);
+        resolve({ allowed: false, deviceUnlockValidated: false });
       }
     }, 120000);
 
-    shellApprovalResolvers.set(requestId, (allowed) => {
+    shellApprovalResolvers.set(requestId, (result = {}) => {
       clearTimeout(timeout);
       nativeMacUiState.pendingApproval = null;
-      resolve(allowed);
+      if (typeof result === 'boolean') {
+        resolve({ allowed: result, deviceUnlockValidated: false });
+        return;
+      }
+      resolve({
+        allowed: !!result.allowed,
+        deviceUnlockValidated: !!result.deviceUnlockValidated,
+      });
     });
   });
 }
@@ -4960,18 +4866,22 @@ async function checkShellPermission(command, reason, riskLevel) {
   }
 
   console.log(`[Shell] Requesting approval (${approvalRiskLevel}): ${command}`);
-  const allowed = await requestShellApproval(
+  const approvalResult = await requestShellApproval(
     command,
     approvalRiskLevel,
     reason || 'Automation requested this shell action.',
     { requiresDeviceUnlock }
   );
 
-  if (!allowed) {
+  if (!approvalResult.allowed) {
     return false;
   }
 
   if (!requiresDeviceUnlock) {
+    return true;
+  }
+
+  if (approvalResult.deviceUnlockValidated) {
     return true;
   }
 
@@ -4992,6 +4902,29 @@ async function checkShellPermission(command, reason, riskLevel) {
 
   console.log(`[Shell] Native device unlock approved via ${nativeVerification.mode}`);
   return true;
+}
+
+function checkAiActionPermission(actionType, target, riskLevel = 'medium') {
+  const normalizedRisk = `${riskLevel || 'medium'}`.trim().toLowerCase() === 'critical'
+    ? 'high'
+    : `${riskLevel || 'medium'}`.trim().toLowerCase();
+  const normalizedActionType = `${actionType || ''}`.trim().toUpperCase();
+  const permissionTarget = `${target || normalizedActionType}`.trim();
+  const permissionKey = `${normalizedActionType}:${permissionTarget}`;
+
+  if (permissionStore.isGranted(permissionKey)) {
+    return { allowed: true, permissionKey };
+  }
+
+  if (permissionStore.canAutoExecuteAction(normalizedActionType, normalizedRisk)) {
+    return { allowed: true, permissionKey };
+  }
+
+  return {
+    allowed: false,
+    permissionKey,
+    error: `${normalizedActionType} requires approval in Comet Settings or the AI action prompt.`,
+  };
 }
 
 /**
@@ -5073,6 +5006,11 @@ ipcMain.handle('execute-shell-command', async (event, { rawCommand, preApproved,
 // OS-Specific System Controls — dedicated IPC handlers (bypass security dialog)
 
 ipcMain.handle('set-volume', async (event, level) => {
+  const permission = checkAiActionPermission('SET_VOLUME', `${parseInt(level, 10) || 0}`, 'medium');
+  if (!permission.allowed) {
+    return { success: false, error: permission.error };
+  }
+
   // level: 0-100
   if (process.platform === 'win32') {
     // Use PowerShell with Windows Audio API (no nircmd needed)
@@ -5150,6 +5088,11 @@ Write-Output "Volume set to ${clamped}"
 });
 
 ipcMain.handle('set-brightness', async (event, level) => {
+  const permission = checkAiActionPermission('SET_BRIGHTNESS', `${parseInt(level, 10) || 50}`, 'medium');
+  if (!permission.allowed) {
+    return { success: false, error: permission.error };
+  }
+
   const clamped = Math.max(0, Math.min(100, parseInt(level, 10) || 50));
 
   if (process.platform === 'win32') {
@@ -6996,6 +6939,12 @@ app.whenReady().then(async () => {
       robotService = new RobotService(permissionStore);
       console.log(`[Main] RobotService initialized (available: ${robotService.isAvailable}).`);
 
+      commandExecutor.setRobotService(robotService);
+      commandExecutor.setCometAiEngine(cometAiEngine);
+      commandExecutor.setNetworkManager(networkSecurityManager);
+      commandExecutor.registerHandlers();
+      console.log('[Main] CommandExecutor IPC handlers registered.');
+
       tesseractOcrService = new TesseractOcrService();
       console.log('[Main] TesseractOcrService ready (lazy init on first use).');
 
@@ -7257,7 +7206,9 @@ app.whenReady().then(async () => {
     nativeMacUiApp.post('/native-mac-ui/panels/open', async (req, res) => {
       const mode = normalizeMacNativePanelMode(`${req.body?.mode || 'sidebar'}`);
       try {
-        const result = await nativeMacPanelManager.show(mode);
+        const result = await nativeMacPanelManager.show(mode, {
+          relaunchIfRunning: !!req.body?.relaunchIfRunning,
+        });
         res.json({ success: true, ...result });
       } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -7313,6 +7264,7 @@ app.whenReady().then(async () => {
     nativeMacUiApp.post('/native-mac-ui/approval/respond', (req, res) => {
       const requestId = `${req.body?.requestId || ''}`;
       const allowed = !!req.body?.allowed;
+      const deviceUnlockValidated = !!req.body?.deviceUnlockValidated;
       if (!requestId) {
         res.status(400).json({ success: false, error: 'Missing requestId.' });
         return;
@@ -7324,7 +7276,7 @@ app.whenReady().then(async () => {
       }
       nativeMacUiState.pendingApproval = null;
       shellApprovalResolvers.delete(requestId);
-      resolver(allowed);
+      resolver({ allowed, deviceUnlockValidated });
       res.json({ success: true });
     });
 
@@ -9014,6 +8966,10 @@ app.whenReady().then(async () => {
   ipcMain.handle('click-element', async (event, selector) => {
     const view = tabViews.get(activeTabId);
     if (!view) return { success: false, error: 'No active view' };
+    const permission = checkAiActionPermission('CLICK_ELEMENT', selector, 'medium');
+    if (!permission.allowed) {
+      return { success: false, error: permission.error };
+    }
     try {
       const result = await view.webContents.executeJavaScript(`
       (() => {
@@ -9034,6 +8990,10 @@ app.whenReady().then(async () => {
   ipcMain.handle('type-text', async (event, { selector, text }) => {
     const view = tabViews.get(activeTabId);
     if (!view) return { success: false, error: 'No active view' };
+    const permission = checkAiActionPermission('FILL_FORM', selector, 'medium');
+    if (!permission.allowed) {
+      return { success: false, error: permission.error };
+    }
     try {
       const vaultApproval = await ensureVaultApprovalForFormFill({ [selector]: text });
       if (!vaultApproval.success) {
@@ -9064,6 +9024,13 @@ app.whenReady().then(async () => {
   ipcMain.handle('fill-form', async (event, formData) => {
     const view = tabViews.get(activeTabId);
     if (!view) return { success: false, error: 'No active view' };
+    const permissionTarget = formData && typeof formData === 'object'
+      ? Object.keys(formData).slice(0, 5).join(',') || 'form'
+      : 'form';
+    const permission = checkAiActionPermission('FILL_FORM', permissionTarget, 'medium');
+    if (!permission.allowed) {
+      return { success: false, error: permission.error };
+    }
     try {
       const vaultApproval = await ensureVaultApprovalForFormFill(formData);
       if (!vaultApproval.success) {
@@ -9340,6 +9307,10 @@ app.whenReady().then(async () => {
   // Handler: Perform Click (Comprehensive)
   const performClickHandler = async (event, args) => {
     const { x, y, button = 'left', doubleClick = false } = args;
+    const permission = checkAiActionPermission('CLICK_AT', `${x},${y}`, 'medium');
+    if (!permission.allowed) {
+      return { success: false, error: permission.error };
+    }
 
     try {
       await performRobotClick({ x, y, button, doubleClick });
@@ -9438,7 +9409,7 @@ app.whenReady().then(async () => {
       ? {
         proxyMode: config.mode || 'fixed_servers',
         proxyRules: config.proxyRules || config.rules || config.proxyServer || '',
-        proxyBypassRules: config.proxyBypassRules || networkSecurityConfig.proxyBypassRules,
+        proxyBypassRules: config.proxyBypassRules || networkSecurityManager.getConfig().proxyBypassRules,
       }
       : {
         proxyMode: 'direct',
@@ -9452,6 +9423,11 @@ app.whenReady().then(async () => {
   ipcMain.handle('permission-auto-command', async (event, { command, enabled }) => {
     permissionStore.setAutoCommand(command, enabled);
     return { success: true, commands: permissionStore.getAutoApprovedCommands() };
+  });
+
+  ipcMain.handle('permission-auto-action', async (event, { actionType, enabled }) => {
+    permissionStore.setAutoAction(actionType, enabled);
+    return { success: true, actions: permissionStore.getAutoApprovedActions() };
   });
 
   // Skill Loader - loads document generation skills (pdf/docx/pptx)
@@ -9470,11 +9446,15 @@ app.whenReady().then(async () => {
     return { commands: permissionStore.getAutoApprovedCommands() };
   });
 
-  ipcMain.on('automation-shell-approval-response', (_event, { requestId, allowed }) => {
+  ipcMain.handle('permission-auto-actions', async () => {
+    return { actions: permissionStore.getAutoApprovedActions() };
+  });
+
+  ipcMain.on('automation-shell-approval-response', (_event, { requestId, allowed, deviceUnlockValidated }) => {
     const resolver = shellApprovalResolvers.get(requestId);
     if (resolver) {
       shellApprovalResolvers.delete(requestId);
-      resolver(!!allowed);
+      resolver({ allowed: !!allowed, deviceUnlockValidated: !!deviceUnlockValidated });
     }
   });
 
@@ -10263,9 +10243,8 @@ ${tabData}`;
     if (validServers.length > 0) {
       console.log(`[Main] Reconnecting ${validServers.length} MCP servers...`);
       validServers.forEach(server => {
-        mcpManager.connect(server.id, server).catch(err => {
-          // Suppress connection errors - they'll show in UI
-          console.log(`[MCP] ${server.name} unavailable: ${err.message || 'connection failed'}`);
+        mcpManager.connect(server.id, server).catch(() => {
+          // Connection errors handled by mcp-server-registry.js
         });
       });
     }

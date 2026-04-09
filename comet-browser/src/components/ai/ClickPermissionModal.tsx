@@ -5,7 +5,7 @@ import { Zap } from 'lucide-react';
 interface ClickPermissionModalProps {
   context: {
     action: string;
-    target: string;
+    target?: string;
     reason: string;
     risk: 'low' | 'medium' | 'high';
     actionType?: string;
@@ -29,6 +29,15 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
   const [pinInput, setPinInput] = React.useState('');
   const riskKey = context.risk || 'medium';
   const risk = RISK_CONFIG[riskKey] ?? RISK_CONFIG.medium;
+
+  React.useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); onAllow(); }
+      if (e.key === 'Escape') { e.preventDefault(); onDeny(); }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onAllow, onDeny]);
 
   let qrData = null;
   if (context.highRiskQr) {
@@ -57,7 +66,7 @@ const ClickPermissionModal = memo(function ClickPermissionModal({ context, onAll
       initial={{ opacity: 0, scale: 0.92, y: 12 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.92, y: 12 }}
-      className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0d0d1a] shadow-2xl overflow-hidden backdrop-blur-2xl"
+      className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0d0d1a] shadow-2xl overflow-hidden backdrop-blur-2xl mx-auto"
     >
       {/* Header */}
       <div className={`flex items-center gap-3 px-5 py-4 border-b border-white/5 ${risk.bg}`}>
