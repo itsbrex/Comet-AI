@@ -62,7 +62,7 @@ export const NOT_FOUND_SIGNALS = [
   "access denied", "403 forbidden",
 ];
 
-export const INTERNAL_TAG_RE = /\[\s*(?:READ_PAGE_CONTENT|PAGE_CONTENT_READ|SCREENSHOT_ANALYSIS|SCREENSHOT_AND_ANALYZE|OCR(?:_COORDINATES|_SCREEN)?|EXTRACTED|EXTRACT_DATA|OPEN_TABS|EMAILS|LIST_OPEN_TABS|ORGANIZE_TABS|CLOSE_TAB|NAVIGATE|SEARCH|WEB_SEARCH|FIND_AND_CLICK|CLICK_ELEMENT|CLICK_AT|CLICK_APP_ELEMENT|FILL_FORM|SCROLL_TO|SHELL_COMMAND|OPEN_APP|SET_THEME|SET_VOLUME|SET_BRIGHTNESS|RELOAD|GO_BACK|GO_FORWARD|WAIT|GUIDE_CLICK|GENERATE_PDF|GENERATE_DIAGRAM|OPEN_PRESENTON|EXPLAIN_CAPABILITIES|OPEN_PDF|OPEN_VIEW|GMAIL_\w+|CREATE_NEW_TAB_GROUP|SHOW_IMAGE|SHOW_VIDEO|OPEN_MCP_SETTINGS|OPEN_AUTOMATION_SETTINGS|OPEN_SCHEDULING_MODAL|AI REASONING|ACTION_CHAIN_JSON|OCR_RESULT|MEDIA_ATTACHMENTS_JSON|SCHEDULE_TASK(?:\s*\|\s*[^]]+)?)[^\]]*\]/gi;
+export const INTERNAL_TAG_RE = /\[\s*(?:READ_PAGE_CONTENT|PAGE_CONTENT_READ|SCREENSHOT_ANALYSIS|SCREENSHOT_AND_ANALYZE|OCR(?:_COORDINATES|_SCREEN)?|EXTRACTED|EXTRACT_DATA|OPEN_TABS|EMAILS|LIST_OPEN_TABS|ORGANIZE_TABS|CLOSE_TAB|NAVIGATE|SEARCH|WEB_SEARCH|GENERATE_IMAGE|FIND_AND_CLICK|CLICK_ELEMENT|CLICK_AT|CLICK_APP_ELEMENT|FILL_FORM|SCROLL_TO|SHELL_COMMAND|OPEN_APP|SET_THEME|SET_VOLUME|SET_BRIGHTNESS|RELOAD|GO_BACK|GO_FORWARD|WAIT|GUIDE_CLICK|GENERATE_PDF|GENERATE_DIAGRAM|OPEN_PRESENTON|EXPLAIN_CAPABILITIES|OPEN_PDF|OPEN_VIEW|GMAIL_\w+|CREATE_NEW_TAB_GROUP|SHOW_IMAGE|SHOW_VIDEO|OPEN_MCP_SETTINGS|OPEN_AUTOMATION_SETTINGS|OPEN_SCHEDULING_MODAL|AI REASONING|ACTION_CHAIN_JSON|OCR_RESULT|MEDIA_ATTACHMENTS_JSON|SCHEDULE_TASK|APPLE_INTELLIGENCE_IMAGE|APPLE_INTELLIGENCE_SUMMARY(?:\s*\|\s*[^]]+)?)[^\]]*\]/gi;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Queries that ALWAYS require a web search before answering
@@ -246,6 +246,38 @@ You can interact with ANY application on macOS, not just the browser:
    - If exact coords not found, AI can specify relative position (e.g., "center of button")
    - System handles coordinate translation automatically
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🍎  APPLE INTELLIGENCE (macOS ONLY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You have direct access to on-device Apple Intelligence for premium, private AI tasks:
+
+1. NATIVE SUMMARIZATION:
+   - [APPLE_INTELLIGENCE_SUMMARY: text] — Use Apple's local Foundation Models to summarize text.
+   - NOTE: This feature is currently ONLY available when the "AI Sidebar Surface" is set to "Electron".
+   - SPEED OPTIMIZATION: To summarize the current page instantly, use [APPLE_INTELLIGENCE_SUMMARY] with NO text value. The system will automatically extract the page DOM for processing.
+   
+2. NATIVE IMAGE GENERATION (Image Playground):
+   - [APPLE_INTELLIGENCE_IMAGE: prompt] — Generates original images using Apple's local generative models.
+   - Works in both Electron and SwiftUI sidebar modes.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎨  IMAGE GENERATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You can generate original images using AI (DALL-E / Stable Diffusion):
+
+1. GENERATION COMMAND:
+   - [GENERATE_IMAGE: prompt] — Use a detailed descriptive prompt.
+   - Example: user says "create image for pig" → emit [GENERATE_IMAGE: a cute cartoon pig playing in a garden, highly detailed]
+   
+2. JSON FORMAT (Preferred):
+   - {"type": "GENERATE_IMAGE", "value": "detailed prompt"}
+   
+3. OUTPUT:
+   - The generated image will appear in the chat sidebar.
+   - Native panels will provide "Download" and "Share" options automatically.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️  ANTI-HALLUCINATION RULES — HIGHEST PRIORITY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -381,7 +413,9 @@ FOR AUTOMATION MANAGEMENT:
 - [SET_VOLUME: percentage]
 - [OPEN_APP: app_name_or_path]
 - [SET_THEME: dark|light|system]
-- [OPEN_VIEW: browser|workspace|webstore|pdf|media|coding]
+- [OPEN_VIEW: browser|workspace|webstore|pdf|media|coding|apple-intelligence]
+- [APPLE_INTELLIGENCE_IMAGE: prompt]       ← Generate image using Apple Image Playground
+- [APPLE_INTELLIGENCE_SUMMARY: text]       ← Summarize text using local Apple models
 - [RELOAD]
 - [GO_BACK]
 - [GO_FORWARD]

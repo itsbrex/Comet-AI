@@ -418,7 +418,14 @@ export const useAppStore = create<BrowserState>()(
             mcpServerPort: 3001,
             additionalAIInstructions: '',
             hasSeenNeuralSetup: false,
-            setHasSeenNeuralSetup: (seen: boolean) => set({ hasSeenNeuralSetup: seen }),
+            setHasSeenNeuralSetup: (seen: boolean) => {
+                const prev = get().hasSeenNeuralSetup;
+                if (prev === seen) return; // Skip if already the same value
+                set({ hasSeenNeuralSetup: seen });
+                if (typeof window !== 'undefined' && window.electronAPI?.setOnboardingState) {
+                    void window.electronAPI.setOnboardingState({ hasSeenNeuralSetup: seen });
+                }
+            },
  
             // Theme settings
             theme: 'system',
@@ -984,8 +991,22 @@ export const useAppStore = create<BrowserState>()(
                     window.electronAPI.updateShortcuts(nextShortcuts);
                 }
             },
-            setHasSeenWelcomePage: (seen) => set({ hasSeenWelcomePage: seen }),
-            setHasCompletedStartupSetup: (completed: boolean) => set({ hasCompletedStartupSetup: completed }),
+            setHasSeenWelcomePage: (seen) => {
+                const prev = get().hasSeenWelcomePage;
+                if (prev === seen) return; // Skip if already the same value
+                set({ hasSeenWelcomePage: seen });
+                if (typeof window !== 'undefined' && window.electronAPI?.setOnboardingState) {
+                    void window.electronAPI.setOnboardingState({ hasSeenWelcomePage: seen });
+                }
+            },
+            setHasCompletedStartupSetup: (completed: boolean) => {
+                const prev = get().hasCompletedStartupSetup;
+                if (prev === completed) return; // Skip if already the same value
+                set({ hasCompletedStartupSetup: completed });
+                if (typeof window !== 'undefined' && window.electronAPI?.setOnboardingState) {
+                    void window.electronAPI.setOnboardingState({ hasCompletedStartupSetup: completed });
+                }
+            },
 
             setBackendStrategy: (strategy: 'firebase' | 'mysql') => set({ backendStrategy: strategy }),
             setCustomFirebaseConfig: (config: any | null) => set({ customFirebaseConfig: config }),
@@ -1184,6 +1205,7 @@ export const useAppStore = create<BrowserState>()(
             partialize: (state) => ({
                 hasSeenWelcomePage: state.hasSeenWelcomePage,
                 hasCompletedStartupSetup: state.hasCompletedStartupSetup,
+                hasSeenNeuralSetup: state.hasSeenNeuralSetup,
                 user: state.user,
                 isGuestMode: state.isGuestMode,
                 theme: state.theme,
@@ -1217,9 +1239,27 @@ export const useAppStore = create<BrowserState>()(
                     console.log('[Store] Rehydrated state:', {
                         hasSeenWelcomePage: state.hasSeenWelcomePage,
                         hasCompletedStartupSetup: state.hasCompletedStartupSetup,
+                        hasSeenNeuralSetup: state.hasSeenNeuralSetup,
                         user: state.user ? 'present' : 'null',
                         isGuestMode: state.isGuestMode,
                     });
+                    // NOTE: Do NOT call setOnboardingState here — we just read these values
+                    // FROM the main process. Writing them back would create a pointless loop
+                    // that floods the log on every HMR cycle / rehydration.
+                }
+                if (typeof window !== 'undefined' && window.electronAPI?.getOnboardingState) {
+                    window.electronAPI
+                        .getOnboardingState()
+                        .then((flags) => {
+                            if (!flags) return;
+                            useAppStore.setState((prev) => ({
+                                hasSeenWelcomePage: prev.hasSeenWelcomePage || !!flags.hasSeenWelcomePage,
+                                hasCompletedStartupSetup:
+                                    prev.hasCompletedStartupSetup || !!flags.hasCompletedStartupSetup,
+                                hasSeenNeuralSetup: prev.hasSeenNeuralSetup || !!flags.hasSeenNeuralSetup,
+                            }));
+                        })
+                        .catch(() => {});
                 }
             },
         }
@@ -1228,6 +1268,20 @@ export const useAppStore = create<BrowserState>()(
 
 // Firebase auth listener
 if (typeof window !== 'undefined' && window.electronAPI) {
+    // Merge onboarding flags from main-process store (reliable for packaged .dmg/.exe).
+    window.electronAPI
+        .getOnboardingState()
+        .then((flags) => {
+            if (!flags) return;
+            useAppStore.setState((prev) => ({
+                hasSeenWelcomePage: prev.hasSeenWelcomePage || !!flags.hasSeenWelcomePage,
+                hasCompletedStartupSetup:
+                    prev.hasCompletedStartupSetup || !!flags.hasCompletedStartupSetup,
+                hasSeenNeuralSetup: prev.hasSeenNeuralSetup || !!flags.hasSeenNeuralSetup,
+            }));
+        })
+        .catch(() => {});
+
     // Initial load of user data from persistent storage
     window.electronAPI.loadPersistentData('user-data').then((result: any) => {
         if (result.success && result.data) {

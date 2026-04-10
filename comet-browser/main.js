@@ -539,7 +539,7 @@ const createNativeMacUiSnapshot = () => {
 };
 
 const normalizeMacNativePanelMode = (mode = 'sidebar') => {
-  const allowedModes = new Set(['sidebar', 'action-chain', 'menu', 'settings', 'downloads', 'clipboard', 'permissions']);
+  const allowedModes = new Set(['sidebar', 'action-chain', 'menu', 'settings', 'downloads', 'clipboard', 'permissions', 'apple-intelligence', 'apple-summary', 'apple-image']);
   return allowedModes.has(mode) ? mode : 'sidebar';
 };
 
@@ -4429,6 +4429,28 @@ ipcMain.handle('get-stored-api-keys', () => {
   };
 });
 
+// Onboarding / first-run flags — persisted in electron-store so .dmg/.exe builds
+// keep state even when renderer localStorage partition or origin differs from dev.
+ipcMain.handle('get-onboarding-state', () => ({
+  hasSeenWelcomePage: !!store.get('onboarding_has_seen_welcome'),
+  hasCompletedStartupSetup: !!store.get('onboarding_completed_startup'),
+  hasSeenNeuralSetup: !!store.get('onboarding_seen_neural_setup'),
+}));
+
+ipcMain.handle('set-onboarding-state', (event, partial = {}) => {
+  console.log('[IPC] set-onboarding-state handler called with:', partial);
+  if (typeof partial.hasSeenWelcomePage === 'boolean') {
+    store.set('onboarding_has_seen_welcome', partial.hasSeenWelcomePage);
+  }
+  if (typeof partial.hasCompletedStartupSetup === 'boolean') {
+    store.set('onboarding_completed_startup', partial.hasCompletedStartupSetup);
+  }
+  if (typeof partial.hasSeenNeuralSetup === 'boolean') {
+    store.set('onboarding_seen_neural_setup', partial.hasSeenNeuralSetup);
+  }
+  return true;
+});
+
 // Redundant search-applications handler removed (see line 3387)
 
 
@@ -7431,6 +7453,14 @@ app.whenReady().then(async () => {
       res.json({ success: false, error: 'No active Comet window found.' });
     });
 
+    nativeMacUiApp.post('/native-mac-ui/apple-intelligence/image-callback', (req, res) => {
+      const { path: imagePath } = req.body || {};
+      if (imagePath && mainWindow) {
+        mainWindow.webContents.send('apple-intelligence-image-generated', { path: imagePath });
+      }
+      res.json({ success: true });
+    });
+
     nativeMacUiServer = nativeMacUiApp.listen(nativeMacUiPort, '127.0.0.1', () => {
       console.log(`[MacNativeUI] Bridge listening at http://127.0.0.1:${nativeMacUiPort}`);
     });
@@ -10325,7 +10355,10 @@ ${tabData}`;
       { accelerator: spotlightShortcut, action: 'spotlight-search' },
       { accelerator: 'CommandOrControl+Shift+S', action: 'pop-search' },
       { accelerator: 'CommandOrControl+P', action: 'print' },
-      { accelerator: process.platform === 'darwin' ? 'Command+Shift+Escape' : 'Control+Shift+Escape', action: 'kill-switch' }
+      { accelerator: process.platform === 'darwin' ? 'Command+Shift+Escape' : 'Control+Shift+Escape', action: 'kill-switch' },
+      { accelerator: 'CommandOrControl+Option+S', action: 'apple-intel-summary' },
+      { accelerator: 'CommandOrControl+Option+I', action: 'apple-intel-image' },
+      { accelerator: 'CommandOrControl+Option+A', action: 'apple-intel-panel' }
     ];
 
     const shortcutsToRegister = (shortcuts && shortcuts.length > 0) ? shortcuts : defaultShortcuts;
@@ -10341,7 +10374,10 @@ ${tabData}`;
           'global-search',
           'kill-switch',
           'emergency-kill',
-          'toggle-spotlight'
+          'toggle-spotlight',
+          'apple-intel-summary',
+          'apple-intel-image',
+          'apple-intel-panel'
         ];
 
         if (!GLOBAL_SAFE_ACTIONS.includes(s.action)) return;
@@ -10374,10 +10410,12 @@ ${tabData}`;
                 detail: 'You can re-enable robot permissions in Settings > Permissions.',
               });
             }
-          } else if (s.action === 'print') {
-            const view = tabViews.get(activeTabId);
-            if (view) view.webContents.print();
-            else if (mainWindow) mainWindow.webContents.print();
+          } else if (s.action === 'apple-intel-summary') {
+            nativeMacPanelManager.show('apple-summary', { relaunchIfRunning: true });
+          } else if (s.action === 'apple-intel-image') {
+            nativeMacPanelManager.show('apple-image', { relaunchIfRunning: true });
+          } else if (s.action === 'apple-intel-panel') {
+            nativeMacPanelManager.show('apple-intelligence', { relaunchIfRunning: true });
           } else if (mainWindow) {
             mainWindow.webContents.send('execute-shortcut', s.action);
           }

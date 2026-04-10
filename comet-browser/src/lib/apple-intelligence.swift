@@ -192,7 +192,7 @@ struct AppleIntelligenceHelper {
             case "status":
                 var response = ResponsePayload(success: true, osVersion: ProcessInfo.processInfo.operatingSystemVersionString)
                 #if canImport(FoundationModels)
-                if #available(macOS 26.0, *) {
+                if #available(macOS 15.1, *) {
                     let (summaryAvailable, summaryReason) = await validateSummaryGeneration()
                     response.available = summaryAvailable
                     response.supportsSummaries = true
@@ -202,7 +202,7 @@ struct AppleIntelligenceHelper {
                     response.available = false
                     response.supportsSummaries = false
                     response.summaryAvailable = false
-                    response.summaryReason = "Foundation Models requires a newer macOS runtime."
+                    response.summaryReason = "Foundation Models requires macOS 15.1 or newer."
                 }
                 #else
                 response.available = false
@@ -217,10 +217,14 @@ struct AppleIntelligenceHelper {
                     let (imageAvailable, imageReason) = await imageGenerationStatus()
                     response.imageAvailable = imageAvailable
                     response.imageReason = imageReason
+                } else if #available(macOS 15.1, *) {
+                    response.supportsImageGeneration = true
+                    response.imageAvailable = true // Available via sheet
+                    response.imageReason = "Image generation is available via interactive sheet."
                 } else {
                     response.supportsImageGeneration = false
                     response.imageAvailable = false
-                    response.imageReason = "Image Playground requires macOS 15.4 or newer."
+                    response.imageReason = "Image Playground requires macOS 15.1 or newer."
                 }
                 #else
                 response.supportsImageGeneration = false
@@ -236,7 +240,7 @@ struct AppleIntelligenceHelper {
                 }
 
                 #if canImport(FoundationModels)
-                if #available(macOS 26.0, *) {
+                if #available(macOS 15.1, *) {
                     let (summaryAvailable, summaryReason) = summaryAvailabilityStatus()
                     guard summaryAvailable else {
                         writeResponse(ResponsePayload(success: false, available: false, supportsSummaries: true, supportsImageGeneration: nil, summaryAvailable: false, imageAvailable: nil, summaryReason: summaryReason, imageReason: nil, osVersion: ProcessInfo.processInfo.operatingSystemVersionString, summary: nil, imagePath: nil, error: summaryReason ?? "Apple Intelligence summaries are unavailable on this Mac right now."))

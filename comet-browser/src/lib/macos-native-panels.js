@@ -7,10 +7,13 @@ const execFileAsync = util.promisify(execFile);
 const PANEL_BINARY_NAME = 'Comet-AI-NativePanels';
 
 function getMacNativePanelPaths() {
+  const sourceDir = path.join(__dirname, 'native-panels');
+  const sourceFile = path.join(__dirname, 'macos-native-panels.swift');
+  
   return {
     bundledBinary: path.join(process.resourcesPath || '', 'bin', PANEL_BINARY_NAME),
     localBinary: path.join(__dirname, '..', '..', 'bin', PANEL_BINARY_NAME),
-    swiftSource: path.join(__dirname, 'macos-native-panels.swift'),
+    swiftSource: fs.existsSync(sourceDir) ? sourceDir : sourceFile,
   };
 }
 
@@ -19,7 +22,34 @@ async function ensureLocalMacNativePanelBinary(swiftSource, localBinary) {
     return false;
   }
 
-  const scriptStat = fs.statSync(swiftSource);
+  const isDirectory = fs.statSync(swiftSource).isDirectory();
+  let scriptStat;
+  let swiftFiles = [];
+
+  if (isDirectory) {
+    // Collect all .swift files in the directory
+    const getAllSwiftFiles = (dir) => {
+      let results = [];
+      const list = fs.readdirSync(dir);
+      list.forEach((file) => {
+        file = path.join(dir, file);
+        const stat = fs.statSync(file);
+        if (stat && stat.isDirectory()) {
+          results = results.concat(getAllSwiftFiles(file));
+        } else if (file.endsWith('.swift')) {
+          results.push(file);
+        }
+      });
+      return results;
+    };
+    swiftFiles = getAllSwiftFiles(swiftSource);
+    // Use the latest mtime of all files
+    scriptStat = { mtimeMs: Math.max(...swiftFiles.map(f => fs.statSync(f).mtimeMs)) };
+  } else {
+    swiftFiles = [swiftSource];
+    scriptStat = fs.statSync(swiftSource);
+  }
+
   const binaryExists = fs.existsSync(localBinary);
   const binaryIsFresh = binaryExists && fs.statSync(localBinary).mtimeMs >= scriptStat.mtimeMs;
 
@@ -28,7 +58,13 @@ async function ensureLocalMacNativePanelBinary(swiftSource, localBinary) {
   }
 
   fs.mkdirSync(path.dirname(localBinary), { recursive: true });
-  await execFileAsync('swiftc', ['-parse-as-library', swiftSource, '-o', localBinary], {
+  
+  // Prepare compiler arguments
+  const args = ['-parse-as-library', ...swiftFiles, '-o', localBinary];
+  
+  console.log('[MacNativePanels] Compiling native binary from:', isDirectory ? `${swiftFiles.length} files` : swiftSource);
+  
+  await execFileAsync('swiftc', args, {
     timeout: 120000,
     maxBuffer: 1024 * 1024,
   });
@@ -108,16 +144,22 @@ class MacNativePanelManager {
     }
 
     const child = spawn(target.command, args, {
-      stdio: 'ignore',
+      stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
     });
+
+    child.stdout?.on('data', (data) => console.log(`[MacNativePanels:${mode}] ${data}`));
+    child.stderr?.on('data', (data) => console.error(`[MacNativePanels:${mode}] ${data}`));
 
     child.on('error', (error) => {
       console.error(`[MacNativePanels] Failed to launch ${mode}:`, error);
       this.processes.delete(mode);
     });
 
-    child.on('exit', () => {
+    child.on('exit', (code) => {
+      if (code !== 0 && code !== null) {
+        console.warn(`[MacNativePanels] Panel ${mode} exited with code ${code}`);
+      }
       this.processes.delete(mode);
     });
 

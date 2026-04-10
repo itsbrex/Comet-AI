@@ -483,7 +483,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
       });
     }
 
-    if (typeof options.attemptsUsed === 'number' && typeof options.maxAttempts === 'number') {
+    if (typeof options.attemptsUsed === 'number' && options.attemptsUsed > 0 && typeof options.maxAttempts === 'number') {
       lines.push('', `Recovery attempts used: ${options.attemptsUsed}/${options.maxAttempts}`);
     }
 
@@ -740,6 +740,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     if (aiProvider === 'ollama' && ollamaBaseUrl) return true;
     if (aiProvider === 'gemini' && geminiApiKey) return true;
     if (aiProvider === 'google' && geminiApiKey) return true;
+    if (aiProvider === 'google-flash' && geminiApiKey) return true;
     if (aiProvider === 'openai' && openaiApiKey) return true;
     if (aiProvider === 'azure-openai' && store.azureOpenaiApiKey && store.azureOpenaiEndpoint) return true;
     if (aiProvider === 'anthropic' && anthropicApiKey) return true;
@@ -860,11 +861,12 @@ I couldn't schedule the task. The background service may not be running. Please 
     }
   ), [localLlmMode, normalizedProvider, ollamaModel, ollamaBaseUrl, geminiModel, store.azureOpenaiEndpoint, store.azureOpenaiModel]);
 
-  const getStreamingResponse = useCallback(async (history: ChatMessage[], messageId?: string): Promise<any> => {
+  const getStreamingResponse = useCallback(async (history: ChatMessage[], messageId?: string, onFirstChunk?: () => void): Promise<any> => {
     return new Promise((resolve) => {
       let fullText = '';
       let fullThought = '';
       let animationFrame: number | null = null;
+      let hasCalledOnFirstChunk = false;
 
       const flushStreamText = () => {
         animationFrame = null;
@@ -882,6 +884,11 @@ I couldn't schedule the task. The background service may not be running. Please 
       };
 
       const cleanup = window.electronAPI.onChatStreamPart((part: any) => {
+        if (!hasCalledOnFirstChunk && (part.type === 'text-delta' || part.type === 'reasoning-delta')) {
+          hasCalledOnFirstChunk = true;
+          onFirstChunk?.();
+        }
+
         if (part.type === 'text-delta') {
           fullText += (part.textDelta || '');
           if (animationFrame === null) {
@@ -1102,7 +1109,9 @@ I couldn't schedule the task. The background service may not be running. Please 
         const responseMessageId = createMessageId('assistant');
         activeStreamingMessageIdRef.current = responseMessageId;
         setMessages(prev => [...prev, { id: responseMessageId, role: 'model', content: '' }] as ExtendedChatMessage[]);
-        const response = await getStreamingResponse(currentHistory, responseMessageId);
+        const response = await getStreamingResponse(currentHistory, responseMessageId, () => {
+          updateThinkingStep(aiId, iterations === 1 ? 'AI is responding...' : `Comet is processing Step ${iterations}...`);
+        });
         resolveThinkingStep(aiId, response.error ? 'error' : 'done');
 
         if (response.error) throw new Error(response.error);
@@ -1221,6 +1230,7 @@ I couldn't schedule the task. The background service may not be running. Please 
           timestamp: Date.now()
         }));
         console.log('[AI] Command queue:', aiCommands.map(c => c.type));
+        commandQueueRef.current = aiCommands;
         setCommandQueue(aiCommands);
         setCurrentCommandIndex(0);
 
@@ -1306,7 +1316,11 @@ I couldn't schedule the task. The background service may not be running. Please 
               skippedCommands.length > 0
                 ? `\n\nLoop prevention notes:\n${skippedCommands.map(note => `- ${note}`).join('\n')}`
                 : ''
-            }\n\nRecovery attempts used: ${recoveryAttempts}/${ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS}.\nDo not repeat the same failed command unless the parameters materially change. If you need another action pass, emit at most 3 focused commands. If you cannot safely continue, explain the blocker clearly to the user and ask one specific clarification question. If the steps succeeded or you already have enough information, provide the final answer now without more commands.`
+            }${
+              recoveryAttempts > 0 
+                ? `\n\nRecovery attempts used: ${recoveryAttempts}/${ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS}.\nDo not repeat the same failed command unless the parameters materially change.`
+                : ''
+            }\n\nIf you need another action pass, emit at most 3 focused commands. If you cannot safely continue, explain the blocker clearly to the user and ask one specific clarification question. If the steps succeeded or you already have enough information, provide the final answer now without more commands.`
           }
         ];
       }
@@ -1768,10 +1782,142 @@ case 'ORGANIZE_TABS': {
           output = `Theme set to ${command.value}`;
           break;
 
-        case 'OPEN_VIEW':
-          setActiveView(command.value as any);
-          output = `Switched to ${command.value} view`;
+
+        case 'OPEN_VIEW': {
+          if (command.value === 'apple-intelligence' && window.electronAPI.showMacNativePanel) {
+            await window.electronAPI.showMacNativePanel('apple-intelligence');
+            output = 'Opened Apple Intelligence native panel.';
+          } else {
+            setActiveView(command.value as any);
+            output = `Switched to ${command.value} view`;
+          }
           break;
+        }
+
+        case 'GENERATE_IMAGE': {
+          let prompt = command.value || 'An artistic masterpiece';
+          let style = '';
+          
+          // Try to parse JSON if it looks like JSON
+          if (prompt.trim().startsWith('{') && prompt.trim().endsWith('}')) {
+            try {
+              const data = JSON.parse(prompt);
+              prompt = data.prompt || data.value || prompt;
+              style = data.style || '';
+            } catch { /* not JSON, use as string */ }
+          }
+          
+          const fullPrompt = style ? `${prompt} in ${style} style` : prompt;
+          const genId = addThinkingStep(`Generating image with AI: ${fullPrompt}...`);
+          try {
+            const res = await window.electronAPI.generateImage({ prompt: fullPrompt });
+            if (res.success) {
+              output = `Image generated successfully: ${res.imageUrl || res.imagePath}`;
+              resolveThinkingStep(genId, 'done', 'Image generated');
+              const url = res.imageUrl || (res.imagePath ? `file://${res.imagePath}` : '');
+              if (url) {
+                setMessages(prev => {
+                  const last = prev[prev.length - 1];
+                  const imgItem: MediaItem = { 
+                    id: `gen-img-${Date.now()}`, 
+                    type: 'image', 
+                    url: url, 
+                    title: 'Generated Image', 
+                    description: prompt 
+                  };
+                  if (last && last.role === 'model') {
+                    return [...prev.slice(0, -1), { ...last, mediaItems: [...(last.mediaItems || []), imgItem] }];
+                  }
+                  return [...prev, { role: 'model', content: `I've generated an image for you: ${prompt}`, mediaItems: [imgItem] }];
+                });
+              }
+            } else {
+              output = `Failed to generate image: ${res.error}`;
+              resolveThinkingStep(genId, 'error', res.error);
+            }
+          } catch (e: any) {
+             output = `Image generation error: ${e.message}`;
+             resolveThinkingStep(genId, 'error', e.message);
+          }
+          break;
+        }
+
+        case 'APPLE_INTELLIGENCE_IMAGE': {
+          const prompt = command.value || 'A beautiful landscape';
+          const genId = addThinkingStep(`Generating image with Apple Intelligence: ${prompt}...`);
+          try {
+            const res = await window.electronAPI.generateAppleIntelligenceImage({ prompt });
+            if (res.success) {
+              output = `Image generated successfully: ${res.imagePath}`;
+              resolveThinkingStep(genId, 'done', 'Image generated');
+              if (res.imagePath) {
+                setMessages(prev => {
+                  const last = prev[prev.length - 1];
+                  const imgItem: MediaItem = { id: `ai-img-${Date.now()}`, type: 'image', url: `file://${res.imagePath}`, title: 'Apple Intelligence Image', description: prompt };
+                  if (last && last.role === 'model') {
+                    return [...prev.slice(0, -1), { ...last, mediaItems: [...(last.mediaItems || []), imgItem] }];
+                  }
+                  return [...prev, { role: 'model', content: `I've generated an image for you: ${prompt}`, mediaItems: [imgItem] }];
+                });
+              }
+            } else {
+              output = `Apple image generation failed: ${res.error || res.imageReason || 'Unknown error'}`;
+              resolveThinkingStep(genId, 'error', output);
+              // Fallback: invite user to try the interactive panel
+              if (res.imageReason?.includes('interactive sheet')) {
+                await window.electronAPI.showMacNativePanel('apple-intelligence');
+                output += '\nOpening the Apple Intelligence panel so you can use the interactive Image Playground sheet.';
+              }
+            }
+          } catch (e: any) {
+            output = `Apple Intelligence error: ${e.message}`;
+            resolveThinkingStep(genId, 'error', e.message);
+          }
+          break;
+        }
+
+        case 'APPLE_INTELLIGENCE_SUMMARY': {
+          if (store.macNativeSidebarMode === 'swiftui') {
+            const errorMsg = "Apple Intelligence Summarization is optimized for the Electron Sidebar ecosystem and is currently unavailable in Native SwiftUI mode.";
+            setMessages(prev => [...prev, { 
+              role: 'model', 
+              content: `⚠️ **Mode Conflict**\n\n${errorMsg}` 
+            }]);
+            break;
+          }
+
+          let textToSummarize = command.value || '';
+          const sumId = addThinkingStep('Extracting page content for Apple Intelligence...');
+          
+          try {
+            // Use DOM for faster/better summary if no specific text provided
+            if (!textToSummarize) {
+              const domRes = await window.electronAPI.readPageContent();
+              textToSummarize = domRes.content || '';
+              if (!textToSummarize) {
+                resolveThinkingStep(sumId, 'error', 'No page content found to summarize.');
+                setMessages(prev => [...prev, { role: 'model', content: "I couldn't find any content on the current page to summarize." }]);
+                break;
+              }
+            }
+
+            updateThinkingStep(sumId, 'Summarizing with Apple local models...');
+            const res = await window.electronAPI.summarizeWithAppleIntelligence(textToSummarize);
+            
+            if (res.success && res.summary) {
+              output = `Summary: ${res.summary}`;
+              resolveThinkingStep(sumId, 'done', 'Summary created');
+              setMessages(prev => [...prev, { role: 'model', content: `🍏 **Apple Intelligence Summary:**\n\n${res.summary}` }]);
+            } else {
+              output = `Apple summarization failed: ${res.error || res.summaryReason || 'Unknown error'}`;
+              resolveThinkingStep(sumId, 'error', output);
+            }
+          } catch (e: any) {
+            output = `Apple Intelligence error: ${e.message}`;
+            resolveThinkingStep(sumId, 'error', e.message);
+          }
+          break;
+        }
 
         // ── GENERATE_DIAGRAM: render Mermaid diagram in chat ────────────────────
         case 'GENERATE_DIAGRAM': {

@@ -106,6 +106,16 @@ declare global {
             setActiveLLMProvider: (providerId: string) => Promise<boolean>;
             configureLLMProvider: (providerId: string, options: any) => Promise<boolean>;
             getStoredApiKeys: () => Promise<any>;
+            getOnboardingState: () => Promise<{
+                hasSeenWelcomePage: boolean;
+                hasCompletedStartupSetup: boolean;
+                hasSeenNeuralSetup: boolean;
+            }>;
+            setOnboardingState: (partial: {
+                hasSeenWelcomePage?: boolean;
+                hasCompletedStartupSetup?: boolean;
+                hasSeenNeuralSetup?: boolean;
+            }) => Promise<boolean>;
             generateChatContent: (messages: ChatMessage[], options?: any) => Promise<{ text?: string; thought?: string; error?: string }>;
             streamChatContent: (messages: ChatMessage[], options?: any) => void;
             onChatStreamPart: (callback: (part: any) => void) => () => void;
@@ -273,8 +283,8 @@ declare global {
             deletePersistentData: (key: string) => Promise<{ success: boolean; error?: string }>;
             getMacNativeUIPreferences: () => Promise<{ success: boolean; preferences?: { sidebarMode: 'electron' | 'swiftui'; actionChainMode: 'electron' | 'swiftui'; utilityMode: 'electron' | 'swiftui'; permissionMode: 'electron' | 'swiftui'; sidebarAutoMinimize?: boolean; sidebarGradientPreset?: 'graphite' | 'ocean' | 'aurora'; sidebarShowQuickActions?: boolean; sidebarShowSessions?: boolean; sidebarShowSearchTags?: boolean; sidebarShowCommandCenterButton?: boolean; sidebarShowActionChainButton?: boolean }; available?: boolean; error?: string }>;
             setMacNativeUIPreferences: (preferences: Partial<{ sidebarMode: 'electron' | 'swiftui'; actionChainMode: 'electron' | 'swiftui'; utilityMode: 'electron' | 'swiftui'; permissionMode: 'electron' | 'swiftui'; sidebarAutoMinimize: boolean; sidebarGradientPreset: 'graphite' | 'ocean' | 'aurora'; sidebarShowQuickActions: boolean; sidebarShowSessions: boolean; sidebarShowSearchTags: boolean; sidebarShowCommandCenterButton: boolean; sidebarShowActionChainButton: boolean }>) => Promise<{ success: boolean; preferences?: { sidebarMode: 'electron' | 'swiftui'; actionChainMode: 'electron' | 'swiftui'; utilityMode: 'electron' | 'swiftui'; permissionMode: 'electron' | 'swiftui'; sidebarAutoMinimize?: boolean; sidebarGradientPreset?: 'graphite' | 'ocean' | 'aurora'; sidebarShowQuickActions?: boolean; sidebarShowSessions?: boolean; sidebarShowSearchTags?: boolean; sidebarShowCommandCenterButton?: boolean; sidebarShowActionChainButton?: boolean }; available?: boolean; error?: string }>;
-            showMacNativePanel: (mode: 'sidebar' | 'action-chain' | 'menu' | 'settings' | 'downloads' | 'clipboard' | 'permissions') => Promise<{ success: boolean; reused?: boolean; error?: string }>;
-            toggleMacNativePanel: (mode: 'sidebar' | 'action-chain' | 'menu' | 'settings' | 'downloads' | 'clipboard' | 'permissions') => Promise<{ success: boolean; closed?: boolean; reused?: boolean; error?: string }>;
+            showMacNativePanel: (mode: 'sidebar' | 'action-chain' | 'menu' | 'settings' | 'downloads' | 'clipboard' | 'permissions' | 'apple-intelligence') => Promise<{ success: boolean; reused?: boolean; error?: string }>;
+            toggleMacNativePanel: (mode: 'sidebar' | 'action-chain' | 'menu' | 'settings' | 'downloads' | 'clipboard' | 'permissions' | 'apple-intelligence') => Promise<{ success: boolean; closed?: boolean; reused?: boolean; error?: string }>;
             updateNativeMacUIState: (state: {
                 inputDraft?: string;
                 isLoading?: boolean;
@@ -467,7 +477,8 @@ declare global {
             workflowStatus: () => Promise<{ success: boolean; isRecording?: boolean; stepCount?: number }>;
             generateHighRiskQr: (actionId: string) => Promise<string | null>;
             onMobileApproveHighRisk: (callback: (data: { pin: string; id: string }) => void) => () => void;
-            getAppIcon: (path: string) => Promise<string | null>;
+            getAppIcon: (path?: string) => Promise<string | null>;
+            getCometIcon: () => Promise<string | null>;
             classifyTabsAi: (args: { tabs: Array<{ id: string; title: string; url: string }> }) => Promise<{ success: boolean; classifications?: Record<string, string>; error?: string }>;
             organizeFolder: (path: string) => Promise<{ success: boolean; count?: number; summary?: string; path?: string; error?: string }>;
 

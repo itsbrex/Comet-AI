@@ -114,6 +114,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setActiveLLMProvider: (providerId) => ipcRenderer.invoke('llm-set-active-provider', providerId),
   configureLLMProvider: (providerId, options) => ipcRenderer.invoke('llm-configure-provider', providerId, options),
   getStoredApiKeys: () => ipcRenderer.invoke('get-stored-api-keys'),
+  getOnboardingState: () => ipcRenderer.invoke('get-onboarding-state'),
+  setOnboardingState: (partial) => ipcRenderer.invoke('set-onboarding-state', partial),
   generateChatContent: (messages, options) => ipcRenderer.invoke('llm-generate-chat-content', messages, options),
   streamChatContent: (messages, options) => {
     ipcRenderer.send('llm-stream-chat-content', messages, options);
