@@ -14,7 +14,7 @@ import {
   Image,
   Eye, EyeOff, Brain, Search, Loader2, MousePointerClick,
   CheckCircle2, AlertCircle, Layers,
-  Share2, CopyIcon, Trash2, Printer, Cpu, Rocket, Camera, Terminal, MoreHorizontal, Play, History
+  Share2, CopyIcon, Trash2, Printer, Cpu, Rocket, Camera, Terminal, MoreHorizontal, Play, History, Copy
 } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 import ReactMarkdown from 'react-markdown';
@@ -23,6 +23,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import dracula from 'react-syntax-highlighter/dist/cjs/styles/prism/dracula';
+import { useTypingAnimation, TypingCursor, StreamingText } from '@/hooks/useTypingAnimation';
 
 // Imported modular components
 import ThinkingPanel, { type ThinkingStep } from './ai/ThinkingPanel';
@@ -220,10 +221,148 @@ const StreamingMarkdownMessage: React.FC<{
         <motion.span
           aria-hidden="true"
           className="inline-flex h-4 w-2 rounded-full bg-sky-400/80 shadow-[0_0_14px_rgba(56,189,248,0.45)]"
-          animate={{ opacity: [1, 0.2, 1] }}
-          transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+          animate={{ 
+            opacity: [1, 0.3, 1],
+            scaleY: [1, 1.2, 1]
+          }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
         />
       ) : null}
+    </div>
+  );
+};
+
+// Enhanced Streaming Message with Smooth Typing Animation
+const EnhancedStreamingMessage: React.FC<{
+  content: string;
+  isStreaming: boolean;
+  animate: boolean;
+}> = ({ content, isStreaming, animate }) => {
+  const shouldReduceMotion = useReducedMotion();
+  const { displayedContent, showCursor } = useTypingAnimation(content, isStreaming, {
+    enabled: animate && !shouldReduceMotion,
+    speed: 'normal',
+    showCursor: true,
+    cursorStyle: 'blink',
+    chunkSize: 4,
+    minDelay: 6,
+    maxDelay: 20,
+  });
+
+  return (
+    <div className="space-y-2">
+      {displayedContent ? renderMarkdownContent(displayedContent) : null}
+      {showCursor && isStreaming && (
+        <motion.span
+          aria-hidden="true"
+          className="inline-flex h-4 w-2 rounded-full"
+          style={{
+            backgroundColor: '#38bdf8',
+            boxShadow: '0 0 16px rgba(56, 189, 248, 0.5), 0 0 8px rgba(56, 189, 248, 0.3)',
+          }}
+          animate={{ 
+            opacity: [1, 0.4, 1],
+            scaleY: [1, 1.15, 1],
+            boxShadow: [
+              '0 0 16px rgba(56, 189, 248, 0.5), 0 0 8px rgba(56, 189, 248, 0.3)',
+              '0 0 20px rgba(56, 189, 248, 0.7), 0 0 12px rgba(56, 189, 248, 0.5)',
+              '0 0 16px rgba(56, 189, 248, 0.5), 0 0 8px rgba(56, 189, 248, 0.3)',
+            ],
+          }}
+          transition={{ 
+            duration: 1.4, 
+            repeat: Infinity, 
+            ease: 'easeInOut' 
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Progress-based Streaming Message (for smoother long text)
+const ProgressStreamingMessage: React.FC<{
+  content: string;
+  isStreaming: boolean;
+  animate: boolean;
+}> = ({ content, isStreaming, animate }) => {
+  const shouldReduceMotion = useReducedMotion();
+  const [visibleLength, setVisibleLength] = useState(0);
+  const animationRef = useRef<number | null>(null);
+  const lastUpdateRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!animate || shouldReduceMotion) {
+      setVisibleLength(content.length);
+      return;
+    }
+
+    if (!isStreaming) {
+      setVisibleLength(content.length);
+      return;
+    }
+
+    const animateProgress = (timestamp: number) => {
+      if (!lastUpdateRef.current) lastUpdateRef.current = timestamp;
+      const delta = timestamp - lastUpdateRef.current;
+      
+      if (delta > 12) {
+        lastUpdateRef.current = timestamp;
+        
+        setVisibleLength(prev => {
+          if (prev >= content.length) {
+            animationRef.current = null;
+            return prev;
+          }
+          
+          const remaining = content.length - prev;
+          const step = remaining > 500 ? Math.max(8, Math.floor(remaining / 40))
+            : remaining > 200 ? Math.max(4, Math.floor(remaining / 30))
+            : remaining > 50 ? 3
+            : 1;
+          
+          return Math.min(prev + step, content.length);
+        });
+      }
+      
+      animationRef.current = requestAnimationFrame(animateProgress);
+    };
+
+    animationRef.current = requestAnimationFrame(animateProgress);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [animate, shouldReduceMotion, isStreaming, content]);
+
+  useEffect(() => {
+    if (!isStreaming && content.length > 0) {
+      setVisibleLength(content.length);
+    }
+  }, [isStreaming, content]);
+
+  const displayedContent = animate && !shouldReduceMotion
+    ? content.slice(0, visibleLength)
+    : content;
+  const showCaret = animate && !shouldReduceMotion && visibleLength < content.length;
+
+  return (
+    <div className="space-y-2">
+      {displayedContent ? renderMarkdownContent(displayedContent) : null}
+      {showCaret && (
+        <motion.span
+          aria-hidden="true"
+          className="inline-flex h-4 w-2 rounded-full"
+          style={{
+            backgroundColor: '#38bdf8',
+            boxShadow: '0 0 14px rgba(56, 189, 248, 0.45)',
+          }}
+          animate={{ opacity: [1, 0.25, 1] }}
+          transition={{ duration: 1.0, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      )}
     </div>
   );
 };
@@ -246,16 +385,17 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const store = useAppStore(useShallow(selectAIChatSidebarStore));
   const {
     aiProvider, ollamaBaseUrl, ollamaModel, openaiApiKey, localLLMBaseUrl,
-    localLLMModel, geminiApiKey, anthropicApiKey, groqApiKey,
+    localLLMModel, geminiApiKey, xaiApiKey, anthropicApiKey, groqApiKey,
     hasSeenAiMistakeWarning, askForAiPermission, aiSafetyMode,
     additionalAIInstructions, selectedLanguage, history, tabs, activeTabId,
     currentUrl, sidebarWidth,
     setShowAiMistakeWarning, setActiveView,
-    setCurrentUrl, setSidebarWidth, setGeminiModel,
-    localLlmMode, autoGeminiModelUpdates, geminiModel,
+    setCurrentUrl, setSidebarWidth, setGeminiModel, setGeminiFlashModel,
+    localLlmMode, autoGeminiModelUpdates, geminiModel, geminiFlashModel,
     setTheme: storeSetTheme,
     ollamaModelsList, setOllamaModelsList, setOllamaModel, geminiModel: storeGeminiModel,
     hasSeenNeuralSetup, setHasSeenNeuralSetup,
+    openaiModel, anthropicModel, groqModel, xaiModel,
   } = store;
   const appVersion = useAppVersion();
   const versionLabel = `v${appVersion}`;
@@ -723,6 +863,10 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     setThinkingSteps((prev) => prev.map((s) => s.id === id ? { ...s, status, detail: detail ?? s.detail } : s));
   }, []);
 
+  const updateThinkingStep = useCallback((id: string, detail: string) => {
+    setThinkingSteps((prev) => prev.map((s) => s.id === id ? { ...s, detail } : s));
+  }, []);
+
   const preloadCometIconLocal = useCallback(async (): Promise<void> => {
     if (typeof window === 'undefined') return;
     if ((window as any).__cometIconBase64) return;
@@ -745,8 +889,9 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     if (aiProvider === 'azure-openai' && store.azureOpenaiApiKey && store.azureOpenaiEndpoint) return true;
     if (aiProvider === 'anthropic' && anthropicApiKey) return true;
     if (aiProvider === 'groq' && groqApiKey) return true;
+    if (aiProvider === 'xai' && xaiApiKey) return true;
     return false;
-  }, [aiProvider, ollamaBaseUrl, geminiApiKey, openaiApiKey, anthropicApiKey, groqApiKey, store.azureOpenaiApiKey, store.azureOpenaiEndpoint]);
+  }, [aiProvider, ollamaBaseUrl, geminiApiKey, openaiApiKey, anthropicApiKey, groqApiKey, xaiApiKey, store.azureOpenaiApiKey, store.azureOpenaiEndpoint]);
 
   // Scheduling handler
   const handleSchedulingConfirm = useCallback(async (config: any) => {
@@ -846,20 +991,49 @@ I couldn't schedule the task. The background service may not be running. Please 
 
   // Normalize 'gemini' -> 'google' so the main process provider switch always matches
   const normalizedProvider = aiProvider === 'gemini' ? 'google' : aiProvider;
+  const selectedProviderModel = useMemo(() => {
+    switch (normalizedProvider) {
+      case 'ollama':
+        return ollamaModel || 'llama3';
+      case 'google':
+        return geminiModel || 'gemini-2.5-pro';
+      case 'google-flash':
+        return geminiFlashModel || 'gemini-2.5-flash';
+      case 'openai':
+        return openaiModel || 'gpt-5.1';
+      case 'azure-openai':
+        return store.azureOpenaiModel || 'gpt-4.1-mini';
+      case 'anthropic':
+        return anthropicModel || 'claude-sonnet-4-20250514';
+      case 'groq':
+        return groqModel || 'llama-3.3-70b-versatile';
+      case 'xai':
+        return xaiModel || 'grok-4-fast-reasoning';
+      default:
+        return normalizedProvider;
+    }
+  }, [
+    anthropicModel,
+    geminiFlashModel,
+    geminiModel,
+    groqModel,
+    normalizedProvider,
+    ollamaModel,
+    openaiModel,
+    store.azureOpenaiModel,
+    xaiModel,
+  ]);
 
   const reasoningOptions = useMemo(() => buildFrontendReasoningOptions(
     (localLlmMode || 'normal') as LlmMode,
     normalizedProvider,
     {
-      model: normalizedProvider === 'ollama' ? (ollamaModel || 'llama3')
-        : normalizedProvider === 'google' ? (geminiModel || 'gemini-2.0-flash')
-          : normalizedProvider === 'azure-openai' ? (store.azureOpenaiModel || 'gpt-4.1-mini')
-          : undefined,
+      model: selectedProviderModel,
       baseUrl: normalizedProvider === 'ollama'
         ? ollamaBaseUrl
         : normalizedProvider === 'azure-openai' ? store.azureOpenaiEndpoint : undefined,
     }
-  ), [localLlmMode, normalizedProvider, ollamaModel, ollamaBaseUrl, geminiModel, store.azureOpenaiEndpoint, store.azureOpenaiModel]);
+  ), [localLlmMode, normalizedProvider, ollamaBaseUrl, selectedProviderModel, store.azureOpenaiEndpoint]);
 
   const getStreamingResponse = useCallback(async (history: ChatMessage[], messageId?: string, onFirstChunk?: () => void): Promise<any> => {
     return new Promise((resolve) => {
@@ -1160,16 +1334,16 @@ I couldn't schedule the task. The background service may not be running. Please 
         setMessages(prev => {
           if (prev.length === 0) return prev;
           const updated = [...prev];
-              const targetIndex = responseMessageId
-                ? updated.findIndex((message) => message.id === responseMessageId)
-                : updated.length - 1;
-              if (targetIndex >= 0 && updated[targetIndex].role === 'model') {
-                updated[targetIndex] = {
-                  ...updated[targetIndex],
-                  content: trimmedResponseText,
-                  thinkText: response.thought // 🚀 PERSIST reasoning for exports/copy
-                };
-              }
+          const targetIndex = responseMessageId
+            ? updated.findIndex((message) => message.id === responseMessageId)
+            : updated.length - 1;
+          if (targetIndex >= 0 && updated[targetIndex].role === 'model') {
+            updated[targetIndex] = {
+              ...updated[targetIndex],
+              content: trimmedResponseText,
+              thinkText: response.thought // 🚀 PERSIST reasoning for exports/copy
+            };
+          }
           return updated;
         });
         window.setTimeout(() => {
@@ -1179,12 +1353,21 @@ I couldn't schedule the task. The background service may not be running. Please 
         }, 1200);
 
         if (commands.length === 0) {
-          if (!trimmedResponseText || invalidCommands.length > 0 || skippedCommands.length > 0) {
+          // Only show error if there are genuinely unsupported commands AND no useful response text.
+          // If the AI produced reasoning/think text only, just break cleanly (it's done deliberating).
+          const hasRealInvalidCommands = invalidCommands.some(
+            ({ command }) => command.type.includes('_') || command.type.length >= 5
+          );
+          const noUsefulContent = !trimmedResponseText || trimmedResponseText.length < 20;
+
+          if (noUsefulContent && (hasRealInvalidCommands || skippedCommands.length > 0)) {
             const clarificationMessage = buildActionChainClarification({
               reason: !trimmedResponseText
                 ? 'The AI returned an empty or unusable step, so execution was stopped before it could stall.'
                 : 'The AI produced malformed or repetitive action steps, so execution was stopped before it could loop.',
-              invalidCommands: invalidCommands.map(({ command, error }) => ({ type: command.type, error })),
+              invalidCommands: invalidCommands
+                .filter(({ command }) => command.type.includes('_') || command.type.length >= 5)
+                .map(({ command, error }) => ({ type: command.type, error })),
               skippedCommands,
               attemptsUsed: recoveryAttempts,
               maxAttempts: ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS,
@@ -1308,19 +1491,16 @@ I couldn't schedule the task. The background service may not be running. Please 
           ...currentHistory,
           {
             role: 'user',
-            content: `Action outputs for the steps above:\n${actionResults}${
-              invalidCommands.length > 0
+            content: `Action outputs for the steps above:\n${actionResults}${invalidCommands.length > 0
                 ? `\n\nInvalid commands skipped:\n${invalidCommands.map(({ command, error }) => `- ${command.type}: ${error}`).join('\n')}`
                 : ''
-            }${
-              skippedCommands.length > 0
+              }${skippedCommands.length > 0
                 ? `\n\nLoop prevention notes:\n${skippedCommands.map(note => `- ${note}`).join('\n')}`
                 : ''
-            }${
-              recoveryAttempts > 0 
+              }${recoveryAttempts > 0
                 ? `\n\nRecovery attempts used: ${recoveryAttempts}/${ACTION_CHAIN_MAX_RECOVERY_ATTEMPTS}.\nDo not repeat the same failed command unless the parameters materially change.`
                 : ''
-            }\n\nIf you need another action pass, emit at most 3 focused commands. If you cannot safely continue, explain the blocker clearly to the user and ask one specific clarification question. If the steps succeeded or you already have enough information, provide the final answer now without more commands.`
+              }\n\nIf you need another action pass, emit at most 3 focused commands. If you cannot safely continue, explain the blocker clearly to the user and ask one specific clarification question. If the steps succeeded or you already have enough information, provide the final answer now without more commands.`
           }
         ];
       }
@@ -1352,7 +1532,7 @@ I couldn't schedule the task. The background service may not be running. Please 
     let commandResult: { output: string; error?: string } = { output: '' };
 
     const executeWithTimeout = async (fn: () => Promise<void>) => {
-      const timeoutPromise = new Promise<{ output: string; error: string }>((_, reject) => 
+      const timeoutPromise = new Promise<{ output: string; error: string }>((_, reject) =>
         setTimeout(() => reject(new Error(`Command timed out after ${COMMAND_TIMEOUT}ms`)), COMMAND_TIMEOUT)
       );
       try {
@@ -1365,7 +1545,7 @@ I couldn't schedule the task. The background service may not be running. Please 
 
     try {
       let output = '';
-        switch (command.type) {
+      switch (command.type) {
         case 'WAIT': {
           const ms = parseInt(command.value) || 2000;
           output = `Waiting for ${ms}ms...`;
@@ -1703,15 +1883,15 @@ I couldn't schedule the task. The background service may not be running. Please 
           break;
         }
 
-case 'ORGANIZE_TABS': {
+        case 'ORGANIZE_TABS': {
           const organizeStepId = addThinkingStep('AI is Classifying Tabs...');
           try {
             const tabs = store.tabs;
             const tabsToClassify = tabs.map(t => ({ id: t.id, title: t.title, url: t.url || '' }));
-            
+
             const urlCounts = new Map<string, string[]>();
             const closedDuplicates: string[] = [];
-            
+
             tabs.forEach(t => {
               const url = t.url || '';
               if (url) {
@@ -1721,7 +1901,7 @@ case 'ORGANIZE_TABS': {
                 urlCounts.set(normalized, existing);
               }
             });
-            
+
             for (const [, tabIds] of urlCounts) {
               if (tabIds.length > 1) {
                 for (let i = 1; i < tabIds.length; i++) {
@@ -1730,27 +1910,27 @@ case 'ORGANIZE_TABS': {
                 }
               }
             }
-            
+
             const result = await (window as any).electronAPI.classifyTabsAi({ tabs: tabsToClassify });
             if (result.success && result.classifications) {
               const classifications = result.classifications;
               const groupedTabs = new Map<string, string[]>();
-              
+
               Object.entries(classifications).forEach(([tabId, groupName]) => {
                 const existing = groupedTabs.get(groupName as string) || [];
                 existing.push(tabId);
                 groupedTabs.set(groupName as string, existing);
               });
-              
+
               for (const [groupName, tabIds] of groupedTabs) {
                 if (tabIds.length > 0) {
                   store.groupTabs(tabIds, groupName);
                 }
               }
-              
+
               const uniqueGroups = groupedTabs.size;
               const totalClosed = closedDuplicates.length;
-              const action = totalClosed > 0 
+              const action = totalClosed > 0
                 ? `Organized ${tabs.length} tabs into ${uniqueGroups} groups and closed ${totalClosed} duplicate.`
                 : `Successfully organized ${tabs.length} tabs into ${uniqueGroups} groups.`;
               output = action;
@@ -1797,7 +1977,7 @@ case 'ORGANIZE_TABS': {
         case 'GENERATE_IMAGE': {
           let prompt = command.value || 'An artistic masterpiece';
           let style = '';
-          
+
           // Try to parse JSON if it looks like JSON
           if (prompt.trim().startsWith('{') && prompt.trim().endsWith('}')) {
             try {
@@ -1806,11 +1986,21 @@ case 'ORGANIZE_TABS': {
               style = data.style || '';
             } catch { /* not JSON, use as string */ }
           }
-          
+
           const fullPrompt = style ? `${prompt} in ${style} style` : prompt;
           const genId = addThinkingStep(`Generating image with AI: ${fullPrompt}...`);
           try {
-            const res = await window.electronAPI.generateImage({ prompt: fullPrompt });
+            const generateImage = (window.electronAPI as typeof window.electronAPI & {
+              generateImage?: (payload: { prompt: string }) => Promise<{ success: boolean; imageUrl?: string; imagePath?: string; error?: string }>;
+            }).generateImage;
+
+            if (!generateImage) {
+              output = 'Image generation is not available in this build.';
+              resolveThinkingStep(genId, 'error', output);
+              break;
+            }
+
+            const res = await generateImage({ prompt: fullPrompt });
             if (res.success) {
               output = `Image generated successfully: ${res.imageUrl || res.imagePath}`;
               resolveThinkingStep(genId, 'done', 'Image generated');
@@ -1818,12 +2008,12 @@ case 'ORGANIZE_TABS': {
               if (url) {
                 setMessages(prev => {
                   const last = prev[prev.length - 1];
-                  const imgItem: MediaItem = { 
-                    id: `gen-img-${Date.now()}`, 
-                    type: 'image', 
-                    url: url, 
-                    title: 'Generated Image', 
-                    description: prompt 
+                  const imgItem: MediaItem = {
+                    id: `gen-img-${Date.now()}`,
+                    type: 'image',
+                    url: url,
+                    title: 'Generated Image',
+                    description: prompt
                   };
                   if (last && last.role === 'model') {
                     return [...prev.slice(0, -1), { ...last, mediaItems: [...(last.mediaItems || []), imgItem] }];
@@ -1836,8 +2026,8 @@ case 'ORGANIZE_TABS': {
               resolveThinkingStep(genId, 'error', res.error);
             }
           } catch (e: any) {
-             output = `Image generation error: ${e.message}`;
-             resolveThinkingStep(genId, 'error', e.message);
+            output = `Image generation error: ${e.message}`;
+            resolveThinkingStep(genId, 'error', e.message);
           }
           break;
         }
@@ -1877,22 +2067,13 @@ case 'ORGANIZE_TABS': {
         }
 
         case 'APPLE_INTELLIGENCE_SUMMARY': {
-          if (store.macNativeSidebarMode === 'swiftui') {
-            const errorMsg = "Apple Intelligence Summarization is optimized for the Electron Sidebar ecosystem and is currently unavailable in Native SwiftUI mode.";
-            setMessages(prev => [...prev, { 
-              role: 'model', 
-              content: `⚠️ **Mode Conflict**\n\n${errorMsg}` 
-            }]);
-            break;
-          }
-
           let textToSummarize = command.value || '';
           const sumId = addThinkingStep('Extracting page content for Apple Intelligence...');
-          
+
           try {
             // Use DOM for faster/better summary if no specific text provided
             if (!textToSummarize) {
-              const domRes = await window.electronAPI.readPageContent();
+              const domRes = await window.electronAPI.extractPageContent();
               textToSummarize = domRes.content || '';
               if (!textToSummarize) {
                 resolveThinkingStep(sumId, 'error', 'No page content found to summarize.');
@@ -1903,7 +2084,7 @@ case 'ORGANIZE_TABS': {
 
             updateThinkingStep(sumId, 'Summarizing with Apple local models...');
             const res = await window.electronAPI.summarizeWithAppleIntelligence(textToSummarize);
-            
+
             if (res.success && res.summary) {
               output = `Summary: ${res.summary}`;
               resolveThinkingStep(sumId, 'done', 'Summary created');
@@ -3445,7 +3626,7 @@ I've successfully executed the following real tasks:
           try {
             const pluginCommandId = command.value;
             const params = command.context ? JSON.parse(command.context) : {};
-            
+
             if (window.electronAPI?.plugins?.executeCommand) {
               const result = await window.electronAPI.plugins.executeCommand(pluginCommandId, params);
               output = result.success ? (result.result || 'Command executed successfully') : `Error: ${result.error}`;
@@ -3949,7 +4130,7 @@ I've successfully executed the following real tasks:
         id: message.id || `${message.role}-${index}`,
         role: message.role,
         content: `${message.content || ''}`.slice(0, 12000),
-        timestamp: index,
+        timestamp: Date.now() + index,
         thinkText: message.thinkText ? message.thinkText.slice(0, 8000) : null,
         isOcr: !!message.isOcr,
         ocrLabel: message.ocrLabel ? `${message.ocrLabel}`.slice(0, 120) : null,
@@ -4033,6 +4214,14 @@ I've successfully executed the following real tasks:
         }).filter(Boolean)
       )).slice(0, 8);
 
+      const snapshotThinkingSteps = thinkingSteps.slice(-12).map((step) => ({
+        id: step.id,
+        label: step.label.slice(0, 200),
+        status: step.status,
+        detail: step.detail ? step.detail.slice(0, 500) : undefined,
+        timestamp: step.timestamp,
+      }));
+
       if (isLoading) {
         snapshotActivityTags.unshift('Comet is thinking');
       }
@@ -4048,6 +4237,7 @@ I've successfully executed the following real tasks:
         conversations: snapshotConversations,
         activeConversationId,
         activityTags: Array.from(new Set(snapshotActivityTags)).slice(0, 8),
+        thinkingSteps: snapshotThinkingSteps,
       });
       nativeMacSyncTimeoutRef.current = null;
     }, 120);
@@ -4074,12 +4264,7 @@ I've successfully executed the following real tasks:
     );
   }
 
-  const currentActiveModel = aiProvider === 'ollama' ? ollamaModel :
-    aiProvider === 'gemini' ? geminiModel :
-      aiProvider === 'openai' ? store.openaiModel :
-        aiProvider === 'azure-openai' ? store.azureOpenaiModel :
-        aiProvider === 'anthropic' ? store.anthropicModel :
-          aiProvider === 'groq' ? store.groqModel : aiProvider;
+  const currentActiveModel = selectedProviderModel;
 
   if (props.bridgeOnly) {
     return null;
@@ -4420,11 +4605,20 @@ I've successfully executed the following real tasks:
                   style={msg.role === 'user' ? userBubbleStyle : modelBubbleStyle}
                 >
                   {msg.role === 'model' && (
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 rounded-lg bg-sky-500/20 flex items-center justify-center text-sky-400 border border-sky-500/20">
-                        <Sparkles size={12} />
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-sky-500/20 flex items-center justify-center text-sky-400 border border-sky-500/20">
+                          <Sparkles size={12} />
+                        </div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-sky-400/60">Comet Response</span>
                       </div>
-                      <span className="text-[9px] font-black uppercase tracking-widest text-sky-400/60">Comet Response</span>
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(displayContent); }}
+                        className="p-1.5 rounded-lg text-sky-400/40 hover:text-sky-400 hover:bg-sky-500/20 transition-all opacity-0 group-hover:opacity-100"
+                        title="Copy response"
+                      >
+                        <Copy size={12} />
+                      </button>
                     </div>
                   )}
                   {displayContent && (
@@ -4664,7 +4858,7 @@ I've successfully executed the following real tasks:
           />
 
           <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/10">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <button onClick={() => fileInputRef.current?.click()} className="p-3 rounded-2xl hover:bg-accent/5 text-secondary-text hover:text-primary-text transition-all"><Paperclip size={20} /></button>
               <button
                 onClick={() => setShowConversationHistory(true)}
@@ -4674,6 +4868,38 @@ I've successfully executed the following real tasks:
                 <History size={20} />
               </button>
               <button onClick={() => setShowActionsMenu(!showActionsMenu)} className={`p-3 rounded-2xl transition-all ${showActionsMenu ? 'bg-accent/10 text-primary-text' : 'hover:bg-accent/5 text-secondary-text hover:text-primary-text'}`}><MoreHorizontal size={20} /></button>
+              <div className="w-px h-6 bg-white/10 mx-1" />
+              <button
+                onClick={async () => {
+                  if (!inputMessage.trim()) return;
+                  try {
+                    const result = await window.electronAPI?.summarizeWithAppleIntelligence?.(inputMessage);
+                    if (result?.success) {
+                      setMessages(prev => [...prev, { role: 'model', content: `**📝 Summary:**\n\n${result.summary}` } as ExtendedChatMessage]);
+                    }
+                  } catch (e) { console.error('Apple summary failed:', e); }
+                }}
+                title="Summarize input with Apple Intelligence"
+                className="p-2.5 rounded-2xl hover:bg-purple-500/10 text-purple-400/60 hover:text-purple-400 transition-all"
+              >
+                <FileText size={18} />
+              </button>
+              <button
+                onClick={async () => {
+                  const imgPrompt = window.prompt('Describe the image you want to generate:');
+                  if (!imgPrompt) return;
+                  try {
+                    const result = await window.electronAPI?.generateAppleIntelligenceImage?.({ prompt: imgPrompt });
+                    if (result?.success && result.imagePath) {
+                      setMessages(prev => [...prev, { role: 'model', content: `**🖼️ Generated:**`, mediaItems: [{ type: 'image', url: `file://${result.imagePath}`, caption: imgPrompt }] } as ExtendedChatMessage]);
+                    }
+                  } catch (e) { console.error('Apple image failed:', e); }
+                }}
+                title="Generate image with Apple Intelligence"
+                className="p-2.5 rounded-2xl hover:bg-pink-500/10 text-pink-400/60 hover:text-pink-400 transition-all"
+              >
+                <ImageIcon size={18} />
+              </button>
             </div>
             <button
               onClick={() => handleSendMessage()}

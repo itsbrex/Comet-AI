@@ -5,9 +5,12 @@ export type { ChatMessage, Conversation } from '../ai/ConversationHistoryPanel';
 export type { ThinkingStep } from '../ai/ThinkingPanel';
 
 export type MediaItem = {
+  id?: string;
   type: 'image';
   url: string;
   caption?: string;
+  title?: string;
+  description?: string;
 } | {
   type: 'video';
   videoUrl: string;
@@ -46,6 +49,7 @@ export type MediaItem = {
 };
 
 export type ExtendedChatMessage = ChatMessage & {
+  timestamp?: number;
   attachments?: string[];
   isOcr?: boolean;
   ocrLabel?: string;

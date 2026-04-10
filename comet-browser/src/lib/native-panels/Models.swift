@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Foundation
 
 enum PanelMode: String, CaseIterable {
@@ -9,9 +10,6 @@ enum PanelMode: String, CaseIterable {
     case downloads
     case clipboard
     case permissions
-    case appleIntelligence = "apple-intelligence"
-    case appleSummary = "apple-summary"
-    case appleImage = "apple-image"
 
     var title: String {
         switch self {
@@ -22,9 +20,6 @@ enum PanelMode: String, CaseIterable {
         case .downloads: return "Comet Downloads"
         case .clipboard: return "Comet Clipboard"
         case .permissions: return "Comet Approval"
-        case .appleIntelligence: return "Apple Intelligence"
-        case .appleSummary: return "Apple Summary"
-        case .appleImage: return "Apple Image Playground"
         }
     }
 
@@ -37,9 +32,6 @@ enum PanelMode: String, CaseIterable {
         case .downloads: return "arrow.down.circle"
         case .clipboard: return "doc.on.clipboard"
         case .permissions: return "lock.shield"
-        case .appleIntelligence: return "apple.intelligence"
-        case .appleSummary: return "text.badge.checkmark"
-        case .appleImage: return "wand.and.stars"
         }
     }
 
@@ -52,9 +44,6 @@ enum PanelMode: String, CaseIterable {
         case .downloads: return CGSize(width: 480, height: 680)
         case .clipboard: return CGSize(width: 470, height: 700)
         case .permissions: return CGSize(width: 430, height: 620)
-        case .appleIntelligence: return CGSize(width: 440, height: 650)
-        case .appleSummary: return CGSize(width: 500, height: 400)
-        case .appleImage: return CGSize(width: 400, height: 500)
         }
     }
 }
@@ -208,6 +197,22 @@ struct NativePanelState: Codable {
         let approvedPin: String?
     }
 
+    struct TerminalLog: Codable, Identifiable {
+        var id: String { "\(command)-\(timestamp)" }
+        let command: String
+        let output: String
+        let success: Bool
+        let timestamp: Double
+    }
+
+    struct ThinkingStep: Codable {
+        let id: String
+        let label: String
+        let status: String
+        let detail: String?
+        let timestamp: Double
+    }
+
     let mode: String
     let updatedAt: Double
     let inputDraft: String
@@ -226,14 +231,7 @@ struct NativePanelState: Codable {
     let pendingApproval: ApprovalState?
     let terminalLogs: [TerminalLog]?
     let actionLogs: [ActionLog]?
-
-    struct TerminalLog: Codable, Identifiable {
-        var id: String { "\(command)-\(timestamp)" }
-        let command: String
-        let output: String
-        let success: Bool
-        let timestamp: Double
-    }
+    let thinkingSteps: [ThinkingStep]?
 
     static func empty(mode: PanelMode) -> NativePanelState {
         NativePanelState(
@@ -254,7 +252,8 @@ struct NativePanelState: Codable {
             preferences: .defaults,
             pendingApproval: nil,
             terminalLogs: [],
-            actionLogs: []
+            actionLogs: [],
+            thinkingSteps: []
         )
     }
 }

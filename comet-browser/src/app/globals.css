@@ -696,3 +696,137 @@ body {
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   AI CHAT TYPING CURSOR ANIMATIONS
+   ───────────────────────────────────────────────────────────── */
+
+/* Classic blinking cursor */
+@keyframes typing-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+/* Cursor with subtle scale */
+@keyframes typing-cursor-pulse {
+  0%, 100% { 
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  50% { 
+    opacity: 0.4;
+    transform: scaleY(1.1);
+  }
+}
+
+/* Cursor with glow effect */
+@keyframes typing-cursor-glow {
+  0%, 100% { 
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.4), 0 0 4px rgba(56, 189, 248, 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.6), 0 0 8px rgba(56, 189, 248, 0.4);
+  }
+}
+
+/* Word-by-word fade in */
+@keyframes word-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* Smooth character reveal */
+@keyframes char-reveal {
+  from {
+    opacity: 0;
+    transform: translateX(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Progress bar glow */
+@keyframes progress-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.5);
+  }
+}
+
+/* Typing cursor classes */
+.typing-cursor {
+  display: inline-block;
+  background-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+  animation: typing-cursor-blink 1s ease-in-out infinite;
+}
+
+.typing-cursor-block {
+  animation: typing-cursor-pulse 0.8s ease-in-out infinite;
+}
+
+.typing-cursor-glow {
+  animation: typing-cursor-glow 1.2s ease-in-out infinite;
+}
+
+/* Streaming text animation */
+.streaming-word {
+  display: inline-block;
+  animation: word-fade-in 0.15s ease-out forwards;
+}
+
+/* Fade-in reveal for streaming */
+@keyframes streaming-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.streaming-char {
+  display: inline-block;
+  animation: streaming-fade-in 0.05s ease-out forwards;
+}
+
+/* Progress indicator for streaming */
+.streaming-progress {
+  position: relative;
+  height: 2px;
+  background: linear-gradient(90deg, #38bdf8, #818cf8, #38bdf8);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Gradient border animation for AI response */
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.ai-response-border {
+  background: linear-gradient(90deg, #38bdf8, #818cf8, #a78bfa, #818cf8, #38bdf8);
+  background-size: 300% 100%;
+  animation: gradient-shift 3s ease infinite;
+}

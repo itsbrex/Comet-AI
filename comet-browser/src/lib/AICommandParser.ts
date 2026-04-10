@@ -153,9 +153,32 @@ function extractCommandsFromStructuredPayload(payload: any, originalMatch: strin
     return commands;
 }
 
+/** Scan `src` starting at `startAt` for the outermost balanced { } or [ ] block. */
+function scanBalanced(src: string, startAt: number): { start: number; end: number } | null {
+    const open = src[startAt];
+    const close = open === '{' ? '}' : ']';
+    let depth = 0;
+    let inStr = false;
+    let escape = false;
+    for (let i = startAt; i < src.length; i++) {
+        const ch = src[i];
+        if (escape) { escape = false; continue; }
+        if (ch === '\\' && inStr) { escape = true; continue; }
+        if (ch === '"') { inStr = !inStr; continue; }
+        if (inStr) continue;
+        if (ch === open) depth++;
+        else if (ch === close) {
+            depth--;
+            if (depth === 0) return { start: startAt, end: i };
+        }
+    }
+    return null;
+}
+
 function extractJSONCommands(content: string): ParsedCommand[] {
     const commands: ParsedCommand[] = [];
     const seenTypes = new Set<string>();
+    const matchedRanges: Array<[number, number]> = [];
 
     const SINGLE_RUN_COMMANDS = new Set(['CREATE_PDF_JSON', 'CREATE_FILE_JSON', 'GENERATE_PDF', 'CREATE_PDF']);
     const takeCommand = (cmd: ParsedCommand) => {
@@ -166,41 +189,63 @@ function extractJSONCommands(content: string): ParsedCommand[] {
         return true;
     };
 
-    const candidatePatterns = [
-        /\{[\s\S]*?"commands"\s*:\s*\[[\s\S]*?\][\s\S]*?\}/g,
-        /\[[\s\S]*?\{[\s\S]*?"type"\s*:\s*"[^"]+"[\s\S]*?\}[\s\S]*?\]/g,
-        /\{[\s\S]*?"type"\s*:\s*"[^"]+"[\s\S]*?\}/g,
-        /```json\s*([\s\S]*?)```/gi,
-        /```\s*([\s\S]*?)```/g,
-    ];
-
-    for (const pattern of candidatePatterns) {
-        let match: RegExpExecArray | null;
-        while ((match = pattern.exec(content)) !== null) {
-            const rawCandidate = match[1] ? match[1].trim() : match[0];
-            if (!/"(?:commands|type|command)"/.test(rawCandidate)) {
-                continue;
-            }
-
-            const robustResult = robustJSONParse(rawCandidate);
-            if (robustResult.success) {
-                const extracted = extractCommandsFromStructuredPayload(robustResult.data, match[0], match.index);
-                extracted.forEach(cmd => { if (takeCommand(cmd)) commands.push(cmd); });
-            } else {
-                const fbRegex = /"type"\s*:\s*"([^"]+)"[\s\S]*?"(?:value|url|query|args)"\s*:\s*"([\s\S]*?)"(?=\s*[},])/g;
-                let fbMatch;
-                while ((fbMatch = fbRegex.exec(rawCandidate)) !== null) {
-                    const cmdType = fbMatch[1].toUpperCase();
-                    const cmdValue = fbMatch[2].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-                    if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
-                        const cmd = { type: cmdType, value: cmdValue, originalMatch: match[0], index: match.index };
-                        if (takeCommand(cmd)) commands.push(cmd);
-                    }
+    // Helper: try to parse and register commands from a raw JSON candidate string.
+    const tryParse = (rawCandidate: string, originalMatch: string, index: number) => {
+        if (!/"(?:commands|type|command)"/.test(rawCandidate)) return;
+        const robustResult = robustJSONParse(rawCandidate);
+        if (robustResult.success) {
+            const extracted = extractCommandsFromStructuredPayload(robustResult.data, originalMatch, index);
+            extracted.forEach(cmd => { if (takeCommand(cmd)) commands.push(cmd); });
+        } else {
+            // Fallback: handle string-only "value" fields
+            const fbRegex = /"type"\s*:\s*"([^"]+)"[\s\S]*?"(?:value|url|query|args)"\s*:\s*"([\s\S]*?)"(?=\s*[},])/g;
+            let fbMatch;
+            while ((fbMatch = fbRegex.exec(rawCandidate)) !== null) {
+                const cmdType = fbMatch[1].toUpperCase();
+                const cmdValue = fbMatch[2].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                if (cmdType && SUPPORTED_COMMANDS.includes(cmdType as any)) {
+                    const cmd = { type: cmdType, value: cmdValue, originalMatch, index };
+                    if (takeCommand(cmd)) commands.push(cmd);
                 }
             }
         }
+    };
+
+    // Pass 1: Extract from fenced code blocks (```json ... ```) — balanced-brace aware
+    const codeBlockRe = /```(?:json|JSON)?\s*([\s\S]*?)```/g;
+    let cbMatch: RegExpExecArray | null;
+    while ((cbMatch = codeBlockRe.exec(content)) !== null) {
+        const inner = (cbMatch[1] || '').trim();
+        const firstBrace = inner.search(/[{[]/);
+        if (firstBrace === -1) continue;
+        const balanced = scanBalanced(inner, firstBrace);
+        if (!balanced) continue;
+        const candidate = inner.substring(balanced.start, balanced.end + 1);
+        tryParse(candidate, cbMatch[0], cbMatch.index);
+        // Record this range so bracket scanner won't re-parse it
+        matchedRanges.push([cbMatch.index, cbMatch.index + cbMatch[0].length]);
     }
 
+    // Pass 2: Find bare { "commands": ... } blocks in the text using balanced-brace scanner
+    let searchFrom = 0;
+    while (searchFrom < content.length) {
+        const braceIdx = content.indexOf('{', searchFrom);
+        if (braceIdx === -1) break;
+        // Skip if already inside a matched code-block range
+        const alreadyCovered = matchedRanges.some(([s, e]) => braceIdx >= s && braceIdx < e);
+        if (alreadyCovered) { searchFrom = braceIdx + 1; continue; }
+        const balanced = scanBalanced(content, braceIdx);
+        if (!balanced) { searchFrom = braceIdx + 1; continue; }
+        const candidate = content.substring(balanced.start, balanced.end + 1);
+        if (/"(?:commands|type|command)"/.test(candidate)) {
+            tryParse(candidate, candidate, balanced.start);
+            matchedRanges.push([balanced.start, balanced.end + 1]);
+        }
+        searchFrom = balanced.end + 1;
+    }
+
+    // Attach matched ranges to commands so the bracket scanner can mask them
+    (commands as any).__matchedRanges = matchedRanges;
     return commands;
 }
 
@@ -227,34 +272,10 @@ export function parseAICommands(content: string): CommandParseResult {
         }
     };
 
-    // 0. FIRST: Check for JSON format (faster parsing)
+    // 0. FIRST: Check for JSON format
     const jsonCommands = extractJSONCommands(content);
     if (jsonCommands.length > 0) {
-        // Deduplicate JSON commands
         jsonCommands.forEach(addUniqueCommand);
-        
-        if (commands.length > 0) {
-            // Remove JSON from content for display
-            const jsonPatterns = [
-                /\{"commands"\s*:\s*\[[\s\S]*?\]\}/g,
-                /\[[\s\S]*?\{[\s\S]*?"type"\s*:\s*"[^"]+"[\s\S]*?\}[\s\S]*?\]/g,
-                /\{[\s\S]*?"type"\s*:\s*"[^"]+"[\s\S]*?\}/g,
-                /```json\s*\{[\s\S]*?\}\s*```/g,
-                /```json\s*\[[\s\S]*?\]\s*```/g,
-                /```\s*\{[\s\S]*?\}\s*```/g,
-                /```\s*\[[\s\S]*?\]\s*```/g,
-            ];
-            let cleanedContent = content;
-            for (const pattern of jsonPatterns) {
-                cleanedContent = cleanedContent.replace(pattern, '');
-            }
-            return {
-                commands,
-                textWithoutCommands: cleanedContent.trim(),
-                hasCommands: true,
-                parseIssues,
-            };
-        }
     }
 
     // 0b. Also extract from HTML comment format <!-- AI_COMMANDS_START -->...<!-- AI_COMMANDS_END -->
@@ -287,14 +308,22 @@ export function parseAICommands(content: string): CommandParseResult {
     // Replace content inside ```...``` and `...` with spaces to preserve indices
     let mask = content;
     
-    // Mask code blocks
-    mask = mask.replace(/```[\s\S]*?```/g, (match) => ' '.repeat(match.length));
+    // Mask code blocks (including their full content so mermaid letters aren't parsed as commands)
+    mask = mask.replace(/```[\s\S]*?```/g, (m) => ' '.repeat(m.length));
     
+    // Mask JSON command blocks already extracted (so their string contents aren't re-parsed)
+    const extractedRanges: Array<[number, number]> = (jsonCommands as any).__matchedRanges || [];
+    for (const [s, e] of extractedRanges) {
+        if (s >= 0 && e > s && e <= mask.length) {
+            mask = mask.substring(0, s) + ' '.repeat(e - s) + mask.substring(e);
+        }
+    }
+
     // Mask inline code
-    mask = mask.replace(/`.*?`/g, (match) => ' '.repeat(match.length));
+    mask = mask.replace(/`.*?`/g, (m) => ' '.repeat(m.length));
     
     // Mask thinking blocks (<think>, <thinking>, <thought>)
-    mask = mask.replace(/<(think|thinking|thought)>[\s\S]*?<\/\1>/gi, (match) => ' '.repeat(match.length));
+    mask = mask.replace(/<(think|thinking|thought)>[\s\S]*?<\/\1>/gi, (m) => ' '.repeat(m.length));
     
     // Mask markdown tables (lines with at least 3 '|' characters)
     const lines = mask.split('\n');
@@ -305,82 +334,98 @@ export function parseAICommands(content: string): CommandParseResult {
         return line;
     }).join('\n');
 
-    // 2. Build regex dynamically from supported commands
-    const commandPattern = SUPPORTED_COMMANDS.join('|');
-    // Allow spaces inside brackets: e.g., [ WEB_SEARCH: google ]
-    const commandRegex = new RegExp(`\\[\\s*(${commandPattern})\\s*(?::\\s*([^\\]]+?))?\\s*\\]`, 'gi');
-
-    let match;
-    commandRegex.lastIndex = 0;
-
-    while ((match = commandRegex.exec(mask)) !== null) {
-        const [fullMatch, commandType, commandValue = ''] = match;
-        const type = commandType.toUpperCase();
-        const trailingSlice = mask.substring(match.index + fullMatch.length);
-
-        // Validate command type (only if it's in the master list)
-        if (!commandsSet.has(type as CommandType)) continue;
-
-        // SKIP Meta Commands - they should NOT go into the execution queue
-        if (metaCommandsSet.has(type as any)) continue;
-
-        // Legacy syntax like [NAVIGATE]:https://example.com is handled separately below.
-        if (!commandValue && /^\s*:/.test(trailingSlice)) continue;
-
-        // Clean up command value: trim and strip surrounding quotes
-        let rawValue = (match[2] || '').trim();
-        if ((rawValue.startsWith('"') && rawValue.endsWith('"')) || (rawValue.startsWith("'") && rawValue.endsWith("'"))) {
-            rawValue = rawValue.substring(1, rawValue.length - 1).trim();
+    // 2. Scan string for commands using a balanced bracket parser (handles nested JSON)
+    let searchIdx = 0;
+    while (true) {
+        const startIdx = mask.indexOf('[', searchIdx);
+        if (startIdx === -1) break;
+        
+        const colonIdx = mask.indexOf(':', startIdx);
+        const closeIdx = mask.indexOf(']', startIdx);
+        
+        if (closeIdx === -1) break;
+        
+        let typeEnd = (colonIdx !== -1 && colonIdx < closeIdx) ? colonIdx : closeIdx;
+        let possibleType = mask.substring(startIdx + 1, typeEnd).trim().toUpperCase();
+        
+        if (!commandsSet.has(possibleType as CommandType) || metaCommandsSet.has(possibleType as any)) {
+            searchIdx = startIdx + 1;
+            continue;
         }
 
-        // For most commands, split by | to get value and reason.
-        // For PDF/File commands, keep the raw value as it contains structured data with pipes.
-        const shouldStoreRawValue = ['GENERATE_PDF', 'CREATE_PDF_JSON', 'CREATE_FILE_JSON', 'SCHEDULE_TASK', 'OPEN_SCHEDULING_MODAL'].includes(type);
-
-        addUniqueCommand({
-            type,
-            value: shouldStoreRawValue ? rawValue : rawValue.split('|')[0].trim(),
-            reason: rawValue.split('|').find(p => p.trim().toLowerCase().startsWith('reason:'))?.split(':').slice(1).join(':').trim() || (rawValue.split('|')[1] || '').trim(),
-            risk: (rawValue.split('|').find(p => p.trim().toLowerCase().startsWith('risk:'))?.split(':').slice(1).join(':').trim().toLowerCase() as any) || 'medium',
-            originalMatch: content.substring(match.index, match.index + fullMatch.length),
-            index: match.index,
-        });
-    }
-
-    const legacyCommandRegex = new RegExp(`\\[\\s*(${commandPattern})\\s*\\]\\s*:\\s*([^\\n\\r]+)`, 'gi');
-    legacyCommandRegex.lastIndex = 0;
-
-    while ((match = legacyCommandRegex.exec(mask)) !== null) {
-        const [fullMatch, commandType, commandValue = ''] = match;
-        const type = commandType.toUpperCase();
-
-        if (!commandsSet.has(type as CommandType) || metaCommandsSet.has(type as any)) continue;
-
-        let rawValue = commandValue.trim();
-        if ((rawValue.startsWith('"') && rawValue.endsWith('"')) || (rawValue.startsWith("'") && rawValue.endsWith("'"))) {
-            rawValue = rawValue.substring(1, rawValue.length - 1).trim();
+        let bracketCount = 0;
+        let actualCloseIdx = -1;
+        for (let i = startIdx; i < mask.length; i++) {
+            if (mask[i] === '[') bracketCount++;
+            else if (mask[i] === ']') {
+                bracketCount--;
+                if (bracketCount === 0) {
+                    actualCloseIdx = i;
+                    break;
+                }
+            }
         }
+        
+        if (actualCloseIdx !== -1) {
+            const fullMatch = mask.substring(startIdx, actualCloseIdx + 1);
+            let commandValue = '';
+            if (colonIdx !== -1 && colonIdx < actualCloseIdx) {
+                commandValue = mask.substring(colonIdx + 1, actualCloseIdx).trim();
+            }
+            
+            let rawValue = commandValue;
+            if ((rawValue.startsWith('"') && rawValue.endsWith('"')) || (rawValue.startsWith("'") && rawValue.endsWith("'"))) {
+                rawValue = rawValue.substring(1, rawValue.length - 1).trim();
+            }
 
-        const shouldStoreRawValue = ['GENERATE_PDF', 'CREATE_PDF_JSON', 'CREATE_FILE_JSON', 'SCHEDULE_TASK', 'OPEN_SCHEDULING_MODAL'].includes(type);
+            const type = possibleType;
+            const shouldStoreRawValue = ['GENERATE_PDF', 'CREATE_PDF_JSON', 'CREATE_FILE_JSON', 'SCHEDULE_TASK', 'OPEN_SCHEDULING_MODAL'].includes(type);
 
-        addUniqueCommand({
-            type,
-            value: shouldStoreRawValue ? rawValue : rawValue.split('|')[0].trim(),
-            reason: rawValue.split('|').find(p => p.trim().toLowerCase().startsWith('reason:'))?.split(':').slice(1).join(':').trim() || (rawValue.split('|')[1] || '').trim(),
-            risk: (rawValue.split('|').find(p => p.trim().toLowerCase().startsWith('risk:'))?.split(':').slice(1).join(':').trim().toLowerCase() as any) || 'medium',
-            originalMatch: content.substring(match.index, match.index + fullMatch.length),
-            index: match.index,
-        });
+            let nextCharIdx = actualCloseIdx + 1;
+            while (nextCharIdx < mask.length && /\\s/.test(mask[nextCharIdx])) nextCharIdx++;
+            
+            let finalMatch = fullMatch;
+            if (!commandValue && nextCharIdx < mask.length && mask[nextCharIdx] === ':') {
+                 let endOfLine = mask.indexOf('\\n', nextCharIdx);
+                 if (endOfLine === -1) endOfLine = mask.length;
+                 rawValue = mask.substring(nextCharIdx + 1, endOfLine).trim();
+                 finalMatch = mask.substring(startIdx, endOfLine);
+                 actualCloseIdx = endOfLine - 1;
+                 if ((rawValue.startsWith('"') && rawValue.endsWith('"')) || (rawValue.startsWith("'") && rawValue.endsWith("'"))) {
+                     rawValue = rawValue.substring(1, rawValue.length - 1).trim();
+                 }
+            }
+
+            addUniqueCommand({
+                type,
+                value: shouldStoreRawValue ? rawValue : rawValue.split('|')[0].trim(),
+                reason: rawValue.split('|').find(p => p.trim().toLowerCase().startsWith('reason:'))?.split(':').slice(1).join(':').trim() || (rawValue.split('|')[1] || '').trim(),
+                risk: (rawValue.split('|').find((p: string) => p.trim().toLowerCase().startsWith('risk:'))?.split(':').slice(1).join(':').trim().toLowerCase() as any) || 'medium',
+                originalMatch: content.substring(startIdx, startIdx + finalMatch.length),
+                index: startIdx,
+            });
+            
+            searchIdx = actualCloseIdx + 1;
+        } else {
+            searchIdx = startIdx + 1;
+        }
     }
 
+    // Only flag tokens that look like real command attempts:
+    // must contain underscore OR be >= 5 chars long.
+    // This prevents Mermaid node names (A, B, FIN, etc.) from being logged as issues.
     const potentialCommandRegex = /\[\s*([A-Z_][A-Z0-9_]*)[^\]]*\](?:\s*:\s*[^\n\r]+)?/g;
     potentialCommandRegex.lastIndex = 0;
 
+    let match;
     while ((match = potentialCommandRegex.exec(mask)) !== null) {
         const type = (match[1] || '').toUpperCase();
         if (!type || commandsSet.has(type as CommandType) || metaCommandsSet.has(type as any)) {
             continue;
         }
+        // Skip short identifiers that are clearly not commands (Mermaid nodes, etc.)
+        const looksLikeCommand = type.includes('_') || type.length >= 5;
+        if (!looksLikeCommand) continue;
 
         parseIssues.push({
             type,

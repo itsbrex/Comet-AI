@@ -118,6 +118,8 @@ export interface BrowserState {
     setGeminiApiKey: (key: string) => void;
     geminiModel: string;
     setGeminiModel: (model: string) => void;
+    geminiFlashModel: string;
+    setGeminiFlashModel: (model: string) => void;
     autoGeminiModelUpdates: boolean;
     setAutoGeminiModelUpdates: (enabled: boolean) => void;
     setAnthropicApiKey: (key: string) => void;
@@ -396,12 +398,14 @@ export const useAppStore = create<BrowserState>()(
             azureOpenaiEndpoint: '',
             azureOpenaiModel: 'gpt-4.1-mini',
             geminiApiKey: '',
+            geminiModel: MODEL_REGISTRY.google.pro.id,
+            geminiFlashModel: MODEL_REGISTRY.google.flash.id,
             anthropicApiKey: '',
-            anthropicModel: 'claude-sonnet-4-0',
+            anthropicModel: 'claude-sonnet-4-20250514',
             groqApiKey: '',
             groqModel: 'llama-3.3-70b-versatile',
             xaiApiKey: '',
-            xaiModel: 'grok-4-latest',
+            xaiModel: 'grok-4-fast-reasoning',
             aiProvider: 'ollama',
             ollamaBaseUrl: 'http://127.0.0.1:11434',
             ollamaModel: 'deepseek-r1:1.5b',
@@ -414,7 +418,6 @@ export const useAppStore = create<BrowserState>()(
             enableAiOverview: false,
             setEnableAiOverview: (enable: boolean) => set({ enableAiOverview: enable }),
 
-            geminiModel: MODEL_REGISTRY.google.pro.id,
             mcpServerPort: 3001,
             additionalAIInstructions: '',
             hasSeenNeuralSetup: false,
@@ -777,6 +780,12 @@ export const useAppStore = create<BrowserState>()(
                 set({ geminiModel: model });
                 if (window.electronAPI) {
                     window.electronAPI.configureLLMProvider('google', { model });
+                }
+            },
+            setGeminiFlashModel: (model: string) => {
+                set({ geminiFlashModel: model });
+                if (window.electronAPI) {
+                    window.electronAPI.configureLLMProvider('google-flash', { model });
                 }
             },
             setAutoGeminiModelUpdates: (enabled: boolean) => set({ autoGeminiModelUpdates: enabled }),
@@ -1320,6 +1329,10 @@ if (typeof window !== 'undefined' && window.electronAPI) {
             if (keys.gemini_model) {
                 useAppStore.getState().setGeminiModel(keys.gemini_model);
                 window.electronAPI.configureLLMProvider('google', { model: keys.gemini_model });
+            }
+            if (keys.gemini_flash_model) {
+                useAppStore.getState().setGeminiFlashModel(keys.gemini_flash_model);
+                window.electronAPI.configureLLMProvider('google-flash', { model: keys.gemini_flash_model });
             }
             if (keys.anthropic_api_key) {
                 useAppStore.getState().setAnthropicApiKey(keys.anthropic_api_key);

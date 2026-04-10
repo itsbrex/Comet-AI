@@ -298,6 +298,7 @@ declare global {
                 activeConversationId?: string | null;
                 downloads?: Array<{ name: string; status: string; progress?: number; path?: string }>;
                 clipboardItems?: string[];
+                thinkingSteps?: Array<{ id: string; label: string; status: 'running' | 'done' | 'error'; detail?: string; timestamp: number }>;
             }) => void;
             onMacNativeUIPreferencesChanged: (callback: (preferences: { sidebarMode: 'electron' | 'swiftui'; actionChainMode: 'electron' | 'swiftui'; utilityMode: 'electron' | 'swiftui'; permissionMode: 'electron' | 'swiftui'; sidebarAutoMinimize?: boolean; sidebarGradientPreset?: 'graphite' | 'ocean' | 'aurora'; sidebarShowQuickActions?: boolean; sidebarShowSessions?: boolean; sidebarShowSearchTags?: boolean; sidebarShowCommandCenterButton?: boolean; sidebarShowActionChainButton?: boolean }) => void) => () => void;
             onNativeMacPrompt: (callback: (payload: { prompt: string; source?: string }) => void) => () => void;

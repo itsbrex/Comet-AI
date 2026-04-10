@@ -669,5 +669,106 @@ window.electronAPI.plugins.scan(directory)
 
 ---
 
-*Last Updated: 2026-04-09*
-*Status: v0.2.8 Release Ready - COMPLETED*
+## ✅ COMPLETED THIS SESSION (2026-04-10)
+
+### Native Swift Panel Enhancements
+
+**Status:** ✅ COMPLETE
+
+**Files Modified:**
+- `comet-browser/src/lib/native-panels/Components.swift` - Complete rewrite with liquid glass themes
+- `comet-browser/src/lib/native-panels/AICommandParser.swift` - Robust JSON parsing
+- `comet-browser/src/lib/native-panels/SettingsView.swift` - Updated theme selector
+- `comet-browser/src/lib/native-panels/SidebarView.swift` - Added AppKit import
+
+**New Glass Presets Added (9 total):**
+| Preset | Description | Accent Color |
+|--------|-------------|--------------|
+| `graphite` | Dark gray minimal | Indigo #6366f1 |
+| `crystal` | Cool cyan tones | Cyan #06b6d4 |
+| `obsidian` | Deep purple-black | Purple #a855f7 |
+| `azure` | Blue ocean | Blue #3b82f6 |
+| `rose` | Pink rose quartz | Pink #ec4899 |
+| `aurora` | Green aurora borealis | Emerald #10b981 |
+| `nebula` | Purple nebula clouds | Violet #8b5cf6 |
+| `liquidGlass` | Ultra translucent | Indigo #6366f1 |
+| `translucent` | Nearly invisible glass | Slate #64748b |
+
+**New Components:**
+- `UltraTranslucentBackground` - True translucent panel background
+- `UltraTranslucentVisualEffectView` - Custom NSVisualEffectView wrapper
+- `GlassPreset` enum - Theme management
+- `GlassOptionButton` - Glass-styled option buttons
+- `GlassDivider` - Gradient dividers
+- Enhanced `GlassButton`, `GlassToggle`, `GlassInputField`
+
+**Visual Enhancements:**
+- Multi-layer gradients for depth and specular highlights
+- 30-50% reduction in background opacity for true translucency
+- Improved spring animations (0.18-0.22s response, 0.5-0.7 damping)
+- Specular highlight overlays on all glass surfaces
+- Consistent glass treatment across all card components
+- Ultra-thin materials for maximum transparency
+
+**AICommandParser Robustness:**
+- Multiple JSON parsing patterns for different AI response formats
+- Graceful handling of unknown command types
+- Fallback to "unknown" category instead of ignoring
+- Improved regex patterns for JSON command extraction
+- Safe substring extraction to prevent crashes
+
+**Settings View:**
+- All 9 themes now available in theme selector
+- Clean glass button styling
+- Updated descriptions for each theme
+
+---
+
+## ✅ COMPLETED THIS SESSION (2026-04-10)
+
+### Streaming Parser + Typing Animation
+
+**Status:** ✅ COMPLETE
+
+**Files Created:**
+- `comet-browser/src/hooks/useTypingAnimation.ts` - Custom typing animation hook
+- `comet-browser/src/hooks/useStreamingParser.ts` - Streaming parser hook (parses only when streaming completes)
+
+**Files Modified:**
+- `comet-browser/src/components/AIChatSidebar.tsx` - Enhanced StreamingMarkdownMessage with glow cursor
+- `comet-browser/src/app/globals.css` - Added typing cursor animations
+
+**Typing Animation Hook Features:**
+- `useTypingAnimation` - Core hook for character-by-character animation
+- `TypingCursor` - Multiple cursor styles (block, line, blink)
+- `StreamingText` - Pre-built streaming text component
+- `WordByWordText` - Word-by-word fade-in animation
+- Configurable speed (fast/normal/slow), chunk size, delays
+- Smooth requestAnimationFrame-based animation
+
+**Streaming Parser Hook Features:**
+- `useStreamingParser` - Separates parsing from streaming
+- `skipParsingDuringStream` - Only parses when streaming completes
+- `parseDelay` - Configurable parse delay after streaming
+- Extracted reasoning, OCR, commands from messages
+- Non-blocking parsing for smooth UI
+
+**New CSS Animations:**
+- `typing-cursor-blink` - Classic blinking cursor
+- `typing-cursor-pulse` - Cursor with scale animation
+- `typing-cursor-glow` - Cursor with glow effect
+- `word-fade-in` - Word-by-word fade animation
+- `streaming-fade-in` - Character reveal animation
+- `progress-glow` - Progress indicator shimmer
+- `gradient-shift` - Animated gradient border
+
+**Cursor Styles:**
+- Block cursor with pulse effect
+- Line cursor with smooth blink
+- Glow cursor with shadow animation
+- Customizable colors and sizes
+
+---
+
+*Last Updated: 2026-04-10*
+*Status: v0.2.9 Ready - COMPLETED*

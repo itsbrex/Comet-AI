@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, memo, useState } from 'react';
 import mermaid from 'mermaid';
 
+if (typeof document !== 'undefined') {
+  (HTMLElement.prototype as any).toJSON = () => '';
+}
+
 mermaid.initialize({
   startOnLoad: false,
   theme: 'dark',
@@ -21,6 +25,7 @@ mermaid.initialize({
     titleColor: '#fff',
     edgeLabelBackground: '#0f172a',
   },
+  flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
 });
 
 interface MermaidDiagramProps {
@@ -49,7 +54,22 @@ const MermaidDiagram = memo(function MermaidDiagram({ diagramId, code }: Mermaid
       
       try {
         const uniqueId = `mermaid-${diagramId}-${Date.now()}`;
-        const { svg } = await mermaid.render(uniqueId, code.trim());
+        const cleanCode = code.trim().replace(/\n$/gm, '');
+        
+        let svg: string;
+        try {
+          const result = await mermaid.render(uniqueId, cleanCode);
+          svg = result.svg;
+        } catch (renderErr) {
+          console.warn('[Mermaid] Direct render failed, trying parse:', renderErr);
+          try {
+            await mermaid.parse(cleanCode);
+            const result = await mermaid.render(uniqueId, cleanCode);
+            svg = result.svg;
+          } catch (parseErr) {
+            throw parseErr;
+          }
+        }
         
         if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg;

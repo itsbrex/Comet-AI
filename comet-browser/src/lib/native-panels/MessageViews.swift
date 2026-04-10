@@ -4,6 +4,7 @@ struct MessageBubbleView: View {
     let message: NativePanelState.Message
     let appearance: String
     let animateContent: Bool
+    let thinkingSteps: [NativePanelState.ThinkingStep]
 
     var body: some View {
         let palette = PanelPalette(appearance: appearance)
@@ -14,73 +15,78 @@ struct MessageBubbleView: View {
         let actionLogs = AICommandParser.extractActionLogs(from: message)
         let mediaItems = AICommandParser.extractMediaItems(from: message)
 
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 6) {
-                Image(systemName: message.role == "user" ? "person.circle.fill" : "sparkles")
-                    .font(.system(size: 12))
-                    .foregroundStyle(message.role == "user" ? palette.accent : palette.secondaryAccent)
-                
-                Text(message.role == "user" ? "You" : "Comet")
-                    .font(.system(size: 10, weight: .black, design: .rounded))
-                    .foregroundStyle(message.role == "user" ? palette.accent : palette.secondaryAccent)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-                
-                Spacer()
-                
-                if let ts = message.timestamp {
-                    Text(formatTime(ts))
-                        .font(.system(size: 9))
-                        .foregroundStyle(palette.secondaryText.opacity(0.8))
-                }
+        HStack {
+            if message.role == "user" {
+                Spacer(minLength: 40)
             }
 
-            if message.role != "user" {
-                ForEach(reasoningBlocks, id: \.self) { reasoning in
-                    ThinkingIndicatorView(appearance: appearance, thought: reasoning)
+            VStack(alignment: .leading, spacing: 10) {
+                if message.role != "user" && !thinkingSteps.isEmpty {
+                    ThinkingStepsCard(steps: thinkingSteps, appearance: appearance)
                 }
-            }
 
-            if parseResult.hasCommands && message.role != "user" {
-                VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(message.role == "user" ? "You" : "Comet")
+                        .font(.system(size: 10, weight: .black, design: .rounded))
+                        .foregroundStyle(message.role == "user" ? palette.accent : palette.secondaryAccent)
+                        .textCase(.uppercase)
+                    
+                    Spacer()
+                    
+                    if message.role != "user" {
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(visibleContent, forType: .string)
+                        } label: {
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(palette.secondaryText.opacity(0.5))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Copy to clipboard")
+                    }
+                }
+
+                if message.role != "user" {
+                    ForEach(reasoningBlocks, id: \.self) { reasoning in
+                        ThinkingIndicatorView(appearance: appearance, thought: reasoning)
+                    }
+                }
+
+                if parseResult.hasCommands && message.role != "user" {
                     ForEach(parseResult.commands) { command in
                         CommandTagView(command: command, appearance: appearance)
                     }
                 }
-                .padding(.vertical, 4)
-            }
 
-            if !visibleContent.isEmpty {
-                AnimatedMarkdownMessageText(
-                    content: visibleContent,
-                    appearance: appearance,
-                    animate: animateContent
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+                if !visibleContent.isEmpty {
+                    AnimatedMarkdownMessageText(
+                        content: visibleContent,
+                        appearance: appearance,
+                        animate: animateContent
+                    )
+                }
 
-            if let ocrText, !ocrText.isEmpty {
-                OCRResultCard(label: message.ocrLabel ?? "OCR_RESULT", content: ocrText, appearance: appearance)
-            }
+                if let ocrText, !ocrText.isEmpty {
+                    OCRResultCard(label: message.ocrLabel ?? "OCR_RESULT", content: ocrText, appearance: appearance)
+                }
 
-            if !actionLogs.isEmpty {
-                ActionLogCard(actionLogs: actionLogs, appearance: appearance)
-            }
+                if !actionLogs.isEmpty {
+                    ActionLogCard(actionLogs: actionLogs, appearance: appearance)
+                }
 
-            if !mediaItems.isEmpty {
-                MediaAttachmentGroup(items: mediaItems, appearance: appearance)
+                if !mediaItems.isEmpty {
+                    MediaAttachmentGroup(items: mediaItems, appearance: appearance)
+                }
+            }
+            .padding(14)
+            .background(message.role == "user" ? palette.accent.opacity(0.12) : palette.mutedSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            if message.role != "user" {
+                Spacer(minLength: 20)
             }
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(message.role == "user" ? palette.accent.opacity(0.15) : palette.isDark ? Color(hex: "#121214").opacity(0.9) : Color.white.opacity(0.9))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(message.role == "user" ? palette.accent.opacity(0.3) : palette.border, lineWidth: 1)
-                )
-        )
-        .padding(.horizontal, 2)
     }
 
     private var resolvedReasoning: [String] {
@@ -96,54 +102,162 @@ struct MessageBubbleView: View {
             return true
         }
     }
-    
-    private func formatTime(_ timestamp: Double) -> String {
-        let date = Date(timeIntervalSince1970: timestamp / 1000)
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
 }
 
 struct ThinkingIndicatorView: View {
     let appearance: String
     let thought: String?
     @State private var isExpanded = false
-    
+
     var body: some View {
         let palette = PanelPalette(appearance: appearance)
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     isExpanded.toggle()
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Circle()
-                        .fill(palette.accent.opacity(0.5))
-                        .frame(width: 6, height: 6)
-                    
-                    Text(isExpanded ? "Thinking Process" : "View Thinking Process")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundStyle(palette.accent)
-                    
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10))
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    AuroraThinkingIndicatorTiny(appearance: appearance)
+                    Text(isExpanded ? "Hide reasoning" : "View reasoning")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(palette.secondaryText)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(palette.secondaryText)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
             }
             .buttonStyle(.plain)
-            
-            if isExpanded, let thought = thought {
+
+            if isExpanded, let thought {
                 Text(thought)
-                    .font(.system(size: 12, design: .rounded))
-                    .foregroundStyle(palette.secondaryText)
-                    .lineSpacing(4)
-                    .padding(12)
-                    .background(palette.mutedSurface.opacity(0.5))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(palette.secondaryText.opacity(0.85))
+                    .padding(.leading, 20)
+                    .padding(.trailing, 10)
+                    .padding(.bottom, 4)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct AuroraThinkingIndicatorTiny: View {
+    let appearance: String
+    @State private var phase = 0.0
+
+    var body: some View {
+        let palette = PanelPalette(appearance: appearance)
+        ZStack {
+            Circle()
+                .fill(LinearGradient(colors: [palette.accent, palette.secondaryAccent], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 12, height: 12)
+                .rotationEffect(.degrees(phase))
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
+                phase = 360
+            }
+        }
+    }
+}
+
+struct AuroraThinkingView: View {
+    let appearance: String
+    @State private var phase = 0.0
+
+    var body: some View {
+        let palette = PanelPalette(appearance: appearance)
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(palette.accent.opacity(0.2))
+                    .frame(width: 24, height: 24)
+                
+                Circle()
+                    .fill(LinearGradient(colors: [palette.accent, palette.secondaryAccent], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 12, height: 12)
+                    .rotationEffect(.degrees(phase))
+                    .blur(radius: 2)
+            }
+            
+            Text("Comet is thinking…")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(palette.secondaryText)
+        }
+        .padding(12)
+        .background(palette.mutedSurface)
+        .clipShape(Capsule())
+        .onAppear {
+            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                phase = 360
+            }
+        }
+    }
+}
+
+
+
+struct CommandTagView: View {
+    let command: CommandInfo
+    let appearance: String
+
+    var body: some View {
+        if command.type == "THINK" {
+            ThinkingIndicatorView(appearance: appearance, thought: command.value.isEmpty ? nil : command.value)
+        } else {
+            standardTagView
+        }
+    }
+
+    @ViewBuilder
+    private var standardTagView: some View {
+        let palette = PanelPalette(appearance: appearance)
+        HStack(spacing: 8) {
+            Image(systemName: iconForCategory(command.category))
+                .font(.system(size: 10, weight: .bold))
+            Text(command.type.replacingOccurrences(of: "_", with: " "))
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+            if !command.value.isEmpty {
+                Text(command.value.prefix(30) + (command.value.count > 30 ? "..." : ""))
+                    .font(.system(size: 9, design: .rounded))
+                    .foregroundStyle(palette.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .foregroundStyle(colorForRisk(command.riskLevel))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(colorForRisk(command.riskLevel).opacity(0.15))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(colorForRisk(command.riskLevel).opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private func iconForCategory(_ category: String) -> String {
+        switch category {
+        case "navigation": return "globe"
+        case "browser": return "safari"
+        case "automation": return "gearshape.2"
+        case "system": return "terminal"
+        case "pdf": return "doc.richtext"
+        case "utility": return "wrench.and.screwdriver"
+        case "media": return "photo"
+        case "meta": return "brain"
+        default: return "command"
+        }
+    }
+
+    private func colorForRisk(_ risk: String) -> Color {
+        switch risk {
+        case "high": return .red
+        case "medium": return .orange
+        default: return .green
         }
     }
 }
@@ -155,23 +269,33 @@ struct OCRResultCard: View {
 
     var body: some View {
         let palette = PanelPalette(appearance: appearance)
-        VStack(alignment: .leading, spacing: 10) {
-            Label(label.replacingOccurrences(of: "_", with: " "), systemImage: "viewfinder")
-                .font(.system(size: 10, weight: .black, design: .rounded))
-                .foregroundStyle(Color.orange)
-            
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(label.replacingOccurrences(of: "_", with: " "), systemImage: "viewfinder")
+                    .font(.system(size: 10, weight: .black, design: .rounded))
+                    .foregroundStyle(Color.orange.opacity(0.95))
+                Spacer()
+                Text("\(content.count) chars")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(palette.secondaryText)
+            }
+
             ScrollView(.vertical, showsIndicators: true) {
                 Text(content)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(palette.primaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
             }
             .frame(maxHeight: 180)
         }
         .padding(12)
-        .background(Color.orange.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.orange.opacity(0.3), lineWidth: 1))
+        .background(Color.orange.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.orange.opacity(0.25), lineWidth: 1)
+        )
     }
 }
 
@@ -181,26 +305,34 @@ struct ActionLogCard: View {
 
     var body: some View {
         let palette = PanelPalette(appearance: appearance)
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Action Execution", systemImage: "point.3.filled.connected.trianglepath.dotted")
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Action Chain", systemImage: "point.3.filled.connected.trianglepath.dotted")
                 .font(.system(size: 10, weight: .black, design: .rounded))
                 .foregroundStyle(palette.secondaryAccent)
 
-            ForEach(Array(actionLogs.enumerated()), id: \.offset) { index, log in
-                HStack(spacing: 8) {
-                    Circle().fill(log.success ? Color.green : Color.red).frame(width: 6, height: 6)
-                    Text(log.type.replacingOccurrences(of: "_", with: " ")).font(.system(size: 11, weight: .bold))
-                    Spacer()
-                    Text(log.success ? "Done" : "Failed").font(.system(size: 9))
+            ForEach(Array(actionLogs.prefix(8).enumerated()), id: \.offset) { index, log in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("\(index + 1). \(log.type.replacingOccurrences(of: "_", with: " "))")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(palette.primaryText)
+                        Spacer()
+                        StatusPill(text: log.success ? "DONE" : "FAILED", color: log.success ? Color.green.opacity(0.25) : Color.red.opacity(0.25))
+                    }
+                    Text(log.output)
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(palette.secondaryText)
+                        .lineLimit(4)
+                        .textSelection(.enabled)
                 }
-                .padding(8)
-                .background(palette.mutedSurface)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(10)
+                .background(Color.white.opacity(appearance == "light" ? 0.45 : 0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
         }
         .padding(12)
-        .background(palette.mutedSurface.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .background(palette.mutedSurface.opacity(0.7))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -210,6 +342,10 @@ struct MediaAttachmentGroup: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Label("Media", systemImage: "photo.on.rectangle.angled")
+                .font(.system(size: 10, weight: .black, design: .rounded))
+                .foregroundStyle(PanelPalette(appearance: appearance).secondaryAccent)
+
             ForEach(items, id: \.stableId) { item in
                 MediaAttachmentCard(item: item, appearance: appearance)
             }
@@ -225,147 +361,201 @@ struct MediaAttachmentCard: View {
         let palette = PanelPalette(appearance: appearance)
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: item.type == "mermaid" ? "diagram.project" : "paperclip")
-                    .font(.system(size: 10))
-                Text(item.type.uppercased())
-                    .font(.system(size: 8, weight: .black))
+                Label(titleText, systemImage: systemIcon)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(palette.primaryText)
                 Spacer()
-                
-                if item.type == "image" || item.type.contains("gen") {
-                    HStack(spacing: 8) {
-                        Button {
-                            // Download logic
-                            if let urlStr = item.url, let url = URL(string: urlStr) {
-                                NSWorkspace.shared.open(url)
-                            }
-                        } label: {
-                            Image(systemName: "arrow.down.circle")
-                                .font(.system(size: 14))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Download Image")
-                        
-                        Button {
-                            // Share logic
-                        } label: {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 14))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Share Image")
-                    }
+                Text(item.type.uppercased())
+                    .font(.system(size: 9, weight: .black, design: .rounded))
+                    .foregroundStyle(palette.secondaryText)
+            }
+
+            if let thumbnailUrl = item.thumbnailUrl, let url = URL(string: thumbnailUrl) {
+                AsyncImage(url: url) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 160)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                } placeholder: {
+                    Rectangle()
+                        .fill(palette.mutedSurface)
+                        .frame(height: 160)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
-            .foregroundStyle(palette.accent)
-            
-            if item.type == "image" || item.type.contains("gen"), let urlString = item.url {
-                MediaImageLoader(urlString: urlString, palette: palette)
-            } else if let url = item.url {
-                Text(url)
-                    .font(.system(size: 10))
+
+            if let caption = item.caption, !caption.isEmpty {
+                Text(caption)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(palette.primaryText)
+            }
+
+            if let desc = item.description, !desc.isEmpty {
+                Text(desc)
+                    .font(.system(size: 10, design: .rounded))
                     .foregroundStyle(palette.secondaryText)
-                    .lineLimit(1)
+                    .lineLimit(3)
+            }
+            
+            if let code = item.code, !code.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(code)
+                        .font(.system(size: 9, design: .monospaced))
+                        .padding(8)
+                        .background(palette.mutedSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
             }
         }
         .padding(12)
         .background(palette.mutedSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
-}
 
-struct MediaImageLoader: View {
-    let urlString: String
-    let palette: PanelPalette
-    @State private var image: NSImage?
-    @State private var isLoading = true
-    
-    var body: some View {
-        Group {
-            if let image = image {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            } else if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 200)
-            } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "photo.fill")
-                        .font(.system(size: 32))
-                    Text("Unable to load image")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .foregroundStyle(palette.secondaryText)
-                .frame(maxWidth: .infinity, minHeight: 200)
-                .background(palette.mutedSurface)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-        }
-        .onAppear { loadImage() }
+    private var titleText: String {
+        item.title ?? item.caption ?? "Attached \(item.type)"
     }
-    
-    private func loadImage() {
-        guard let url = URL(string: urlString) else {
-            isLoading = false
-            return
-        }
-        
-        // Handle file URLs specially
-        if url.scheme == "file" {
-            if let data = try? Data(contentsOf: url), let nsImage = NSImage(data: data) {
-                self.image = nsImage
-                self.isLoading = false
-            } else {
-                // Try direct path if URL(string:) failed file scheme
-                let path = urlString.replacingOccurrences(of: "file://", with: "")
-                if let nsImage = NSImage(contentsOfFile: path) {
-                    self.image = nsImage
-                }
-                self.isLoading = false
-            }
-        } else {
-            // Network image
-            Task {
-                do {
-                    let (data, _) = try await URLSession.shared.data(from: url)
-                    if let nsImage = NSImage(data: data) {
-                        await MainActor.run {
-                            self.image = nsImage
-                            self.isLoading = false
-                        }
-                    }
-                } catch {
-                    await MainActor.run { self.isLoading = false }
-                }
-            }
+
+    private var systemIcon: String {
+        switch item.type {
+        case "image": return "photo"
+        case "video": return "play.rectangle"
+        case "diagram": return "projective"
+        case "chart": return "chart.bar"
+        case "pdf": return "doc.richtext"
+        default: return "paperclip"
         }
     }
 }
 
-
-struct CommandTagView: View {
-    let command: CommandInfo
+struct ThinkingStepsCard: View {
+    let steps: [NativePanelState.ThinkingStep]
     let appearance: String
+    @State private var isExpanded = false
 
     var body: some View {
         let palette = PanelPalette(appearance: appearance)
-        HStack(spacing: 6) {
-            Image(systemName: "command")
-                .font(.system(size: 10))
-            Text(command.type.replacingOccurrences(of: "_", with: " "))
-                .font(.system(size: 10, weight: .bold))
-            if !command.value.isEmpty {
-                Text(command.value).font(.system(size: 9)).lineLimit(1).foregroundStyle(palette.primaryText.opacity(0.7))
+        let hasRunning = steps.contains { $0.status == "running" }
+        
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    if hasRunning {
+                        AuroraThinkingIndicatorTiny(appearance: appearance)
+                    } else {
+                        ZStack {
+                            Circle()
+                                .fill(palette.secondaryAccent.opacity(0.2))
+                                .frame(width: 14, height: 14)
+                            Image(systemName: "brain")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundStyle(palette.secondaryAccent)
+                        }
+                    }
+                    
+                    Text(isExpanded ? "Hide thinking" : "View thinking")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(palette.secondaryText)
+                    
+                    Spacer()
+                    
+                    if !isExpanded && steps.count > 0 {
+                        Text("\(steps.count)")
+                            .font(.system(size: 9, weight: .black, design: .rounded))
+                            .foregroundStyle(palette.secondaryText)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(palette.secondaryAccent.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(palette.secondaryText)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+            }
+            .buttonStyle(.plain)
+            
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(steps, id: \.id) { step in
+                        HStack(spacing: 8) {
+                            statusIcon(for: step.status, palette: palette)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(step.label)
+                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .foregroundStyle(statusColor(for: step.status))
+                                    .lineLimit(2)
+                                
+                                if let detail = step.detail, !detail.isEmpty {
+                                    Text(detail)
+                                        .font(.system(size: 9, design: .rounded))
+                                        .foregroundStyle(palette.secondaryText.opacity(0.6))
+                                        .lineLimit(2)
+                                }
+                            }
+                        }
+                        .padding(8)
+                        .background(palette.mutedSurface.opacity(0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                }
+                .padding(.top, 4)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(palette.accent.opacity(0.12))
-        .foregroundStyle(palette.accent)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.accent.opacity(0.2), lineWidth: 1))
+    }
+    
+    @ViewBuilder
+    private func statusIcon(for status: String, palette: PanelPalette) -> some View {
+        ZStack {
+            Circle()
+                .stroke(statusColor(for: status).opacity(0.5), lineWidth: 1.5)
+                .frame(width: 16, height: 16)
+            
+            if status == "running" {
+                Circle()
+                    .fill(palette.secondaryAccent.opacity(0.3))
+                    .frame(width: 8, height: 8)
+                    .modifier(PulseModifier())
+            } else if status == "done" {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(Color.green)
+            } else {
+                Image(systemName: "xmark")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(Color.red)
+            }
+        }
+    }
+    
+    private func statusColor(for status: String) -> Color {
+        switch status {
+        case "running": return PanelPalette(appearance: appearance).secondaryAccent
+        case "done": return Color.white.opacity(0.6)
+        case "error": return Color.red
+        default: return Color.white.opacity(0.6)
+        }
+    }
+}
+
+struct PulseModifier: ViewModifier {
+    @State private var pulsing = false
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(pulsing ? 1.2 : 1.0)
+            .opacity(pulsing ? 0.7 : 1.0)
+            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: pulsing)
+            .onAppear { pulsing = true }
     }
 }

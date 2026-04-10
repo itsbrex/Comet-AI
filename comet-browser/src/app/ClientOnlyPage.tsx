@@ -709,12 +709,12 @@ export default function Home() {
 
   const resolveProviderModel = useCallback((providerId: string) => {
     switch (providerId) {
-      case 'google-flash': return getRecommendedGeminiModel('google-flash');
+      case 'google-flash': return store.geminiFlashModel || getRecommendedGeminiModel('google-flash');
       case 'google': return store.geminiModel || getRecommendedGeminiModel('google');
       case 'openai': return store.openaiModel || 'gpt-4o';
       case 'azure-openai': return store.azureOpenaiModel || 'gpt-4.1-mini';
-      case 'anthropic': return store.anthropicModel || 'claude-3-5-sonnet-latest';
-      case 'xai': return store.xaiModel || 'grok-2-latest';
+      case 'anthropic': return store.anthropicModel || 'claude-sonnet-4-20250514';
+      case 'xai': return store.xaiModel || 'grok-4-fast-reasoning';
       case 'groq': return store.groqModel || 'llama-3.3-70b-versatile';
       case 'ollama': return store.ollamaModel;
       default: return providerId;
@@ -722,6 +722,7 @@ export default function Home() {
   }, [
     store.anthropicModel,
     store.azureOpenaiModel,
+    store.geminiFlashModel,
     store.geminiModel,
     store.groqModel,
     store.openaiModel,

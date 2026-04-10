@@ -395,7 +395,9 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
       const recommendedModel = providerCatalogs[activeProviderId]?.recommendedModel || getRecommendedGeminiModel(providerId);
       config = {
         apiKey: store.geminiApiKey,
-        model: providerId === 'google-flash' ? recommendedModel : (store.geminiModel || recommendedModel)
+        model: providerId === 'google-flash'
+          ? (store.geminiFlashModel || recommendedModel)
+          : (store.geminiModel || recommendedModel)
       };
     } else if (activeProviderId === 'openai') {
       config = { apiKey: store.openaiApiKey, model: store.openaiModel || providerCatalogs.openai?.recommendedModel || 'gpt-5.1' };
@@ -406,9 +408,9 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
         model: store.azureOpenaiModel || 'gpt-4.1-mini'
       };
     } else if (activeProviderId === 'anthropic') {
-      config = { apiKey: store.anthropicApiKey, model: store.anthropicModel || providerCatalogs.anthropic?.recommendedModel || 'claude-sonnet-4-0' };
+      config = { apiKey: store.anthropicApiKey, model: store.anthropicModel || providerCatalogs.anthropic?.recommendedModel || 'claude-sonnet-4-20250514' };
     } else if (activeProviderId === 'xai') {
-      config = { apiKey: store.xaiApiKey, model: store.xaiModel || providerCatalogs.xai?.recommendedModel || 'grok-4-latest' };
+      config = { apiKey: store.xaiApiKey, model: store.xaiModel || providerCatalogs.xai?.recommendedModel || 'grok-4-fast-reasoning' };
     } else if (activeProviderId === 'groq') {
       config = { apiKey: store.groqApiKey, model: store.groqModel || providerCatalogs.groq?.recommendedModel || 'llama-3.3-70b-versatile' };
     }
@@ -768,8 +770,8 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                         </div>
                         {renderCatalogControls(
                           activeProviderId,
-                          store.geminiModel || '',
-                          (model) => store.setGeminiModel(model),
+                          activeProviderId === 'google-flash' ? (store.geminiFlashModel || '') : (store.geminiModel || ''),
+                          (model) => activeProviderId === 'google-flash' ? store.setGeminiFlashModel(model) : store.setGeminiModel(model),
                           `e.g. ${activeCatalog?.recommendedModel || geminiPreferences.metadata.id}`
                         )}
                         <div className="space-y-2 p-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] text-white/80">
@@ -873,7 +875,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setAnthropicApiKey(e.target.value)}
                           />
                         </div>
-                        {renderCatalogControls('anthropic', store.anthropicModel || '', (model) => store.setAnthropicModel(model), 'e.g. claude-sonnet-4-0')}
+                        {renderCatalogControls('anthropic', store.anthropicModel || '', (model) => store.setAnthropicModel(model), 'e.g. claude-sonnet-4-20250514')}
                       </div>
                     )}
 
@@ -893,7 +895,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => store.setXaiApiKey(e.target.value)}
                           />
                         </div>
-                        {renderCatalogControls('xai', store.xaiModel || '', (model) => store.setXaiModel(model), 'e.g. grok-4-latest')}
+                        {renderCatalogControls('xai', store.xaiModel || '', (model) => store.setXaiModel(model), 'e.g. grok-4-fast-reasoning')}
                       </div>
                     )}
 

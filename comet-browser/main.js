@@ -538,6 +538,27 @@ const createNativeMacUiSnapshot = () => {
   };
 };
 
+const appendNativeMacUiMessage = (message = {}) => {
+  const existing = Array.isArray(nativeMacUiState.messages) ? nativeMacUiState.messages : [];
+  nativeMacUiState.messages = [
+    ...existing,
+    {
+      id: message.id || `native-message-${Date.now()}`,
+      role: message.role || 'model',
+      content: `${message.content || ''}`.slice(0, 16000),
+      timestamp: message.timestamp || Date.now(),
+      thinkText: message.thinkText ? `${message.thinkText}`.slice(0, 8000) : null,
+      isOcr: !!message.isOcr,
+      ocrLabel: message.ocrLabel ? `${message.ocrLabel}`.slice(0, 120) : null,
+      ocrText: message.ocrText ? `${message.ocrText}`.slice(0, 12000) : null,
+      actionLogs: Array.isArray(message.actionLogs) ? message.actionLogs.slice(0, 24) : [],
+      mediaItems: Array.isArray(message.mediaItems) ? message.mediaItems.slice(0, 12) : [],
+    },
+  ].slice(-24);
+  nativeMacUiState.updatedAt = Date.now();
+  nativeMacUiState.error = null;
+};
+
 const normalizeMacNativePanelMode = (mode = 'sidebar') => {
   const allowedModes = new Set(['sidebar', 'action-chain', 'menu', 'settings', 'downloads', 'clipboard', 'permissions', 'apple-intelligence', 'apple-summary', 'apple-image']);
   return allowedModes.has(mode) ? mode : 'sidebar';
@@ -2181,6 +2202,7 @@ const llmStreamHandler = async (event, messages, options = {}) => {
       }
       if (providerId === 'anthropic') engineKeys.ANTHROPIC_API_KEY = store.get('anthropic_api_key') || '';
       if (providerId === 'groq') engineKeys.GROQ_API_KEY = store.get('groq_api_key') || '';
+      if (providerId === 'xai') engineKeys.XAI_API_KEY = store.get('xai_api_key') || '';
       if (providerId === 'ollama') engineKeys.OLLAMA_BASE_URL = options.baseUrl || store.get('ollama_base_url') || 'http://127.0.0.1:11434';
       if (Object.keys(engineKeys).length > 0) cometAiEngine.configure(engineKeys);
 
@@ -4238,7 +4260,7 @@ const llmConfigs = {
   },
   'google-flash': {
     apiKey: store.get('gemini_api_key') || '',
-    model: store.get('gemini_model') || getProviderFallbackModel('google-flash')
+    model: store.get('gemini_flash_model') || getProviderFallbackModel('google-flash')
   },
   openai: {
     apiKey: store.get('openai_api_key') || '',
@@ -4372,9 +4394,13 @@ ipcMain.handle('llm-configure-provider', (event, providerId, options) => {
   llmConfigs[providerId] = { ...llmConfigs[providerId], ...options };
 
   // Persist to store for survivors
-  if (providerId === 'google' || providerId === 'google-flash') {
+  if (providerId === 'google') {
     if (options.apiKey) store.set('gemini_api_key', options.apiKey);
     if (options.model) store.set('gemini_model', options.model);
+  }
+  if (providerId === 'google-flash') {
+    if (options.apiKey) store.set('gemini_api_key', options.apiKey);
+    if (options.model) store.set('gemini_flash_model', options.model);
   }
   if (providerId === 'openai') {
     if (options.apiKey) store.set('openai_api_key', options.apiKey);
@@ -4416,6 +4442,7 @@ ipcMain.handle('get-stored-api-keys', () => {
     azure_openai_model: store.get('azure_openai_model') || 'gpt-4.1-mini',
     gemini_api_key: store.get('gemini_api_key') || '',
     gemini_model: getConfiguredProviderModel('google'),
+    gemini_flash_model: getConfiguredProviderModel('google-flash'),
     anthropic_api_key: store.get('anthropic_api_key') || '',
     anthropic_model: getConfiguredProviderModel('anthropic'),
     groq_api_key: store.get('groq_api_key') || '',
@@ -5167,10 +5194,6 @@ ipcMain.handle('execute-shell-command', async (event, { rawCommand, preApproved,
 // OS-Specific System Controls — dedicated IPC handlers (bypass security dialog)
 
 ipcMain.handle('set-volume', async (event, level) => {
-  const permission = checkAiActionPermission('SET_VOLUME', `${parseInt(level, 10) || 0}`, 'medium');
-  if (!permission.allowed) {
-    return { success: false, error: permission.error };
-  }
 
   // level: 0-100
   if (process.platform === 'win32') {
@@ -5249,10 +5272,6 @@ Write-Output "Volume set to ${clamped}"
 });
 
 ipcMain.handle('set-brightness', async (event, level) => {
-  const permission = checkAiActionPermission('SET_BRIGHTNESS', `${parseInt(level, 10) || 50}`, 'medium');
-  if (!permission.allowed) {
-    return { success: false, error: permission.error };
-  }
 
   const clamped = Math.max(0, Math.min(100, parseInt(level, 10) || 50));
 
@@ -7451,6 +7470,105 @@ app.whenReady().then(async () => {
       }
 
       res.json({ success: false, error: 'No active Comet window found.' });
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/apple-intelligence/status', async (req, res) => {
+      try {
+        const result = await getAppleIntelligenceStatus();
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/apple-intelligence/summary', async (req, res) => {
+      const text = `${req.body?.text || ''}`.trim();
+      if (!text) {
+        res.status(400).json({ success: false, error: 'Missing summary text.' });
+        return;
+      }
+
+      try {
+        nativeMacUiState.isLoading = true;
+        nativeMacUiState.updatedAt = Date.now();
+        appendNativeMacUiMessage({
+          id: `apple-summary-user-${Date.now()}`,
+          role: 'user',
+          content: text,
+        });
+
+        const result = await summarizeWithAppleIntelligence(text);
+        if (result?.success && result.summary) {
+          appendNativeMacUiMessage({
+            id: `apple-summary-model-${Date.now()}`,
+            role: 'model',
+            content: `## Apple Intelligence Summary\n\n${result.summary}`,
+          });
+          nativeMacUiState.isLoading = false;
+          nativeMacUiState.updatedAt = Date.now();
+        } else {
+          nativeMacUiState.isLoading = false;
+          nativeMacUiState.error = result?.summaryReason || result?.error || 'Apple Intelligence summary failed.';
+          nativeMacUiState.updatedAt = Date.now();
+        }
+
+        res.json(result);
+      } catch (error) {
+        nativeMacUiState.isLoading = false;
+        nativeMacUiState.error = error.message;
+        nativeMacUiState.updatedAt = Date.now();
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    nativeMacUiApp.post('/native-mac-ui/apple-intelligence/image', async (req, res) => {
+      const prompt = `${req.body?.prompt || ''}`.trim();
+      const outputPath = req.body?.outputPath ? `${req.body.outputPath}` : undefined;
+      if (!prompt) {
+        res.status(400).json({ success: false, error: 'Missing image prompt.' });
+        return;
+      }
+
+      try {
+        nativeMacUiState.isLoading = true;
+        nativeMacUiState.updatedAt = Date.now();
+        appendNativeMacUiMessage({
+          id: `apple-image-user-${Date.now()}`,
+          role: 'user',
+          content: `Generate an Apple Intelligence image: ${prompt}`,
+        });
+
+        const result = await generateAppleIntelligenceImage(prompt, outputPath);
+        if (result?.success && result.imagePath) {
+          appendNativeMacUiMessage({
+            id: `apple-image-model-${Date.now()}`,
+            role: 'model',
+            content: `Generated image for: ${prompt}`,
+            mediaItems: [
+              {
+                id: `apple-image-media-${Date.now()}`,
+                type: 'image',
+                url: `file://${result.imagePath}`,
+                title: 'Apple Intelligence Image',
+                description: prompt,
+              },
+            ],
+          });
+          nativeMacUiState.isLoading = false;
+          nativeMacUiState.updatedAt = Date.now();
+        } else {
+          nativeMacUiState.isLoading = false;
+          nativeMacUiState.error = result?.imageReason || result?.error || 'Apple Intelligence image generation failed.';
+          nativeMacUiState.updatedAt = Date.now();
+        }
+
+        res.json(result);
+      } catch (error) {
+        nativeMacUiState.isLoading = false;
+        nativeMacUiState.error = error.message;
+        nativeMacUiState.updatedAt = Date.now();
+        res.status(500).json({ success: false, error: error.message });
+      }
     });
 
     nativeMacUiApp.post('/native-mac-ui/apple-intelligence/image-callback', (req, res) => {

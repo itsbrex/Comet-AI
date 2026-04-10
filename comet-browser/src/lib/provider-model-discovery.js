@@ -27,7 +27,7 @@ const PROVIDER_API_KEY_STORE_KEYS = {
 
 const PROVIDER_MODEL_STORE_KEYS = {
   google: 'gemini_model',
-  'google-flash': 'gemini_model',
+  'google-flash': 'gemini_flash_model',
   openai: 'openai_model',
   anthropic: 'anthropic_model',
   groq: 'groq_model',
@@ -38,9 +38,9 @@ const PROVIDER_FALLBACK_MODELS = {
   google: 'gemini-2.5-pro',
   'google-flash': 'gemini-2.5-flash',
   openai: 'gpt-5.1',
-  anthropic: 'claude-sonnet-4-0',
+  anthropic: 'claude-sonnet-4-20250514',
   groq: 'llama-3.3-70b-versatile',
-  xai: 'grok-4-latest',
+  xai: 'grok-4-fast-reasoning',
 };
 
 const PROVIDER_PRIORITY = {
@@ -66,6 +66,7 @@ const PROVIDER_PRIORITY = {
     'gpt-4o',
   ],
   anthropic: [
+    'claude-sonnet-4-20250514',
     'claude-sonnet-4',
     'claude-opus-4-1',
     'claude-opus-4',
@@ -82,8 +83,11 @@ const PROVIDER_PRIORITY = {
     'gemma2-9b-it',
   ],
   xai: [
-    'grok-4-latest',
+    'grok-4-fast-reasoning',
+    'grok-4-fast-non-reasoning',
+    'grok-4.20-beta-latest-non-reasoning',
     'grok-4',
+    'grok-4-0709',
     'grok-3',
     'grok-2',
   ],

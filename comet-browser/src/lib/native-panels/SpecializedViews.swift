@@ -178,6 +178,7 @@ struct MermaidView: NSViewRepresentable {
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "`", with: "\\`")
             .replacingOccurrences(of: "$", with: "\\$")
+            .replacingOccurrences(of: "\n$", with: "", options: .regularExpression)
         
         let textColor = isDark ? "#ffffff" : "#1a1a1a"
         let primaryColor = "#6366f1"
@@ -193,39 +194,69 @@ struct MermaidView: NSViewRepresentable {
             <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
             <style>
                 * { margin: 0; padding: 0; box-sizing: border-box; }
+                html, body { 
+                    min-height: 100%; 
+                    background: transparent !important;
+                }
                 body {
                     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Rounded', sans-serif;
                     background: transparent;
                     display: flex;
                     justify-content: center;
                     align-items: center;
-                    min-height: 100px;
-                    padding: 16px;
+                    min-height: 120px;
+                    padding: 20px;
+                    overflow: auto;
                 }
                 .mermaid {
                     color-scheme: \(isDark ? "dark" : "light");
                 }
+                #container { text-align: center; width: 100%; }
             </style>
         </head>
         <body>
-            <pre class="mermaid">
-            \(escapedDiagram)
-            </pre>
+            <div id="container">
+                <pre class="mermaid">
+                \(escapedDiagram)
+                </pre>
+            </div>
             <script>
-                mermaid.initialize({
-                    startOnLoad: true,
-                    theme: '\(isDark ? "dark" : "default")',
-                    themeVariables: {
-                        primaryColor: '\(primaryColor)',
-                        primaryTextColor: '\(textColor)',
-                        primaryBorderColor: '\(lineColor)',
-                        lineColor: '\(lineColor)',
-                        secondaryColor: '\(secondaryColor)',
-                        tertiaryColor: '\(isDark ? "#2d2d3d" : "#f5f5f5")'
-                    },
-                    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
-                    securityLevel: 'loose'
-                });
+                (function() {
+                    if (typeof mermaid === 'undefined') {
+                        window.mermaidReady = false;
+                        var checkMermaid = setInterval(function() {
+                            if (typeof mermaid !== 'undefined') {
+                                clearInterval(checkMermaid);
+                                window.mermaidReady = true;
+                                initMermaid();
+                            }
+                        }, 100);
+                        setTimeout(function() { clearInterval(checkMermaid); }, 5000);
+                    } else {
+                        window.mermaidReady = true;
+                        initMermaid();
+                    }
+                })();
+                
+                function initMermaid() {
+                    if (!window.mermaidReady) return;
+                    try {
+                        mermaid.initialize({
+                            startOnLoad: true,
+                            theme: '\(isDark ? "dark" : "default")',
+                            themeVariables: {
+                                primaryColor: '\(primaryColor)',
+                                primaryTextColor: '\(textColor)',
+                                primaryBorderColor: '\(lineColor)',
+                                lineColor: '\(lineColor)',
+                                secondaryColor: '\(secondaryColor)',
+                                tertiaryColor: '\(isDark ? "#2d2d3d" : "#f5f5f5")'
+                            },
+                            flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+                            securityLevel: 'loose'
+                        });
+                    } catch(e) { console.error('Mermaid init failed:', e); }
+                }
             </script>
         </body>
         </html>
@@ -288,20 +319,114 @@ struct MarkdownMessageText: View {
 
     var body: some View {
         let palette = PanelPalette(appearance: appearance)
-        
-        Group {
-            if containsComplexElements(content) {
-                RichMarkdownView(content: content, appearance: appearance)
-            } else {
-                Text(content)
-                    .font(.system(size: 14, design: .rounded))
-                    .foregroundStyle(palette.primaryText)
+
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(parsedBlocks.enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .markdown(let text):
+                    markdownBlock(text, palette: palette)
+                case .code(let language, let code):
+                    codeBlock(code, language: language, palette: palette)
+                }
             }
         }
+        .textSelection(.enabled)
     }
-    
-    private func containsComplexElements(_ text: String) -> Bool {
-        let patterns = ["\\$\\$", "\\\\begin", "```", "\\|", "###"]
-        return patterns.contains { text.contains($0) }
+
+    private var parsedBlocks: [RenderedContentBlock] {
+        var blocks: [RenderedContentBlock] = []
+        let pattern = #"```([A-Za-z0-9_\-#+.]*)\n([\s\S]*?)```"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return [.markdown(content)]
+        }
+
+        let nsRange = NSRange(content.startIndex..., in: content)
+        let matches = regex.matches(in: content, range: nsRange)
+
+        if matches.isEmpty {
+            return [.markdown(content)]
+        }
+
+        var cursor = content.startIndex
+
+        for match in matches {
+            guard let fullRange = Range(match.range(at: 0), in: content) else { continue }
+
+            if cursor < fullRange.lowerBound {
+                let markdown = String(content[cursor..<fullRange.lowerBound])
+                if !markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    blocks.append(.markdown(markdown))
+                }
+            }
+
+            let language: String?
+            if let languageRange = Range(match.range(at: 1), in: content) {
+                let rawLanguage = String(content[languageRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                language = rawLanguage.isEmpty ? nil : rawLanguage
+            } else {
+                language = nil
+            }
+
+            let code = Range(match.range(at: 2), in: content).map { String(content[$0]) } ?? ""
+            blocks.append(.code(language: language, code: code))
+            cursor = fullRange.upperBound
+        }
+
+        if cursor < content.endIndex {
+            let markdown = String(content[cursor..<content.endIndex])
+            if !markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                blocks.append(.markdown(markdown))
+            }
+        }
+
+        return blocks.isEmpty ? [.markdown(content)] : blocks
     }
+
+    @ViewBuilder
+    private func markdownBlock(_ text: String, palette: PanelPalette) -> some View {
+        if let rendered = try? AttributedString(
+            markdown: text,
+            options: AttributedString.MarkdownParsingOptions(
+                interpretedSyntax: .full,
+                failurePolicy: .returnPartiallyParsedIfPossible
+            )
+        ) {
+            Text(rendered)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(palette.primaryText)
+        } else {
+            Text(text)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(palette.primaryText)
+        }
+    }
+
+    private func codeBlock(_ code: String, language: String?, palette: PanelPalette) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let language, !language.isEmpty {
+                Text(language.uppercased())
+                    .font(.system(size: 9, weight: .black, design: .rounded))
+                    .foregroundStyle(palette.secondaryAccent)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(code.trimmingCharacters(in: .newlines))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(palette.primaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(12)
+        .background(palette.mutedSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+        )
+    }
+}
+
+private enum RenderedContentBlock {
+    case markdown(String)
+    case code(language: String?, code: String)
 }

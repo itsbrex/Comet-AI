@@ -75,11 +75,13 @@ class CometAiEngine {
     if (m.startsWith('openai/') || m.includes('gpt-')) return 'openai';
     if (m.startsWith('google/') || m.includes('gemini-')) return 'gemini';
     if (m.startsWith('anthropic/') || m.includes('claude-')) return 'anthropic';
+    if (m.startsWith('xai/') || m.includes('grok-')) return 'xai';
     if (m.startsWith('groq/') || m.includes('llama-3.3')) return 'groq';
 
     if (m.includes('gemini') || m.includes('google')) return 'gemini';
     if (m.includes('gpt') || m.includes('openai')) return 'openai';
     if (m.includes('claude') || m.includes('anthropic')) return 'anthropic';
+    if (m.includes('grok') || m.includes('xai')) return 'xai';
     if (m.includes('groq')) return 'groq';
 
     // Default: try Ollama (local first policy)
@@ -92,12 +94,17 @@ class CometAiEngine {
 
     switch (resolvedProvider) {
       case 'ollama':    return this._chatOllama({ message, model, systemPrompt, history, onChunk });
-      case 'gemini':    return this._chatGemini({ message, model, systemPrompt, history, onChunk });
+      case 'gemini':
+      case 'google':
+      case 'google-flash':
+        return this._chatGemini({ message, model, systemPrompt, history, onChunk });
       case 'groq':      return this._chatGroq({ message, model, systemPrompt, history, onChunk });
       case 'openai':    return this._chatOpenAI({ message, model, systemPrompt, history, onChunk });
+      case 'xai':       return this._chatXai({ message, model, systemPrompt, history, onChunk });
       case 'azure-openai': return this._chatAzureOpenAI({ message, model, systemPrompt, history, onChunk });
       case 'anthropic': return this._chatAnthropic({ message, model, systemPrompt, history, onChunk });
-      default:          return this._chatOllama({ message, model, systemPrompt, history, onChunk });
+      default:
+        throw new Error(`Unsupported provider: ${resolvedProvider}`);
     }
   }
 
@@ -314,6 +321,55 @@ class CometAiEngine {
     if (!res.ok) {
       const err = await res.text();
       throw new Error(`OpenAI API error ${res.status}: ${err}`);
+    }
+
+    if (onChunk) {
+      for await (const line of streamToLines(res.body)) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.substring(6).trim();
+        if (jsonStr === '[DONE]') break;
+        try {
+          const json = JSON.parse(jsonStr);
+          const content = json.choices?.[0]?.delta?.content;
+          if (content) onChunk(content);
+        } catch (e) {}
+      }
+      return '';
+    } else {
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || '';
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // xAI (OpenAI-compatible REST API)
+  // -------------------------------------------------------------------------
+  async _chatXai({ message, model, systemPrompt, history, onChunk }) {
+    const apiKey = this._getKey('XAI_API_KEY');
+    if (!apiKey) throw new Error('XAI_API_KEY not configured');
+
+    const messages = [];
+    if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+    for (const h of (history || [])) messages.push(h);
+    messages.push({ role: 'user', content: message });
+
+    const res = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: model || 'grok-4-fast-reasoning',
+        messages,
+        max_tokens: 8192,
+        stream: !!onChunk,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`xAI API error ${res.status}: ${err}`);
     }
 
     if (onChunk) {
