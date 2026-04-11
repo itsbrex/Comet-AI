@@ -236,31 +236,6 @@ struct SidebarPanelView: View {
                             }
                             .buttonStyle(.plain)
                             .help("Summarize with Apple Intelligence")
-                            
-                            Button {
-                                let alert = NSAlert()
-                                alert.messageText = "Generate Image"
-                                alert.informativeText = "Describe the image you want:"
-                                alert.addButton(withTitle: "Generate")
-                                alert.addButton(withTitle: "Cancel")
-                                let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
-                                input.placeholderString = "A serene sunset over mountains..."
-                                alert.accessoryView = input
-                                if alert.runModal() == .alertFirstButtonReturn {
-                                    let prompt = input.stringValue
-                                    Task {
-                                        if let imagePath = try? await viewModel.appleGenerateImage(prompt: prompt) {
-                                            viewModel.state.actionLogs = (viewModel.state.actionLogs ?? []) + [NativePanelState.ActionLog(type: "IMAGE_GENERATED", output: prompt, success: true)]
-                                        }
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "photo.artstyle")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(palette.secondaryText)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Generate image with Apple Intelligence")
                         }
                         
                         Button {

@@ -127,7 +127,7 @@ struct NativePanelState: Codable {
         let isOcr: Bool?
         let ocrLabel: String?
         let ocrText: String?
-        let actionLogs: [ActionLog]?
+    var actionLogs: [ActionLog]?
         let mediaItems: [MediaItem]?
     }
 
@@ -230,8 +230,8 @@ struct NativePanelState: Codable {
     let preferences: Preferences?
     let pendingApproval: ApprovalState?
     let terminalLogs: [TerminalLog]?
-    let actionLogs: [ActionLog]?
-    let thinkingSteps: [ThinkingStep]?
+    var actionLogs: [ActionLog]?
+    var thinkingSteps: [ThinkingStep]?
 
     static func empty(mode: PanelMode) -> NativePanelState {
         NativePanelState(

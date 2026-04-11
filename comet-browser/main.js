@@ -202,6 +202,7 @@ const { MacNativePanelManager } = require('./src/lib/macos-native-panels.js');
 const { PluginManager, pluginManager } = require('./src/lib/plugin-manager.js');
 const {
   generateAppleIntelligenceImage,
+  generateGenmoji,
   getAppleIntelligenceStatus,
   summarizeWithAppleIntelligence,
 } = require('./src/lib/apple-intelligence.js');
@@ -237,8 +238,12 @@ ipcMain.handle('apple-intelligence-summary', async (event, text) => {
   return summarizeWithAppleIntelligence(text);
 });
 
-ipcMain.handle('apple-intelligence-generate-image', async (event, { prompt, outputPath } = {}) => {
-  return generateAppleIntelligenceImage(prompt, outputPath);
+ipcMain.handle('apple-intelligence-generate-image', async (event, { prompt, outputPath, style } = {}) => {
+  return generateAppleIntelligenceImage(prompt, outputPath, style);
+});
+
+ipcMain.handle('apple-intelligence-genmoji', async (event, { prompt } = {}) => {
+  return generateGenmoji(prompt);
 });
 
 ipcMain.handle('get-app-icon', async (event, appPath) => {
@@ -560,7 +565,7 @@ const appendNativeMacUiMessage = (message = {}) => {
 };
 
 const normalizeMacNativePanelMode = (mode = 'sidebar') => {
-  const allowedModes = new Set(['sidebar', 'action-chain', 'menu', 'settings', 'downloads', 'clipboard', 'permissions', 'apple-intelligence', 'apple-summary', 'apple-image']);
+  const allowedModes = new Set(['sidebar', 'action-chain', 'menu', 'settings', 'downloads', 'clipboard', 'permissions']);
   return allowedModes.has(mode) ? mode : 'sidebar';
 };
 
@@ -7472,113 +7477,6 @@ app.whenReady().then(async () => {
       res.json({ success: false, error: 'No active Comet window found.' });
     });
 
-    nativeMacUiApp.post('/native-mac-ui/apple-intelligence/status', async (req, res) => {
-      try {
-        const result = await getAppleIntelligenceStatus();
-        res.json(result);
-      } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-      }
-    });
-
-    nativeMacUiApp.post('/native-mac-ui/apple-intelligence/summary', async (req, res) => {
-      const text = `${req.body?.text || ''}`.trim();
-      if (!text) {
-        res.status(400).json({ success: false, error: 'Missing summary text.' });
-        return;
-      }
-
-      try {
-        nativeMacUiState.isLoading = true;
-        nativeMacUiState.updatedAt = Date.now();
-        appendNativeMacUiMessage({
-          id: `apple-summary-user-${Date.now()}`,
-          role: 'user',
-          content: text,
-        });
-
-        const result = await summarizeWithAppleIntelligence(text);
-        if (result?.success && result.summary) {
-          appendNativeMacUiMessage({
-            id: `apple-summary-model-${Date.now()}`,
-            role: 'model',
-            content: `## Apple Intelligence Summary\n\n${result.summary}`,
-          });
-          nativeMacUiState.isLoading = false;
-          nativeMacUiState.updatedAt = Date.now();
-        } else {
-          nativeMacUiState.isLoading = false;
-          nativeMacUiState.error = result?.summaryReason || result?.error || 'Apple Intelligence summary failed.';
-          nativeMacUiState.updatedAt = Date.now();
-        }
-
-        res.json(result);
-      } catch (error) {
-        nativeMacUiState.isLoading = false;
-        nativeMacUiState.error = error.message;
-        nativeMacUiState.updatedAt = Date.now();
-        res.status(500).json({ success: false, error: error.message });
-      }
-    });
-
-    nativeMacUiApp.post('/native-mac-ui/apple-intelligence/image', async (req, res) => {
-      const prompt = `${req.body?.prompt || ''}`.trim();
-      const outputPath = req.body?.outputPath ? `${req.body.outputPath}` : undefined;
-      if (!prompt) {
-        res.status(400).json({ success: false, error: 'Missing image prompt.' });
-        return;
-      }
-
-      try {
-        nativeMacUiState.isLoading = true;
-        nativeMacUiState.updatedAt = Date.now();
-        appendNativeMacUiMessage({
-          id: `apple-image-user-${Date.now()}`,
-          role: 'user',
-          content: `Generate an Apple Intelligence image: ${prompt}`,
-        });
-
-        const result = await generateAppleIntelligenceImage(prompt, outputPath);
-        if (result?.success && result.imagePath) {
-          appendNativeMacUiMessage({
-            id: `apple-image-model-${Date.now()}`,
-            role: 'model',
-            content: `Generated image for: ${prompt}`,
-            mediaItems: [
-              {
-                id: `apple-image-media-${Date.now()}`,
-                type: 'image',
-                url: `file://${result.imagePath}`,
-                title: 'Apple Intelligence Image',
-                description: prompt,
-              },
-            ],
-          });
-          nativeMacUiState.isLoading = false;
-          nativeMacUiState.updatedAt = Date.now();
-        } else {
-          nativeMacUiState.isLoading = false;
-          nativeMacUiState.error = result?.imageReason || result?.error || 'Apple Intelligence image generation failed.';
-          nativeMacUiState.updatedAt = Date.now();
-        }
-
-        res.json(result);
-      } catch (error) {
-        nativeMacUiState.isLoading = false;
-        nativeMacUiState.error = error.message;
-        nativeMacUiState.updatedAt = Date.now();
-        res.status(500).json({ success: false, error: error.message });
-      }
-    });
-
-    nativeMacUiApp.post('/native-mac-ui/apple-intelligence/image-callback', (req, res) => {
-      const { path: imagePath } = req.body || {};
-      if (imagePath && mainWindow) {
-        mainWindow.webContents.send('apple-intelligence-image-generated', { path: imagePath });
-      }
-      res.json({ success: true });
-    });
-
     nativeMacUiServer = nativeMacUiApp.listen(nativeMacUiPort, '127.0.0.1', () => {
       console.log(`[MacNativeUI] Bridge listening at http://127.0.0.1:${nativeMacUiPort}`);
     });
@@ -10528,13 +10426,7 @@ ${tabData}`;
                 detail: 'You can re-enable robot permissions in Settings > Permissions.',
               });
             }
-          } else if (s.action === 'apple-intel-summary') {
-            nativeMacPanelManager.show('apple-summary', { relaunchIfRunning: true });
-          } else if (s.action === 'apple-intel-image') {
-            nativeMacPanelManager.show('apple-image', { relaunchIfRunning: true });
-          } else if (s.action === 'apple-intel-panel') {
-            nativeMacPanelManager.show('apple-intelligence', { relaunchIfRunning: true });
-          } else if (mainWindow) {
+            } else if (mainWindow) {
             mainWindow.webContents.send('execute-shortcut', s.action);
           }
         });

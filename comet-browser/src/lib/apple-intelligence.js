@@ -107,12 +107,17 @@ async function summarizeWithAppleIntelligence(text) {
   return runAppleIntelligenceCommand('summary', { text });
 }
 
-async function generateAppleIntelligenceImage(prompt, outputPath) {
-  return runAppleIntelligenceCommand('image', { prompt, outputPath });
+async function generateAppleIntelligenceImage(prompt, outputPath, style = 'illustration') {
+  return runAppleIntelligenceCommand('image', { prompt, outputPath, style });
+}
+
+async function generateGenmoji(prompt) {
+  return runAppleIntelligenceCommand('genmoji', { prompt });
 }
 
 module.exports = {
   generateAppleIntelligenceImage,
+  generateGenmoji,
   getAppleIntelligencePaths,
   getAppleIntelligenceStatus,
   summarizeWithAppleIntelligence,

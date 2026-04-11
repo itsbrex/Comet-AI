@@ -1964,13 +1964,8 @@ I couldn't schedule the task. The background service may not be running. Please 
 
 
         case 'OPEN_VIEW': {
-          if (command.value === 'apple-intelligence' && window.electronAPI.showMacNativePanel) {
-            await window.electronAPI.showMacNativePanel('apple-intelligence');
-            output = 'Opened Apple Intelligence native panel.';
-          } else {
-            setActiveView(command.value as any);
-            output = `Switched to ${command.value} view`;
-          }
+          setActiveView(command.value as any);
+          output = `Switched to ${command.value} view`;
           break;
         }
 
@@ -2053,11 +2048,6 @@ I couldn't schedule the task. The background service may not be running. Please 
             } else {
               output = `Apple image generation failed: ${res.error || res.imageReason || 'Unknown error'}`;
               resolveThinkingStep(genId, 'error', output);
-              // Fallback: invite user to try the interactive panel
-              if (res.imageReason?.includes('interactive sheet')) {
-                await window.electronAPI.showMacNativePanel('apple-intelligence');
-                output += '\nOpening the Apple Intelligence panel so you can use the interactive Image Playground sheet.';
-              }
             }
           } catch (e: any) {
             output = `Apple Intelligence error: ${e.message}`;
@@ -4636,12 +4626,31 @@ I've successfully executed the following real tasks:
                     <div className="mt-4 space-y-3">
                       {msg.mediaItems.map((item, midx) => {
                         if (item.type === 'image') {
+                          const imageUrl = item.url;
+                          const handleDownload = async () => {
+                            const link = document.createElement('a');
+                            link.href = imageUrl;
+                            link.download = item.title || `image-${Date.now()}.png`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          };
+                          const handleCopy = async () => {
+                            try {
+                              const response = await fetch(imageUrl);
+                              const blob = await response.blob();
+                              await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+                            } catch {
+                              // Fallback: just copy the URL
+                              await navigator.clipboard.writeText(imageUrl);
+                            }
+                          };
                           return (
                             <motion.div
                               key={midx}
                               initial={{ opacity: 0, scale: 0.95 }}
                               animate={{ opacity: 1, scale: 1 }}
-                              className="rounded-2xl overflow-hidden border border-white/10 shadow-xl"
+                              className="rounded-2xl overflow-hidden border border-white/10 shadow-xl group relative"
                             >
                               <img
                                 src={item.url}
@@ -4651,9 +4660,29 @@ I've successfully executed the following real tasks:
                                   (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200"><rect fill="%230f0f1a" width="400" height="200"/><text fill="%23ffffff40" x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="14">Image unavailable</text></svg>';
                                 }}
                               />
-                              {item.caption && (
+                              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={handleDownload}
+                                  className="p-2 rounded-lg bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors"
+                                  title="Download"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={handleCopy}
+                                  className="p-2 rounded-lg bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors"
+                                  title="Copy to clipboard"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                </button>
+                              </div>
+                              {(item.caption || item.description) && (
                                 <div className="px-3 py-2 bg-black/30 text-[10px] text-white/50 font-medium">
-                                  {item.caption}
+                                  {item.caption || item.description}
                                 </div>
                               )}
                             </motion.div>

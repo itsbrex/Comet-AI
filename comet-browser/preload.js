@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppleIntelligenceStatus: () => ipcRenderer.invoke('apple-intelligence-status'),
   summarizeWithAppleIntelligence: (text) => ipcRenderer.invoke('apple-intelligence-summary', text),
   generateAppleIntelligenceImage: (payload) => ipcRenderer.invoke('apple-intelligence-generate-image', payload),
+  generateGenmoji: (payload) => ipcRenderer.invoke('apple-intelligence-genmoji', payload),
   onAddNewTab: (callback) => {
     const subscription = (event, url) => callback(url);
     ipcRenderer.on('add-new-tab', subscription);

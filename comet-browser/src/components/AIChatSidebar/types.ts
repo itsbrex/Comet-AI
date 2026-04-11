@@ -11,6 +11,7 @@ export type MediaItem = {
   caption?: string;
   title?: string;
   description?: string;
+  downloadPath?: string;
 } | {
   type: 'video';
   videoUrl: string;
