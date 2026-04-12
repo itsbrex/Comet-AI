@@ -246,6 +246,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAsDefaultBrowser: () => ipcRenderer.invoke('set-as-default-browser'),
   hideWebview: () => ipcRenderer.send('hide-webview'),
   showWebview: () => ipcRenderer.send('show-webview'),
+  createDesktopShortcut: (args) => ipcRenderer.invoke('create-desktop-shortcut', args),
 
   // Chat & File Export
   exportChatAsTxt: (messages) => ipcRenderer.invoke('export-chat-txt', messages),

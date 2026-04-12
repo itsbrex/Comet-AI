@@ -1,34 +1,14 @@
 import SwiftUI
+
+#if canImport(ImagePlayground)
 import ImagePlayground
+#endif
+
+#if canImport(FoundationModels)
 import FoundationModels
+#endif
 
-@available(macOS 26.0, *)
-struct AppleIntelligencePanelView: View {
-    @ObservedObject var viewModel: NativePanelViewModel
-    @State private var selectedTab: AppleAITab = .summary
-    @State private var inputText: String = ""
-    @State private var summaryResult: String = ""
-    @State private var generatedImage: URL?
-    @State private var isGenerating: Bool = false
-    @State private var showImagePlayground: Bool = false
-    @State private var isModelAvailable: Bool = false
-    
-    enum AppleAITab: String, CaseIterable {
-        case summary = "Summary"
-        case image = "Image"
-        case genmoji = "Genmoji"
-        case tools = "Writing Tools"
-        
-        var symbol: String {
-            switch self {
-            case .summary: return "doc.text"
-            case .image: return "photo"
-            case .genmoji: return "face.smiling"
-            case .tools: return "pencil.line"
-            }
-        }
-    }
-
+@available(macOS 15.0, *)
 struct AppleIntelligencePanelView: View {
     @ObservedObject var viewModel: NativePanelViewModel
     @State private var selectedTab: AppleAITab = .summary
@@ -114,8 +94,11 @@ struct AppleIntelligencePanelView: View {
                     case .tools:
                         writingToolsView(palette: palette)
                     }
-}
-        .padding(20)
+                }
+                .padding(20)
+            }
+        }
+        .background(palette.mutedSurface)
     }
     
     private func versionBadge(palette: PanelPalette, active: Bool) -> some View {
@@ -124,7 +107,7 @@ struct AppleIntelligencePanelView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(active ? .green : .orange)
             
-            Text(active ? "Apple Intelligence Ready" : "Requires macOS 26.0+")
+            Text(active ? "Apple Intelligence Ready" : "Requires macOS 15.0+")
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(active ? .green : .orange)
             
@@ -139,9 +122,6 @@ struct AppleIntelligencePanelView: View {
         .background((active ? Color.green : Color.orange).opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
-}
-        .background(palette.background)
-    }
     
     private func headerSection(palette: PanelPalette) -> some View {
         HStack {
@@ -155,18 +135,16 @@ struct AppleIntelligencePanelView: View {
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(palette.primaryText)
                     
-                    if #available(macOS 26.0, *) {
-                        Text("26+")
+                        Text("15+")
                             .font(.system(size: 9, weight: .bold))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .background(palette.accent)
                             .foregroundStyle(.white)
                             .clipShape(Capsule())
-                    }
                 }
                 
-                Text("On-device AI - Requires macOS 26.0+")
+                Text("On-device AI - Requires macOS 15.0+")
                     .font(.system(size: 10, weight: .medium, design: .rounded))
                     .foregroundStyle(palette.secondaryText)
             }
@@ -251,11 +229,11 @@ struct AppleIntelligencePanelView: View {
             TextEditor(text: $inputText)
                 .font(.system(size: 14))
                 .scrollContentBackground(.hidden)
-                .background(palette.background)
+                .background(palette.mutedSurface)
                 .foregroundStyle(palette.primaryText)
                 .frame(height: 120)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.border.opacity(0.3), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.stroke.opacity(0.3), lineWidth: 1))
             
             if !summaryResult.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -267,7 +245,7 @@ struct AppleIntelligencePanelView: View {
                         .font(.system(size: 13))
                         .foregroundStyle(palette.primaryText)
                         .padding(12)
-                        .background(palette.background.opacity(0.5))
+                        .background(palette.mutedSurface.opacity(0.5))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
@@ -302,24 +280,20 @@ struct AppleIntelligencePanelView: View {
         
         Task {
             do {
-                // Check if Apple Intelligence model is available
-                let model = FoundationModel.onDevice
-                
-                let session = LanguageModelSession(model: .default)
+                #if canImport(FoundationModels)
                 let instruction = "Summarize this text concisely in 2-3 sentences, capturing the key points."
                 
-                let prompt = Prompt(text: inputText, instructions: instruction)
+                let session = LanguageModelSession(instructions: instruction)
                 
                 summaryResult = "🤖 Apple Intelligence is generating summary...\n"
                 
-                let response = try await session.respond(to: prompt)
+                let response = try await session.respond(to: inputText)
                 
-                if let content = response.content {
-                    summaryResult = "✅ **Summary:**\n\n\(content.string)"
-                } else {
-                    // Fallback to extractive
-                    summaryResult = extractiveSummary(text: inputText)
-                }
+                summaryResult = "✅ **Summary:**\n\n\(response.content)"
+                #else
+                // Fallback to extractive if module not available
+                summaryResult = extractiveSummary(text: inputText)
+                #endif
             } catch {
                 // Fallback to extractive summarization
                 summaryResult = extractiveSummary(text: inputText)
@@ -343,9 +317,10 @@ struct AppleIntelligencePanelView: View {
             return text
         }
         
-        let important = sentences.enumerated()
-            .map { (index: $0.offset, sentence: $0.element, score: 1.0 / Double(index + 1) + Double($0.element.count) / 1000.0) }
-            .sorted { $0.score > $1.score }
+        let important = sentences.enumerated().map { item -> (index: Int, sentence: String, score: Double) in
+            let score = 1.0 / Double(item.offset + 1) + Double(item.element.count) / 1000.0
+            return (index: item.offset, sentence: item.element, score: score)
+        }.sorted { $0.score > $1.score }
             .prefix(3)
             .map { $0.sentence }
             .joined(separator: ". ")
@@ -379,55 +354,6 @@ struct AppleIntelligencePanelView: View {
         }
     }
     
-    // Keep for older macOS versions
-    private func generateSummary() {
-        guard !inputText.isEmpty else { return }
-        isGenerating = true
-        summaryResult = ""
-        
-        Task {
-            summaryResult = "📝 Extractive summary:\n\n"
-            let sentences = inputText.components(separatedBy: CharacterSet(charactersIn: ".!?\n"))
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { $0.count > 20 }
-            
-            if sentences.count <= 3 {
-                summaryResult = inputText
-            } else {
-                let important = sentences.enumerated()
-                    .map { (index: $0.offset, sentence: $0.element, score: 1.0 / Double(index + 1) + Double($0.element.count) / 1000.0) }
-                    .sorted { $0.score > $1.score }
-                    .prefix(3)
-                    .map { $0.sentence }
-                    .joined(separator: ". ")
-                summaryResult = "📝 **Summary:**\n\n\(important)."
-            }
-            
-            isGenerating = false
-        }
-    }
-    
-    private func summarizeCurrentPage() {
-        isGenerating = true
-        summaryResult = "🌐 Extracting page..."
-        
-        Task {
-            do {
-                let url = URL(string: "\(viewModel.configuration.bridgeURL)/native-mac-ui/summarize-page")!
-                let (data, _) = try await URLSession.shared.data(from: url)
-                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let content = json["content"] as? String {
-                    inputText = content
-                    summaryResult = "✅ Extracted. Click 'Generate' to summarize."
-                } else {
-                    summaryResult = "❌ Failed"
-                }
-            } catch {
-                summaryResult = "❌ \(error.localizedDescription)"
-            }
-            isGenerating = false
-        }
-    }
     
     private func imageView(palette: PanelPalette) -> some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -467,11 +393,13 @@ struct AppleIntelligencePanelView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
-            .background(palette.background.opacity(0.5))
+            .background(palette.mutedSurface.opacity(0.5))
             .clipShape(RoundedRectangle(cornerRadius: 12))
+            #if canImport(ImagePlayground)
             .imagePlaygroundSheet(isPresented: $showImagePlayground, concept: inputText.isEmpty ? "A beautiful landscape" : inputText) { url in
                 generatedImage = url
             }
+            #endif
             
             Spacer()
         }
@@ -493,7 +421,7 @@ struct AppleIntelligencePanelView: View {
                                 .font(.system(size: 11, weight: .medium))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(analysisType == type ? palette.accent.opacity(0.2) : palette.background.opacity(0.5))
+                                .background(analysisType == type ? palette.accent.opacity(0.2) : palette.mutedSurface.opacity(0.5))
                                 .foregroundStyle(analysisType == type ? palette.accent : palette.secondaryText)
                                 .clipShape(Capsule())
                         }
@@ -505,7 +433,7 @@ struct AppleIntelligencePanelView: View {
             TextEditor(text: $inputText)
                 .font(.system(size: 13))
                 .scrollContentBackground(.hidden)
-                .background(palette.background)
+                .background(palette.mutedSurface)
                 .frame(height: 100)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             
@@ -532,7 +460,7 @@ struct AppleIntelligencePanelView: View {
                     .foregroundStyle(palette.primaryText)
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(palette.background.opacity(0.5))
+                    .background(palette.mutedSurface.opacity(0.5))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
@@ -554,7 +482,7 @@ struct AppleIntelligencePanelView: View {
                                 .font(.system(size: 11, weight: .medium))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(extractionType == type ? palette.accent.opacity(0.2) : palette.background.opacity(0.5))
+                                .background(extractionType == type ? palette.accent.opacity(0.2) : palette.mutedSurface.opacity(0.5))
                                 .foregroundStyle(extractionType == type ? palette.accent : palette.secondaryText)
                                 .clipShape(Capsule())
                         }
@@ -586,7 +514,7 @@ struct AppleIntelligencePanelView: View {
                     .foregroundStyle(palette.primaryText)
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(palette.background.opacity(0.5))
+                    .background(palette.mutedSurface.opacity(0.5))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
@@ -608,7 +536,7 @@ struct AppleIntelligencePanelView: View {
                                 .font(.system(size: 11, weight: .medium))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(rewriteStyle == style ? palette.accent.opacity(0.2) : palette.background.opacity(0.5))
+                                .background(rewriteStyle == style ? palette.accent.opacity(0.2) : palette.mutedSurface.opacity(0.5))
                                 .foregroundStyle(rewriteStyle == style ? palette.accent : palette.secondaryText)
                                 .clipShape(Capsule())
                         }
@@ -620,7 +548,7 @@ struct AppleIntelligencePanelView: View {
             TextEditor(text: $inputText)
                 .font(.system(size: 13))
                 .scrollContentBackground(.hidden)
-                .background(palette.background)
+                .background(palette.mutedSurface)
                 .frame(height: 80)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             
@@ -652,7 +580,7 @@ struct AppleIntelligencePanelView: View {
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(palette.background.opacity(0.5))
+                .background(palette.mutedSurface.opacity(0.5))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             
@@ -701,6 +629,7 @@ struct AppleIntelligencePanelView: View {
         
         Task {
             let text = inputText
+            _ = text
             switch extractionType {
             case .links:
                 let links = extractMatches(pattern: "https?://[^\\s]+")
@@ -747,7 +676,10 @@ struct AppleIntelligencePanelView: View {
             
             switch style {
             case .professional:
-                summaryResult = text.replacingOccurrences(of: "\\b(gonna|won't|can't)\\b", with: { $0 == "gonna" ? "going to" : ($0 == "won't" ? "will not" : "cannot") }, options: .regularExpression)
+                summaryResult = text
+                    .replacingOccurrences(of: "\\bgonna\\b", with: "going to", options: .regularExpression)
+                    .replacingOccurrences(of: "\\bwon't\\b", with: "will not", options: .regularExpression)
+                    .replacingOccurrences(of: "\\bcan't\\b", with: "cannot", options: .regularExpression)
             case .friendly:
                 summaryResult = "Hey! Here's a friendly version: \(text.lowercased().capitalized)"
             case .concise:
@@ -773,10 +705,10 @@ struct AppleIntelligencePanelView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .padding(12)
-                .background(palette.background)
+                .background(palette.mutedSurface)
                 .foregroundStyle(palette.primaryText)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.border.opacity(0.3), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.stroke.opacity(0.3), lineWidth: 1))
             
             Text("Tap the emoji keyboard in any text field, then tap the Genmoji icon to create custom emojis.")
                 .font(.system(size: 11))
@@ -824,7 +756,7 @@ struct AppleIntelligencePanelView: View {
             Spacer()
         }
         .padding(12)
-        .background(palette.background.opacity(0.5))
+        .background(palette.mutedSurface.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

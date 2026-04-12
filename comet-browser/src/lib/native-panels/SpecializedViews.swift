@@ -384,10 +384,11 @@ struct MarkdownMessageText: View {
 
     @ViewBuilder
     private func markdownBlock(_ text: String, palette: PanelPalette) -> some View {
+        let markdownReadyText = text.replacingOccurrences(of: "\n", with: "  \n")
         if let rendered = try? AttributedString(
-            markdown: text,
+            markdown: markdownReadyText,
             options: AttributedString.MarkdownParsingOptions(
-                interpretedSyntax: .full,
+                interpretedSyntax: .inlineOnlyPreservingWhitespace,
                 failurePolicy: .returnPartiallyParsedIfPossible
             )
         ) {

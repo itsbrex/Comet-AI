@@ -15,6 +15,8 @@ interface ServerPreset {
     requiresToken?: boolean;
     tokenEnvVar?: string;
     tokenPlaceholder?: string;
+    authUrl?: string;
+    authGuide?: string;
 }
 
 const SERVER_PRESETS: ServerPreset[] = [
@@ -35,6 +37,8 @@ const SERVER_PRESETS: ServerPreset[] = [
         requiresToken: true,
         tokenEnvVar: 'GITHUB_PERSONAL_ACCESS_TOKEN',
         tokenPlaceholder: 'ghp_xxxxxxxxxxxxxxxxxxxx',
+        authUrl: 'https://github.com/settings/tokens/new?scopes=repo,read:org,read:user,user:email',
+        authGuide: 'Create a classic token with repo and user scopes.',
     },
     {
         name: 'Slack',
@@ -46,6 +50,8 @@ const SERVER_PRESETS: ServerPreset[] = [
         requiresToken: true,
         tokenEnvVar: 'SLACK_BOT_TOKEN',
         tokenPlaceholder: 'xoxb-xxxxxxxxxxxxxxxxxxxx',
+        authUrl: 'https://api.slack.com/apps',
+        authGuide: 'Create an app, add OAuth scope (chat:write, channels:read) and install.',
     },
     {
         name: 'Gmail',
@@ -57,6 +63,8 @@ const SERVER_PRESETS: ServerPreset[] = [
         requiresToken: true,
         tokenEnvVar: 'GMAIL_CREDENTIALS_PATH',
         tokenPlaceholder: '/path/to/credentials.json',
+        authUrl: 'https://console.cloud.google.com/apis/credentials',
+        authGuide: 'Create OAuth Client ID (Desktop) and download JSON.',
     },
     {
         name: 'n8n Workflows',
@@ -68,6 +76,21 @@ const SERVER_PRESETS: ServerPreset[] = [
         requiresToken: true,
         tokenEnvVar: 'N8N_URL',
         tokenPlaceholder: 'https://your-n8n-instance.com',
+        authUrl: 'https://docs.n8n.io/integrations/builtin/credentials/n8n/',
+        authGuide: 'Go to your n8n settings > API to generate a key.',
+    },
+    {
+        name: 'Notion',
+        desc: 'Connect your workspace to search, create, and update pages',
+        type: 'stdio',
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-notion'],
+        env: { 'NOTION_API_KEY': '' },
+        requiresToken: true,
+        tokenEnvVar: 'NOTION_API_KEY',
+        tokenPlaceholder: 'secret_xxxxxxxxxxxxxxxxxxxx',
+        authUrl: 'https://www.notion.so/my-integrations',
+        authGuide: 'Create an internal integration and copy the secret token.',
     },
     {
         name: 'Git',
@@ -295,7 +318,22 @@ const McpSettings = () => {
                                     </div>
 
                                     {newServer.envVars.length > 0 && (
-                                        <div className="space-y-3 pt-2">
+                                        <div className="space-y-3 pt-4 border-t border-white/5">
+                                            {selectedPreset?.authUrl && (
+                                                <div className="flex items-start gap-3 p-3 rounded-xl bg-deep-space-accent-neon/5 border border-deep-space-accent-neon/10 mb-2">
+                                                    <div className="flex-1 space-y-1">
+                                                        <h5 className="text-[11px] font-bold text-white">Need a token?</h5>
+                                                        <p className="text-[10px] text-white/50">{selectedPreset.authGuide}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => window.electronAPI?.openExternal(selectedPreset.authUrl!)}
+                                                        className="px-3 py-1.5 bg-deep-space-accent-neon text-black text-[10px] font-bold rounded-lg hover:bg-white transition-all whitespace-nowrap flex items-center gap-1"
+                                                    >
+                                                        <Globe size={12} /> Get Token
+                                                    </button>
+                                                </div>
+                                            )}
+                                            
                                             <div className="flex items-center justify-between">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Environment Variables</label>
                                                 <button

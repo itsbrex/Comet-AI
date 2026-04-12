@@ -2,16 +2,48 @@ name: Build All Platforms
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release Tag (leave empty to use v + package.json version)'
+        required: false
+        default: ''
+      version_name:
+        description: 'Version Name (leave empty to use package.json version)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
 
 jobs:
+  get-version:
+    name: Get Version Info
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pkg.outputs.version }}
+      tag: ${{ steps.pkg.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extra version
+        id: pkg
+        run: |
+          VERSION=$(grep '"version":' comet-browser/package.json | head -1 | awk -F: '{ print $2 }' | sed 's/[", ]//g')
+          INPUT_VERSION="${{ github.event.inputs.version_name }}"
+          INPUT_TAG="${{ github.event.inputs.release_tag }}"
+          
+          FINAL_VERSION="${INPUT_VERSION:-$VERSION}"
+          FINAL_TAG="${INPUT_TAG:-v$FINAL_VERSION}"
+          
+          echo "version=$FINAL_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$FINAL_TAG" >> $GITHUB_OUTPUT
+          echo "Using version: $FINAL_VERSION"
+          echo "Using tag: $FINAL_TAG"
   # ============================================================================
   # ANDROID BUILD
   # ============================================================================
   build-android:
     name: Build Android
+    needs: [get-version]
     runs-on: ubuntu-latest
     environment: Production
     steps:
@@ -110,6 +142,7 @@ jobs:
   # ============================================================================
   build-ios:
     name: Build iOS
+    needs: [get-version]
     runs-on: macos-latest
     environment: Production
     steps:
@@ -164,6 +197,7 @@ jobs:
   # ============================================================================
   build-desktop:
     name: Build Desktop (${{ matrix.target }})
+    needs: [get-version]
     environment: Production
     runs-on: ${{ matrix.os }}
     strategy:
@@ -173,7 +207,7 @@ jobs:
           - target: windows
             os: windows-latest
             build_cmd: npm run dist:win
-            artifact_path: comet-browser/release/*.exe
+            artifact_path: comet-browser/release/*.{exe,msix}
           - target: macos
             os: macos-latest
             build_cmd: npm run dist:mac
@@ -230,7 +264,7 @@ jobs:
         working-directory: comet-browser
         env:
           NEXT_PUBLIC_APP_NAME: Comet
-          NEXT_PUBLIC_APP_VERSION: 3.1.0
+          NEXT_PUBLIC_APP_VERSION: ${{ needs.get-version.outputs.version }}
         run: ${{ matrix.build_cmd }}
 
       - name: Upload Artifact
@@ -244,7 +278,7 @@ jobs:
   # ============================================================================
   create-release:
     name: Create Draft Release
-    needs: [build-android, build-ios, build-desktop]
+    needs: [get-version, build-android, build-ios, build-desktop]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -262,7 +296,7 @@ jobs:
           artifacts: "release-artifacts/*"
           draft: true
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag: "v3.1.0-manual-${{ github.run_number }}"
-          name: "Manual Release v3.1.0 (#${{ github.run_number }})"
+          tag: ${{ needs.get-version.outputs.tag }}
+          name: "Release ${{ needs.get-version.outputs.tag }} (#${{ github.run_number }})"
           body: "Manual cross-platform build triggered from workflow_dispatch."
           allowUpdates: true

@@ -227,7 +227,7 @@ ipcMain.handle('get-app-version', () => {
 });
 
 ipcMain.handle('get-platform', () => {
-   return process.platform;
+  return process.platform;
 });
 
 ipcMain.handle('apple-intelligence-status', async () => {
@@ -298,7 +298,7 @@ async function applyNetworkSecurityConfig(nextConfig = {}) {
     }
   }
 
-  await Promise.all([...uniqueSessions].map((targetSession) => 
+  await Promise.all([...uniqueSessions].map((targetSession) =>
     networkSecurityManager.applyToSession(targetSession)
   ));
   return config;
@@ -528,7 +528,7 @@ const createNativeMacUiSnapshot = () => {
   const recentMessages = Array.isArray(nativeMacUiState.messages) ? nativeMacUiState.messages : [];
   const lastMsg = recentMessages[recentMessages.length - 1];
   const actionLogs = lastMsg?.actionLogs || [];
-  
+
   return {
     ...nativeMacUiState,
     themeAppearance: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
@@ -676,24 +676,24 @@ const openSettingsSection = (section, options = {}) => {
 const triggerShortcut = (action) => {
   // Get any available window
   let targetWindow = mainWindow;
-  
+
   if (!targetWindow || targetWindow.isDestroyed()) {
     targetWindow = BrowserWindow.getAllWindows()[0];
   }
-  
+
   if (targetWindow && !targetWindow.isDestroyed()) {
     targetWindow.webContents.send('execute-shortcut', action);
     return;
   }
-  
+
   // Browser window doesn't exist - app not running or crashed
   console.log('[triggerShortcut] Browser not available for:', action, '- attempting recovery');
-  
+
   // For critical menu items, try to restart the main window
   if (isQuitting || app.isReady()) {
     createMainWindow();
   }
-  
+
   // Don't crash - just log
   console.log('[triggerShortcut] No window available for:', action);
 };
@@ -906,8 +906,8 @@ const buildApplicationMenu = () => {
         { label: 'Show AI Overview', accelerator: menuAccelerator('toggle-ai-overview', 'CmdOrCtrl+Option+O'), click: () => triggerShortcut('toggle-ai-overview') },
         ...(isMac ? [
           { type: 'separator' },
-          { label: 'Apple Intelligence Panel', accelerator: 'Cmd+Option+1', click: () => triggerShortcut('open-apple-ai') },
-        ]) : [],
+          { label: 'Apple Intelligence Panel', accelerator: 'Cmd+Option+1', click: () => triggerShortcut('open-apple-ai') }
+        ] : []),
         { type: 'separator' },
         ...(isMac ? [
           {
@@ -1802,18 +1802,18 @@ app.on('open-url', async (event, url) => {
     target = mainWindow;
   }
   if (!target || target.isDestroyed()) return;
-  
+
   console.log('[Main] open-url received:', url);
-  
+
   // Handle Raycast commands
   const parsed = new URL(url);
   const pathname = parsed.pathname.replace(/^\/+/, '');
   const params = Object.fromEntries(parsed.searchParams);
-  
+
   // Comet Browser protocol
   if (url.startsWith(`${PROTOCOL}://`)) {
     target.webContents.send('auth-callback', url);
-  } 
+  }
   // HTTP/HTTPS URLs
   else if (url.startsWith('http://') || url.startsWith('https://')) {
     target.webContents.send('add-new-tab', url);
@@ -1822,11 +1822,11 @@ app.on('open-url', async (event, url) => {
   else if (url.startsWith('comet-ai://') || url.startsWith('comet://')) {
     const command = pathname || params.command || 'index';
     console.log('[Main] Raycast command:', command, params);
-    
+
     // Map commands to IPC events
     const commandMap = {
       'chat': 'open-ai-chat',
-      'browse': 'open-quick-browse', 
+      'browse': 'open-quick-browse',
       'ocr': 'trigger-screen-ocr',
       'pdf': 'open-pdf-creator',
       'automation': 'open-automation-panel',
@@ -1834,11 +1834,11 @@ app.on('open-url', async (event, url) => {
       'index': 'open-main',
       'navigate': 'navigate-to-url',
     };
-    
+
     const ipcCommand = commandMap[command] || command;
     target.webContents.send(ipcCommand, params);
   }
-  
+
   if (target.isMinimized()) target.restore();
   target.focus();
 });
@@ -3481,9 +3481,9 @@ ipcMain.on('propose-password-save', (event, { domain, username, password, type }
   const normalizedDomain = normalizeVaultSite(domain);
 
   // PRE-CHECK: Avoid opening dialog if identical entry exists
-  const isDuplicate = passwords.some(p => 
-    p.site === normalizedDomain && 
-    p.username === username && 
+  const isDuplicate = passwords.some(p =>
+    p.site === normalizedDomain &&
+    p.username === username &&
     p.password === password &&
     (p.type === type || (!p.type && type === 'login'))
   );
@@ -3516,14 +3516,14 @@ ipcMain.on('propose-password-save', (event, { domain, username, password, type }
 
       const passwords = readVaultEntries();
       const normalizedDomain = normalizeVaultSite(domain);
-      
-      passwords.push({ 
-        id: Date.now().toString(), 
-        site: normalizedDomain, 
-        username, 
-        password, 
+
+      passwords.push({
+        id: Date.now().toString(),
+        site: normalizedDomain,
+        username,
+        password,
         type: type || 'login',
-        created: new Date().toISOString() 
+        created: new Date().toISOString()
       });
       writeVaultEntries(passwords);
       clearVaultUnlock();
@@ -3537,9 +3537,9 @@ ipcMain.on('propose-form-collection-save', (event, { domain, title, data, type }
   const normalizedDomain = normalizeVaultSite(domain);
 
   // PRE-CHECK: If we already have this exact form-data for this site, skip.
-  const isDuplicate = entries.some(e => 
-    e.site === normalizedDomain && 
-    e.type === 'form' && 
+  const isDuplicate = entries.some(e =>
+    e.site === normalizedDomain &&
+    e.type === 'form' &&
     JSON.stringify(e.formData) === JSON.stringify(data)
   );
 
@@ -3562,13 +3562,13 @@ ipcMain.on('propose-form-collection-save', (event, { domain, title, data, type }
       if (!verification.success) return;
 
       const entries = readVaultEntries();
-      entries.push({ 
-        id: Date.now().toString(), 
-        site: normalizeVaultSite(domain), 
+      entries.push({
+        id: Date.now().toString(),
+        site: normalizeVaultSite(domain),
         title,
-        formData: data, 
+        formData: data,
         type: 'form',
-        created: new Date().toISOString() 
+        created: new Date().toISOString()
       });
       writeVaultEntries(entries);
       console.log(`[Vault] Saved form collection for ${domain}`);
@@ -3755,7 +3755,7 @@ ipcMain.on('open-auth-window', (event, authUrl) => {
             dispatchAuthCallback(`comet-browser://auth?${params.toString()}`);
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     });
 
     authWindow.on('closed', () => {
@@ -4556,10 +4556,10 @@ ipcMain.handle('extract-page-content', async () => {
   if (!view || !view.webContents || view.webContents.isDestroyed()) {
     return { error: 'No active view' };
   }
-  
+
   // Small delay to let page settle before reading
   await new Promise(resolve => setTimeout(resolve, 500));
-  
+
   try {
     const content = await view.webContents.executeJavaScript(`
       (() => {
@@ -7119,31 +7119,28 @@ ${pages.map((page, pageIdx) => `
 ${(() => {
   let row = 1;
   let code = '';
-  
+
   // Add section title as header
   if (page.title) {
-    code += \`ws.cell(row=${row}, column=1, value="${page.title.replace(/"/g, '\\"')}")
-ws.cell(row=${row}, column=1).font = Font(bold=True, size=14)
-ws.cell(row=${row}, column=1).fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")
-row += 2
-\`;
+    code += `ws.cell(row=${row}, column=1, value="${page.title.replace(/"/g, '\\"')}")\n`;
+    code += `ws.cell(row=${row}, column=1).font = Font(bold=True, size=14)\n`;
+    code += `ws.cell(row=${row}, column=1).fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")\n`;
+    row += 2;
   }
   
   // Process sections with tables
   (page.sections || []).forEach((section, secIdx) => {
     if (section.title) {
-      code += \`ws.cell(row=\${row}, column=1, value="\${section.title.replace(/"/g, '\\"')}")
-ws.cell(row=\${row}, column=1).font = Font(bold=True, size=12)
-row += 1
-\`;
+      code += `ws.cell(row=${row}, column=1, value="${section.title.replace(/"/g, '\\"')}")\n`;
+      code += `ws.cell(row=${row}, column=1).font = Font(bold=True, size=12)\n`;
+      row += 1;
     }
     if (section.content) {
       // Split content into rows
-      const lines = section.content.split('\\n').filter(Boolean);
+      const lines = section.content.split('\n').filter(Boolean);
       lines.forEach(line => {
-        code += \`ws.cell(row=\${row}, column=1, value="\${line.replace(/"/g, '\\"')}")
-row += 1
-\`;
+        code += `ws.cell(row=${row}, column=1, value="${line.replace(/"/g, '\\"')}")\n`;
+        row += 1;
       });
     }
     if (section.table && Array.isArray(section.table)) {
@@ -7151,16 +7148,13 @@ row += 1
       section.table.forEach((tableRow, tblRowIdx) => {
         const cols = Array.isArray(tableRow) ? tableRow : [tableRow];
         cols.forEach((cell, colIdx) => {
-          code += \`ws.cell(row=\${row}, column=\${colIdx + 1}, value="\${String(cell).replace(/"/g, '\\"')}")
-\`;
+          code += `ws.cell(row=${row}, column=${colIdx + 1}, value="${String(cell).replace(/"/g, '\\"')}")\n`;
           if (tblRowIdx === 0) {
-            code += \`ws.cell(row=\${row}, column=\${colIdx + 1}).font = Font(bold=True)
-ws.cell(row=\${row}, column=\${colIdx + 1}).fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")
-\`;
+            code += `ws.cell(row=${row}, column=${colIdx + 1}).font = Font(bold=True)\n`;
+            code += `ws.cell(row=${row}, column=${colIdx + 1}).fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")\n`;
           }
         });
-        code += \`row += 1
-\`;
+        row += 1;
       });
       row += 1;
     }
@@ -7189,16 +7183,16 @@ wb.save("${fullPath.replace(/"/g, '\\"')}")
       const { exec } = require('child_process');
       const { promisify } = require('util');
       const execAsync = promisify(exec);
-      
+
       try {
         await execAsync(`python3 -c "${pythonCode.replace(/"/g, '\\"').replace(/\n/g, '; ')}"`, { timeout: 30000 });
       } catch (pyErr) {
         // Fallback: simple JS generation if Python fails
         const XLSX = require('xlsx');
         const workbook = XLSX.utils.book_new();
-        const worksheet = XLSX.utils.-sheet_from_json(JSON.stringify(pages.flatMap(p => 
-          (p.sections || []).flatMap(s => [s.title, s.content]).filter(Boolean)
-        )));
+        const worksheet = XLSX.utils.aoa_to_sheet(pages.flatMap(p =>
+          (p.sections || []).flatMap(s => [[s.title], [s.content]]).filter(row => !!row[0])
+        ));
         XLSX.utils.book_append_sheet(workbook, worksheet, title);
         const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
         fs.writeFileSync(fullPath, buffer);
@@ -7558,7 +7552,7 @@ wb.save("${fullPath.replace(/"/g, '\\"')}")
             return clone.innerText.replace(/\\s+/g, ' ').substring(0, 5000);
           })()
         `);
-        
+
         res.json({ success: true, content: domContent });
       } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -7766,14 +7760,14 @@ wb.save("${fullPath.replace(/"/g, '\\"')}")
         const pin = args.pin;
         const configId = args.id;
         console.log(`[WiFi-Sync] Mobile approved high risk action with PIN: ${pin}`);
-        
+
         // Check if there's a pending power action
         if (pendingPowerActions.has(configId)) {
           const pendingAction = pendingPowerActions.get(configId);
           pendingAction.resolve({ success: true, approved: true });
           pendingPowerActions.delete(configId);
         }
-        
+
         if (
           nativeMacUiState.pendingApproval &&
           nativeMacUiState.pendingApproval.approvalToken === configId
@@ -8037,13 +8031,13 @@ wb.save("${fullPath.replace(/"/g, '\\"')}")
             auto_approve_mid: store.get('auto_approve_mid_risk') || false,
             run_in_background: store.get('run_in_background_automation') || true,
             notifications_enabled: store.get('desktop_notifications') || true,
-            sync_mode: 'local_cloud', 
+            sync_mode: 'local_cloud',
           };
           sendResponse({ success: true, settings: currentSettings });
         } else if (action === 'update-setting') {
           const { key, value } = args;
           console.log(`[WiFi-Sync] Updating setting: ${key} = ${value}`);
-          
+
           if (key === 'theme') {
             nativeTheme.themeSource = value;
           } else {
@@ -8068,79 +8062,79 @@ wb.save("${fullPath.replace(/"/g, '\\"')}")
             sendResponse({ success: false, error: 'Automation manager unavailable' });
           }
         } else if (action === 'toggle-task') {
-           const { taskId } = args;
-           ipcMain.emit('automation:toggle-task', { sender: { send: () => {} } }, taskId);
-           sendResponse({ success: true });
+          const { taskId } = args;
+          ipcMain.emit('automation:toggle-task', { sender: { send: () => { } } }, taskId);
+          sendResponse({ success: true });
         } else if (action === 'run-task') {
-           const { taskId } = args;
-           ipcMain.emit('automation:run-task', { sender: { send: () => {} } }, taskId);
-           sendResponse({ success: true });
+          const { taskId } = args;
+          ipcMain.emit('automation:run-task', { sender: { send: () => { } } }, taskId);
+          sendResponse({ success: true });
         } else if (action === 'delete-task') {
-           const { taskId } = args;
-           ipcMain.emit('automation:delete-task', { sender: { send: () => {} } }, taskId);
-           sendResponse({ success: true });
+          const { taskId } = args;
+          ipcMain.emit('automation:delete-task', { sender: { send: () => { } } }, taskId);
+          sendResponse({ success: true });
         } else if (action === 'shutdown' || action === 'restart' || action === 'sleep' || action === 'lock') {
-           // ALWAYS require QR verification for power/restart actions - even from mobile
-           const powerAction = action;
-           console.log(`[WiFi-Sync] Power action requested: ${powerAction} - requiring QR approval`);
-           
-           const actionDescriptions: Record<string, string> = {
-             shutdown: 'Shutdown Desktop',
-             restart: 'Restart Desktop',
-             sleep: 'Sleep Desktop',
-             lock: 'Lock Screen'
-           };
-           
-           const { qrImage, pin, token } = await generateShellApprovalQR(actionDescriptions[powerAction] || powerAction);
-           wifiSyncService.sendToMobile({
-             action: 'power-approval-qr',
-             commandId: token,
-             pin: pin,
-             powerAction: powerAction,
-             qrData: qrImage,
-           });
-           
-           // Wait for mobile approval, then execute the power action
-           const actionResult = await new Promise(async (resolve) => {
-             const timeout = setTimeout(() => {
-               pendingPowerActions.delete(token);
-               resolve({ success: false, error: 'Power action approval timeout (2 minutes)' });
-             }, 120000);
-             
-             pendingPowerActions.set(token, {
-               action: powerAction,
-               resolve: (result) => {
-                 clearTimeout(timeout);
-                 pendingPowerActions.delete(token);
-                 resolve(result);
-               }
-             });
-           });
-           
-           // Execute the power action after approval
-           if (actionResult.success) {
-             try {
-               const { exec } = require('child_process');
-               const actionCommands: Record<string, string> = {
-                 shutdown: 'osascript -e \'tell app "System Events" to shut down\'',
-                 restart: 'osascript -e \'tell app "System Events" to restart\'',
-                 sleep: 'pmset sleepnow',
-                 lock: '/System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -suspend'
-               };
-               
-               exec(actionCommands[powerAction], (err, stdout, stderr) => {
-                 if (err) {
-                   sendResponse({ success: false, error: err.message });
-                 } else {
-                   sendResponse({ success: true, output: `Power action ${powerAction} executed` });
-                 }
-               });
-             } catch (err) {
-               sendResponse({ success: false, error: err.message });
-             }
-           } else {
-             sendResponse({ success: false, error: actionResult.error || 'Power action not approved' });
-           }
+          // ALWAYS require QR verification for power/restart actions - even from mobile
+          const powerAction = action;
+          console.log(`[WiFi-Sync] Power action requested: ${powerAction} - requiring QR approval`);
+
+          const actionDescriptions = {
+            shutdown: 'Shutdown Desktop',
+            restart: 'Restart Desktop',
+            sleep: 'Sleep Desktop',
+            lock: 'Lock Screen'
+          };
+
+          const { qrImage, pin, token } = await generateShellApprovalQR(actionDescriptions[powerAction] || powerAction);
+          wifiSyncService.sendToMobile({
+            action: 'power-approval-qr',
+            commandId: token,
+            pin: pin,
+            powerAction: powerAction,
+            qrData: qrImage,
+          });
+
+          // Wait for mobile approval, then execute the power action
+          const actionResult = await new Promise(async (resolve) => {
+            const timeout = setTimeout(() => {
+              pendingPowerActions.delete(token);
+              resolve({ success: false, error: 'Power action approval timeout (2 minutes)' });
+            }, 120000);
+
+            pendingPowerActions.set(token, {
+              action: powerAction,
+              resolve: (result) => {
+                clearTimeout(timeout);
+                pendingPowerActions.delete(token);
+                resolve(result);
+              }
+            });
+          });
+
+          // Execute the power action after approval
+          if (actionResult.success) {
+            try {
+              const { exec } = require('child_process');
+              const actionCommands = {
+                shutdown: 'osascript -e \'tell app "System Events" to shut down\'',
+                restart: 'osascript -e \'tell app "System Events" to restart\'',
+                sleep: 'pmset sleepnow',
+                lock: '/System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -suspend'
+              };
+
+              exec(actionCommands[powerAction], (err, stdout, stderr) => {
+                if (err) {
+                  sendResponse({ success: false, error: err.message });
+                } else {
+                  sendResponse({ success: true, output: `Power action ${powerAction} executed` });
+                }
+              });
+            } catch (err) {
+              sendResponse({ success: false, error: err.message });
+            }
+          } else {
+            sendResponse({ success: false, error: actionResult.error || 'Power action not approved' });
+          }
         } else {
           sendResponse({ success: false, error: `Unknown action: ${action}` });
         }
@@ -8690,26 +8684,26 @@ wb.save("${fullPath.replace(/"/g, '\\"')}")
               if (!mainWindow.isVisible()) mainWindow.show();
               mainWindow.focus();
 
-          // Handle specific actions
-          if (s.action === 'spotlight-search' || s.action === 'global-search' || s.action === 'toggle-spotlight') {
-            mainWindow.webContents.send('open-unified-search');
-          } else if (s.action === 'pop-search') {
-            if (popSearch) popSearch.showPopupWithText('');
-          } else if (s.action === 'kill-switch' || s.action === 'emergency-kill') {
-            if (robotService) robotService.kill();
-            mainWindow.webContents.send('robot-killed');
-          } else if (s.action === 'zoom-in' || s.action === 'zoom-in-plus') {
-            const view = tabViews.get(activeTabId);
-            if (view) view.webContents.setZoomFactor(view.webContents.getZoomFactor() + 0.1);
-          } else if (s.action === 'zoom-out') {
-            const view = tabViews.get(activeTabId);
-            if (view) view.webContents.setZoomFactor(view.webContents.getZoomFactor() - 0.1);
-          } else if (s.action === 'zoom-reset') {
-            const view = tabViews.get(activeTabId);
-            if (view) view.webContents.setZoomFactor(1.0);
-          } else {
-            mainWindow.webContents.send('execute-shortcut', s.action);
-          }
+              // Handle specific actions
+              if (s.action === 'spotlight-search' || s.action === 'global-search' || s.action === 'toggle-spotlight') {
+                mainWindow.webContents.send('open-unified-search');
+              } else if (s.action === 'pop-search') {
+                if (popSearch) popSearch.showPopupWithText('');
+              } else if (s.action === 'kill-switch' || s.action === 'emergency-kill') {
+                if (robotService) robotService.kill();
+                mainWindow.webContents.send('robot-killed');
+              } else if (s.action === 'zoom-in' || s.action === 'zoom-in-plus') {
+                const view = tabViews.get(activeTabId);
+                if (view) view.webContents.setZoomFactor(view.webContents.getZoomFactor() + 0.1);
+              } else if (s.action === 'zoom-out') {
+                const view = tabViews.get(activeTabId);
+                if (view) view.webContents.setZoomFactor(view.webContents.getZoomFactor() - 0.1);
+              } else if (s.action === 'zoom-reset') {
+                const view = tabViews.get(activeTabId);
+                if (view) view.webContents.setZoomFactor(1.0);
+              } else {
+                mainWindow.webContents.send('execute-shortcut', s.action);
+              }
             }
           });
         }
@@ -9122,10 +9116,10 @@ wb.save("${fullPath.replace(/"/g, '\\"')}")
   let isAutomationInitializing = false;
   async function initializeAutomationService() {
     if (ipcService || isAutomationInitializing) {
-       console.log('[Main] Automation service already initialized or initializing');
-       return;
+      console.log('[Main] Automation service already initialized or initializing');
+      return;
     }
-    
+
     isAutomationInitializing = true;
     try {
       // Check if modules exist
@@ -9162,7 +9156,7 @@ wb.save("${fullPath.replace(/"/g, '\\"')}")
       ipcService = new IPCHandler(taskScheduler, taskQueue, storageManager, mobileNotifier);
       ipcService.initialize();
 
-console.log('[Main] Automation service initialized');
+      console.log('[Main] Automation service initialized');
     } catch (error) {
       console.error('[Main] Failed to initialize automation service:', error);
     } finally {
@@ -9173,25 +9167,25 @@ console.log('[Main] Automation service initialized');
   // Biometric Authentication Handlers
   try {
     const { BiometricAuthManager, CrossPlatformBiometricAuth } = require('./src/service/biometric-auth.js');
-    
+
     const biometricAuth = new BiometricAuthManager();
     const crossPlatformAuth = new CrossPlatformBiometricAuth();
-    
+
     // Check biometric availability
     ipcMain.handle('biometric-check', async () => {
       return await biometricAuth.quickCheck();
     });
-    
+
     // Authenticate via biometrics
     ipcMain.handle('biometric-authenticate', async (event, reason) => {
       return await biometricAuth.authenticate(reason || 'Authenticate to proceed');
     });
-    
+
     // Execute chained actions with biometric protection
     ipcMain.handle('biometric-execute', async (event, actions, reason) => {
       return await crossPlatformAuth.executeWithAuth(actions, reason || 'Execute critical action');
     });
-    
+
     console.log('[Main] Biometric authentication initialized');
   } catch (error) {
     console.error('[Main] Failed to initialize biometric auth:', error);
@@ -10757,7 +10751,7 @@ ${tabData}`;
                 detail: 'You can re-enable robot permissions in Settings > Permissions.',
               });
             }
-            } else if (mainWindow) {
+          } else if (mainWindow) {
             mainWindow.webContents.send('execute-shortcut', s.action);
           }
         });

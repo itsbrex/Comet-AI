@@ -17,9 +17,9 @@ import AppKit
     
     @objc public func showMenu(at point: NSPoint, params: [String: Any]) {
         let menu = buildContextMenu(params: params)
-        if let window = NSApp.keyWindow {
+        if let window = NSApp.keyWindow, let contentView = window.contentView {
             let loc = window.convertPoint(toScreen: point)
-            menu.popUp(positioning: nil, at: loc, in: window)
+            menu.popUp(positioning: nil, at: loc, in: contentView)
         }
     }
     

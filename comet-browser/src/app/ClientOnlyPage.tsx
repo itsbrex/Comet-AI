@@ -1112,13 +1112,13 @@ export default function Home() {
               useAppStore.setState({ sidebarOpen: true });
             }
             break;
-          case 'open-media-studio': store.setActiveView('media-studio'); break;
+          case 'open-media-studio': store.setActiveView('media'); break;
           case 'open-presenton': store.setActiveView('presenton'); break;
-          case 'open-p2p-sync': store.setActiveView('p2p-sync'); break;
-          case 'open-password-manager': store.setActiveView('password-manager'); break;
-          case 'open-proxy-firewall': store.setActiveView('proxy-firewall'); break;
-          case 'open-pdf-workspace': store.setActiveView('pdf-workspace'); break;
-          case 'open-coding-dashboard': store.setActiveView('coding-dashboard'); break;
+          case 'open-p2p-sync': store.setActiveView('p2psync'); break;
+          case 'open-password-manager': store.setActiveView('passwords'); break;
+          case 'open-proxy-firewall': store.setActiveView('firewall'); break;
+          case 'open-pdf-workspace': store.setActiveView('pdf'); break;
+          case 'open-coding-dashboard': store.setActiveView('coding'); break;
           case 'open-documentation': store.setActiveView('documentation'); break;
           case 'open-cart': setShowCart(true); break;
           case 'open-camera': setShowCamera(true); break;
