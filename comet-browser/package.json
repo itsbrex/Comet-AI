@@ -165,8 +165,7 @@
     "win": {
       "icon": "assets/icon.ico",
       "target": [
-        "nsis",
-        "appx"
+        "nsis"
       ]
     },
     "appx": {
