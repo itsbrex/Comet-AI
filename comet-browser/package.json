@@ -166,7 +166,7 @@
       "icon": "assets/icon.ico",
       "target": [
         "nsis",
-        "msix"
+        "appx"
       ]
     },
     "appx": {
