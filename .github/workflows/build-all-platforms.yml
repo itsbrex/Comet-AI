@@ -207,7 +207,7 @@ jobs:
           - target: windows
             os: windows-latest
             build_cmd: npm run dist:win
-            artifact_path: comet-browser/release/*.{exe,msix,appx}
+            artifact_path: comet-browser/release/*.exe
           - target: macos
             os: macos-latest
             build_cmd: npm run dist:mac
