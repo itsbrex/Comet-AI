@@ -299,7 +299,7 @@ jobs:
             os: windows-latest
             build_cmd: npm run dist:win
             artifact_glob: |
-              comet-browser/release/*.{exe,msix,appx}
+              comet-browser/release/*.exe
             artifact_name: comet-ai-windows
           - target: macos
             os: macos-latest
