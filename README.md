@@ -503,13 +503,6 @@ Comet AI Browser is built by a **16-year-old student** from India, preparing for
 > Efficient architecture beats expensive hardware.
 
 ---
-
-## 📝 License
-
-[Apache 2.0](LICENSE) © 2026 Comet-AI
-
----
-
 ## 📋 Changelog
 
 ### v0.2.8 (2026-04-05) - Documentation Website & Structured Changelog
@@ -583,3 +576,11 @@ Comet AI Browser is built by a **16-year-old student** from India, preparing for
 - Scheduling modal with cron presets
 - Mobile push notifications
 - PDF sync for mobile
+---
+
+## 📝 License
+
+[Apache 2.0](LICENSE) © 2026 Comet-AI
+
+---
+
