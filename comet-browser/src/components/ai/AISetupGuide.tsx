@@ -70,16 +70,214 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
   const [setupWarning, setSetupWarning] = useState<string | null>(null);
   const [automationTasks, setAutomationTasks] = useState<TaskSummary[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
+  const [selectedProviderForSetup, setSelectedProviderForSetup] = useState<string | null>(null);
+  const [verifyingProvider, setVerifyingProvider] = useState<string | null>(null);
+  const [providerVerification, setProviderVerification] = useState<Record<string, { success: boolean; message: string }>>({});
+
+  const isWindows = useMemo(() => {
+    if (typeof navigator === 'undefined') return false;
+    return /win/i.test(navigator.userAgent) || navigator.platform.toLowerCase().includes('win');
+  }, []);
 
   const timezone = useMemo(() => {
     if (typeof Intl === 'undefined') return 'UTC';
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
   }, []);
 
-  const isWindows = useMemo(() => {
-    if (typeof navigator === 'undefined') return false;
-    return /win/i.test(navigator.userAgent) || navigator.platform.toLowerCase().includes('win');
-  }, []);
+  const providerSetupSteps: Record<string, { url: string; steps: string[] }> = {
+    ollama: {
+      url: 'https://ollama.com/download/',
+      steps: [
+        'Download Ollama from ollama.com/downloads for your OS',
+        'Run the installer and wait for installation to complete',
+        'Open Terminal and run: ollama run gpt-oss-cloud:120b',
+        'Or run: ollama run llama3.3:70b (for faster local model)',
+        'To enable network access: export OLLAMA_HOST=0.0.0.0',
+        'Restart Ollama if needed. Comet connects to http://localhost:11434'
+      ]
+    },
+    openai: {
+      url: 'https://platform.openai.com/api-keys',
+      steps: [
+        'Go to platform.openai.com/api-keys',
+        'Click "Create new secret key" button',
+        'Name your key and set permissions',
+        'Copy the key (starts with sk-)',
+        'Paste it in the API key field above',
+        'We recommend gpt-5.1 or gpt-4.1 for best results'
+      ]
+    },
+    google: {
+      url: 'https://aistudio.google.com/app/apikey',
+      steps: [
+        'Visit aistudio.google.com/app/apikey',
+        'Click "Create API Key" button',
+        'Select "Create API key in new project"',
+        'Copy your API key (starts with AIza...)',
+        'Paste in the API key field above',
+        'Recommended: gemini-2.5-pro or gemini-2.5-flash'
+      ]
+    },
+    anthropic: {
+      url: 'https://console.anthropic.com/settings/keys',
+      steps: [
+        'Go to console.anthropic.com/settings/keys',
+        'Click "Create Key" button',
+        'Name your key and set organization',
+        'Copy the key (starts with sk-ant-...)',
+        'Paste in the API key field above',
+        'Recommended: claude-sonnet-4-20250514 or claude-opus-4'
+      ]
+    },
+    groq: {
+      url: 'https://console.groq.com/keys',
+      steps: [
+        'Visit console.groq.com/keys',
+        'Click "Create API Key" button',
+        'Name your key (e.g., Comet-AI)',
+        'Copy the key (starts with gsk_...)',
+        'Paste in the API key field above',
+        'Recommended: llama-3.3-70b-versatile (ultra-fast LPU)'
+      ]
+    },
+    xai: {
+      url: 'https://console.x.ai/',
+      steps: [
+        'Go to console.x.ai/',
+        'Click "Create API Key" in API Keys section',
+        'Name your key and select permissions',
+        'Copy the key (starts with xai-...)',
+        'Paste in the API key field above',
+        'Recommended: grok-4-fast-reasoning'
+      ]
+    },
+    'azure-openai': {
+      url: 'https://azure.microsoft.com/en-us/products/ai-services/openai-service',
+      steps: [
+        'Create Azure account at azure.com',
+        'Create Azure OpenAI resource in your subscription',
+        'Go to "Keys and Endpoint" in your resource',
+        'Copy one of the keys and the endpoint URL',
+        'Paste both in the API key and Base URL fields',
+        'Deploy a model (gpt-4, gpt-4o) and use deployment name as model'
+      ]
+    },
+    'google-flash': {
+      url: 'https://aistudio.google.com/app/apikey',
+      steps: [
+        'Visit aistudio.google.com/app/apikey',
+        'Click "Create API Key" button',
+        'Select "Create API key in new project"',
+        'Copy your API key (starts with AIza...)',
+        'Paste in the API key field above',
+        'Recommended: gemini-2.5-flash (fast & free tier available)'
+      ]
+    },
+    copilot: {
+      url: 'https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app',
+      steps: [
+        'No API key needed for Windows Copilot Companion',
+        'This opens the built-in Copilot app on Windows',
+        'Comet will use this as a companion AI option',
+        'Comet still uses other providers (Ollama/Gemini/etc) for in-sidebar chat',
+        'Download Windows 11 for best Copilot experience',
+        'Or use Microsoft Edge for Copilot integration'
+      ]
+    }
+  };
+
+  const verifyProviderConfig = async (providerId: string) => {
+    setVerifyingProvider(providerId);
+    try {
+      let success = false;
+      let message = '';
+      
+      if (providerId === 'ollama') {
+        try {
+          const res = await fetch(`${ollamaBaseUrl || 'http://localhost:11434'}/api/tags`);
+          if (res.ok) {
+            success = true;
+            message = 'Ollama connected! Models available.';
+          } else {
+            message = 'Ollama not responding. Is it running?';
+          }
+        } catch (e) {
+          message = 'Cannot connect to Ollama. Run "ollama start" first.';
+        }
+      } else if (providerId === 'google' || providerId === 'google-flash') {
+        if (geminiApiKey && geminiApiKey.length > 5) {
+          success = true;
+          message = 'Gemini API key configured!';
+        } else {
+          message = 'Please add a valid Gemini API key.';
+        }
+      } else if (providerId === 'openai') {
+        if (openaiApiKey && openaiApiKey.startsWith('sk-')) {
+          success = true;
+          message = 'OpenAI API key configured!';
+        } else {
+          message = 'Please add a valid OpenAI key (starts with sk-).';
+        }
+      } else if (providerId === 'anthropic') {
+        if (anthropicApiKey && anthropicApiKey.startsWith('sk-ant-')) {
+          success = true;
+          message = 'Anthropic API key configured!';
+        } else {
+          message = 'Please add a valid Anthropic key (starts with sk-ant-).';
+        }
+      } else if (providerId === 'groq') {
+        if (groqApiKey && groqApiKey.startsWith('gsk_')) {
+          success = true;
+          message = 'Groq API key configured!';
+        } else {
+          message = 'Please add a valid Groq key (starts with gsk_).';
+        }
+      } else if (providerId === 'xai') {
+        if (xaiApiKey && xaiApiKey.startsWith('xai-')) {
+          success = true;
+          message = 'xAI API key configured!';
+        } else {
+          message = 'Please add a valid xAI key (starts with xai-).';
+        }
+      } else if (providerId === 'copilot') {
+        success = true;
+        message = 'Copilot ready on Windows!';
+      } else if (providerId === 'azure-openai') {
+        success = true;
+        message = 'Azure OpenAI configured!';
+      }
+      
+      setProviderVerification(prev => ({ ...prev, [providerId]: { success, message } }));
+    } catch (e) {
+      setProviderVerification(prev => ({ ...prev, [providerId]: { success: false, message: 'Verification failed' } }));
+    }
+    setVerifyingProvider(null);
+  };
+
+  const getProviderStatus = (providerId: string): 'configured' | 'missing' | 'invalid' => {
+    if (providerId === 'ollama') {
+      return ollamaBaseUrl ? 'configured' : 'missing';
+    }
+    if (providerId === 'google' || providerId === 'google-flash') {
+      return geminiApiKey && geminiApiKey.length > 5 ? 'configured' : 'missing';
+    }
+    if (providerId === 'openai') {
+      return openaiApiKey && openaiApiKey.startsWith('sk-') ? 'configured' : 'missing';
+    }
+    if (providerId === 'anthropic') {
+      return anthropicApiKey && anthropicApiKey.startsWith('sk-ant-') ? 'configured' : 'missing';
+    }
+    if (providerId === 'groq') {
+      return groqApiKey && groqApiKey.startsWith('gsk_') ? 'configured' : 'missing';
+    }
+    if (providerId === 'xai') {
+      return xaiApiKey && xaiApiKey.startsWith('xai-') ? 'configured' : 'missing';
+    }
+    if (providerId === 'copilot' || providerId === 'azure-openai') {
+      return 'configured';
+    }
+    return 'missing';
+  };
 
   const isAiConfigured = useMemo(() => {
     // Check if the SPECIFICALLY SELECTED provider is actually configured
@@ -160,11 +358,70 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
   };
 
   const providers = [
-    { name: 'Google AI Studio', url: 'https://aistudio.google.com/app/apikey', icon: <Sparkles size={16} className="text-deep-space-accent-neon" />, desc: 'Get your free Gemini API key' },
-    { name: 'Groq Cloud', url: 'https://console.groq.com/keys', icon: <Cpu size={16} className="text-orange-400" />, desc: 'Ultra-fast LPU inference keys' },
-    { name: 'Ollama (Local AI)', url: 'https://ollama.com/download/', icon: <Download size={16} className="text-sky-400" />, desc: 'Download for private offline AI' },
-    { name: 'OpenAI (GPT-4)', url: 'https://platform.openai.com/api-keys', icon: <Cloud size={16} className="text-emerald-400" />, desc: 'Standard reasoning model keys' },
-    { name: 'Anthropic Claude', url: 'https://console.anthropic.com/settings/keys', icon: <Shield size={16} className="text-amber-400" />, desc: 'Superior coding & reasoning keys' },
+    { 
+      id: 'ollama', 
+      name: 'Ollama (Local AI)', 
+      url: 'https://ollama.com/download/', 
+      icon: <Download size={16} className="text-sky-400" />, 
+      desc: 'Private offline AI - Recommended for privacy',
+      recommended: 'gpt-oss-cloud:120b (free, 120B params)'
+    },
+    { 
+      id: 'google', 
+      name: 'Google Gemini Pro', 
+      url: 'https://aistudio.google.com/app/apikey', 
+      icon: <Sparkles size={16} className="text-deep-space-accent-neon" />, 
+      desc: 'Best reasoning + 1M token context',
+      recommended: 'gemini-2.5-pro (auto-updated)'
+    },
+    { 
+      id: 'google-flash', 
+      name: 'Google Gemini Flash', 
+      url: 'https://aistudio.google.com/app/apikey', 
+      icon: <Sparkles size={16} className="text-cyan-400" />, 
+      desc: 'Fast + free tier available',
+      recommended: 'gemini-2.5-flash'
+    },
+    { 
+      id: 'openai', 
+      name: 'OpenAI (GPT-4/5)', 
+      url: 'https://platform.openai.com/api-keys', 
+      icon: <Cloud size={16} className="text-emerald-400" />, 
+      desc: 'Industry standard reasoning',
+      recommended: 'gpt-5.1'
+    },
+    { 
+      id: 'anthropic', 
+      name: 'Anthropic Claude', 
+      url: 'https://console.anthropic.com/settings/keys', 
+      icon: <Shield size={16} className="text-amber-400" />, 
+      desc: 'Superior coding & analysis',
+      recommended: 'claude-sonnet-4-20250514'
+    },
+    { 
+      id: 'groq', 
+      name: 'Groq (LPU)', 
+      url: 'https://console.groq.com/keys', 
+      icon: <Cpu size={16} className="text-orange-400" />, 
+      desc: 'Ultra-fast inference - Free tier',
+      recommended: 'llama-3.3-70b-versatile'
+    },
+    { 
+      id: 'xai', 
+      name: 'xAI Grok', 
+      url: 'https://console.x.ai/', 
+      icon: <Cpu size={16} className="text-purple-400" />, 
+      desc: 'Real-time knowledge + wit',
+      recommended: 'grok-4-fast-reasoning'
+    },
+    { 
+      id: 'azure-openai', 
+      name: 'Azure OpenAI', 
+      url: 'https://azure.microsoft.com/en-us/products/ai-services/openai-service', 
+      icon: <Cloud size={16} className="text-blue-400" />, 
+      desc: 'Enterprise + compliance features',
+      recommended: 'gpt-4.1-mini'
+    },
   ];
 
   return (
@@ -274,34 +531,128 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
               className="space-y-5"
             >
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Acquire Security Keys</p>
-                <span className="text-[8px] font-black text-deep-space-accent-neon uppercase tracking-widest px-2 py-0.5 rounded-full bg-deep-space-accent-neon/5 border border-deep-space-accent-neon/20">External Links</span>
-              </div>
-              
-              <div className="space-y-3">
-                {providers.map((p, idx) => (
-                  <motion.a 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.05 }}
-                    key={p.name} 
-                    href={p.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/5 hover:border-white/20 transition-all group no-underline"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center border border-white/5 shadow-inner">
-                      {p.icon}
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-[11px] font-black text-white group-hover:text-deep-space-accent-neon transition-colors uppercase tracking-widest">{p.name}</div>
-                      <div className="text-[9px] text-white/20 font-medium uppercase tracking-tighter">{p.desc}</div>
-                    </div>
-                    <ExternalLink size={14} className="text-white/10 group-hover:text-white/60 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
-                  </motion.a>
-                ))}
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Configure AI Providers</p>
+                <span className="text-[8px] font-black text-deep-space-accent-neon uppercase tracking-widest px-2 py-0.5 rounded-full bg-deep-space-accent-neon/5 border border-deep-space-accent-neon/20">All 8 Providers</span>
               </div>
 
+              {/* Recommended Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-500/10 to-sky-500/10 border border-purple-500/20">
+                <div className="flex items-center gap-3 mb-2">
+                  <Sparkles size={16} className="text-purple-400" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Recommended: Ollama + gpt-oss-cloud:120b</span>
+                </div>
+                <p className="text-[9px] text-white/50 leading-relaxed">
+                  120B parameter open-source model with reasoning capabilities - completely free and runs locally on your machine. 
+                  <button 
+                    onClick={() => { setAIProvider('ollama'); openExternal('https://ollama.com/download/'); }}
+                    className="ml-2 text-sky-400 hover:underline"
+                  >
+                    Download Ollama →
+                  </button>
+                </p>
+              </div>
+
+              {/* Provider List with Status */}
+              <div className="grid grid-cols-1 gap-3">
+                {providers.map((p, idx) => {
+                  const status = getProviderStatus(p.id);
+                  const isConfigured = status === 'configured';
+                  const isVerifying = verifyingProvider === p.id;
+                  const verification = providerVerification[p.id];
+                  const showSetup = selectedProviderForSetup === p.id;
+                  const setupInfo = providerSetupSteps[p.id];
+                  
+                  return (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      key={p.id}
+                      className={`rounded-2xl border transition-all ${isConfigured ? 'bg-green-500/5 border-green-500/20' : 'bg-white/[0.02] border-white/5'}`}
+                    >
+                      {/* Provider Header */}
+                      <div className="flex items-center gap-3 p-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${isConfigured ? 'bg-green-500/10 border-green-500/30' : 'bg-black/40 border-white/5'}`}>
+                          {isConfigured ? <Check size={18} className="text-green-400" /> : p.icon}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="text-[11px] font-black text-white uppercase tracking-widest">{p.name}</div>
+                            {isConfigured && <span className="text-[8px] font-black bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">Ready</span>}
+                            {aiProvider === p.id && <span className="text-[8px] font-black bg-deep-space-accent-neon/20 text-deep-space-accent-neon px-2 py-0.5 rounded-full">Active</span>}
+                          </div>
+                          <div className="text-[9px] text-white/30 font-medium uppercase tracking-tighter">{p.desc}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => openExternal(p.url)}
+                            className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[9px] font-black uppercase tracking-[0.2em] text-white/60 transition-all"
+                          >
+                            Get Key
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (selectedProviderForSetup === p.id) {
+                                setSelectedProviderForSetup(null);
+                              } else {
+                                setSelectedProviderForSetup(p.id);
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-[0.2em] transition-all ${showSetup ? 'bg-white/10 border-white/30 text-white' : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'}`}
+                          >
+                            {showSetup ? 'Close' : 'Setup'}
+                          </button>
+                          <button
+                            onClick={() => { setAIProvider(p.id); verifyProviderConfig(p.id); }}
+                            disabled={isVerifying}
+                            className="px-3 py-1.5 rounded-lg bg-deep-space-accent-neon/10 hover:bg-deep-space-accent-neon/20 border border-deep-space-accent-neon/20 text-deep-space-accent-neon text-[9px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50"
+                          >
+                            {isVerifying ? 'Checking...' : 'Verify'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Recommended Model Tag */}
+                      {p.recommended && (
+                        <div className="px-4 pb-3">
+                          <span className="text-[8px] text-sky-400/60 uppercase tracking-wider">
+                            → {p.recommended}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Verification Message */}
+                      {verification && (
+                        <div className={`px-4 pb-3 text-[9px] ${verification.success ? 'text-green-400' : 'text-amber-400'}`}>
+                          {verification.message}
+                        </div>
+                      )}
+
+                      {/* Setup Guide Panel */}
+                      {showSetup && setupInfo && (
+                        <div className="border-t border-white/5 p-4 bg-black/20">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40">Step-by-Step Setup</span>
+                            <button onClick={() => openExternal(setupInfo.url)} className="text-[8px] text-sky-400 hover:underline flex items-center gap-1">
+                              Open {setupInfo.url.replace('https://', '').split('/')[0]} <ExternalLink size={10} />
+                            </button>
+                          </div>
+                          <ol className="space-y-2">
+                            {setupInfo.steps.map((step, i) => (
+                              <li key={i} className="flex items-start gap-2 text-[9px] text-white/50">
+                                <span className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[8px] font-black text-white/60 flex-shrink-0">{i + 1}</span>
+                                <span className="leading-relaxed">{step}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              {/* Windows Copilot Section */}
               {isWindows && (
                 <div className="rounded-2xl border border-sky-400/15 bg-sky-400/5 p-4 space-y-4">
                   <div className="flex items-start gap-4">
@@ -319,9 +670,9 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
                     <button
                       type="button"
                       onClick={() => setAIProvider('copilot')}
-                      className="px-4 py-2 rounded-xl bg-sky-400/15 border border-sky-400/20 text-[10px] font-black uppercase tracking-[0.2em] text-sky-100 transition-all hover:bg-sky-400/25"
+                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${aiProvider === 'copilot' ? 'bg-sky-400/20 border border-sky-400/40 text-sky-100' : 'bg-sky-400/15 border border-sky-400/20 text-sky-100 hover:bg-sky-400/25'}`}
                     >
-                      Select Copilot
+                      {aiProvider === 'copilot' ? 'Active ✓' : 'Select Copilot'}
                     </button>
                     <button
                       type="button"
@@ -329,13 +680,6 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
                       className="px-4 py-2 rounded-xl bg-white text-black text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:bg-slate-100"
                     >
                       Open Copilot
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openExternal('https://blogs.windows.com/windowsdeveloper/2024/05/21/unlock-a-new-era-of-innovation-with-windows-copilot-runtime-and-copilot-pcs/')}
-                      className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-[0.2em] text-white/70 transition-all hover:bg-white/10 hover:text-white"
-                    >
-                      View Copilot Runtime
                     </button>
                   </div>
                 </div>

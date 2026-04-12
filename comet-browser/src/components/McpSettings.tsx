@@ -326,7 +326,7 @@ const McpSettings = () => {
                                                         <p className="text-[10px] text-white/50">{selectedPreset.authGuide}</p>
                                                     </div>
                                                     <button
-                                                        onClick={() => window.electronAPI?.openExternal(selectedPreset.authUrl!)}
+                                                        onClick={() => window.electronAPI?.openExternalUrl(selectedPreset.authUrl!)}
                                                         className="px-3 py-1.5 bg-deep-space-accent-neon text-black text-[10px] font-bold rounded-lg hover:bg-white transition-all whitespace-nowrap flex items-center gap-1"
                                                     >
                                                         <Globe size={12} /> Get Token

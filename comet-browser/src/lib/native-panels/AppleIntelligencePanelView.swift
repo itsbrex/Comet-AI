@@ -196,7 +196,7 @@ struct AppleIntelligencePanelView: View {
     
     private func summaryView(palette: PanelPalette) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            if #available(macOS 26.0, *) {
+            if #available(macOS 15.1, *) {
                 versionBadge(palette: palette, active: true)
             } else {
                 versionBadge(palette: palette, active: false)
@@ -210,7 +210,9 @@ struct AppleIntelligencePanelView: View {
                 Spacer()
                 
                 Button {
-                    summarizeCurrentPage()
+                    if #available(macOS 15.1, *) {
+                        summarizeCurrentPage()
+                    }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "globe")
@@ -253,7 +255,9 @@ struct AppleIntelligencePanelView: View {
             Spacer()
             
             Button {
-                generateSummary()
+                if #available(macOS 15.1, *) {
+                    generateSummary()
+                }
             } label: {
                 HStack {
                     Image(systemName: "sparkles")
@@ -272,7 +276,7 @@ struct AppleIntelligencePanelView: View {
         }
     }
     
-    @available(macOS 26.0, *)
+    @available(macOS 15.1, *)
     private func generateSummary() {
         guard !inputText.isEmpty else { return }
         isGenerating = true
@@ -303,7 +307,7 @@ struct AppleIntelligencePanelView: View {
         }
     }
     
-    @available(macOS 26.0, *)
+    @available(macOS 15.1, *)
     private func extractiveSummary(text: String) -> String {
         let sentences = text.components(separatedBy: CharacterSet(charactersIn: ".!?\n"))
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -328,7 +332,7 @@ struct AppleIntelligencePanelView: View {
         return "📝 **Summary:**\n\n\(important)."
     }
     
-    @available(macOS 26.0, *)
+    @available(macOS 15.1, *)
     private func summarizeCurrentPage() {
         isGenerating = true
         summaryResult = "🌐 Extracting page content..."
@@ -395,11 +399,7 @@ struct AppleIntelligencePanelView: View {
             .padding(.vertical, 40)
             .background(palette.mutedSurface.opacity(0.5))
             .clipShape(RoundedRectangle(cornerRadius: 12))
-            #if canImport(ImagePlayground)
-            .imagePlaygroundSheet(isPresented: $showImagePlayground, concept: inputText.isEmpty ? "A beautiful landscape" : inputText) { url in
-                generatedImage = url
-            }
-            #endif
+            .applyImagePlayground(isPresented: $showImagePlayground, concept: inputText.isEmpty ? "A beautiful landscape" : inputText, output: $generatedImage)
             
             Spacer()
         }
@@ -758,5 +758,22 @@ struct AppleIntelligencePanelView: View {
         .padding(12)
         .background(palette.mutedSurface.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func applyImagePlayground(isPresented: Binding<Bool>, concept: String, output: Binding<URL?>) -> some View {
+        if #available(macOS 15.1, *) {
+            #if canImport(ImagePlayground)
+            self.imagePlaygroundSheet(isPresented: isPresented, concept: concept) { url in
+                output.wrappedValue = url
+            }
+            #else
+            self
+            #endif
+        } else {
+            self
+        }
     }
 }
