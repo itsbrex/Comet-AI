@@ -74,8 +74,27 @@ const SettingsPanel = ({ onClose, defaultSection = 'profile' }: { onClose: () =>
             })
             .catch(err => console.error("Firebase redirect result error:", err));
 
+        // Listen for auth-callback from main process to handle OAuth redirect
+        let authCallbackUnsubscribe: (() => void) | null = null;
+        if (window.electronAPI?.onAuthCallback) {
+            authCallbackUnsubscribe = window.electronAPI.onAuthCallback(async (url: string) => {
+                console.log('[Auth] Received auth callback, processing redirect result...');
+                try {
+                    const user = await firebaseService.handleRedirectResult();
+                    if (user) {
+                        setCurrentUser(user);
+                        setUser({ uid: user.uid, email: user.email || '', displayName: user.displayName || '', photoURL: user.photoURL || '' });
+                        fetchHistory();
+                    }
+                } catch (err) {
+                    console.error('[Auth] Error handling redirect result:', err);
+                }
+            });
+        }
+
         return () => {
             unsubscribe();
+            if (authCallbackUnsubscribe) authCallbackUnsubscribe();
         };
     }, [setUser, fetchHistory]);
 

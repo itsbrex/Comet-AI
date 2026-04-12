@@ -10,6 +10,7 @@ enum PanelMode: String, CaseIterable {
     case downloads
     case clipboard
     case permissions
+    case appleAI = "apple-ai"
 
     var title: String {
         switch self {
@@ -20,6 +21,7 @@ enum PanelMode: String, CaseIterable {
         case .downloads: return "Comet Downloads"
         case .clipboard: return "Comet Clipboard"
         case .permissions: return "Comet Approval"
+        case .appleAI: return "Apple Intelligence"
         }
     }
 
@@ -32,6 +34,7 @@ enum PanelMode: String, CaseIterable {
         case .downloads: return "arrow.down.circle"
         case .clipboard: return "doc.on.clipboard"
         case .permissions: return "lock.shield"
+        case .appleAI: return "appleintelligence"
         }
     }
 
@@ -44,6 +47,7 @@ enum PanelMode: String, CaseIterable {
         case .downloads: return CGSize(width: 480, height: 680)
         case .clipboard: return CGSize(width: 470, height: 700)
         case .permissions: return CGSize(width: 430, height: 620)
+        case .appleAI: return CGSize(width: 480, height: 780)
         }
     }
 }

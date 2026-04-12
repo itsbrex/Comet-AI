@@ -11,6 +11,12 @@ declare global {
             summarizeWithAppleIntelligence: (text: string) => Promise<{ success: boolean; available?: boolean; summaryAvailable?: boolean; summaryReason?: string; osVersion?: string; summary?: string; error?: string }>;
             generateAppleIntelligenceImage: (payload: { prompt: string; outputPath?: string; style?: string }) => Promise<{ success: boolean; available?: boolean; imageAvailable?: boolean; imageReason?: string; osVersion?: string; imagePath?: string; error?: string }>;
             generateGenmoji: (payload: { prompt: string }) => Promise<{ success: boolean; available?: boolean; genmojiAvailable?: boolean; genmojiReason?: string; osVersion?: string; genmojiPath?: string; error?: string }>;
+            
+            // Biometric Authentication
+            checkBiometricAuth: () => Promise<{ available: boolean; type: string; platform: string; message?: string }>;
+            authenticateBiometric: (reason: string) => Promise<{ success: boolean; method?: string; error?: string; message?: string }>;
+            executeWithAuth: (actions: Array<{ type: string; url?: string; command?: string; ms?: number }>, reason: string) => Promise<Array<{ success: boolean; action: string; url?: string; error?: string }>>;
+            
             onAiQueryDetected: (callback: (query: string) => void) => () => void;
             createView: (args: { tabId: string; url: string }) => void;
             activateView: (args: { tabId: string; bounds: { x: number; y: number; width: number; height: number } }) => void;
@@ -160,6 +166,7 @@ declare global {
             exportChatAsPdf: (messages: ChatMessage[]) => Promise<boolean>;
             generatePPTX: (payload: any) => Promise<{ success: boolean; path?: string; filePath?: string; error?: string }>;
             generateDOCX: (payload: any) => Promise<{ success: boolean; path?: string; filePath?: string; error?: string }>;
+            generateXLSX: (payload: any) => Promise<{ success: boolean; path?: string; filePath?: string; error?: string }>;
             checkPythonAvailable: () => Promise<boolean>;
 
             // MCP Support
@@ -233,6 +240,8 @@ declare global {
             openSystemSettings: (url: string) => Promise<{ success: boolean; error?: string }>;
             performCrossAppClick: (coords: { x: number; y: number }) => Promise<{ success: boolean; error?: string }>;
             onOpenUnifiedSearch: (callback: () => void) => () => void;
+            clickAppElement: (appName: string, elementText: string, reason: string) => Promise<{ success: boolean; error?: string }>;
+            typeTextApp: (text: string) => Promise<{ success: boolean; error?: string }>;
 
             // Element Control (deprecated - use performCrossAppClick instead)
             clickElement: (selector: string) => Promise<{ success: boolean; error?: string }>;
@@ -376,6 +385,9 @@ declare global {
             setVolume: (level: number) => Promise<{ success: boolean; error?: string }>;
             setBrightness: (level: number) => Promise<{ success: boolean; error?: string }>;
             performClick: (options: any) => Promise<{ success: boolean; error?: string }>;
+            clickAt: (x: number, y: number) => Promise<{ success: boolean; error?: string }>;
+            clickAppElement: (appName: string, elementText: string, reason: string) => Promise<{ success: boolean; error?: string }>;
+            typeTextApp: (text: string) => Promise<{ success: boolean; error?: string }>;
             performOCR: (options: any) => Promise<{ success: boolean; results: any[]; error?: string }>;
             getWindowInfo: () => Promise<any>;
 

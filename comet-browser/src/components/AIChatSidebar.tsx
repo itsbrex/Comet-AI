@@ -41,7 +41,7 @@ import {
 } from './ai/RobustParsers';
 import { useAppVersion } from '@/lib/useAppVersion';
 import AISetupGuide from './ai/AISetupGuide';
-import ThinkingIndicator from './ThinkingIndicator';
+import ThinkingIndicator, { type ThemePreset } from './ThinkingIndicator';
 import LLMProviderSettings from './LLMProviderSettings';
 import { AICommandQueue, type AICommand } from './AICommandQueue';
 import CapabilitiesPanel from './CapabilitiesPanel';
@@ -52,6 +52,7 @@ import SchedulingModal from './ai/SchedulingModal';
 import MermaidDiagram from './ai/MermaidDiagram';
 import FlowchartDiagram from './ai/FlowchartDiagram';
 import ChartDiagram from './ai/ChartDiagram';
+import { useUIStore } from '@/stores/uiStore';
 
 // Logic & Utils
 import {
@@ -155,8 +156,26 @@ const renderMarkdownContent = (content: string) => (
 const StreamingMarkdownMessage: React.FC<{
   content: string;
   animate: boolean;
-}> = ({ content, animate }) => {
+  theme?: string;
+}> = ({ content, animate, theme = 'graphite' }) => {
   const shouldReduceMotion = useReducedMotion();
+  const gradientPreset = useUIStore((state) => state.gradientPreset);
+  const activeTheme = theme || gradientPreset;
+  
+  const themeColors: Record<string, string> = {
+    graphite: '#6366f1',
+    crystal: '#06b6d4',
+    obsidian: '#a855f7',
+    azure: '#3b82f6',
+    rose: '#ec4899',
+    aurora: '#10b981',
+    nebula: '#8b5cf6',
+    liquidGlass: '#818cf8',
+    translucent: '#94a3b8',
+  };
+  
+  const cursorColor = themeColors[activeTheme] || themeColors.graphite;
+
   const [visibleLength, setVisibleLength] = useState(() => (
     animate && !shouldReduceMotion ? 0 : content.length
   ));
@@ -220,7 +239,11 @@ const StreamingMarkdownMessage: React.FC<{
       {showCaret ? (
         <motion.span
           aria-hidden="true"
-          className="inline-flex h-4 w-2 rounded-full bg-sky-400/80 shadow-[0_0_14px_rgba(56,189,248,0.45)]"
+          className="inline-flex h-4 w-2 rounded-full"
+          style={{ 
+            backgroundColor: cursorColor,
+            boxShadow: `0 0 14px ${cursorColor}73`
+          }}
           animate={{ 
             opacity: [1, 0.3, 1],
             scaleY: [1, 1.2, 1]
@@ -399,6 +422,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   } = store;
   const appVersion = useAppVersion();
   const versionLabel = `v${appVersion}`;
+  const gradientPreset = useUIStore((state) => state.gradientPreset);
   const resolvedTheme = useMemo<'dark' | 'light' | 'vibrant' | 'custom'>(() => {
     if (props.theme === 'system') {
       if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -1155,12 +1179,12 @@ I couldn't schedule the task. The background service may not be running. Please 
       if (props.setBrowserDisabled) props.setBrowserDisabled(true);
     }
 
-    // ✅ NEW: Load document skill if user wants to create pdf/docx/pptx
+    // ✅ NEW: Load document skill if user wants to create pdf/docx/pptx/xlsx
     let skillContext = '';
-    const docFormatMatch = rawContent.match(/\b(pdf|docx?|pptx?)\b/i);
+    const docFormatMatch = rawContent.match(/\b(pdf|docx?|pptx?|xlsx?)\b/i);
     if (docFormatMatch && window.electronAPI?.loadSkill) {
       const format = docFormatMatch[1].toLowerCase();
-      const normalizedFormat = format === 'doc' || format === 'docx' ? 'docx' : format === 'ppt' ? 'pptx' : format;
+      const normalizedFormat = format === 'doc' || format === 'docx' ? 'docx' : format === 'ppt' ? 'pptx' : format === 'xls' || format === 'xlsx' ? 'xlsx' : format;
       try {
         const skillId = addThinkingStep(`📖 Loading ${normalizedFormat.toUpperCase()} skill guide...`);
         skillContext = await window.electronAPI.loadSkill(normalizedFormat);
@@ -1883,6 +1907,71 @@ I couldn't schedule the task. The background service may not be running. Please 
           break;
         }
 
+        // ── CROSS_APP_JSON: Execute multiple cross-app actions in sequence ───────────────
+        case 'CROSS_APP_JSON': {
+          const stepId = addThinkingStep('Executing cross-app actions...');
+          try {
+            let actions: any[] = [];
+            try {
+              actions = JSON.parse(command.value || command.context || '[]');
+              if (!Array.isArray(actions)) actions = [actions];
+            } catch (parseErr) {
+              output = 'Invalid CROSS_APP_JSON format. Use: [CROSS_APP_JSON: [{"type":"ocr","region":[x,y,w,h]},{"type":"click","app":"AppName","element":"Button"}]]';
+              break;
+            }
+            
+            const results: string[] = [];
+            for (let i = 0; i < actions.length; i++) {
+              const action = actions[i];
+              const actionType = action.type?.toUpperCase();
+              
+              if (actionType === 'OCR' || actionType === 'CAPTURE') {
+                const region = action.region || action.rect || [0, 0, 1920, 1080];
+                const ocrId = addThinkingStep(`Cross-app OCR: region ${region}...`);
+                const ocrRes = await window.electronAPI.ocrScreenText?.();
+                const ocrText = typeof ocrRes === 'string' ? ocrRes : ((ocrRes as any)?.text || '');
+                results.push(`OCR: ${ocrText.substring(0, 200)}...`);
+                resolveThinkingStep(ocrId, 'done', 'OCR complete');
+              } else if (actionType === 'CLICK' || actionType === 'TAP') {
+                const appName = action.app || action.application || '';
+                const elementText = action.element || action.text || action.label || '';
+                const reason = action.reason || 'Cross-app click';
+                const clickId = addThinkingStep(`Clicking ${appName}: ${elementText}...`);
+                if (appName && elementText) {
+                  const clickRes = await window.electronAPI.clickAppElement?.(appName, elementText, reason);
+                  results.push(`Click ${appName}/${elementText}: ${clickRes?.success ? 'OK' : clickRes?.error || 'Failed'}`);
+                  resolveThinkingStep(clickId, clickRes?.success ? 'done' : 'error', clickRes?.error || 'Done');
+                } else if (action.x !== undefined && action.y !== undefined) {
+                  const clickRes = await window.electronAPI.clickAt?.(action.x, action.y);
+                  results.push(`Click at (${action.x}, ${action.y}): ${clickRes?.success ? 'OK' : clickRes?.error || 'Failed'}`);
+                  resolveThinkingStep(clickId, clickRes?.success ? 'done' : 'error', clickRes?.error || 'Done');
+                } else {
+                  results.push(`Click: missing app/element or coordinates`);
+                }
+              } else if (actionType === 'TYPE' || actionType === 'INPUT') {
+                const text = action.text || action.value || '';
+                const typeId = addThinkingStep(`Typing: ${text.substring(0, 30)}...`);
+                const typeRes = await window.electronAPI.typeTextApp?.(text);
+                results.push(`Type "${text.substring(0, 30)}...": ${typeRes?.success ? 'OK' : typeRes?.error || 'Failed'}`);
+                resolveThinkingStep(typeId, typeRes?.success ? 'done' : 'error', typeRes?.error || 'Done');
+              } else if (actionType === 'WAIT' || actionType === 'DELAY') {
+                const ms = action.ms || action.delay || 1000;
+                await new Promise(r => setTimeout(r, ms));
+                results.push(`Wait: ${ms}ms`);
+              } else {
+                results.push(`Unknown action: ${actionType}`);
+              }
+            }
+            
+            output = `Cross-app actions completed:\n${results.join('\n')}`;
+            resolveThinkingStep(stepId, 'done', `${actions.length} actions executed`);
+          } catch (e: any) {
+            output = `CROSS_APP error: ${e.message}`;
+            resolveThinkingStep(stepId, 'error', e.message);
+          }
+          break;
+        }
+
         case 'ORGANIZE_TABS': {
           const organizeStepId = addThinkingStep('AI is Classifying Tabs...');
           try {
@@ -2058,9 +2147,20 @@ I couldn't schedule the task. The background service may not be running. Please 
 
         case 'APPLE_INTELLIGENCE_SUMMARY': {
           let textToSummarize = command.value || '';
-          const sumId = addThinkingStep('Extracting page content for Apple Intelligence...');
+          const sumId = addThinkingStep('Checking Apple Intelligence availability...');
 
           try {
+            // Check Apple Intelligence availability first
+            const status = await window.electronAPI.getAppleIntelligenceStatus?.();
+            if (!status?.success) {
+              resolveThinkingStep(sumId, 'error', 'Apple Intelligence is not available on this system.');
+              setMessages(prev => [...prev, { 
+                role: 'model', 
+                content: `🍎 **Apple Intelligence Unavailable**\n\nApple Intelligence is not available on this system. This feature requires:\n- macOS 15.1+ (Sequoia or later)\n- Apple Silicon Mac (M1+)\n\nPlease use a different AI provider for summaries.` 
+              }]);
+              break;
+            }
+
             // Use DOM for faster/better summary if no specific text provided
             if (!textToSummarize) {
               const domRes = await window.electronAPI.extractPageContent();
@@ -2080,12 +2180,20 @@ I couldn't schedule the task. The background service may not be running. Please 
               resolveThinkingStep(sumId, 'done', 'Summary created');
               setMessages(prev => [...prev, { role: 'model', content: `🍏 **Apple Intelligence Summary:**\n\n${res.summary}` }]);
             } else {
-              output = `Apple summarization failed: ${res.error || res.summaryReason || 'Unknown error'}`;
+              output = `Apple summarization failed: ${res.error || 'Please ensure you have macOS 15.1+ and Apple Silicon Mac.'}`;
               resolveThinkingStep(sumId, 'error', output);
+              setMessages(prev => [...prev, { 
+                role: 'model', 
+                content: `⚠️ **Apple Intelligence Error:**\n\n${res.error || 'Please ensure you have macOS 15.1+ and Apple Silicon Mac.'}` 
+              }]);
             }
           } catch (e: any) {
             output = `Apple Intelligence error: ${e.message}`;
             resolveThinkingStep(sumId, 'error', e.message);
+            setMessages(prev => [...prev, { 
+              role: 'model', 
+              content: `⚠️ **Apple Intelligence Error:**\n\n${e.message || 'Failed to run Apple Intelligence. Please ensure you have macOS 15.1+ and Apple Silicon Mac.'}` 
+            }]);
           }
           break;
         }
@@ -2751,7 +2859,12 @@ I couldn't schedule the task. The background service may not be running. Please 
           const iconSource = (window as any).__cometIconBase64 || null;
 
           try {
-            if (format === 'pptx') {
+            if (format === 'xlsx' || format === 'excel') {
+              const res = await window.electronAPI.generateXLSX(commonPayload);
+              output = res?.success
+                ? `✅ **Excel Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**File:** ${res.filePath || 'Saved to Downloads'}`
+                : `❌ Excel generation failed: ${res?.error || 'Unknown error'}`;
+            } else if (format === 'pptx') {
               const res = await window.electronAPI.generatePPTX(commonPayload);
               output = res?.success
                 ? `✅ **PPTX Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**File:** ${res.filePath || 'Saved to Downloads'}`
@@ -2761,7 +2874,7 @@ I couldn't schedule the task. The background service may not be running. Please 
               output = res?.success
                 ? `✅ **DOCX Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**File:** ${res.filePath || 'Saved to Downloads'}`
                 : `❌ DOCX generation failed: ${res?.error || 'Unknown error'}`;
-            } else if (method === 'pdfmake' || method === 'pdf-lib') {
+            } else if (format === 'pdf' || method === 'pdfmake' || method === 'pdf-lib') {
               const res = await window.electronAPI.generatePDFWithMethod(method, {
                 title: pdfTitle,
                 content: pdfContent,
@@ -4576,6 +4689,8 @@ I've successfully executed the following real tasks:
               return null;
             }
 
+            const msgIsOcr = (msg as any).isOcr || (msg as any).ocrText;
+
             return (
               <motion.div
                 key={msg.id || `${msg.role}-${i}`}
@@ -4617,8 +4732,8 @@ I've successfully executed the following real tasks:
                       animate={msg.role === 'model' && msg.id === activeStreamingMessageIdRef.current}
                     />
                   )}
-                  {msg.isOcr && msg.ocrText && (
-                    <CollapsibleOCRMessage label={msg.ocrLabel || 'SCREENSHOT_ANALYSIS'} content={msg.ocrText} />
+                  {msgIsOcr && (msg as any).ocrText && (
+                    <CollapsibleOCRMessage label={(msg as any).ocrLabel || 'SCREENSHOT_ANALYSIS'} content={(msg as any).ocrText} />
                   )}
 
                   {/* ── Inline Media: Images & Video Cards ─────────────────── */}
@@ -4827,7 +4942,7 @@ I've successfully executed the following real tasks:
               </motion.div>
             )
           })}
-          {isLoading && messages.length === 0 && <ThinkingIndicator />}
+          {isLoading && messages.length === 0 && <ThinkingIndicator theme={gradientPreset as ThemePreset} variant="full" />}
         </AnimatePresence>
         <div ref={messagesEndRef} />
       </div>
@@ -4897,38 +5012,6 @@ I've successfully executed the following real tasks:
                 <History size={20} />
               </button>
               <button onClick={() => setShowActionsMenu(!showActionsMenu)} className={`p-3 rounded-2xl transition-all ${showActionsMenu ? 'bg-accent/10 text-primary-text' : 'hover:bg-accent/5 text-secondary-text hover:text-primary-text'}`}><MoreHorizontal size={20} /></button>
-              <div className="w-px h-6 bg-white/10 mx-1" />
-              <button
-                onClick={async () => {
-                  if (!inputMessage.trim()) return;
-                  try {
-                    const result = await window.electronAPI?.summarizeWithAppleIntelligence?.(inputMessage);
-                    if (result?.success) {
-                      setMessages(prev => [...prev, { role: 'model', content: `**📝 Summary:**\n\n${result.summary}` } as ExtendedChatMessage]);
-                    }
-                  } catch (e) { console.error('Apple summary failed:', e); }
-                }}
-                title="Summarize input with Apple Intelligence"
-                className="p-2.5 rounded-2xl hover:bg-purple-500/10 text-purple-400/60 hover:text-purple-400 transition-all"
-              >
-                <FileText size={18} />
-              </button>
-              <button
-                onClick={async () => {
-                  const imgPrompt = window.prompt('Describe the image you want to generate:');
-                  if (!imgPrompt) return;
-                  try {
-                    const result = await window.electronAPI?.generateAppleIntelligenceImage?.({ prompt: imgPrompt });
-                    if (result?.success && result.imagePath) {
-                      setMessages(prev => [...prev, { role: 'model', content: `**🖼️ Generated:**`, mediaItems: [{ type: 'image', url: `file://${result.imagePath}`, caption: imgPrompt }] } as ExtendedChatMessage]);
-                    }
-                  } catch (e) { console.error('Apple image failed:', e); }
-                }}
-                title="Generate image with Apple Intelligence"
-                className="p-2.5 rounded-2xl hover:bg-pink-500/10 text-pink-400/60 hover:text-pink-400 transition-all"
-              >
-                <ImageIcon size={18} />
-              </button>
             </div>
             <button
               onClick={() => handleSendMessage()}

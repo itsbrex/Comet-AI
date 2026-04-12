@@ -47,10 +47,16 @@ export default function RootLayout({
       }
     });
 
+    // Listen for auth-callback from OAuth redirect
+    const unsubscribeAuthCallback = window.electronAPI?.onAuthCallback((url: string) => {
+      console.log('[Layout] Auth callback received:', url);
+    });
+
     return () => {
       unsubscribeSuspend?.();
       unsubscribeResume?.();
       unsubscribeResumeAndActivate?.();
+      unsubscribeAuthCallback?.();
     };
   }, [store]);
 

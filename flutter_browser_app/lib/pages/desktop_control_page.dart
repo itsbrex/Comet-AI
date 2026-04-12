@@ -80,6 +80,13 @@ class _DesktopControlPageState extends State<DesktopControlPage>
           msg['pin'] as String,
           msg['qrData'] as String?,
         );
+      } else if (mounted && msg['action'] == 'power-approval-qr') {
+        // Handle shutdown/restart/sleep/lock QR approval
+        _showPowerApprovalDialog(
+          msg['powerAction'] as String,
+          msg['pin'] as String,
+          msg['qrData'] as String?,
+        );
       } else if (mounted && msg['action'] == 'file-generated') {
         _showFileReadyDialog(
           msg['name'] as String,
@@ -201,7 +208,8 @@ class _DesktopControlPageState extends State<DesktopControlPage>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('File Generated'),
-        content: Text('Desktop has generated "$name". Would you like to view it?'),
+        content:
+            Text('Desktop has generated "$name". Would you like to view it?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -264,6 +272,73 @@ class _DesktopControlPageState extends State<DesktopControlPage>
             ),
             const SizedBox(height: 20),
             const Text('Approve on your mobile using the QR code below:',
+                style: TextStyle(color: Colors.white70)),
+            if (qrData != null) ...[
+              const SizedBox(height: 10),
+              Image.memory(base64Decode(qrData.split(',').last),
+                  width: 200, height: 200),
+            ],
+            const SizedBox(height: 10),
+            Text('PIN: $pin',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child:
+                const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPowerApprovalDialog(
+      String powerAction, String pin, String? qrData) {
+    final actionLabels = {
+      'shutdown': 'Shutdown Desktop',
+      'restart': 'Restart Desktop',
+      'sleep': 'Sleep Desktop',
+      'lock': 'Lock Screen'
+    };
+    final actionLabel = actionLabels[powerAction] ?? powerAction;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.power_settings_new, color: Colors.red),
+            const SizedBox(width: 10),
+            Text('Power Action Required',
+                style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                actionLabel,
+                style: const TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text('Approve this power action on your desktop:',
                 style: TextStyle(color: Colors.white70)),
             if (qrData != null) ...[
               const SizedBox(height: 10),
@@ -355,8 +430,7 @@ class _DesktopControlPageState extends State<DesktopControlPage>
               height: 10,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color:
-                    _isCloudMode ? const Color(0xFF9C27B0) : Colors.green,
+                color: _isCloudMode ? const Color(0xFF9C27B0) : Colors.green,
               ),
             ),
             const SizedBox(width: 10),
@@ -775,6 +849,11 @@ class _DesktopControlPageState extends State<DesktopControlPage>
         _buildActionTile(Icons.refresh, 'Reload', () => _sendCommand('reload')),
         _buildActionTile(
             Icons.arrow_back, 'Back', () => _sendCommand('go-back')),
+        _buildActionTile(Icons.power_settings_new, 'Shutdown',
+            () => _sendPowerCommand('shutdown')),
+        _buildActionTile(
+            Icons.restart_alt, 'Restart', () => _sendPowerCommand('restart')),
+        _buildActionTile(Icons.lock, 'Lock', () => _sendPowerCommand('lock')),
       ],
     );
   }
@@ -975,6 +1054,11 @@ class _DesktopControlPageState extends State<DesktopControlPage>
   }
 
   Future<void> _sendCommand(String action) async {
+    await SyncService().executeDesktopControl(action);
+  }
+
+  Future<void> _sendPowerCommand(String action) async {
+    // Power commands always require QR verification
     await SyncService().executeDesktopControl(action);
   }
 

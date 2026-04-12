@@ -362,6 +362,7 @@ const memoryPath = path.join(app.getPath('userData'), 'ai_memory.jsonl');
 
 const searchCache = new Map();
 const shellApprovalResolvers = new Map();
+const pendingPowerActions = new Map(); // Store power actions awaiting QR approval: token -> { action, resolver }
 
 const RAYCAST_PORT = parseInt(process.env.RAYCAST_PORT || '9877', 10);
 const RAYCAST_HOST = process.env.RAYCAST_HOST || '127.0.0.1';
@@ -673,18 +674,28 @@ const openSettingsSection = (section, options = {}) => {
 };
 
 const triggerShortcut = (action) => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('execute-shortcut', action);
+  // Get any available window
+  let targetWindow = mainWindow;
+  
+  if (!targetWindow || targetWindow.isDestroyed()) {
+    targetWindow = BrowserWindow.getAllWindows()[0];
+  }
+  
+  if (targetWindow && !targetWindow.isDestroyed()) {
+    targetWindow.webContents.send('execute-shortcut', action);
     return;
   }
-  if (openWindows.size > 0) {
-    const firstWin = Array.from(openWindows)[0];
-    if (firstWin && !firstWin.isDestroyed()) {
-      firstWin.webContents.send('execute-shortcut', action);
-      return;
-    }
+  
+  // Browser window doesn't exist - app not running or crashed
+  console.log('[triggerShortcut] Browser not available for:', action, '- attempting recovery');
+  
+  // For critical menu items, try to restart the main window
+  if (isQuitting || app.isReady()) {
+    createMainWindow();
   }
-  console.log('[triggerShortcut] No window for:', action);
+  
+  // Don't crash - just log
+  console.log('[triggerShortcut] No window available for:', action);
 };
 
 const getShortcutMap = () => {
@@ -893,6 +904,10 @@ const buildApplicationMenu = () => {
         { label: 'AI Chat Sidebar', accelerator: menuAccelerator('open-ai-chat', 'CmdOrCtrl+Option+C'), click: () => triggerShortcut('open-ai-chat') },
         { label: 'Toggle AI Assistant', accelerator: menuAccelerator('toggle-ai-assist', 'CmdOrCtrl+Option+A'), click: () => triggerShortcut('toggle-ai-assist') },
         { label: 'Show AI Overview', accelerator: menuAccelerator('toggle-ai-overview', 'CmdOrCtrl+Option+O'), click: () => triggerShortcut('toggle-ai-overview') },
+        ...(isMac ? [
+          { type: 'separator' },
+          { label: 'Apple Intelligence Panel', accelerator: 'Cmd+Option+1', click: () => triggerShortcut('open-apple-ai') },
+        ]) : [],
         { type: 'separator' },
         ...(isMac ? [
           {
@@ -1690,30 +1705,39 @@ const fetch = require('cross-fetch'); // Make sure cross-fetch is always availab
 const MCP_SERVER_PORT = process.env.MCP_SERVER_PORT || 3001;
 
 // Global Context Menu for all windows and views
-contextMenu({
-  showSaveImageAs: true,
-  showDragLink: true,
-  showInspectElement: true,
-  showLookUpSelection: true,
-  showSearchWithGoogle: true,
-  prepend: (defaultActions, params, browserWindow) => [
-    {
-      label: 'Open in New Tab',
-      visible: params.linkURL.length > 0,
-      click: () => {
-        if (mainWindow) mainWindow.webContents.send('add-new-tab', params.linkURL);
+// Use native macOS menu for better performance
+const useNativeContextMenu = isMac;
+
+if (useNativeContextMenu) {
+  // Register macOS native context menu handler
+  console.log('[ContextMenu] Using native macOS context menu');
+} else {
+  // Fallback to electron-context-menu
+  contextMenu({
+    showSaveImageAs: true,
+    showDragLink: true,
+    showInspectElement: true,
+    showLookUpSelection: true,
+    showSearchWithGoogle: true,
+    prepend: (defaultActions, params, browserWindow) => [
+      {
+        label: 'Open in New Tab',
+        visible: params.linkURL.length > 0,
+        click: () => {
+          if (mainWindow) mainWindow.webContents.send('add-new-tab', params.linkURL);
+        }
+      },
+      {
+        label: 'Search Comet for "{selection}"',
+        visible: params.selectionText.trim().length > 0,
+        click: () => {
+          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(params.selectionText)}`;
+          if (mainWindow) mainWindow.webContents.send('add-new-tab', searchUrl);
+        }
       }
-    },
-    {
-      label: 'Search Comet for "{selection}"',
-      visible: params.selectionText.trim().length > 0,
-      click: () => {
-        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(params.selectionText)}`;
-        if (mainWindow) mainWindow.webContents.send('add-new-tab', searchUrl);
-      }
-    }
-  ]
-});
+    ]
+  });
+}
 
 ipcMain.handle('set-as-default-browser', async () => {
   try {
@@ -1748,13 +1772,16 @@ ipcMain.handle('set-as-default-browser', async () => {
 let mcpServerPort = MCP_SERVER_PORT;
 // Custom protocol for authentication
 const PROTOCOL = 'comet-browser';
+const RAYCAST_PROTOCOL = 'comet-ai';
 
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
     app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+    app.setAsDefaultProtocolClient(RAYCAST_PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
   }
 } else {
   app.setAsDefaultProtocolClient(PROTOCOL);
+  app.setAsDefaultProtocolClient(RAYCAST_PROTOCOL);
 }
 
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
@@ -1775,11 +1802,43 @@ app.on('open-url', async (event, url) => {
     target = mainWindow;
   }
   if (!target || target.isDestroyed()) return;
+  
+  console.log('[Main] open-url received:', url);
+  
+  // Handle Raycast commands
+  const parsed = new URL(url);
+  const pathname = parsed.pathname.replace(/^\/+/, '');
+  const params = Object.fromEntries(parsed.searchParams);
+  
+  // Comet Browser protocol
   if (url.startsWith(`${PROTOCOL}://`)) {
     target.webContents.send('auth-callback', url);
-  } else if (url.startsWith('http://') || url.startsWith('https://')) {
+  } 
+  // HTTP/HTTPS URLs
+  else if (url.startsWith('http://') || url.startsWith('https://')) {
     target.webContents.send('add-new-tab', url);
   }
+  // Raycast commands via comet-ai:// scheme (registered separately)
+  else if (url.startsWith('comet-ai://') || url.startsWith('comet://')) {
+    const command = pathname || params.command || 'index';
+    console.log('[Main] Raycast command:', command, params);
+    
+    // Map commands to IPC events
+    const commandMap = {
+      'chat': 'open-ai-chat',
+      'browse': 'open-quick-browse', 
+      'ocr': 'trigger-screen-ocr',
+      'pdf': 'open-pdf-creator',
+      'automation': 'open-automation-panel',
+      'settings': 'open-settings',
+      'index': 'open-main',
+      'navigate': 'navigate-to-url',
+    };
+    
+    const ipcCommand = commandMap[command] || command;
+    target.webContents.send(ipcCommand, params);
+  }
+  
   if (target.isMinimized()) target.restore();
   target.focus();
 });
@@ -7034,6 +7093,132 @@ app.whenReady().then(async () => {
     }
   });
 
+  // XLSX generation (using openpyxl)
+  ipcMain.handle('generate-xlsx', async (event, payload = {}) => {
+    try {
+      const title = payload.title || 'Spreadsheet';
+      const pages = normalizePages(payload);
+      const downloads = path.join(os.homedir(), 'Downloads');
+      const safeTitle = title.replace(/[^a-z0-9]/gi, '_');
+      const filename = `${safeTitle}_${Math.floor(Date.now() / 1000)}.xlsx`;
+      const fullPath = path.join(downloads, filename);
+
+      // Use Python with openpyxl
+      const pythonCode = `
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.title = "${title.replace(/"/g, '\\"')}"
+
+# Extract tables from pages
+${pages.map((page, pageIdx) => `
+# Sheet ${pageIdx + 1}: ${page.title || 'Sheet ' + (pageIdx + 1)}
+${(() => {
+  let row = 1;
+  let code = '';
+  
+  // Add section title as header
+  if (page.title) {
+    code += \`ws.cell(row=${row}, column=1, value="${page.title.replace(/"/g, '\\"')}")
+ws.cell(row=${row}, column=1).font = Font(bold=True, size=14)
+ws.cell(row=${row}, column=1).fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")
+row += 2
+\`;
+  }
+  
+  // Process sections with tables
+  (page.sections || []).forEach((section, secIdx) => {
+    if (section.title) {
+      code += \`ws.cell(row=\${row}, column=1, value="\${section.title.replace(/"/g, '\\"')}")
+ws.cell(row=\${row}, column=1).font = Font(bold=True, size=12)
+row += 1
+\`;
+    }
+    if (section.content) {
+      // Split content into rows
+      const lines = section.content.split('\\n').filter(Boolean);
+      lines.forEach(line => {
+        code += \`ws.cell(row=\${row}, column=1, value="\${line.replace(/"/g, '\\"')}")
+row += 1
+\`;
+      });
+    }
+    if (section.table && Array.isArray(section.table)) {
+      // Add table data
+      section.table.forEach((tableRow, tblRowIdx) => {
+        const cols = Array.isArray(tableRow) ? tableRow : [tableRow];
+        cols.forEach((cell, colIdx) => {
+          code += \`ws.cell(row=\${row}, column=\${colIdx + 1}, value="\${String(cell).replace(/"/g, '\\"')}")
+\`;
+          if (tblRowIdx === 0) {
+            code += \`ws.cell(row=\${row}, column=\${colIdx + 1}).font = Font(bold=True)
+ws.cell(row=\${row}, column=\${colIdx + 1}).fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")
+\`;
+          }
+        });
+        code += \`row += 1
+\`;
+      });
+      row += 1;
+    }
+  });
+  
+  return code;
+})()}
+`).join('\\n')}
+
+# Adjust column widths
+for col in ws.columns:
+    max_length = 0
+    column = col[0].column_letter
+    for cell in col:
+        try:
+            if len(str(cell.value)) > max_length:
+                max_length = len(str(cell.value))
+        except:
+            pass
+    adjusted_width = min(max_length + 2, 50)
+    ws.column_dimensions[column].width = adjusted_width
+
+wb.save("${fullPath.replace(/"/g, '\\"')}")
+`.trim();
+
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
+      
+      try {
+        await execAsync(`python3 -c "${pythonCode.replace(/"/g, '\\"').replace(/\n/g, '; ')}"`, { timeout: 30000 });
+      } catch (pyErr) {
+        // Fallback: simple JS generation if Python fails
+        const XLSX = require('xlsx');
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.-sheet_from_json(JSON.stringify(pages.flatMap(p => 
+          (p.sections || []).flatMap(s => [s.title, s.content]).filter(Boolean)
+        )));
+        XLSX.utils.book_append_sheet(workbook, worksheet, title);
+        const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+        fs.writeFileSync(fullPath, buffer);
+      }
+
+      // Auto-sync to mobile
+      autoSyncFileToMobile(filename, fs.readFileSync(fullPath), 'xlsx');
+
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('download-started', { name: filename, path: fullPath });
+        mainWindow.webContents.send('download-complete', { name: filename, path: fullPath });
+      }
+
+      return { success: true, filePath: fullPath };
+    } catch (err) {
+      console.error('[XLSX] Generation failed:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle('open-pdf', async (event, filePath) => {
     if (!filePath || !fs.existsSync(filePath)) {
       return { success: false, error: 'File not found' };
@@ -7353,6 +7538,33 @@ app.whenReady().then(async () => {
       res.json({ success: true });
     });
 
+    nativeMacUiApp.post('/native-mac-ui/summarize-page', async (req, res) => {
+      try {
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          res.status(400).json({ success: false, error: 'Browser not running' });
+          return;
+        }
+
+        const view = tabViews.get(activeTabId);
+        if (!view) {
+          res.status(400).json({ success: false, error: 'No active tab' });
+          return;
+        }
+
+        const domContent = await view.webContents.executeJavaScript(`
+          (() => {
+            const clone = document.body.cloneNode(true);
+            clone.querySelectorAll('script, style, nav, footer, header, noscript, svg, .ads, .advertisement, .sidebar, .menu, .nav').forEach(e => e.remove());
+            return clone.innerText.replace(/\\s+/g, ' ').substring(0, 5000);
+          })()
+        `);
+        
+        res.json({ success: true, content: domContent });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
     nativeMacUiApp.post('/native-mac-ui/conversations/action', async (req, res) => {
       const action = `${req.body?.action || ''}`.trim();
       const id = req.body?.id ? `${req.body.id}` : null;
@@ -7554,6 +7766,14 @@ app.whenReady().then(async () => {
         const pin = args.pin;
         const configId = args.id;
         console.log(`[WiFi-Sync] Mobile approved high risk action with PIN: ${pin}`);
+        
+        // Check if there's a pending power action
+        if (pendingPowerActions.has(configId)) {
+          const pendingAction = pendingPowerActions.get(configId);
+          pendingAction.resolve({ success: true, approved: true });
+          pendingPowerActions.delete(configId);
+        }
+        
         if (
           nativeMacUiState.pendingApproval &&
           nativeMacUiState.pendingApproval.approvalToken === configId
@@ -7859,6 +8079,68 @@ app.whenReady().then(async () => {
            const { taskId } = args;
            ipcMain.emit('automation:delete-task', { sender: { send: () => {} } }, taskId);
            sendResponse({ success: true });
+        } else if (action === 'shutdown' || action === 'restart' || action === 'sleep' || action === 'lock') {
+           // ALWAYS require QR verification for power/restart actions - even from mobile
+           const powerAction = action;
+           console.log(`[WiFi-Sync] Power action requested: ${powerAction} - requiring QR approval`);
+           
+           const actionDescriptions: Record<string, string> = {
+             shutdown: 'Shutdown Desktop',
+             restart: 'Restart Desktop',
+             sleep: 'Sleep Desktop',
+             lock: 'Lock Screen'
+           };
+           
+           const { qrImage, pin, token } = await generateShellApprovalQR(actionDescriptions[powerAction] || powerAction);
+           wifiSyncService.sendToMobile({
+             action: 'power-approval-qr',
+             commandId: token,
+             pin: pin,
+             powerAction: powerAction,
+             qrData: qrImage,
+           });
+           
+           // Wait for mobile approval, then execute the power action
+           const actionResult = await new Promise(async (resolve) => {
+             const timeout = setTimeout(() => {
+               pendingPowerActions.delete(token);
+               resolve({ success: false, error: 'Power action approval timeout (2 minutes)' });
+             }, 120000);
+             
+             pendingPowerActions.set(token, {
+               action: powerAction,
+               resolve: (result) => {
+                 clearTimeout(timeout);
+                 pendingPowerActions.delete(token);
+                 resolve(result);
+               }
+             });
+           });
+           
+           // Execute the power action after approval
+           if (actionResult.success) {
+             try {
+               const { exec } = require('child_process');
+               const actionCommands: Record<string, string> = {
+                 shutdown: 'osascript -e \'tell app "System Events" to shut down\'',
+                 restart: 'osascript -e \'tell app "System Events" to restart\'',
+                 sleep: 'pmset sleepnow',
+                 lock: '/System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -suspend'
+               };
+               
+               exec(actionCommands[powerAction], (err, stdout, stderr) => {
+                 if (err) {
+                   sendResponse({ success: false, error: err.message });
+                 } else {
+                   sendResponse({ success: true, output: `Power action ${powerAction} executed` });
+                 }
+               });
+             } catch (err) {
+               sendResponse({ success: false, error: err.message });
+             }
+           } else {
+             sendResponse({ success: false, error: actionResult.error || 'Power action not approved' });
+           }
         } else {
           sendResponse({ success: false, error: `Unknown action: ${action}` });
         }
@@ -8880,7 +9162,7 @@ app.whenReady().then(async () => {
       ipcService = new IPCHandler(taskScheduler, taskQueue, storageManager, mobileNotifier);
       ipcService.initialize();
 
-      console.log('[Main] Automation service initialized');
+console.log('[Main] Automation service initialized');
     } catch (error) {
       console.error('[Main] Failed to initialize automation service:', error);
     } finally {
@@ -8888,10 +9170,32 @@ app.whenReady().then(async () => {
     }
   }
 
-
-  // Automation handlers are managed by IPCHandler in src/service/ipc-service.js
-
-
+  // Biometric Authentication Handlers
+  try {
+    const { BiometricAuthManager, CrossPlatformBiometricAuth } = require('./src/service/biometric-auth.js');
+    
+    const biometricAuth = new BiometricAuthManager();
+    const crossPlatformAuth = new CrossPlatformBiometricAuth();
+    
+    // Check biometric availability
+    ipcMain.handle('biometric-check', async () => {
+      return await biometricAuth.quickCheck();
+    });
+    
+    // Authenticate via biometrics
+    ipcMain.handle('biometric-authenticate', async (event, reason) => {
+      return await biometricAuth.authenticate(reason || 'Authenticate to proceed');
+    });
+    
+    // Execute chained actions with biometric protection
+    ipcMain.handle('biometric-execute', async (event, actions, reason) => {
+      return await crossPlatformAuth.executeWithAuth(actions, reason || 'Execute critical action');
+    });
+    
+    console.log('[Main] Biometric authentication initialized');
+  } catch (error) {
+    console.error('[Main] Failed to initialize biometric auth:', error);
+  }
 
   initializeAutomationService();
 
@@ -9204,6 +9508,33 @@ app.whenReady().then(async () => {
     `);
       return { success: true };
     } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ============================================================================
+  // CROSS-APP AUTOMATION - For controlling external applications
+  // ============================================================================
+
+  const { CrossPlatformAutomation } = require('./src/lib/cross-platform-automation.js');
+  const crossPlatformAutomation = new CrossPlatformAutomation();
+
+  ipcMain.handle('click-app-element', async (event, { appName, elementText, reason }) => {
+    console.log(`[Main] click-app-element: ${appName}, "${elementText}"`);
+    try {
+      return await crossPlatformAutomation.clickAppElement(appName, elementText, reason);
+    } catch (error) {
+      console.error('[Main] click-app-element error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('type-text-app', async (event, text) => {
+    console.log(`[Main] type-text-app: ${text.substring(0, 30)}...`);
+    try {
+      return await crossPlatformAutomation.typeText(text);
+    } catch (error) {
+      console.error('[Main] type-text-app error:', error);
       return { success: false, error: error.message };
     }
   });

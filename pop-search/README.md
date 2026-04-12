@@ -7,7 +7,7 @@
 
 [![Version](https://img.shields.io/badge/version-v1.3.0--beta-blue)](https://github.com/wsnh2022/pop-search/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078d7.svg?logo=windows&logoColor=white)](https://github.com/wsnh2022/pop-search)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache_2.0-green)](LICENSE)
 ![Electron](https://img.shields.io/badge/Electron-4B32C3?logo=electron&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
 
@@ -217,7 +217,7 @@ npm start
 
 ## 📜 License
 
-MIT License. See [LICENSE](LICENSE) for details.
+Apache License 2.0. See [LICENSE](LICENSE) for details.
 
 ---
 

@@ -6,9 +6,9 @@
 
 **An open-source, AI-native browser with permission-gated OS automation.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.8-blue)]()
+[![Version](https://img.shields.io/badge/Version-0.2.8.2-blue)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
 [![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
@@ -52,7 +52,7 @@ Full documentation is available at [browser.ponsrischool.in](https://browser.pon
 
 ---
 
-## ✨ Features (v0.2.8)
+## ✨ Features (v0.2.8.2)
 
 ### 🤖 AI Agent
 - Multi-step autonomous task execution via chained commands
@@ -105,12 +105,25 @@ Full documentation is available at [browser.ponsrischool.in](https://browser.pon
 - **One-Click Tab Group Closure** — Instantly close all AI-opened tabs
 - **Download Panel** — Click to open completed downloads directly
 
+### 📄 Document & Productivity (v0.2.8.2+)
+- **Advanced Document Generation** — Generate PDFs, Excel (XLSX), PowerPoint (PPTX) programmatically
+- **Mermaid Diagrams** — Convert flowcharts, sequence diagrams, class diagrams to PDF/PNG
+- **Charts & Watermarks** — Add bar/line/pie charts and custom watermarks to documents
+- **Typing Animations** — Character-by-character streaming with configurable cursor styles
+
+### 🔌 Extensibility (v0.2.8.2+)
+- **Raycast Extension** — Control Comet from macOS Spotlight (chat, browse, OCR, PDF, automation)
+- **Plugin System** — Dynamic plugin loading with marketplace support
+- **MCP Integration** — Model Context Protocol for external tools
+
 ### 📱 Mobile App (Flutter)
 - **WiFi Sync** — Connect mobile to desktop instantly
-- **Remote Desktop Control** — Control desktop from phone
+- **Remote Desktop Control** — Control desktop from phone (AI Chat, Shell, Click, Type, Screenshot)
 - **Push Notifications** — Get task completion alerts on mobile
 - **PDF Viewer** — View generated PDFs on mobile
 - **Automation Dashboard** — Manage scheduled tasks from mobile
+- **Remote Settings** — Control desktop settings from mobile
+- **Persistent Device Memory** — Auto-reconnect to saved devices
 - **Native Google Sign-In** — Fast, secure authentication via `google_sign_in` + Firebase Auth
 - **Cloud Sync** — Authenticated sessions sync across mobile and desktop via Firebase
 
@@ -276,7 +289,7 @@ When you use `[EXPLAIN_CAPABILITIES]`, Comet AI demonstrates:
 Comet does **not** rely on LLM guardrails alone. It enforces **architectural isolation** at three levels.
 
 ### 1. Visual Sandbox
-The agent perceives pages via **screenshots + OCR only**. It never parses or executes raw HTML or JavaScript. This prevents hidden prompt injection via DOM manipulation.
+The agent perceives pages via **screenshots + OCR, SecureDOM reader, and in-page DOM search**. It never executes raw HTML or JavaScript directly. This prevents hidden prompt injection via DOM manipulation while still providing structured content access.
 
 ### 2. Syntactic Firewall
 Before any content reaches the LLM, dangerous patterns are filtered:
@@ -493,7 +506,7 @@ Comet AI Browser is built by a **16-year-old student** from India, preparing for
 
 ## 📝 License
 
-[MIT](LICENSE) © 2026 Comet-AI
+[Apache 2.0](LICENSE) © 2026 Comet-AI
 
 ---
 

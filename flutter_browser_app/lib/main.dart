@@ -37,6 +37,7 @@ import 'pages/automation_page.dart';
 import 'pages/remote_settings_page.dart';
 import 'pages/pdf_viewer_page.dart';
 import 'pages/auth_page.dart';
+import 'pages/action_approval_page.dart';
 
 // ignore: non_constant_identifier_names
 late final String WEB_ARCHIVE_DIR;
@@ -273,12 +274,29 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
   }
 
   void _handleDeepLink(Uri uri) {
+    print('[DeepLink] Received: $uri');
     if (uri.scheme == 'comet-ai') {
       if (uri.host == 'connect' || uri.host == 'approve') {
         // Delay to allow navigator to initialize
         Future.delayed(const Duration(milliseconds: 500), () {
           navigatorKey.currentState?.pushNamed('/connect-desktop',
               arguments: {'qrData': uri.toString()});
+        });
+      } else if (uri.host == 'shell-approve' || uri.host == 'shell') {
+        // Shell approval QR code - redirect to approval screen
+        final id = uri.queryParameters['id'];
+        final deviceId = uri.queryParameters['deviceId'];
+        final pin = uri.queryParameters['pin'];
+        final command = uri.queryParameters['command'] ?? '';
+
+        Future.delayed(const Duration(milliseconds: 500), () {
+          navigatorKey.currentState?.pushNamed('/action-approval', arguments: {
+            'approvalId': id,
+            'deviceId': deviceId,
+            'pin': pin,
+            'command': command,
+            'fromQR': true,
+          });
         });
       } else if (uri.host == 'auth') {
         // Auth deep link - redirect to auth page
@@ -382,6 +400,17 @@ class _CometAIAppState extends State<CometAIApp> with WindowListener {
             filePath: args?['filePath'],
             fileUrl: args?['fileUrl'],
             fileName: args?['fileName'],
+          );
+        },
+        '/action-approval': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments
+              as Map<String, dynamic>?;
+          return ActionApprovalPage(
+            approvalId: args?['approvalId'],
+            deviceId: args?['deviceId'],
+            pin: args?['pin'],
+            command: args?['command'] ?? '',
+            fromQR: args?['fromQR'] ?? false,
           );
         },
       },

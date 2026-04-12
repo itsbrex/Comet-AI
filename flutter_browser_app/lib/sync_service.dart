@@ -15,6 +15,10 @@ class SyncService {
   factory SyncService() => _instance;
   SyncService._internal();
 
+  // Device memory for persistent local devices
+  static const String _deviceMemoryKey = 'paired_devices_memory';
+  List<Map<String, dynamic>> _savedDevices = [];
+
   DatabaseReference? _signalRef;
   RTCPeerConnection? _peerConnection;
   RTCDataChannel? _dataChannel;
@@ -31,8 +35,59 @@ class SyncService {
       StreamController<Map>.broadcast();
   Stream<Map> get onHistorySynced => _historyController.stream;
 
+  Future<void> loadSavedDevices() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedJson = prefs.getString(_deviceMemoryKey);
+      if (savedJson != null) {
+        _savedDevices = List<Map<String, dynamic>>.from(
+          (jsonDecode(savedJson) as List)
+              .map((d) => Map<String, dynamic>.from(d)),
+        );
+        print(
+            '[Sync] Loaded ${_savedDevices.length} saved devices from memory');
+      }
+    } catch (e) {
+      print('[Sync] Error loading saved devices: $e');
+    }
+  }
+
+  Future<void> saveDeviceToMemory(Map<String, dynamic> device) async {
+    try {
+      final existingIndex = _savedDevices.indexWhere(
+        (d) => d['deviceId'] == device['deviceId'],
+      );
+      if (existingIndex >= 0) {
+        _savedDevices[existingIndex] = device;
+      } else {
+        _savedDevices.add(device);
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_deviceMemoryKey, jsonEncode(_savedDevices));
+      print('[Sync] Saved device to memory: ${device['deviceName']}');
+    } catch (e) {
+      print('[Sync] Error saving device: $e');
+    }
+  }
+
+  Future<void> removeDeviceFromMemory(String deviceId) async {
+    try {
+      _savedDevices.removeWhere((d) => d['deviceId'] == deviceId);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_deviceMemoryKey, jsonEncode(_savedDevices));
+      print('[Sync] Removed device from memory: $deviceId');
+    } catch (e) {
+      print('[Sync] Error removing device: $e');
+    }
+  }
+
+  List<Map<String, dynamic>> getSavedDevices() => _savedDevices;
+
   Future<void> initialize(String userId, {String? customDeviceId}) async {
     this.userId = userId;
+    // Load saved devices from persistent memory
+    await loadSavedDevices();
+
     if (customDeviceId != null) {
       this.deviceId = customDeviceId;
     } else {
@@ -552,7 +607,8 @@ class SyncService {
             _cloudDeviceCache[remoteDeviceId] as Map<String, dynamic>? ?? {};
         return {
           'success': true,
-          'desktopName': device['deviceName'] ?? _connectedDesktopLabel ?? 'Cloud Desktop',
+          'desktopName':
+              device['deviceName'] ?? _connectedDesktopLabel ?? 'Cloud Desktop',
           'platform': device['platform'] ?? 'cloud',
           'connectionMode': 'cloud',
           'online': device['online'] ?? true,
@@ -713,8 +769,8 @@ class SyncService {
     if (_cloudUserId == null || _cloudDeviceId == null) return;
 
     _cloudAIResponsesSubscription?.cancel();
-    final responsesRef =
-        FirebaseDatabase.instance.ref('aiResponses/$_cloudUserId/$_cloudDeviceId');
+    final responsesRef = FirebaseDatabase.instance
+        .ref('aiResponses/$_cloudUserId/$_cloudDeviceId');
 
     _cloudAIResponsesSubscription = responsesRef.onValue.listen((event) {
       final data = event.snapshot.value;

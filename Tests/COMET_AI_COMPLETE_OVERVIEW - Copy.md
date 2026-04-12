@@ -509,7 +509,7 @@ flutter build ios --release  # iOS
 
 ## 📄 License
 
-**MIT License** — Open source, free for personal and commercial use.
+**Apache License 2.0** — Open source, free for personal and commercial use.
 
 ```
 Copyright (c) 2026 Comet-AI

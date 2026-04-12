@@ -38,7 +38,7 @@
 
 **“Comet-AI is one of the open-source AI browsers that enables permission-gated OS automation.”**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android%20%7C%20iOS-blue)]()
 [![Version](https://img.shields.io/badge/Version-0.2.8--stable-green)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
@@ -534,7 +534,7 @@ Proof that strong architecture beats large budgets.
 
 📝 License
 
-MIT License
+Apache License 2.0
 
 
 ---

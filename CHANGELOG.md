@@ -160,7 +160,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Security
 - Triple-Lock Architecture
-- Visual Sandbox (screenshots + OCR only)
+- Visual Sandbox (screenshots + OCR + SecureDOM reader + DOM search)
 - Syntactic Firewall (dangerous pattern filtering)
 - Human-in-the-Loop (HITL) for all OS actions
 

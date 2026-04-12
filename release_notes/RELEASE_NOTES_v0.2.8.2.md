@@ -1,6 +1,6 @@
 # Comet AI Browser - Release Notes
 
-## v0.2.8.2 (2026-04-12)
+## v0.2.8.2 (2026-04-12) - Stable
 
 ### New Features
 - **Advanced Document Generation Engine** - Generate PDFs, Excel (XLSX), PowerPoint (PPTX), and Mermaid diagrams programmatically with charts, watermarks, tables, and images
@@ -20,7 +20,7 @@
 
 ---
 
-## v0.2.8.1 (2026-04-10)
+## v0.2.8.1 (2026-04-10) - Stable
 
 ### Native UI Enhancements
 - **9 New Liquid Glass Themes** - graphite, crystal, obsidian, azure, rose, aurora, nebula, liquidGlass, translucent
@@ -31,7 +31,7 @@
 
 ---
 
-## v0.2.8 (2026-04-08)
+## v0.2.8 (2026-04-08) - Alpha
 
 ### TypeScript Compilation Fixes
 - **Fixed Security.ts type errors**: Properly typed regex pattern iteration with explicit `RegExp[]` casting
@@ -47,7 +47,7 @@
 
 ---
 
-## v0.2.7 (2026-04-04)
+## v0.2.7.1 (2026-04-06)
 
 ### Authentication Hardening
 - **Deep-Link Protocol Intercept**: Re-engineered Electron auth handling to properly catch custom `comet-browser://` deep links using `did-fail-load`
@@ -62,6 +62,19 @@
 ### Documentation
 - Added comprehensive documentation website at `/docs/*`
 - New pages: AI Commands, Automation, Native API, Plugins, Deep Links, Document Generation
+
+---
+
+## v0.2.7 (2026-04-04)
+
+### Core Features
+- Complete WiFi Sync service implementation
+- Mobile desktop control with Shell tab
+- Automation page with task management
+
+### Bug Fixes
+- Clipboard sync echo prevention
+- Download panel proper object handling
 
 ---
 
@@ -83,11 +96,6 @@
 - **JSON command parser** accepts `commands` and infers `pptx` from `slides`
 - **Inline images** within analysis content
 - **Watermark fixes** on thumbnails
-
-### Bug Fixes
-- IPC Scoping Resolution in `desktop-control` handler
-- DOCX table mapping syntax error
-- CloudSync Initialization property access errors
 
 ---
 

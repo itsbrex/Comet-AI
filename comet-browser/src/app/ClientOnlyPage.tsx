@@ -660,6 +660,18 @@ export default function Home() {
   // Tab Switching logic (Alt + Tab and Alt + Scroll)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Close all panels when ESC is pressed
+        if (showSettings) setShowSettings(false);
+        if (showDownloads) setShowDownloads(false);
+        if (showCart) setShowCart(false);
+        if (showExtensionsPopup) setShowExtensionsPopup(false);
+        if (showClipboard) setShowClipboard(false);
+        if (showSpotlightSearch) setShowSpotlightSearch(false);
+        if (aiOverview) setAiOverview(null);
+        return;
+      }
+
       if (e.altKey && e.key === 'Tab') {
         e.preventDefault();
         setShowTabSwitcher(true);
@@ -688,7 +700,7 @@ export default function Home() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [showSettings, showDownloads, showCart, showExtensionsPopup, showClipboard, showSpotlightSearch, aiOverview]);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {

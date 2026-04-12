@@ -62,7 +62,7 @@ export const NOT_FOUND_SIGNALS = [
   "access denied", "403 forbidden",
 ];
 
-export const INTERNAL_TAG_RE = /\[\s*(?:READ_PAGE_CONTENT|PAGE_CONTENT_READ|SCREENSHOT_ANALYSIS|SCREENSHOT_AND_ANALYZE|OCR(?:_COORDINATES|_SCREEN)?|EXTRACTED|EXTRACT_DATA|OPEN_TABS|EMAILS|LIST_OPEN_TABS|ORGANIZE_TABS|CLOSE_TAB|NAVIGATE|SEARCH|WEB_SEARCH|GENERATE_IMAGE|FIND_AND_CLICK|CLICK_ELEMENT|CLICK_AT|CLICK_APP_ELEMENT|FILL_FORM|SCROLL_TO|SHELL_COMMAND|OPEN_APP|SET_THEME|SET_VOLUME|SET_BRIGHTNESS|RELOAD|GO_BACK|GO_FORWARD|WAIT|GUIDE_CLICK|GENERATE_PDF|GENERATE_DIAGRAM|OPEN_PRESENTON|EXPLAIN_CAPABILITIES|OPEN_PDF|OPEN_VIEW|GMAIL_\w+|CREATE_NEW_TAB_GROUP|SHOW_IMAGE|SHOW_VIDEO|OPEN_MCP_SETTINGS|OPEN_AUTOMATION_SETTINGS|OPEN_SCHEDULING_MODAL|AI REASONING|ACTION_CHAIN_JSON|OCR_RESULT|MEDIA_ATTACHMENTS_JSON|SCHEDULE_TASK|APPLE_INTELLIGENCE_IMAGE|APPLE_INTELLIGENCE_SUMMARY(?:\s*\|\s*[^]]+)?)[^\]]*\]/gi;
+export const INTERNAL_TAG_RE = /\[\s*(?:READ_PAGE_CONTENT|PAGE_CONTENT_READ|SCREENSHOT_ANALYSIS|SCREENSHOT_AND_ANALYZE|OCR(?:_COORDINATES|_SCREEN)?|EXTRACTED|EXTRACT_DATA|OPEN_TABS|EMAILS|LIST_OPEN_TABS|ORGANIZE_TABS|CLOSE_TAB|NAVIGATE|SEARCH|WEB_SEARCH|GENERATE_IMAGE|FIND_AND_CLICK|CLICK_ELEMENT|CLICK_AT|CLICK_APP_ELEMENT|FILL_FORM|SCROLL_TO|SHELL_COMMAND|OPEN_APP|SET_THEME|SET_VOLUME|SET_BRIGHTNESS|RELOAD|GO_BACK|GO_FORWARD|WAIT|GUIDE_CLICK|GENERATE_PDF|GENERATE_DIAGRAM|OPEN_PRESENTON|EXPLAIN_CAPABILITIES|OPEN_PDF|OPEN_VIEW|GMAIL_\w+|CREATE_NEW_TAB_GROUP|SHOW_IMAGE|SHOW_VIDEO|OPEN_MCP_SETTINGS|OPEN_AUTOMATION_SETTINGS|OPEN_SCHEDULING_MODAL|AI REASONING|ACTION_CHAIN_JSON|OCR_RESULT|MEDIA_ATTACHMENTS_JSON|SCHEDULE_TASK|APPLE_INTELLIGENCE_IMAGE|APPLE_INTELLIGENCE_SUMMARY|CREATE_XLSX_JSON|CROSS_APP_JSON(?:\s*\|\s*[^]]+)?)[^\]]*\]/gi;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Queries that ALWAYS require a web search before answering
@@ -147,10 +147,11 @@ JSON Format (REQUIRED for all commands):
 - Put JSON in code block: \`\`\`json { "commands": [...] } \`\`\`
 - Each command: {"type": "COMMAND", "value": "..."}
 - User sees ONLY your text, not the JSON
-- For ALL document requests (PDF/DOCX/PPTX), you MUST create a **highly detailed, professional, and data-rich report**.
+- For ALL document requests (PDF/DOCX/PPTX/XLSX), you MUST create a **highly detailed, professional, and data-rich report**.
 - MANDATORY: Use Markdown TABLES for all data comparisons and statistics.
 - MANDATORY: Use [GENERATE_DIAGRAM: mermaid_code] or embed diagrams in content for visual architecture/workflows.
 - Prefer CREATE_FILE_JSON (not GENERATE_PDF) for document generation.
+- For XLSX/Excel: Use CREATE_FILE_JSON with format:"xlsx" and include table data in sections.
 
 Available commands (prefer JSON format):
 - {"type": "SHELL_COMMAND", "value": "command"}
@@ -425,6 +426,7 @@ FOR AUTOMATION MANAGEMENT:
 - [CREATE_NEW_TAB_GROUP: name | urls]
 - [OCR_COORDINATES: x,y,width,height]
 - [OCR_SCREEN: x,y,width,height]
+- [CROSS_APP_JSON: {"actions":[{"type":"ocr","region":[x,y,w,h]},{"type":"click","app":"AppName","element":"Button Text"},{"type":"type","text":"Hello"}]}] ← Cross-app automation (JSON format)
 - [DOM_SEARCH: query]                   ← Search within current page DOM
 - [DOM_READ_FILTERED: query]            ← Read DOM with search filter (results shown in sidebar)
 - [CLICK_ELEMENT: selector | reason]

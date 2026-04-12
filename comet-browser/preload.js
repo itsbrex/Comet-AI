@@ -9,6 +9,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   summarizeWithAppleIntelligence: (text) => ipcRenderer.invoke('apple-intelligence-summary', text),
   generateAppleIntelligenceImage: (payload) => ipcRenderer.invoke('apple-intelligence-generate-image', payload),
   generateGenmoji: (payload) => ipcRenderer.invoke('apple-intelligence-genmoji', payload),
+  
+  // Biometric Authentication
+  checkBiometricAuth: () => ipcRenderer.invoke('biometric-check'),
+  authenticateBiometric: (reason) => ipcRenderer.invoke('biometric-authenticate', reason),
+  executeWithAuth: (actions, reason) => ipcRenderer.invoke('biometric-execute', actions, reason),
   onAddNewTab: (callback) => {
     const subscription = (event, url) => callback(url);
     ipcRenderer.on('add-new-tab', subscription);
@@ -214,6 +219,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   generatePDFWithMethod: (method, options) => ipcRenderer.invoke('generate-pdf-with-method', { method, options }),
   generatePPTX: (payload) => ipcRenderer.invoke('generate-pptx', payload),
   generateDOCX: (payload) => ipcRenderer.invoke('generate-docx', payload),
+  generateXLSX: (payload) => ipcRenderer.invoke('generate-xlsx', payload),
   openPDF: (filePath) => ipcRenderer.invoke('open-pdf', filePath),
   openFile: (filePath) => ipcRenderer.invoke('open-file', filePath),
   checkPythonAvailable: () => ipcRenderer.invoke('check-python-available'),
@@ -450,6 +456,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   captureScreenRegion: (region) => ipcRenderer.invoke('capture-screen-region', region),
   performCrossAppClick: (coords) => ipcRenderer.invoke('perform-click', coords),
   performClick: (options) => ipcRenderer.invoke('perform-click', options),
+  clickAt: (x, y) => ipcRenderer.invoke('perform-click', { x, y }),
+  typeText: (text) => ipcRenderer.invoke('type-text-app', text),
+  clickAppElement: (appName, elementText, reason) => ipcRenderer.invoke('click-app-element', { appName, elementText, reason }),
+  typeTextApp: (text) => ipcRenderer.invoke('type-text-app', text),
   performOCR: (options) => ipcRenderer.invoke('perform-ocr', options),
   getWindowInfo: () => ipcRenderer.invoke('get-window-info'),
 

@@ -35,6 +35,11 @@ struct CometNativePanelsApp: App {
                 }
                 .keyboardShortcut("1", modifiers: [.command])
 
+                Button("Open Apple Intelligence") {
+                    viewModel.openPanel(.appleAI)
+                }
+                .keyboardShortcut("1", modifiers: [.command, .option])
+
                 Button("Open Command Center") {
                     viewModel.openPanel(.menu)
                 }
@@ -81,6 +86,8 @@ struct RootPanelView: View {
                 ClipboardPanelView(viewModel: viewModel)
             case .permissions:
                 PermissionsPanelView(viewModel: viewModel)
+            case .appleAI:
+                AppleIntelligencePanelView(viewModel: viewModel)
             }
         }
         .frame(minWidth: 100, minHeight: 100)

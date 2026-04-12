@@ -46,6 +46,7 @@
     "@ghostery/adblocker-electron": "^2.14.1",
     "@googleapis/gmail": "^16.1.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@pdf-lib/fontkit": "^1.1.1",
     "@tensorflow/tfjs": "^4.22.0",
     "ai": "^6.0.134",
     "ai-sdk-ollama": "^3.8.0",
@@ -71,6 +72,7 @@
     "node-cron": "^3.0.3",
     "object-inspect": "^1.13.3",
     "pdf-lib": "^1.17.1",
+    "pdf-lib-table": "^1.1.7",
     "pdfjs-dist": "^4.10.38",
     "pdfmake": "^0.2.18",
     "pptxgenjs": "^3.12.0",
@@ -83,6 +85,7 @@
     "tesseract.js": "^7.0.0",
     "wait-on": "^9.0.3",
     "ws": "^8.18.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.25.76"
   },
   "optionalDependencies": {
