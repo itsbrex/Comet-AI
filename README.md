@@ -8,7 +8,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.8.2-blue)]()
+[![Version](https://img.shields.io/badge/Version-0.2.9-blue)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
 [![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
@@ -52,7 +52,7 @@ Full documentation is available at [browser.ponsrischool.in](https://browser.pon
 
 ---
 
-## ✨ Features (v0.2.8.2)
+## ✨ Features (v0.2.9)
 
 ### 🤖 AI Agent
 - Multi-step autonomous task execution via chained commands
@@ -105,13 +105,13 @@ Full documentation is available at [browser.ponsrischool.in](https://browser.pon
 - **One-Click Tab Group Closure** — Instantly close all AI-opened tabs
 - **Download Panel** — Click to open completed downloads directly
 
-### 📄 Document & Productivity (v0.2.8.2+)
+### 📄 Document & Productivity (v0.2.9+)
 - **Advanced Document Generation** — Generate PDFs, Excel (XLSX), PowerPoint (PPTX) programmatically
 - **Mermaid Diagrams** — Convert flowcharts, sequence diagrams, class diagrams to PDF/PNG
 - **Charts & Watermarks** — Add bar/line/pie charts and custom watermarks to documents
 - **Typing Animations** — Character-by-character streaming with configurable cursor styles
 
-### 🔌 Extensibility (v0.2.8.2+)
+### 🔌 Extensibility (v0.2.9+)
 - **Raycast Extension** — Control Comet from macOS Spotlight (chat, browse, OCR, PDF, automation)
 - **Plugin System** — Dynamic plugin loading with marketplace support
 - **MCP Integration** — Model Context Protocol for external tools
@@ -383,13 +383,13 @@ flutter run
 
 ## ⬇️ Downloads
 
-**Latest Release: v0.2.8** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
+**Latest Release: v0.2.9** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
 
 | Platform | Download | Status |
 |----------|----------|--------|
-| 🪟 Windows (.exe) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser.Setup.0.2.8.exe) | ✅ Stable |
-| 🍎 macOS (.dmg) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.8-arm64.dmg) | ✅ Stable |
-| 🐧 Linux (.AppImage) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.8.AppImage) | ✅ Stable |
+| 🪟 Windows (.exe) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser.Setup.0.2.9.exe) | ✅ Stable |
+| 🍎 macOS (.dmg) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.9-arm64.dmg) | ✅ Stable |
+| 🐧 Linux (.AppImage) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.9.AppImage) | ✅ Stable |
 | 📱 Android (.apk) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/app-release.apk) | ✅ Stable |
 | 🍎 iOS (.ipa) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet-AI.ipa) | 🧪 Beta |
 
@@ -407,7 +407,7 @@ flutter run
 
 ---
 
-## 📝 v0.2.8 Highlights
+## 📝 v0.2.9 Highlights
 - **Comprehensive Documentation Website** - Added 6 new documentation pages covering AI Commands, Automation, Native API, Plugins, Deep Links, and Document Generation
 - **Document Generation Guide** - Detailed PDF, PPTX, and DOCX generation with templates, features, and code examples
 - **Native API Reference** - Complete guide to 50+ system-level APIs for window management, file system, network, and media control
@@ -505,7 +505,7 @@ Comet AI Browser is built by a **16-year-old student** from India, preparing for
 ---
 ## 📋 Changelog
 
-### v0.2.8 (2026-04-05) - Documentation Website & Structured Changelog
+### v0.2.9 (2026-04-05) - Documentation Website & Structured Changelog
 #### New Features
 - **Documentation Website** - Comprehensive docs at [browser.ponsrischool.in](https://browser.ponsrischool.in)
   - `/docs/ai-commands` - Complete AI command reference

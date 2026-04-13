@@ -1,122 +1,69 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
-import { searchEngines } from "./SearchEngineSettings";
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from "@/store/useAppStore";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
     Sparkles,
     Shield,
     Zap,
-    Globe,
     LogIn,
     ArrowRight,
-    Layers,
     Cpu,
     BookOpen,
     Github,
-    Code2,
-    Monitor,
-    Search,
-    RefreshCw,
     ExternalLink,
-    Copy as CopyIcon,
-    Download as DownloadIcon
+    Volume2,
+    VolumeX,
+    Music
 } from "lucide-react";
 import { firebaseConfigStorage, FirebaseConfig } from "@/lib/firebaseConfigStorage";
 import { useAppVersion } from "@/lib/useAppVersion";
 
-import { firebaseSyncService } from "@/lib/FirebaseSyncService";
-
 const LandingPage = () => {
     const store = useAppStore();
     const [isLoading, setIsLoading] = useState(false);
-    const [showStartup, setShowStartup] = useState(true);
-    const { scrollYProgress } = useScroll();
+    const [isMuted, setIsMuted] = useState(true);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
     const appVersion = useAppVersion();
     const versionLabel = `v${appVersion}`;
-    const COMET_README = useMemo(() => `
+
+    const COMET_README = `
 # ☄️ Comet-AI (${versionLabel})
-Made in India 🇮🇳
 ### The Future of Autonomous Web Intelligence
 
 **Comet** is an AI-native browser designed to automate your digital life. Built for extreme performance and deep AI integration.
 
 **Core Pillars:**
-1.  **Autonomous Agency**: The Comet Agent doesn't just answer questions; it *acts*. It can navigate, scrape, and automate complex workflows.
-2.  **Neural Orchestration**: Native support for Gemini 1.5 Pro, Claude 3.5, and local Deepseek R1 via Ollama.
-3.  **Local Memory (RAG)**: Built-in vector database for infinite semantic history search.
-4.  **Hardware Isolation**: Sandboxed Chromium environment for maximum security.
-
----
-
-## 🚀 Version ${versionLabel} \"Stardust\" Update
-*   **Neural Translation Engine**: Integrated Google Translate with AI fallback.
-*   **Ambient Workspace**: Procedural music and visualizer for productivity.
-*   **Performance++**: Reduced RAM footprint for 4GB systems.
-*   **Global Spotlight**: Instant ⌘+Space/Alt+Space access to everything.
-`.trim(), [versionLabel]);
+*   **Autonomous Agency**: The Comet Agent doesn't just answer questions; it acts.
+*   **Neural Orchestration**: Native support for Gemini, Claude, and Local LLMs.
+*   **Local Memory**: Built-in vector database for infinite semantic history.
+*   **Hardware Isolation**: Sandboxed environment for maximum security.
+`.trim();
 
     useEffect(() => {
-        if (store.user && window.electronAPI) {
-            store.setActiveView("browser");
-            return;
-        } else if (store.user && !window.electronAPI) {
-            // Web Mode: Activate Sync
-            if (!store.cloudSyncConsent) store.setCloudSyncConsent(true);
-            firebaseSyncService.syncClipboard();
-            firebaseSyncService.syncHistory();
-            // Don't auto-switch view, let user stay on landing page dashboard
-        }
+        audioRef.current = new Audio('/bgm.mp3');
+        audioRef.current.loop = true;
+        audioRef.current.volume = 0.3;
 
-        const done = sessionStorage.getItem("comet_startup_done");
-        if (done) {
-            setShowStartup(false);
-            return;
-        }
-        const t = setTimeout(() => {
-            setShowStartup(false);
-            sessionStorage.setItem("comet_startup_done", "true");
-        }, 2500);
-        return () => clearTimeout(t);
-    }, [store.user]);
-
-    useEffect(() => {
-        const handleExternalAuthReturn = () => {
-            const p = new URLSearchParams(window.location.search);
-            const status = p.get("auth_status");
-            const uid = p.get("uid");
-            const email = p.get("email");
-            const name = p.get("name");
-            const photo = p.get("photo");
-
-            if (status === "success" && uid && email) {
-                store.setUser({
-                    uid,
-                    email,
-                    displayName: name || "User",
-                    photoURL: photo || "",
-                });
-
-                if (email.endsWith("@ponsrischool.in")) store.setAdmin(true);
-
-                if (window.electronAPI) {
-                    store.setActiveView("browser");
-                } else {
-                    // On Web: Stay on Landing Page but activate Sync
-                    store.setCloudSyncConsent(true);
-                }
-
-                store.setHasSeenWelcomePage(true);
-                store.startActiveSession();
-                window.history.replaceState({}, document.title, window.location.pathname);
-                setIsLoading(false);
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
             }
         };
+    }, []);
 
-        handleExternalAuthReturn();
-    }, [store]);
+    const toggleMute = () => {
+        if (!audioRef.current) return;
+        if (isMuted) {
+            audioRef.current.play().catch(console.error);
+        } else {
+            audioRef.current.pause();
+        }
+        setIsMuted(!isMuted);
+    };
 
     const getFirebaseConfigFromEnv = (): FirebaseConfig => ({
         apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
@@ -125,7 +72,6 @@ Made in India 🇮🇳
         storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
         messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
         appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
-        measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
     });
 
     const handleGuestMode = () => {
@@ -134,248 +80,134 @@ Made in India 🇮🇳
         store.setActiveView("browser");
     };
 
-    const handleLogin = async () => {
-        setIsLoading(true);
-        const redirectUri = "comet-browser://auth";
-        const encoded = btoa(JSON.stringify(getFirebaseConfigFromEnv()));
-        const url = `https://browser.ponsrischool.in/auth?client_id=desktop-app&redirect_uri=${encodeURIComponent(
-            redirectUri
-        )}&firebase_config=${encoded}`;
-
-        if (window.electronAPI) {
-            window.electronAPI.openAuthWindow(url);
-        } else {
-            window.open(url, "_blank");
-        }
-    };
-
     const handleGoogleSignIn = async () => {
         setIsLoading(true);
         if (window.electronAPI) {
             const config = firebaseConfigStorage.load() || getFirebaseConfigFromEnv();
             const authUrl = `https://browser.ponsrischool.in/auth?client_id=desktop-app&redirect_uri=comet-browser%3A%2F%2Fauth&firebase_config=${btoa(JSON.stringify(config))}`;
             window.electronAPI.openAuthWindow(authUrl);
-            store.setHasSeenWelcomePage(true);
         } else {
             const url = `https://browser.ponsrischool.in/auth?client_id=web-app&redirect_uri=${encodeURIComponent(window.location.origin + '/auth')}`;
             window.open(url, "_blank");
-            store.setHasSeenWelcomePage(true);
         }
     };
 
-    // Auth callback is now handled globally in ClientOnlyPage.tsx
-    // to ensure user state is synchronized before transitioning views.
-
-    if (showStartup) {
-        return (
-            <div className="fixed inset-0 flex items-center justify-center z-[1000] bg-[var(--primary-bg)]">
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 1 }}
-                    className="relative text-center"
-                >
-                    <motion.div animate={{ opacity: [0.1, 0.2, 0.1] }} transition={{ duration: 2, repeat: Infinity }} className="absolute inset-0 bg-accent/20 blur-[100px] rounded-full" />
-                    <h1 className="text-6xl md:text-9xl font-black text-primary-text tracking-tighter text-neon relative z-10">COMET</h1>
-                    <p className="text-accent font-bold uppercase tracking-[0.6em] mt-4 relative z-10 text-sm">Initializing Neural Link</p>
-                </motion.div>
-            </div>
-        );
-    }
-
     return (
-        <div className="min-h-screen text-primary-text relative overflow-x-hidden transition-colors duration-700 bg-[var(--primary-bg)]" style={{ selectionBackgroundColor: 'var(--accent-light)' } as any}>
-            <div className="fixed inset-0 pointer-events-none opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, var(--accent-light), transparent)' }} />
+        <div className="min-h-screen text-primary-text relative bg-[#050508] font-sans selection:bg-accent/30 overflow-hidden">
+            {/* Ambient Background */}
+            <div className="fixed inset-0 z-0">
+                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-accent/20 blur-[150px] rounded-full animate-pulse" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500/10 blur-[150px] rounded-full" />
+                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 contrast-150 brightness-100" />
+            </div>
 
-            {!store.hasSeenWelcomePage && (
-                <nav className="fixed top-10 left-0 right-0 z-50 backdrop-blur-xl border-b border-border-color">
-                    <div className="max-w-7xl mx-auto px-8 py-4 flex justify-between items-center">
-                        <div className="flex items-center gap-3 group cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                            <img src="/icon.png" className="w-10 h-10 drop-shadow-[0_0_15px_var(--accent)] group-hover:scale-110 transition-transform" alt="Logo" />
-                            <span className="font-black text-2xl tracking-tighter text-primary-text">COMET</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <button
-                                onClick={() => window.open('https://browser.ponsrischool.in', '_blank')}
-                                className="p-2 text-secondary-text hover:text-accent transition-colors flex items-center gap-2"
-                            >
-                                <span className="text-[10px] font-black uppercase tracking-widest">Official Site</span>
-                                <ExternalLink size={16} />
-                            </button>
-                            <button
-                                onClick={() => window.open('https://github.com/Preet3627/Comet-AI', '_blank')}
-                                className="p-2 text-secondary-text hover:text-accent transition-colors flex items-center gap-2"
-                            >
-                                <Github size={20} />
-                            </button>
-                            <button
-                                onClick={handleLogin}
-                                className="px-6 py-2 rounded-xl border border-border-color hover:border-accent/50 transition-all flex items-center gap-2 group"
-                                style={{ background: 'var(--glass-bg)' }}
-                            >
-                                <span className="text-xs font-black uppercase tracking-widest text-accent">Comet ID Access</span>
-                                <LogIn size={16} className="text-accent group-hover:translate-x-1 transition-transform" />
-                            </button>
-                        </div>
-                    </div>
-                </nav>
-            )}
+            {/* Main Content */}
+            <div className="relative z-10 pt-12 pb-20 px-6 max-w-6xl mx-auto flex flex-col items-center">
 
-            <div className="relative z-10 custom-scrollbar">
-                <section className="min-h-screen flex items-center pt-20">
-                    <main className="max-w-7xl mx-auto px-8 grid lg:grid-cols-2 gap-20 items-center">
-                        <motion.div initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }}>
-                            <div className="inline-block px-4 py-1.5 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-black uppercase tracking-widest mb-8">
-                                <Sparkles size={12} className="inline mr-2" />
-                                Neural Link Established • {versionLabel} Stardust
-                            </div>
-                            <h1 className="text-7xl md:text-[8.5rem] font-black uppercase mb-8 leading-[0.82] tracking-tighter text-primary-text">
-                                Navigate <br /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent via-accent to-accent-light animate-gradient-x">THE VOID</span>
-                            </h1>
-                            <p className="text-secondary-text text-xl mb-12 max-w-lg leading-relaxed font-medium border-l-2 border-accent pl-6">
-                                A high-performance browsing environment built for the next generation of AI-native workflows. Fully sandboxed, <span className="text-accent font-bold">RAG-powered</span>, and blindingly fast.
-                            </p>
-                            <div className="flex flex-col gap-5 max-w-md">
-                                {store.user ? (
-                                    <button
-                                        onClick={() => store.setActiveView("browser")}
-                                        className="btn-vibrant-primary flex items-center justify-center gap-3 py-5"
-                                        style={{ background: 'var(--accent)', color: 'white' }}
-                                    >
-                                        Resume Workspace <ArrowRight size={20} />
-                                    </button>
-                                ) : (
-                                    <>
-                                        <button
-                                            onClick={handleGuestMode}
-                                            className="btn-vibrant-cyan flex items-center justify-center gap-3 py-5"
-                                            style={{ background: 'var(--accent)', color: 'white' }}
-                                        >
-                                            Enter Workspace <ArrowRight size={20} />
-                                        </button>
-                                        <button
-                                            onClick={handleGoogleSignIn}
-                                            disabled={isLoading}
-                                            className="btn-vibrant-primary flex items-center justify-center gap-3 py-5"
-                                        >
-                                            <LogIn size={18} />
-                                            {isLoading ? <RefreshCw className="animate-spin" size={18} /> : 'Sign in with Google'}
-                                        </button>
-                                        <button
-                                            onClick={handleLogin}
-                                            disabled={isLoading}
-                                            className="btn-vibrant-secondary flex items-center justify-center gap-3 py-5"
-                                        >
-                                            <Shield size={18} className="text-accent" />
-                                            {isLoading ? <RefreshCw className="animate-spin" size={18} /> : 'Authorize Comet ID'}
-                                        </button>
-                                    </>
-                                )}
-                                <div className="p-4 rounded-2xl border border-border-color backdrop-blur-md" style={{ background: 'var(--glass-bg)' }}>
-                                    <p className="text-[10px] text-secondary-text text-center uppercase font-black tracking-[0.2em]">
-                                        {store.user ? `Identified Entity: ${store.user.email}` : 'No registration required for guest access'}
-                                    </p>
-                                </div>
-                            </div>
-                        </motion.div>
-                        <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="hidden lg:block relative">
-                            <div className="absolute -inset-20 bg-accent/5 blur-[120px] rounded-full animate-pulse" />
-                            <div className="rounded-[3rem] p-10 border border-border-color relative shadow-2xl overflow-hidden backdrop-blur-xl" style={{ background: 'var(--glass-bg)' }}>
-                                <div className="flex flex-col gap-8">
-                                    <div className="flex items-center gap-5">
-                                        <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center text-accent border border-accent/20 shadow-[0_0_20px_var(--shadow-color)]">
-                                            <Cpu size={32} />
-                                        </div>
-                                        <div>
-                                            <h4 className="text-2xl font-black text-primary-text tracking-tight">Comet Neural Core</h4>
-                                            <div className="text-sm text-accent font-black uppercase tracking-widest flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full bg-accent animate-ping" />
-                                                Synchronized
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-4">
-                                        <div className="h-2 w-full bg-black/5 rounded-full overflow-hidden border border-border-color">
-                                            <motion.div animate={{ x: ['-100%', '100%'] }} transition={{ duration: 3, repeat: Infinity, ease: 'linear' }} className="h-full w-2/3 bg-gradient-to-r from-transparent via-accent to-transparent" />
-                                        </div>
-                                        <div className="flex justify-between text-[11px] font-black text-secondary-text uppercase tracking-[0.2em]">
-                                            <span className="text-accent/50">Active Neural Threads</span>
-                                            <span className="text-accent/50">12 Instances</span>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {[
-                                            { label: 'Security', val: 'Hardened', color: 'text-emerald-500' },
-                                            { label: 'Memory', val: 'RAG-Sync', color: 'text-accent' },
-                                            { label: 'Engine', val: 'Chromium', color: 'text-amber-500' },
-                                            { label: 'Identity', val: store.user ? 'Verified' : 'Guest', color: 'text-purple-500' }
-                                        ].map((stat, i) => (
-                                            <div key={i} className="p-5 rounded-3xl bg-black/5 border border-transparent hover:border-border-color transition-colors">
-                                                <p className="text-[10px] text-secondary-text uppercase font-black mb-1">{stat.label}</p>
-                                                <p className={`font-black tracking-tight ${stat.color}`}>{stat.val}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    </main>
-                </section>
-
-                <section className="py-40 max-w-5xl mx-auto px-8">
-                    <div className="flex flex-col items-center text-center mb-32">
-                        <div className="w-px h-24 bg-gradient-to-b from-transparent via-accent to-transparent mb-12 opacity-50" />
-                        <h2 className="text-6xl font-black uppercase tracking-tighter text-primary-text mb-8">Engineering Manifest</h2>
-                        <div className="flex gap-4">
-                            <div className="w-12 h-1 bg-accent rounded-full" />
-                            <div className="w-12 h-1 bg-accent rounded-full opacity-50" />
-                            <div className="w-12 h-1 bg-accent rounded-full opacity-20" />
-                        </div>
+                {/* Hero Section */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.8 }}
+                    className="text-center mb-24"
+                >
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest text-white/50 mb-8">
+                        <Sparkles size={12} className="text-accent" />
+                        Neural Interface • {versionLabel}
                     </div>
 
-                    <div className="relative group border border-border-color rounded-[4rem] p-16 shadow-2xl overflow-hidden backdrop-blur-xl" style={{ background: 'var(--glass-bg)' }}>
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-accent/5 blur-[100px] rounded-full pointer-events-none" />
-                        <div className="flex items-center gap-6 mb-16 pb-10 border-b border-border-color">
-                            <div className="p-4 bg-accent/10 rounded-3xl text-accent border border-accent/20 shadow-[0_0_30px_var(--shadow-color)]">
-                                <BookOpen size={40} />
+                    <h1 className="text-6xl md:text-8xl font-black mb-8 tracking-tighter text-white leading-[0.9]">
+                        Minimal. <br />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent via-white to-accent-light">Intelligent.</span>
+                    </h1>
+
+                    <p className="text-lg md:text-xl text-white/40 max-w-2xl mx-auto leading-relaxed font-medium mb-12">
+                        Experience a browsing environment designed for focus.
+                        Native AI orchestration, hardened security, and liquid speed.
+                    </p>
+
+                    <div className="flex flex-col md:flex-row gap-4 justify-center">
+                        <button
+                            onClick={handleGuestMode}
+                            className="px-10 py-4 bg-accent hover:bg-accent-light text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all shadow-[0_10px_40px_-10px_var(--accent)] hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
+                        >
+                            Enter Workspace <ArrowRight size={18} />
+                        </button>
+                        <button
+                            onClick={handleGoogleSignIn}
+                            disabled={isLoading}
+                            className="px-10 py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all border border-white/10 backdrop-blur-xl flex items-center justify-center gap-3"
+                        >
+                            <LogIn size={18} />
+                            {isLoading ? 'Processing...' : 'Sign in with Google'}
+                        </button>
+                    </div>
+                </motion.div>
+
+                {/* Feature Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-32">
+                    {[
+                        { icon: <Shield size={24} />, title: "Hardened", desc: "Chromium sandbox with neural firewalling." },
+                        { icon: <Zap size={24} />, title: "Instant", desc: "Optimized for extreme low-latency task execution." },
+                        { icon: <Cpu size={24} />, title: "Native AI", desc: "Integrated reasoning engines for deep automation." }
+                    ].map((feature, i) => (
+                        <motion.div
+                            key={i}
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.1 }}
+                            className="p-8 rounded-[2rem] bg-white/[0.02] border border-white/5 backdrop-blur-3xl hover:bg-white/[0.04] transition-all group"
+                        >
+                            <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-accent mb-6 group-hover:scale-110 transition-transform">
+                                {feature.icon}
                             </div>
-                            <div>
-                                <h3 className="text-4xl font-black text-primary-text uppercase tracking-tighter">Documentation</h3>
-                                <p className="text-secondary-text font-bold uppercase tracking-[0.2em] text-xs">V{appVersion} Hardware Specification</p>
-                            </div>
+                            <h3 className="text-xl font-bold text-white mb-2">{feature.title}</h3>
+                            <p className="text-white/40 text-sm leading-relaxed">{feature.desc}</p>
+                        </motion.div>
+                    ))}
+                </div>
+
+                {/* Engineering Manifest Section (README) */}
+                <motion.section
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
+                    viewport={{ once: true }}
+                    className="w-full max-w-4xl"
+                >
+                    <div className="p-10 md:p-16 rounded-[3rem] bg-white/[0.02] border border-white/5 backdrop-blur-3xl relative overflow-hidden">
+                        <div className="flex items-center gap-4 mb-12">
+                            <BookOpen size={24} className="text-accent" />
+                            <h2 className="text-2xl font-black text-white uppercase tracking-tight">System Specification</h2>
                         </div>
 
                         <article className="prose prose-invert prose-sky max-w-none 
-                            prose-headings:text-primary-text
-                            prose-headings:font-black prose-headings:uppercase prose-headings:tracking-tighter
-                            prose-p:text-secondary-text prose-p:leading-relaxed prose-p:text-lg
-                            prose-li:text-secondary-text
+                            prose-headings:text-white prose-headings:font-black prose-headings:uppercase 
+                            prose-p:text-white/50 prose-p:leading-relaxed
                             prose-strong:text-accent prose-strong:font-black
-                            prose-code:text-accent prose-code:bg-accent/10 prose-code:px-2 prose-code:py-0.5 prose-code:rounded-lg prose-code:before:content-none prose-code:after:content-none
-                         ">
+                            prose-code:bg-white/5 prose-code:px-1.5 prose-code:rounded-md
+                            prose-ul:text-white/40
+                        ">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                 {COMET_README}
                             </ReactMarkdown>
                         </article>
                     </div>
-                </section>
-
-                <footer className="border-t border-border-color py-32 relative overflow-hidden bg-black/5">
-                    <div className="absolute bottom-0 left-0 w-full h-[500px] bg-gradient-to-t from-accent/5 to-transparent pointer-events-none" />
-                    <div className="max-w-7xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-12 relative z-10">
-                        <div className="flex items-center gap-4 group cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                            <img src="/icon.png" className="w-12 h-12 grayscale group-hover:grayscale-0 transition-all opacity-40 group-hover:opacity-100" />
-                            <span className="font-black text-4xl tracking-tighter text-primary-text opacity-20 group-hover:opacity-100 transition-opacity">COMET</span>
-                        </div>
-                        <div className="made-in-india-gradient-text text-4xl font-black uppercase tracking-[0.2em] animate-pulse">
-                            Made in India 🇮🇳
-                        </div>
-                        <div className="text-secondary-text/20 text-[11px] font-black uppercase tracking-[0.5em] text-center md:text-right">
-                            © 2026 Latestinssan <br /> All Neural Systems Secured.
-                        </div>
-                    </div>
-                </footer>
+                </motion.section>
             </div>
+
+            {/* Simple Footer */}
+            <footer className="relative z-10 py-20 border-t border-white/5 mt-20 text-center">
+                <div className="flex flex-col items-center gap-6">
+                    <div className="flex items-center gap-3 opacity-30 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-500 cursor-pointer">
+                        <img src="/icon.png" className="w-8 h-8" alt="Logo" />
+                        <span className="font-black text-xl tracking-tight text-white">COMET</span>
+                    </div>
+                    <div className="text-[10px] font-black uppercase tracking-[0.4em] text-white/20">
+                        Made in India 🇮🇳 • © 2026 Latestinssan
+                    </div>
+                </div>
+            </footer>
         </div>
     );
 };

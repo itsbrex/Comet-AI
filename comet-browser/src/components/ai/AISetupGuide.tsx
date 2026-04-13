@@ -173,17 +173,7 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
         'Recommended: gemini-2.5-flash (fast & free tier available)'
       ]
     },
-    copilot: {
-      url: 'https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app',
-      steps: [
-        'No API key needed for Windows Copilot Companion',
-        'This opens the built-in Copilot app on Windows',
-        'Comet will use this as a companion AI option',
-        'Comet still uses other providers (Ollama/Gemini/etc) for in-sidebar chat',
-        'Download Windows 11 for best Copilot experience',
-        'Or use Microsoft Edge for Copilot integration'
-      ]
-    }
+
   };
 
   const verifyProviderConfig = async (providerId: string) => {
@@ -239,9 +229,7 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
         } else {
           message = 'Please add a valid xAI key (starts with xai-).';
         }
-      } else if (providerId === 'copilot') {
-        success = true;
-        message = 'Copilot ready on Windows!';
+
       } else if (providerId === 'azure-openai') {
         success = true;
         message = 'Azure OpenAI configured!';
@@ -273,7 +261,7 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
     if (providerId === 'xai') {
       return xaiApiKey && xaiApiKey.startsWith('xai-') ? 'configured' : 'missing';
     }
-    if (providerId === 'copilot' || providerId === 'azure-openai') {
+    if (providerId === 'azure-openai') {
       return 'configured';
     }
     return 'missing';
@@ -281,7 +269,6 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
 
   const isAiConfigured = useMemo(() => {
     // Check if the SPECIFICALLY SELECTED provider is actually configured
-    if (aiProvider === 'copilot') return true;
     if (aiProvider === 'ollama') return !!ollamaBaseUrl;
     if (aiProvider === 'openai') return !!openaiApiKey && openaiApiKey.length > 5;
     if (aiProvider === 'google' || aiProvider === 'gemini') return !!geminiApiKey && geminiApiKey.length > 5;
@@ -651,39 +638,6 @@ const AISetupGuide: React.FC<AISetupGuideProps> = ({ onClose, onComplete }) => {
                   );
                 })}
               </div>
-
-              {/* Windows Copilot Section */}
-              {isWindows && (
-                <div className="rounded-2xl border border-sky-400/15 bg-sky-400/5 p-4 space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center border border-white/5 shadow-inner text-sky-300">
-                      <Monitor size={18} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-[11px] font-black text-white uppercase tracking-widest">Windows Copilot Companion</div>
-                      <p className="mt-2 text-[10px] text-white/45 leading-relaxed">
-                        No Comet API key is needed to open the official Copilot app on Windows. Use this as a companion app today, while Comet&apos;s built-in agent still relies on Ollama or provider keys.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setAIProvider('copilot')}
-                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${aiProvider === 'copilot' ? 'bg-sky-400/20 border border-sky-400/40 text-sky-100' : 'bg-sky-400/15 border border-sky-400/20 text-sky-100 hover:bg-sky-400/25'}`}
-                    >
-                      {aiProvider === 'copilot' ? 'Active ✓' : 'Select Copilot'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openExternal('https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app')}
-                      className="px-4 py-2 rounded-xl bg-white text-black text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:bg-slate-100"
-                    >
-                      Open Copilot
-                    </button>
-                  </div>
-                </div>
-              )}
 
               <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex items-start gap-4">
                 <Shield size={18} className="text-amber-500/60 flex-shrink-0 mt-0.5" />

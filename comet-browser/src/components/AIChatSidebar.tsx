@@ -497,6 +497,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
   const [thinkingText, setThinkingText] = useState<string>('');
   const [isThinking, setIsThinking] = useState(false);
+  const [lastSidebarInteractionAt, setLastSidebarInteractionAt] = useState<number>(Date.now());
   const thinkingIdCounter = useRef(0);
 
   // Refs & Workers
@@ -594,8 +595,6 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   const terminalLogIdCounter = useRef(0);
   const nativeMacSyncTimeoutRef = useRef<number | null>(null);
   const isDevMode = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
-  const [lastSidebarInteractionAt, setLastSidebarInteractionAt] = useState(() => Date.now());
-  const [isIdleMinimized, setIsIdleMinimized] = useState(false);
   const {
     pendingPermission: permissionPending,
     requestPermission: requestActionPermission,
@@ -604,7 +603,6 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
 
   const markSidebarInteraction = useCallback(() => {
     setLastSidebarInteractionAt(Date.now());
-    setIsIdleMinimized(false);
   }, []);
 
   const buildActionChainClarification = useCallback((options: {
@@ -904,7 +902,6 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
   }, []);
 
   const isAiSetup = useCallback(() => {
-    if (aiProvider === 'copilot') return true;
     if (aiProvider === 'ollama' && ollamaBaseUrl) return true;
     if (aiProvider === 'gemini' && geminiApiKey) return true;
     if (aiProvider === 'google' && geminiApiKey) return true;
@@ -1123,29 +1120,7 @@ I couldn't schedule the task. The background service may not be running. Please 
     const rawContent = (customContent ?? inputMessage).trim();
     if (!rawContent && attachments.length === 0) return;
 
-    if (aiProvider === 'copilot') {
-      setMessages(prev => [
-        ...prev,
-        { id: createMessageId('user'), role: 'user', content: rawContent },
-        {
-          id: createMessageId('model'),
-          role: 'model',
-          content: `Microsoft Copilot companion mode is selected.\n\nI can open the official Copilot path for you, but Comet's in-sidebar chat is not wired directly to Copilot yet. To chat inside Comet, switch to Ollama, Gemini, OpenAI, Anthropic, or Groq in provider settings.`
-        } as ExtendedChatMessage
-      ]);
 
-      if (!customContent) {
-        setInputMessage('');
-        setAttachments([]);
-      }
-
-      try {
-        await window.electronAPI?.openExternalUrl?.('https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app');
-      } catch (error) {
-        console.warn('[AI Sidebar] Failed to open Copilot companion link:', error);
-      }
-      return;
-    }
 
     // Show setup guide if AI is not configured. After first show, don't block—
     if (!isAiSetup()) {
@@ -2874,27 +2849,12 @@ I couldn't schedule the task. The background service may not be running. Please 
               output = res?.success
                 ? `✅ **DOCX Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**File:** ${res.filePath || 'Saved to Downloads'}`
                 : `❌ DOCX generation failed: ${res?.error || 'Unknown error'}`;
-            } else if (format === 'pdf' || method === 'pdfmake' || method === 'pdf-lib') {
-              const res = await window.electronAPI.generatePDFWithMethod(method, {
-                title: pdfTitle,
-                content: pdfContent,
-                subtitle: pdfSubtitle,
-                author: pdfAuthor,
-                template,
-                watermark,
-                bgColor,
-                priority
-              }) as any;
-              if (res.success) {
-                output = `✅ **PDF Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**Method:** ${method}\n**File:** ${res.filePath}`;
-              } else {
-                output = `❌ PDF generation failed: ${res.error}`;
-              }
             } else {
+              // ✅ Unified Proper PDF Engine (Stabilized HTML method)
               const cleanHTML = generateSmartPDF(pdfContent, iconSource, jsonImageResults);
               const res = await window.electronAPI.generatePDF(pdfTitle, cleanHTML) as any;
               if (res.success) {
-                output = `✅ **PDF Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**Template:** ${template}\n**File:** ${res.filePath}`;
+                output = `✅ **PDF Generated Successfully!**\n\n**Title:** ${pdfTitle}\n**Engine:** Comet Neural Export\n**Template:** ${template}\n**File:** ${res.filePath}`;
               } else {
                 output = `❌ PDF generation failed: ${res.error}`;
               }
@@ -4061,9 +4021,57 @@ I've successfully executed the following real tasks:
         setPdfProgress(progress);
       });
 
+      const unsubXlsx = window.electronAPI.on('xlsx-generation-log', (log: string) => {
+        setTerminalLogs(prev => [...prev, {
+          id: `xlsx-${Date.now()}-${terminalLogIdCounter.current++}`,
+          command: 'GENERATE_XLSX',
+          output: log,
+          success: !log.includes('❌'),
+          timestamp: Date.now()
+        }]);
+      });
+
+      const unsubXlsxProgress = window.electronAPI.on('xlsx-generation-progress', (progress: number) => {
+        setPdfProgress(progress);
+      });
+
+      const unsubPptx = window.electronAPI.on('pptx-generation-log', (log: string) => {
+        setTerminalLogs(prev => [...prev, {
+          id: `pptx-${Date.now()}-${terminalLogIdCounter.current++}`,
+          command: 'GENERATE_PPTX',
+          output: log,
+          success: !log.includes('❌'),
+          timestamp: Date.now()
+        }]);
+      });
+
+      const unsubPptxProgress = window.electronAPI.on('pptx-generation-progress', (progress: number) => {
+        setPdfProgress(progress);
+      });
+
+      const unsubDocx = window.electronAPI.on('docx-generation-log', (log: string) => {
+        setTerminalLogs(prev => [...prev, {
+          id: `docx-${Date.now()}-${terminalLogIdCounter.current++}`,
+          command: 'GENERATE_DOCX',
+          output: log,
+          success: !log.includes('❌'),
+          timestamp: Date.now()
+        }]);
+      });
+
+      const unsubDocxProgress = window.electronAPI.on('docx-generation-progress', (progress: number) => {
+        setPdfProgress(progress);
+      });
+
       return () => {
         unsub();
         unsubProgress();
+        unsubXlsx();
+        unsubXlsxProgress();
+        unsubPptx();
+        unsubPptxProgress();
+        unsubDocx();
+        unsubDocxProgress();
       };
     }
   }, []);
@@ -4103,41 +4111,7 @@ I've successfully executed the following real tasks:
     }
   }, [messages.length, isLoading]);
 
-  useEffect(() => {
-    if (!store.macNativeSidebarAutoMinimize || props.bridgeOnly) {
-      setIsIdleMinimized(false);
-      return;
-    }
 
-    const updateIdleState = () => {
-      const shouldMinimize = !isLoading
-        && !inputMessage.trim()
-        && attachments.length === 0
-        && !showLLMProviderSettings
-        && !showCapabilities
-        && !showTerminal
-        && !permissionPending
-        && !isFullScreen
-        && Date.now() - lastSidebarInteractionAt > 15000;
-      setIsIdleMinimized(shouldMinimize);
-    };
-
-    updateIdleState();
-    const interval = window.setInterval(updateIdleState, 1000);
-    return () => window.clearInterval(interval);
-  }, [
-    attachments.length,
-    inputMessage,
-    isFullScreen,
-    isLoading,
-    lastSidebarInteractionAt,
-    permissionPending,
-    props.bridgeOnly,
-    showCapabilities,
-    showLLMProviderSettings,
-    showTerminal,
-    store.macNativeSidebarAutoMinimize,
-  ]);
 
   // Remote Prompt Listening (from mobile via cloud sync)
   useEffect(() => {
@@ -4168,6 +4142,22 @@ I've successfully executed the following real tasks:
     });
     return cleanup;
   }, [handleSendMessage]);
+
+  useEffect(() => {
+    const listener = window.electronAPI?.onAiQueryDetected;
+    if (!listener) return;
+    const cleanup = listener((query: string) => {
+      if (query === 'Summarize this page' || query === 'Summarize this page using Apple Intelligence') {
+        handleRunCommand({ type: 'APPLE_INTELLIGENCE_SUMMARY', value: '', category: 'ai', riskLevel: 'low' });
+      } else if (query.startsWith('Summarize this using Apple Intelligence: ')) {
+        const text = query.replace('Summarize this using Apple Intelligence: ', '');
+        handleRunCommand({ type: 'APPLE_INTELLIGENCE_SUMMARY', value: text, category: 'ai', riskLevel: 'low' });
+      } else {
+        handleSendMessage(query);
+      }
+    });
+    return cleanup;
+  }, [handleRunCommand, handleSendMessage]);
 
   useEffect(() => {
     const listener = window.electronAPI?.onAIChatInputText ?? window.electronAPI?.onAiChatInputText;
@@ -4373,9 +4363,7 @@ I've successfully executed the following real tasks:
     return null;
   }
 
-  const effectiveSidebarWidth = isIdleMinimized
-    ? Math.max(220, Math.min(sidebarWidth, 260))
-    : sidebarWidth;
+  const effectiveSidebarWidth = sidebarWidth;
 
   return (
     <div
@@ -4565,22 +4553,17 @@ I've successfully executed the following real tasks:
       <AnimatePresence>{approvalModal}</AnimatePresence>
 
       {/* Header */}
-      <header className={`px-5 flex flex-col justify-center border-b backdrop-blur-2xl sticky top-0 z-[50] transition-[height,padding] duration-500 ${isIdleMinimized ? 'h-[64px]' : 'h-[76px]'}`} style={{ ...sidebarShellStyle, borderColor: 'color-mix(in srgb, var(--border-color) 35%, transparent)' }}>
+      <header className={`px-4 flex flex-col justify-center border-b backdrop-blur-2xl sticky top-0 z-[50] transition-[height,padding] duration-500 h-[56px]`} style={{ ...sidebarShellStyle, borderColor: 'color-mix(in srgb, var(--border-color) 35%, transparent)' }}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-9 h-9 rounded-2xl p-1.5 border" style={softPanelStyle}>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl p-1 border" style={softPanelStyle}>
               <img src="icon.png" alt="Comet" className="w-full h-full object-contain" />
             </div>
             <div>
-              <h2 className="text-xs font-black uppercase tracking-[0.3em] text-primary-text">Comet AI</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                <span className="text-[9px] font-bold text-secondary-text uppercase tracking-widest">Autonomous</span>
-                {isIdleMinimized && (
-                  <span className="px-2 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.2em] bg-sky-500/10 text-sky-400 border border-sky-500/15">
-                    Minimal
-                  </span>
-                )}
+              <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary-text leading-tight">Comet AI</h2>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className={`w-1 h-1 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                <span className="text-[8px] font-bold text-secondary-text uppercase tracking-widest">Autonomous</span>
               </div>
             </div>
           </div>
@@ -4658,7 +4641,7 @@ I've successfully executed the following real tasks:
       </header>
 
       {/* Chat Messages */}
-      <div className={`flex-1 overflow-y-auto modern-scrollbar transition-[padding] duration-500 backdrop-blur-sm ${isIdleMinimized ? 'p-4 space-y-5' : 'p-5 space-y-8'}`} style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--primary-bg) 92%, transparent), color-mix(in srgb, var(--primary-bg) 98%, transparent))' }}>
+      <div className={`flex-1 overflow-y-auto modern-scrollbar transition-[padding] duration-500 backdrop-blur-sm p-5 space-y-8`} style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--primary-bg) 92%, transparent), color-mix(in srgb, var(--primary-bg) 98%, transparent))' }}>
         <AnimatePresence mode="popLayout">
           {messages.length === 0 && (
             <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-20 text-center space-y-4">
@@ -4948,7 +4931,7 @@ I've successfully executed the following real tasks:
       </div>
 
       {/* Input Area */}
-      <footer className={`sticky bottom-0 transition-[padding] duration-500 ${isIdleMinimized ? 'p-4 pt-0' : 'p-6 pt-0'}`} style={{ background: 'linear-gradient(180deg, transparent, color-mix(in srgb, var(--primary-bg) 75%, transparent) 28%, var(--primary-bg) 100%)', backdropFilter: 'blur(20px)' }}>
+      <footer className={`sticky bottom-0 transition-[padding] duration-500 p-6 pt-0`} style={{ background: 'linear-gradient(180deg, transparent, color-mix(in srgb, var(--primary-bg) 75%, transparent) 28%, var(--primary-bg) 100%)', backdropFilter: 'blur(20px)' }}>
         <div className={`p-4 rounded-[2.5rem] border transition-all shadow-2xl relative group ${shiftTabGlow
           ? 'border-purple-500/80 shadow-[0_0_24px_4px_rgba(168,85,247,0.35)] focus-within:border-purple-500/80'
           : 'border-white/10 focus-within:border-sky-500/30'
@@ -4998,7 +4981,7 @@ I've successfully executed the following real tasks:
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
             onFocus={markSidebarInteraction}
             placeholder="Command your workspace..."
-            className={`w-full bg-transparent text-sm text-primary-text placeholder:text-secondary-text outline-none resize-none modern-scrollbar font-medium transition-[height] duration-500 ${isIdleMinimized ? 'h-16 py-1.5' : 'h-24 py-2'}`}
+            className={`w-full bg-transparent text-sm text-primary-text placeholder:text-secondary-text outline-none resize-none modern-scrollbar font-medium transition-[height] duration-500 h-24 py-2`}
           />
 
           <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/10">

@@ -381,7 +381,7 @@ export const useAppStore = create<BrowserState>()(
             },
 
             // View and UI
-            activeView: 'browser',
+            activeView: 'landing-page',
             settingsSection: 'profile',
             setSettingsSection: (section: string) => set({ settingsSection: section }),
 

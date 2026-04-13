@@ -1704,22 +1704,39 @@ const fetch = require('cross-fetch'); // Make sure cross-fetch is always availab
 
 const MCP_SERVER_PORT = process.env.MCP_SERVER_PORT || 3001;
 
-// Global Context Menu for all windows and views
-// Use native macOS menu for better performance
-const useNativeContextMenu = isMac;
-
-if (useNativeContextMenu) {
-  // Register macOS native context menu handler
-  console.log('[ContextMenu] Using native macOS context menu');
-} else {
-  // Fallback to electron-context-menu
+// Dedicated context menu handler for BrowserViews and Main Window
+const setupContextMenu = () => {
   contextMenu({
     showSaveImageAs: true,
     showDragLink: true,
     showInspectElement: true,
     showLookUpSelection: true,
     showSearchWithGoogle: true,
+    showCopyImageAddress: true,
     prepend: (defaultActions, params, browserWindow) => [
+      {
+        label: '🚀 Analyze selection with Comet AI',
+        visible: params.selectionText.trim().length > 0,
+        click: () => {
+          if (mainWindow) mainWindow.webContents.send('ai-query-detected', params.selectionText);
+        }
+      },
+      {
+        label: '📄 Summarize Page',
+        visible: params.selectionText.trim().length === 0 && !params.linkURL && !params.mediaType,
+        click: () => {
+          if (mainWindow) mainWindow.webContents.send('ai-query-detected', 'Summarize this page');
+        }
+      },
+      {
+        label: '🍎 Apple Intelligence: Summarize Page',
+        visible: isMac && params.selectionText.trim().length === 0 && !params.linkURL && !params.mediaType,
+        click: async () => {
+          if (mainWindow) {
+            mainWindow.webContents.send('ai-query-detected', 'Summarize this page using Apple Intelligence');
+          }
+        }
+      },
       {
         label: 'Open in New Tab',
         visible: params.linkURL.length > 0,
@@ -1734,10 +1751,35 @@ if (useNativeContextMenu) {
           const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(params.selectionText)}`;
           if (mainWindow) mainWindow.webContents.send('add-new-tab', searchUrl);
         }
+      },
+      {
+        label: '🔍 Search in Popup',
+        visible: params.selectionText.trim().length > 0,
+        click: () => {
+          if (popSearchService) popSearchService.showPopupWithText(params.selectionText);
+        }
+      },
+      {
+        label: '🍏 Apple Intelligence: Summarize Selection',
+        visible: isMac && params.selectionText.trim().length > 0,
+        click: async () => {
+          if (mainWindow) {
+            mainWindow.webContents.send('ai-query-detected', `Summarize this using Apple Intelligence: ${params.selectionText}`);
+          }
+        }
+      },
+      {
+        label: '🌐 Translate this Site',
+        visible: params.selectionText.trim().length === 0 && !params.linkURL && !params.mediaType,
+        click: () => {
+          if (mainWindow) mainWindow.webContents.send('trigger-translation-dialog');
+        }
       }
     ]
   });
-}
+};
+
+setupContextMenu();
 
 ipcMain.handle('set-as-default-browser', async () => {
   try {
@@ -2069,9 +2111,6 @@ const prepareLLM = async (messages, options = {}) => {
     if (!apiKey) throw new Error('Groq API Key is missing.');
     const groq = createGroq({ apiKey });
     modelInstance = groq(options.model || config.model || store.get('groq_model') || getConfiguredProviderModel('groq'));
-  }
-  else if (providerId === 'copilot') {
-    throw new Error('Microsoft Copilot is available in Comet as a Windows companion selection, but native in-sidebar Copilot generation is not wired yet.');
   }
   else {
     throw new Error(`Unsupported provider: ${providerId}`);
@@ -2443,9 +2482,12 @@ async function createWindow() {
 
   const isMacPlatform = process.platform === 'darwin';
 
+  const appIcon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png'));
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    icon: appIcon,
     frame: isMacPlatform,
     transparent: false,
     webPreferences: {
@@ -2463,7 +2505,6 @@ async function createWindow() {
     },
     titleBarStyle: isMacPlatform ? 'hiddenInset' : 'hidden',
     backgroundColor: '#0D0E1C',
-    icon: path.join(__dirname, 'out', 'icon.ico'),
     show: false,
     paintWhenInitiallyHidden: false
   });
@@ -4308,8 +4349,7 @@ const llmProviders = [
   { id: 'anthropic', name: 'Anthropic Claude (Auto Latest)' },
   { id: 'xai', name: 'xAI Grok (Auto Latest)' },
   { id: 'groq', name: 'Groq (Auto Latest)' },
-  { id: 'ollama', name: 'Ollama (Local AI)' },
-  { id: 'copilot', name: 'Microsoft Copilot (Windows Companion)' }
+  { id: 'ollama', name: 'Ollama (Local AI)' }
 ];
 let activeLlmProvider = store.get('active_llm_provider') || 'ollama';
 const llmConfigs = {
@@ -5853,9 +5893,24 @@ app.whenReady().then(async () => {
   registerAppFileProtocol();
   buildApplicationMenu();
   await applyNetworkSecurityConfig(networkSecurityConfig);
+  
+  // Create window early to ensure UI is visible even if secondary services are initializing
+  // Set dock icon for Mac during development
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    try {
+      const iconPath = path.join(__dirname, 'public', 'icon.png');
+      if (fs.existsSync(iconPath)) {
+        app.dock.setIcon(iconPath);
+      }
+    } catch (e) {
+      console.warn('[Main] Failed to set dock icon:', e);
+    }
+  }
+
+  createWindow();
 
   // Auto-update setup (only in production)
-  if (!require('electron-is-dev')) {
+  if (app.isPackaged) {
     const { autoUpdater } = require('electron-updater');
 
     // Check for updates at startup
@@ -6057,13 +6112,7 @@ app.whenReady().then(async () => {
           const pdfData = await workerWindow.webContents.printToPDF({
             printBackground: true,
             pageSize: 'A4',
-            margins: {
-              marginType: 'custom',
-              top: 0,
-              bottom: 0,
-              left: 0,
-              right: 0
-            }
+            margins: { top: 0, bottom: 0, left: 0, right: 0 }
           });
 
           // Save PDF
@@ -6286,11 +6335,21 @@ app.whenReady().then(async () => {
       updateProgress(80, 'generating');
 
       // 5. Transform to PDF
-      logMain('Executing printToPDF...');
-      notifyAI('📄 Converting to Branded PDF format...');
+      logMain('Executing printToPDF with Native Orchestration...');
+      notifyAI('📄 Finalizing Branded neural document...');
       const pdfBuffer = await workerWindow.webContents.printToPDF({
         printBackground: true,
-        margins: { top: 0, bottom: 0, left: 0, right: 0 },
+        displayHeaderFooter: true,
+        headerTemplate: `<div style="font-size: 7px; font-family: 'Inter', sans-serif; width: 100%; text-align: right; padding: 0 40px; color: #94a3b8; opacity: 0.6;">${title.replace(/<[^>]*>?/gm, '')} — Comet AI Research Document</div>`,
+        footerTemplate: `
+          <div style="font-size: 7px; font-family: 'Inter', sans-serif; width: 100%; display: flex; justify-content: space-between; padding: 0 40px; color: #94a3b8;">
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span style="color: #0ea5e9; font-weight: 700;">🌠 Comet</span> 
+              <span>| Protected Ecosystem</span>
+            </div>
+            <div>Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
+          </div>`,
+        margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 },
         pageSize: 'A4'
       });
       logMain(`PDF Buffer generated: ${pdfBuffer.length} bytes.`);
@@ -6376,195 +6435,19 @@ app.whenReady().then(async () => {
   // Python availability check (for optional flows; generation does not require it)
   ipcMain.handle('check-python-available', async () => pythonAvailable);
 
-  // PDF Generation with different methods (pdfmake, pdf-lib)
-  ipcMain.handle('generate-pdf-with-method', async (event, { method, options }) => {
-    const logMain = (msg) => console.log(`[PDF-${method.toUpperCase()}] ${msg}`);
-    const logErr = (msg, err) => console.error(`[PDF-${method.toUpperCase()}] ❌ ${msg}`, err);
 
-    try {
-      const { title, content, subtitle, author, template, watermark, bgColor, priority } = options || {};
-      const safeTitle = (title || 'document').replace(/[^a-z0-9]/gi, '_');
-      const downloads = path.join(os.homedir(), 'Downloads');
-      const filename = `${safeTitle}_${Math.floor(Date.now() / 1000)}.pdf`;
-      const fullPath = path.join(downloads, filename);
-
-      let pdfBuffer;
-
-      if (method === 'pdfmake') {
-        logMain('Generating PDF with pdfmake...');
-        const pdfMake = require('pdfmake/build/pdfmake');
-        const pdfFonts = require('pdfmake/build/vfs_fonts');
-
-        // Handle both export formats
-        if (pdfFonts.pdfMake) {
-          pdfMake.vfs = pdfFonts.pdfMake.vfs;
-        } else if (pdfFonts.vfs) {
-          pdfMake.vfs = pdfFonts.vfs;
-        } else {
-          // Try to extract from the module
-          pdfMake.vfs = pdfFonts;
-        }
-
-        const docDefinition = {
-          pageSize: 'A4',
-          pageMargins: [40, 40, 40, 60],
-          content: buildPdfMakeContent(title, content, options),
-          styles: getPdfMakeStyles(),
-          defaultStyle: { font: 'Roboto', fontSize: 11, lineHeight: 1.5 },
-          footer: (currentPage, pageCount) => ({
-            columns: [
-              { text: `© ${new Date().getFullYear()} Comet AI Browser`, fontSize: 8, color: '#666' },
-              { text: `Page ${currentPage} of ${pageCount}`, fontSize: 8, color: '#666', alignment: 'right' }
-            ],
-            margin: [40, 10, 40, 0]
-          }),
-          header: (currentPage) => currentPage === 1 ? { text: '' } : { text: title, fontSize: 10, color: '#38bdf8', margin: [40, 20, 40, 0] }
-        };
-
-        pdfBuffer = await new Promise((resolve, reject) => {
-          pdfMake.createPdf(docDefinition).getBuffer((buffer) => resolve(buffer));
-        });
-
-      } else if (method === 'pdf-lib') {
-        logMain('Generating PDF with pdf-lib...');
-        const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
-
-        const pdfDoc = await PDFDocument.create();
-        const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-        // Cover page
-        let page = pdfDoc.addPage([595.28, 841.89]);
-        drawPdfLibCoverPage(page, title, subtitle || 'Report', helveticaBold, helveticaFont);
-
-        // Content page
-        page = pdfDoc.addPage([595.28, 841.89]);
-        drawPdfLibContentPage(page, content, helveticaFont, helveticaBold);
-
-        pdfBuffer = Buffer.from(await pdfDoc.save());
-
-      } else {
-        throw new Error(`Unknown PDF method: ${method}. Use "html", "pdfmake", or "pdf-lib"`);
-      }
-
-      fs.writeFileSync(fullPath, pdfBuffer);
-      logMain(`PDF saved: ${fullPath}`);
-
-      // Auto-sync to mobile
-      autoSyncFileToMobile(filename, pdfBuffer, 'pdf');
-
-      // Notify frontend
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('download-started', { name: filename, path: fullPath });
-        setTimeout(() => {
-          mainWindow.webContents.send('download-progress', { name: filename, progress: 100 });
-          mainWindow.webContents.send('download-complete', { name: filename, path: fullPath });
-        }, 500);
-      }
-
-      return { success: true, fileName: filename, filePath: fullPath };
-
-    } catch (err) {
-      logErr('PDF generation failed', err);
-      return { success: false, error: err.message };
-    }
-  });
-
-  function buildPdfMakeContent(title, content, options) {
-    const blocks = [];
-
-    // Cover page
-    blocks.push({
-      stack: [
-        { text: '', margin: [0, 0, 0, 80] },
-        { text: 'Comet AI', style: 'brandTitle', color: '#38bdf8' },
-        { text: 'Premium AI Browser', fontSize: 10, color: '#94a3b8', margin: [0, 4, 0, 40] },
-        { text: title, style: 'coverTitle', margin: [0, 0, 0, 12] },
-        { text: options?.subtitle || 'Report', style: 'coverSubtitle', margin: [0, 0, 0, 40] },
-        {
-          columns: [
-            { text: `Generated: ${new Date().toLocaleDateString()}`, fontSize: 9, color: '#94a3b8' },
-            { text: `ID: CMT-${Math.random().toString(36).slice(2, 8).toUpperCase()}`, fontSize: 9, color: '#94a3b8', alignment: 'right' }
-          ],
-          margin: [0, 0, 0, 20]
-        }
-      ],
-      pageBreak: 'after'
-    });
-
-    // Content
-    const paragraphs = content.split('\n').filter(p => p.trim());
-    for (const para of paragraphs) {
-      blocks.push({ text: para, margin: [0, 0, 0, 8] });
-    }
-
-    return blocks;
-  }
-
-  function getPdfMakeStyles() {
-    return {
-      brandTitle: { fontSize: 24, bold: true, color: '#38bdf8' },
-      coverTitle: { fontSize: 32, bold: true, color: '#0f172a' },
-      coverSubtitle: { fontSize: 14, color: '#64748b' },
-      header: { fontSize: 14, bold: true, color: '#0f172a' },
-      subheader: { fontSize: 12, bold: true, color: '#1e293b' },
-      body: { fontSize: 11, color: '#334155' }
-    };
-  }
-
-  function drawPdfLibCoverPage(page, title, category, boldFont, regularFont) {
-    const { width, height } = page.getSize();
-
-    page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(0.059, 0.09, 0.165) });
-    page.drawRectangle({ x: 40, y: height - 120, width: width - 80, height: 2, color: rgb(0.22, 0.74, 0.97) });
-    page.drawText(title, { x: 40, y: height - 200, size: 28, font: boldFont, color: rgb(1, 1, 1) });
-    page.drawText(category, { x: 40, y: height - 240, size: 14, font: regularFont, color: rgb(0.58, 0.64, 0.72) });
-    page.drawText(`Generated: ${new Date().toLocaleDateString()}`, { x: 40, y: 80, size: 10, font: regularFont, color: rgb(0.58, 0.64, 0.72) });
-    page.drawText('Comet AI Browser - Premium AI Browser', { x: 40, y: 60, size: 12, font: boldFont, color: rgb(0.22, 0.74, 0.97) });
-  }
-
-  function drawPdfLibContentPage(page, content, regularFont, boldFont) {
-    const { width, height } = page.getSize();
-    const margin = 40;
-    const contentWidth = width - margin * 2;
-    let y = height - margin;
-
-    const paragraphs = content.split('\n\n');
-    for (const para of paragraphs) {
-      const lines = wrapText(para, regularFont, 11, contentWidth);
-      for (const line of lines) {
-        if (y < margin + 20) {
-          page = page.doc.addPage([595.28, 841.89]);
-          y = height - margin;
-        }
-        page.drawText(line, { x: margin, y, size: 11, font: regularFont, color: rgb(0.067, 0.098, 0.153) });
-        y -= 16;
-      }
-      y -= 12;
-    }
-  }
-
-  function wrapText(text, font, fontSize, maxWidth) {
-    const words = text.split(' ');
-    const lines = [];
-    let currentLine = '';
-    for (const word of words) {
-      const testLine = currentLine ? `${currentLine} ${word}` : word;
-      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
-      if (testWidth > maxWidth && currentLine) {
-        lines.push(currentLine);
-        currentLine = word;
-      } else {
-        currentLine = testLine;
-      }
-    }
-    if (currentLine) lines.push(currentLine);
-    return lines;
-  }
+  // --- END OF PDF ENGINE ---
 
   // PPTX generation (JS-only, .dmg safe)
   ipcMain.handle('generate-pptx', async (event, payload = {}) => {
+    const log = (msg) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pptx-generation-log', `[PPTX] ${msg}`);
+      }
+    };
     try {
+      log('Initializing PPTX engine...');
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('pptx-generation-progress', 10);
       const pptx = new PptxGenJS();
       pptx.layout = 'LAYOUT_16x9';
       pptx.title = payload.title || 'Presentation';
@@ -6573,10 +6456,12 @@ app.whenReady().then(async () => {
       const { iconBase64 } = loadBrandIcon();
       const title = payload.title || 'Slides';
       const subtitle = payload.subtitle || '';
+      log(`Applying template palette: ${payload.template || 'professional'}`);
       const palette = templatePalette(payload.template || 'professional');
 
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('pptx-generation-progress', 20);
       // GOD-TIER COVER SLIDE
-      const cover = pptx.addSlide();
+      log('Creating Cover Slide...');
       cover.background = { color: palette.bg };
 
       // Top accent bar
@@ -6616,6 +6501,10 @@ app.whenReady().then(async () => {
       });
 
       // Bottom accent bar
+      cover.addShape(pptx.ShapeType.rect, { x: 0, y: 5.5, w: 10, h: 0.1, fill: { color: palette.accent } });
+
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('pptx-generation-progress', 40);
+      log('Adding content slides...');
       cover.addShape(pptx.ShapeType.rect, { x: 0, y: 5.475, w: 10, h: 0.15, fill: { color: palette.accent } });
 
       // Two-column content slides with enhanced layout
@@ -7086,129 +6975,142 @@ app.whenReady().then(async () => {
         mainWindow.webContents.send('download-complete', { name: filename, path: fullPath });
       }
 
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('docx-generation-progress', 100);
+      log(`✅ DOCX Generated: ${filename}`);
       return { success: true, filePath: fullPath, pythonAvailable };
     } catch (err) {
       console.error('[DOCX] Generation failed:', err);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('docx-generation-log', `❌ Error: ${err.message}`);
+      }
       return { success: false, error: err.message };
     }
   });
 
-  // XLSX generation (using openpyxl)
+  // XLSX generation (using xlsx library - NO external dependencies)
   ipcMain.handle('generate-xlsx', async (event, payload = {}) => {
+    const log = (msg) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('xlsx-generation-log', `[XLSX] ${msg}`);
+      }
+    };
     try {
-      const title = payload.title || 'Spreadsheet';
+      log('Initializing Professional Excel Engine...');
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('xlsx-generation-progress', 10);
+      
+      const XLSX = require('xlsx');
+      const title = payload.title || 'Spreadsheet Report';
       const pages = normalizePages(payload);
       const downloads = path.join(os.homedir(), 'Downloads');
       const safeTitle = title.replace(/[^a-z0-9]/gi, '_');
       const filename = `${safeTitle}_${Math.floor(Date.now() / 1000)}.xlsx`;
       const fullPath = path.join(downloads, filename);
 
-      // Use Python with openpyxl
-      const pythonCode = `
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
-from openpyxl.utils import get_column_letter
+      log(`Processing ${pages.length} pages...`);
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('xlsx-generation-progress', 30);
 
-wb = openpyxl.Workbook()
-ws = wb.active
-ws.title = "${title.replace(/"/g, '\\"')}"
+      const workbook = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([[]]);
+      XLSX.utils.book_append_sheet(workbook, ws, (title || 'Report').substring(0, 31));
 
-# Extract tables from pages
-${pages.map((page, pageIdx) => `
-# Sheet ${pageIdx + 1}: ${page.title || 'Sheet ' + (pageIdx + 1)}
-${(() => {
-  let row = 1;
-  let code = '';
+      const styles = {
+        header: { font: { bold: true, color: { rgb: 'FFFFFF' }, size: 18 }, fill: { fgColor: { rgb: '0F172A' }, bgColor: { rgb: '0F172A' } }, alignment: { horizontal: 'center' } },
+        section: { font: { bold: true, color: { rgb: '334155' }, size: 12 }, fill: { fgColor: { rgb: 'F1F5F9' }, bgColor: { rgb: 'F1F5F9' } }, border: [{ bottom: { style: 'medium', color: { rgb: '94A3B8' } } }] },
+        tableHeader: { font: { bold: true, color: { rgb: 'FFFFFF' }, size: 10 }, fill: { fgColor: { rgb: '475569' }, bgColor: { rgb: '475569' } }, alignment: { horizontal: 'center' } },
+        rowAlt: { font: { size: 10 }, fill: { fgColor: { rgb: 'F8FAFC' }, bgColor: { rgb: 'F8FAFC' } } },
+        normal: { font: { size: 10 } }
+      };
 
-  // Add section title as header
-  if (page.title) {
-    code += `ws.cell(row=${row}, column=1, value="${page.title.replace(/"/g, '\\"')}")\n`;
-    code += `ws.cell(row=${row}, column=1).font = Font(bold=True, size=14)\n`;
-    code += `ws.cell(row=${row}, column=1).fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")\n`;
-    row += 2;
-  }
-  
-  // Process sections with tables
-  (page.sections || []).forEach((section, secIdx) => {
-    if (section.title) {
-      code += `ws.cell(row=${row}, column=1, value="${section.title.replace(/"/g, '\\"')}")\n`;
-      code += `ws.cell(row=${row}, column=1).font = Font(bold=True, size=12)\n`;
-      row += 1;
-    }
-    if (section.content) {
-      // Split content into rows
-      const lines = section.content.split('\n').filter(Boolean);
-      lines.forEach(line => {
-        code += `ws.cell(row=${row}, column=1, value="${line.replace(/"/g, '\\"')}")\n`;
-        row += 1;
-      });
-    }
-    if (section.table && Array.isArray(section.table)) {
-      // Add table data
-      section.table.forEach((tableRow, tblRowIdx) => {
-        const cols = Array.isArray(tableRow) ? tableRow : [tableRow];
-        cols.forEach((cell, colIdx) => {
-          code += `ws.cell(row=${row}, column=${colIdx + 1}, value="${String(cell).replace(/"/g, '\\"')}")\n`;
-          if (tblRowIdx === 0) {
-            code += `ws.cell(row=${row}, column=${colIdx + 1}).font = Font(bold=True)\n`;
-            code += `ws.cell(row=${row}, column=${colIdx + 1}).fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")\n`;
+      let row = 1;
+      const setCell = (r, c, val, style = 'normal') => {
+        const cell = XLSX.utils.encode_cell({ r: r - 1, c: c - 1 });
+        ws[cell] = { v: val };
+        if (styles[style]) ws[cell].s = styles[style];
+      };
+      const mergeCells = (startR, startC, endR, endC) => {
+        ws[`!merges`] = ws[`!merges`] || [];
+        ws[`!merges`].push(XLSX.utils.encode_range({ s: { r: startR - 1, c: startC - 1 }, e: { r: endR - 1, c: endC - 1 } }));
+      };
+      const colWidths = {};
+
+      row = 1;
+      const maxCol = 10;
+      mergeCells(row, 1, row, maxCol);
+      setCell(row, 1, title, 'header');
+      row += 2;
+
+      for (const page of pages) {
+        if (page.title) {
+          mergeCells(row, 1, row, maxCol);
+          setCell(row, 1, page.title, 'section');
+          row += 2;
+        }
+        for (const section of page.sections || []) {
+          if (section.title) {
+            setCell(row, 1, section.title);
+            ws[XLSX.utils.encode_cell({ r: row - 1, c: 0 })].s = { font: { bold: true, size: 11 } };
+            if (!section.content) row++;
           }
-        });
-        row += 1;
-      });
-      row += 1;
-    }
-  });
-  
-  return code;
-})()}
-`).join('\\n')}
-
-# Adjust column widths
-for col in ws.columns:
-    max_length = 0
-    column = col[0].column_letter
-    for cell in col:
-        try:
-            if len(str(cell.value)) > max_length:
-                max_length = len(str(cell.value))
-        except:
-            pass
-    adjusted_width = min(max_length + 2, 50)
-    ws.column_dimensions[column].width = adjusted_width
-
-wb.save("${fullPath.replace(/"/g, '\\"')}")
-`.trim();
-
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-
-      try {
-        await execAsync(`python3 -c "${pythonCode.replace(/"/g, '\\"').replace(/\n/g, '; ')}"`, { timeout: 30000 });
-      } catch (pyErr) {
-        // Fallback: simple JS generation if Python fails
-        const XLSX = require('xlsx');
-        const workbook = XLSX.utils.book_new();
-        const worksheet = XLSX.utils.aoa_to_sheet(pages.flatMap(p =>
-          (p.sections || []).flatMap(s => [[s.title], [s.content]]).filter(row => !!row[0])
-        ));
-        XLSX.utils.book_append_sheet(workbook, worksheet, title);
-        const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
-        fs.writeFileSync(fullPath, buffer);
+          if (section.content) {
+            const content = section.content;
+            if (content.includes('|') && content.includes('--')) {
+              const lines = content.split('\n').filter(l => l.trim());
+              const tableRows = [];
+              for (const line of lines) {
+                if (line.includes('|') && !line.match(/^[\s|:-]+$/)) {
+                  const parts = line.split('|').filter(p => p.trim());
+                  if (parts.length) tableRows.push(parts);
+                }
+              }
+              if (tableRows.length) {
+                for (let ri = 0; ri < tableRows.length; ri++) {
+                  for (let ci = 0; ci < tableRows[ri].length; ci++) {
+                    const val = tableRows[ri][ci];
+                    colWidths[ci + 1] = Math.max(colWidths[ci + 1] || 10, val.length + 4);
+                    setCell(row, ci + 1, val, ri === 0 ? 'tableHeader' : (ri % 2 === 0 ? 'rowAlt' : 'normal'));
+                  }
+                  row++;
+                }
+                row++;
+              }
+            } else {
+              const txtLines = content.split('\n');
+              for (const tl of txtLines) {
+                if (tl.trim()) {
+                  setCell(row, 1, tl);
+                  row++;
+                }
+              }
+              row++;
+            }
+          }
+        }
       }
 
-      // Auto-sync to mobile
-      autoSyncFileToMobile(filename, fs.readFileSync(fullPath), 'xlsx');
+      for (const colIdx in colWidths) {
+        ws['!cols'] = ws['!cols'] || [];
+        ws['!cols'].push({ wch: Math.min(colWidths[colIdx], 60) });
+      }
 
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('xlsx-generation-progress', 70);
+      const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+      fs.writeFileSync(fullPath, buffer);
+
+      log('✅ Excel Engine complete.');
       if (mainWindow && !mainWindow.isDestroyed()) {
+        autoSyncFileToMobile(filename, buffer, 'xlsx');
         mainWindow.webContents.send('download-started', { name: filename, path: fullPath });
         mainWindow.webContents.send('download-complete', { name: filename, path: fullPath });
+        mainWindow.webContents.send('xlsx-generation-progress', 100);
       }
 
+      log(`✅ Done: ${filename}`);
       return { success: true, filePath: fullPath };
     } catch (err) {
-      console.error('[XLSX] Generation failed:', err);
+      console.error('[XLSX] Failure:', err);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('xlsx-generation-log', `❌ Critical Error: ${err.message}`);
+      }
       return { success: false, error: err.message };
     }
   });
@@ -7251,7 +7153,7 @@ wb.save("${fullPath.replace(/"/g, '\\"')}")
     }
   });
 
-  createWindow();
+  // createWindow was moved earlier for faster startup feedback
 
   // Load all plugins on startup
   (async () => {
@@ -8988,41 +8890,7 @@ wb.save("${fullPath.replace(/"/g, '\\"')}")
   // Redundant generate-pdf handler removed
 
 
-  // Setup Context Menu
-  contextMenu({
-    showSaveImageAs: true,
-    showInspectElement: true,
-    showCopyImageAddress: true,
-    showSearchWithGoogle: true,
-    prepend: (defaultActions, parameters, browserWindow) => [
-      {
-        label: '🚀 Analyze with Comet AI',
-        visible: parameters.selectionText.trim().length > 0,
-        click: () => {
-          if (mainWindow) {
-            mainWindow.webContents.send('ai-query-detected', parameters.selectionText);
-          }
-        }
-      },
-      {
-        label: '📄 Summarize Page',
-        click: () => {
-          if (mainWindow) {
-            mainWindow.webContents.send('ai-query-detected', 'Summarize this page');
-          }
-        }
-      },
-      {
-        label: '🌐 Translate this Site',
-        click: () => {
-          // This will trigger the translation IPC
-          if (mainWindow) {
-            mainWindow.webContents.send('trigger-translation-dialog');
-          }
-        }
-      }
-    ]
-  });
+  // Setup Context Menu (Merged with global setup at top)
 
   ipcMain.handle('decrypt-data', async (event, { encryptedData, key, iv, authTag, salt }) => {
     try {
@@ -10802,7 +10670,7 @@ ${tabData}`;
 
   // Auto-update IPC handlers
   ipcMain.handle('check-for-updates', () => {
-    if (!require('electron-is-dev')) {
+    if (app.isPackaged) {
       const { autoUpdater } = require('electron-updater');
       return autoUpdater.checkForUpdatesAndNotify();
     }
@@ -10810,7 +10678,7 @@ ${tabData}`;
   });
 
   ipcMain.handle('quit-and-install', () => {
-    if (!require('electron-is-dev')) {
+    if (app.isPackaged) {
       const { autoUpdater } = require('electron-updater');
       autoUpdater.quitAndInstall();
     }
@@ -10901,4 +10769,10 @@ ${tabData}`;
   app.on('quit', async () => {
     process.exit(0);
   });
+}).catch(err => {
+  console.error('[Main] Fatal error during app startup:', err);
+  // Emergency fallback to at least show the window
+  if (openWindows.size === 0) {
+    createWindow();
+  }
 });

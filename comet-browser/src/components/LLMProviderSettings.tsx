@@ -110,7 +110,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
   }, []);
 
   const loadProviderCatalog = useCallback(async (providerId: string, forceRefresh = false) => {
-    if (!window.electronAPI || providerId === 'ollama' || providerId === 'azure-openai' || providerId === 'copilot') {
+    if (!window.electronAPI || providerId === 'ollama' || providerId === 'azure-openai') {
       return;
     }
 
@@ -375,17 +375,7 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
   const handleSaveConfig = async () => {
     if (!activeProviderId) return;
 
-    if (activeProviderId === 'copilot') {
-      if (window.electronAPI) {
-        await window.electronAPI.configureLLMProvider('copilot', { mode: 'companion' });
-      }
-      setFeedback('Copilot Companion Ready');
-      setTimeout(() => {
-        props.setShowSettings(false);
-      }, 1500);
-      setTimeout(() => setFeedback(null), 3000);
-      return;
-    }
+
 
     let config: LLMProviderOptions = {};
     if (activeProviderId === 'ollama') {
@@ -499,35 +489,6 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
 
                 <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
                   <div className="space-y-4">
-                    {activeProviderId === 'copilot' && (
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-3 text-sky-300 mb-1">
-                          <Monitor size={16} />
-                          <span className="text-[10px] font-black uppercase tracking-widest text-sky-300">Microsoft Copilot Companion</span>
-                        </div>
-                        <div className="rounded-2xl border border-sky-400/15 bg-sky-400/5 p-4 text-xs leading-6 text-white/65">
-                          Use this on Windows if you want an official Copilot companion path without entering a Comet API key. Comet keeps the selection in settings, but Comet&apos;s in-sidebar chat still runs on native providers like Ollama, Gemini, OpenAI, Anthropic, or Groq.
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          <button
-                            type="button"
-                            onClick={() => openExternal('https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app')}
-                            className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-white transition-all hover:bg-white/10"
-                          >
-                            Open Copilot
-                            <ExternalLink size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openExternal('https://blogs.windows.com/windowsdeveloper/2024/05/21/unlock-a-new-era-of-innovation-with-windows-copilot-runtime-and-copilot-pcs/')}
-                            className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-white transition-all hover:bg-white/10"
-                          >
-                            Runtime Docs
-                            <ExternalLink size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
 
                     {activeProviderId === 'ollama' && (
                       <div className="space-y-4">
@@ -916,6 +877,112 @@ const LLMProviderSettings: React.FC<LLMProviderSettingsProps> = (props: LLMProvi
                           />
                         </div>
                         {renderCatalogControls('groq', store.groqModel || '', (model) => store.setGroqModel(model), 'e.g. llama-3.3-70b-versatile')}
+                      </div>
+                    )}
+
+                    {isMac && (
+                      <div className="pt-6 border-t border-white/5 mt-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <img src="/ai-logos/apple.png" className="w-4 h-4 object-contain invert" alt="Apple" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-white/60">macOS Apple Intelligence</span>
+                          </div>
+                          <button
+                            onClick={refreshAppleStatus}
+                            className="p-1.5 rounded-lg hover:bg-white/5 text-white/30 hover:text-white/60 transition-all"
+                          >
+                            <RefreshCw size={12} className={appleBusy ? 'animate-spin' : ''} />
+                          </button>
+                        </div>
+
+                        {!appleStatus?.supportsSummaries ? (
+                          <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 mb-4">
+                            <p className="text-[10px] text-amber-500/80 font-bold uppercase tracking-widest leading-relaxed">
+                              ⚠️ Native Apple Intelligence Unavailable
+                            </p>
+                            <p className="text-[9px] text-white/40 mt-1 leading-relaxed">
+                              {appleStatus?.error || 'Requires macOS 15.1+ and Apple Silicon (M1+).'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {/* Summary Section */}
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[9px] text-white/30 uppercase font-black tracking-widest">Page & Text Summarizer</span>
+                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${canUseAppleSummary ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                  {canUseAppleSummary ? 'Ready' : 'Unavailable'}
+                                </span>
+                              </div>
+                              
+                              <button
+                                onClick={handleApplePageSummary}
+                                disabled={!!appleBusy || !canUseAppleSummary}
+                                className="w-full py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/70 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 disabled:opacity-30 transition-all flex items-center justify-center gap-2"
+                              >
+                                {appleBusy === 'summary' ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} className="text-sky-400" />}
+                                Summarize Current Page
+                              </button>
+
+                              {appleSummaryResult && (
+                                <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[8px] font-black uppercase tracking-tighter text-white/30">Intelligence Output</span>
+                                    <button onClick={() => setAppleSummaryResult('')} className="text-white/20 hover:text-white/60"><X size={10} /></button>
+                                  </div>
+                                  <p className="text-[11px] text-white/80 leading-relaxed italic border-l-2 border-sky-500/50 pl-3">
+                                    "{appleSummaryResult}"
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Image Section */}
+                            {appleStatus.supportsImageGeneration && (
+                              <div className="space-y-3 pt-3 border-t border-white/5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[9px] text-white/30 uppercase font-black tracking-widest">Image Playground (Native)</span>
+                                  <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${canUseAppleImage ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                    {canUseAppleImage ? 'Ready' : 'Unavailable'}
+                                  </span>
+                                </div>
+
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder="Describe image..."
+                                    value={appleImagePrompt}
+                                    onChange={(e) => setAppleImagePrompt(e.target.value)}
+                                    className="flex-1 bg-black/20 border border-white/5 rounded-lg px-3 py-2 text-[10px] text-white outline-none"
+                                  />
+                                  <button
+                                    onClick={handleAppleImage}
+                                    disabled={!!appleBusy || !canUseAppleImage}
+                                    className="px-4 py-2 bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-lg text-[10px] font-black uppercase transition-all hover:bg-purple-500/30"
+                                  >
+                                    {appleBusy === 'image' ? <RefreshCw size={12} className="animate-spin" /> : 'Gen'}
+                                  </button>
+                                </div>
+
+                                {appleImagePath && (
+                                  <div className="rounded-xl overflow-hidden border border-white/10 group relative">
+                                    <img src={`file://${appleImagePath}`} className="w-full h-32 object-cover" alt="Apple AI" />
+                                    <button 
+                                      onClick={() => window.open(`file://${appleImagePath}`)}
+                                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-white transition-all"
+                                    >
+                                      Open Image
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {appleUiError && (
+                              <p className="text-[9px] text-red-400/80 italic text-center">{appleUiError}</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -47,7 +47,7 @@ const featureCards = [
   {
     icon: <Globe size={18} />,
     title: 'Flexible Models',
-    description: 'Use local Ollama, cloud providers, or companion tools like Copilot on Windows.',
+    description: 'Use local Ollama or cloud providers for private, high-speed reasoning.',
   },
 ];
 
@@ -259,18 +259,11 @@ export default function WelcomeScreen() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <button
+                   <button
                     onClick={handleCloseAuthPopup}
-                    className="rounded-2xl border border-white/10 bg-transparent px-5 py-3 text-sm font-medium text-white/60 transition hover:bg-white/6 hover:text-white"
+                    className="w-full rounded-2xl border border-white/10 bg-transparent px-5 py-3 text-sm font-medium text-white/60 transition hover:bg-white/6 hover:text-white"
                   >
                     Close sign-in popup
-                  </button>
-                  <button
-                    onClick={() => openExternal('https://www.microsoft.com/en-us/microsoft-copilot/for-individuals/copilot-app')}
-                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-transparent px-5 py-3 text-sm font-medium text-white/60 transition hover:bg-white/6 hover:text-white"
-                  >
-                    <span>Copilot for Windows</span>
-                    <ExternalLink size={16} />
                   </button>
                 </div>
               </div>
@@ -312,7 +305,7 @@ export default function WelcomeScreen() {
                   {[
                     'Choose your theme before the browser opens fully.',
                     'Connect Ollama or cloud AI keys when you are ready.',
-                    'See the Windows Copilot companion path for no-key usage.',
+                    'Your security and AI keys stay encrypted on your machine.',
                     'Review sync and security basics in one pass.',
                   ].map((item) => (
                     <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
@@ -341,20 +334,7 @@ export default function WelcomeScreen() {
                 ))}
               </div>
 
-              <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/8 text-sky-200">
-                    <KeyRound size={18} />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/40">Good to know</p>
-                    <p className="mt-1 text-sm text-white/62">
-                      Windows users can open the official Copilot app without adding a Comet API key, while Comet's
-                      own in-browser agent still uses Ollama or provider keys today.
-                    </p>
-                  </div>
-                </div>
-              </div>
+
             </motion.div>
           </div>
         </div>

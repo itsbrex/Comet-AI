@@ -340,7 +340,7 @@ export function buildCleanPDFContent(
       line-height: 1.7;
       min-height: 100vh;
     }
-    .page-break { page-break-before: always; height: 0; margin-top: 40px; border-top: 1px dashed ${outline}; }
+    .page-break { page-break-before: always; height: 0; margin-top: 40px; border-top: 1px solid ${outline}; }
     .slide {
       min-height: 80vh;
       display: flex;
@@ -354,6 +354,7 @@ export function buildCleanPDFContent(
       box-shadow: 0 40px 100px rgba(0,0,0,0.05);
       position: relative;
       overflow: hidden;
+      break-after: always;
       page-break-after: always;
     }
     .slide-number {
@@ -396,16 +397,33 @@ export function buildCleanPDFContent(
     }
     h2 { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 600; margin: 32px 0 12px; color: #1e293b; }
     h3 { font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 600; margin: 24px 0 10px; color: ${accent}; }
-    table { border-collapse: collapse; width: 100%; margin: 24px 0; border: 1px solid #e2e8f0; table-layout: fixed; word-wrap: break-word; page-break-inside: avoid; page-break-after: auto; }
-    thead { page-break-after: avoid; }
-    tbody { page-break-before: auto; }
-    tr { page-break-inside: avoid; page-break-after: auto; }
-    th { background: #f8fafc; color: #475569; padding: 12px 16px; text-align: left; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; width: auto; border-bottom: 2px solid #e2e8f0; page-break-after: avoid; }
-    td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; word-break: break-word; max-width: 300px; }
-    .table-wrapper { overflow-x: auto; margin: 24px 0; max-width: 100%; page-break-inside: avoid; }
+    
+    /* --- Table Fixes for Page Breaks --- */
+    table { 
+      border-collapse: collapse; 
+      width: 100%; 
+      margin: 24px 0; 
+      border: 1px solid #e2e8f0; 
+      table-layout: auto; 
+      word-wrap: break-word; 
+      break-inside: avoid;
+      page-break-inside: avoid; 
+    }
+    thead { display: table-header-group; break-after: avoid; }
+    tbody { display: table-row-group; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    th { 
+      background: #f8fafc; color: #475569; padding: 12px 16px; 
+      text-align: left; font-size: 0.85rem; font-weight: 600; 
+      text-transform: uppercase; border-bottom: 2px solid #e2e8f0; 
+      break-after: avoid; 
+    }
+    td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; word-break: break-word; }
+    
+    .table-wrapper { overflow-x: visible; margin: 24px 0; max-width: 100%; break-inside: avoid; display: block; }
     code { font-family: monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 2px; color: ${accent}; }
-    pre { background: #0f172a; color: #f8fafc; padding: 16px; overflow-x: auto; margin: 24px 0; white-space: pre-wrap; word-break: break-all; }
-    blockquote { border-left: 4px solid ${accent}; padding: 12px 24px; background: #f0f9ff; color: #1e40af; margin: 24px 0; }
+    pre { background: #0f172a; color: #f8fafc; padding: 16px; overflow-x: auto; margin: 24px 0; white-space: pre-wrap; word-break: break-all; break-inside: avoid; }
+    blockquote { border-left: 4px solid ${accent}; padding: 12px 24px; background: #f0f9ff; color: #1e40af; margin: 24px 0; break-inside: avoid; }
     .footer {
       position: fixed; bottom: 0; left: 0; right: 0;
       display: flex; align-items: center; justify-content: space-between;
@@ -414,7 +432,7 @@ export function buildCleanPDFContent(
     }
     .footer-brand { display: flex; align-items: center; gap: 6px; font-weight: 600; color: ${accent}; }
     .pdf-images { margin: 32px 0; clear: both; }
-    .pdf-images figure { margin: 24px 0; text-align: center; page-break-inside: avoid; clear: both; display: block; }
+    .pdf-images figure { margin: 24px 0; text-align: center; break-inside: avoid; page-break-inside: avoid; clear: both; display: block; }
     .pdf-images img { max-width: 100%; width: auto; height: auto; max-height: 600px; border: 1px solid #e2e8f0; display: block; margin: 0 auto; }
     .pdf-images figcaption { font-size: 0.85rem; color: #64748b; margin-top: 12px; font-style: italic; text-align: center; }
   </style>
@@ -425,7 +443,26 @@ export function buildCleanPDFContent(
       <div class="brand">${headerLogoHTML} Comet<span>AI</span></div>
       <div style="font-size: 0.75rem; font-weight: 600; color: #16a34a; background: #f0fdf4; padding: 4px 12px; border-radius: 999px;">✨ Real-time Verified</div>
     </header>
-    <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 24px;">Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} • By Comet AI</div>
+    ${(() => {
+      // Auto-generate TOC from bodyHTML
+      const h2Matches = bodyHTML.matchAll(/<h2[^>]*>(.*?)<\/h2>/g);
+      const tocItems = Array.from(h2Matches);
+      if (tocItems.length > 2) {
+        return `
+          <div class="toc-container" style="margin-bottom: 40px; padding: 24px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; break-inside: avoid;">
+            <h2 style="margin-top: 0; font-size: 1.2rem; margin-bottom: 16px;">📑 Table of Contents</h2>
+            <ul style="list-style: none; padding: 0;">
+              ${tocItems.map((match, i) => {
+                const text = match[1].replace(/<[^>]*>?/gm, '');
+                const id = `toc-${i}`;
+                return `<li style="margin-bottom: 8px;"><a href="#${id}" style="color: ${accent}; text-decoration: none; display: flex; justify-content: space-between;"><span>${text}</span> <span style="border-bottom: 1px dotted #cbd5e1; flex-grow: 1; margin: 0 8px; margin-bottom: 4px;"></span></a></li>`;
+              }).join('')}
+            </ul>
+          </div>
+        `;
+      }
+      return '';
+    })()}
     ${isSlideShow 
       ? slides.map((s: string, i: number) => `
         <div class="slide ${i > 0 ? 'page-break' : ''}">
@@ -433,7 +470,13 @@ export function buildCleanPDFContent(
           <div class="slide-content">${buildBodyFromMarkdown(s)}</div>
           <div class="slide-decoration"></div>
         </div>`).join('\n')
-      : `<h1>${escapeHtml(title)}</h1>${bodyHTML}`
+      : `<h1>${escapeHtml(title)}</h1>${(() => {
+          // Re-inject IDs into bodyHTML for TOC links
+          let indexedBody = bodyHTML;
+          let i = 0;
+          indexedBody = indexedBody.replace(/<h2/g, () => `<h2 id="toc-${i++}"`);
+          return indexedBody;
+        })()}`
     }
     ${imagesHTML}
   </div>

@@ -43,6 +43,7 @@ import SchedulingModal from '@/components/ai/SchedulingModal';
 import CloudSyncConsent from "@/components/CloudSyncConsent";
 import NoNetworkGame from "@/components/DinoGame";
 import AIAssistOverlay from "@/components/AIAssistOverlay";
+import InitializingOverlay from "@/components/InitializingOverlay";
 
 import { firebaseSyncService } from "@/lib/FirebaseSyncService";
 import firebaseService from '@/lib/FirebaseService';
@@ -154,6 +155,15 @@ const MusicVisualizer = ({ color = 'rgb', isPlaying = false }: { color?: string,
 export default function Home() {
   const store = useAppStore(useShallow(selectClientOnlyPageStore));
   const { shouldRenderTab, isTabSuspended } = useOptimizedTabs();
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    // Let the clean initialization screen show for a moment
+    const timer = setTimeout(() => {
+      setIsInitializing(false);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
   const isMacOS = typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgent);
   const [showClipboard, setShowClipboard] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -763,9 +773,9 @@ export default function Home() {
       window.electronAPI.webSearchRag(query).catch(() => []) as Promise<string[]>
     ]);
 
-    setAiOverview(prev => prev ? { 
-      ...prev, 
-      statusMessage: `${contextItems.length} local memories + ${webSearchResults.length} live results ready` 
+    setAiOverview(prev => prev ? {
+      ...prev,
+      statusMessage: `${contextItems.length} local memories + ${webSearchResults.length} live results ready`
     } : prev);
 
     const contextString = [
@@ -1300,7 +1310,8 @@ export default function Home() {
   };
 
   const calculateBounds = useCallback(() => {
-    if (!store.hasCompletedStartupSetup) {
+    // Only resize/enable BrowserView if it's actually intended to be showing
+    if (!store.hasCompletedStartupSetup || !store.hasSeenWelcomePage || store.activeView !== 'browser') {
       return { x: 0, y: 0, width: 0, height: 0 };
     }
 
@@ -1324,14 +1335,17 @@ export default function Home() {
       width: Math.max(0, Math.round(width)),
       height: Math.max(0, Math.round(height))
     };
-  }, [store.sidebarOpen, store.isSidebarCollapsed, store.sidebarWidth, store.sidebarSide, railVisible, store.hasCompletedStartupSetup]);
+  }, [store.sidebarOpen, store.isSidebarCollapsed, store.sidebarWidth, store.sidebarSide, railVisible, store.hasCompletedStartupSetup, store.hasSeenWelcomePage, store.activeView]);
 
   useEffect(() => {
     if (window.electronAPI) {
       const bounds = calculateBounds();
       window.electronAPI.setBrowserViewBounds(bounds);
     }
-    window.addEventListener('resize', calculateBounds);
+
+    if (store.activeView === 'browser') {
+      window.addEventListener('resize', calculateBounds);
+    }
 
     let cleanupFullscreen: (() => void) | undefined;
     if (window.electronAPI?.onWindowFullscreenChanged) {
@@ -1349,7 +1363,7 @@ export default function Home() {
       window.removeEventListener('resize', calculateBounds);
       cleanupFullscreen?.();
     };
-  }, [calculateBounds]);
+  }, [calculateBounds, store.activeView]);
 
   // View Management Effects
   useEffect(() => {
@@ -1562,7 +1576,7 @@ export default function Home() {
           });
           if (profile.email?.endsWith('@ponsrischool.in')) store.setAdmin(true);
           store.setHasSeenWelcomePage(true);
-          store.setActiveView('browser');
+          store.setActiveView('landing-page');
           store.startActiveSession();
           console.log('[Auth] User signed in:', profile.email);
           return;
@@ -1723,7 +1737,7 @@ export default function Home() {
   const useNativeSidebarShell = isMacOS && store.macNativeSidebarMode === 'swiftui';
   const useNativeActionChainShell = isMacOS && store.macNativeActionChainMode === 'swiftui';
   const keepNativeBridgeMounted = useNativeSidebarShell || useNativeActionChainShell;
-  const showEmbeddedSidebar = store.sidebarOpen && !useNativeSidebarShell;
+  const showEmbeddedSidebar = store.sidebarOpen && !useNativeSidebarShell && store.activeView === 'browser';
 
   useEffect(() => {
     if (!window.electronAPI?.updateNativeMacUIState) return;
@@ -1740,12 +1754,16 @@ export default function Home() {
         onOpenSettings={() => openSettingsPanel()}
       />
 
-      {!store.hasSeenWelcomePage ? (
-        <WelcomeScreen />
-      ) : (
-        !store.hasCompletedStartupSetup && (
-          <StartupSetupUI onComplete={() => store.setHasCompletedStartupSetup(true)} />
-        )
+      <AnimatePresence mode="wait">
+        {isInitializing && <InitializingOverlay key="init" />}
+      </AnimatePresence>
+
+      {!isInitializing && !store.hasSeenWelcomePage && (
+        <WelcomeScreen key="welcome" />
+      )}
+
+      {!isInitializing && store.hasSeenWelcomePage && !store.hasCompletedStartupSetup && (
+        <StartupSetupUI key="setup" onComplete={() => store.setHasCompletedStartupSetup(true)} />
       )}
 
       <div
@@ -1757,7 +1775,7 @@ export default function Home() {
       >
         {/* Navigation Sidebar (Rail) */}
         <AnimatePresence>
-          {railVisible && (
+          {railVisible && store.activeView === 'browser' && (
             <motion.div
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: 70, opacity: 1 }}
@@ -1784,7 +1802,7 @@ export default function Home() {
         </AnimatePresence>
 
         <AnimatePresence>
-          {(showEmbeddedSidebar || keepNativeBridgeMounted) && (
+          {(showEmbeddedSidebar || keepNativeBridgeMounted) && store.activeView === 'browser' && (
             <motion.div
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
@@ -1802,7 +1820,7 @@ export default function Home() {
               animate={{ width: showEmbeddedSidebar ? (store.isSidebarCollapsed ? 70 : store.sidebarWidth) : 0, opacity: showEmbeddedSidebar ? 1 : 0 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
-              className={`relative h-full cursor-grab active:cursor-grabbing ${store.sidebarSide === 'left' ? 'order-first border-r border-border-color' : 'order-last border-l border-border-color'} no-drag-region outline-none ring-0`}
+              className={`relative h-full cursor-grab active:cursor-grabbing ${store.sidebarSide === 'left' ? (showEmbeddedSidebar ? 'order-first border-r border-border-color' : 'order-first') : (showEmbeddedSidebar ? 'order-last border-l border-border-color' : 'order-last')} no-drag-region outline-none ring-0`}
               style={{
                 background: `linear-gradient(180deg, color-mix(in srgb, var(--navbar-bg) ${store.themeOpacity - 3}%, transparent), color-mix(in srgb, var(--primary-bg) ${Math.max(0, store.themeOpacity - 7)}%, transparent), color-mix(in srgb, var(--primary-bg) ${Math.max(0, store.themeOpacity - 2)}%, transparent))`,
                 backdropFilter: `blur(${store.themeBlur}px)`,
@@ -1874,7 +1892,7 @@ export default function Home() {
         <main className="flex-1 flex flex-col relative overflow-hidden min-w-0" style={{ background: 'color-mix(in srgb, var(--primary-bg) 92%, var(--card-bg))' }}>
           {store.activeView === 'browser' && (
             <header
-              className="h-[76px] flex-shrink-0 flex items-center px-6 gap-6 border-b backdrop-blur-3xl z-40 no-drag-region transition-all duration-500 outline-none ring-0 pb-3"
+              className="h-[56px] flex-shrink-0 flex items-center px-6 gap-6 border-b backdrop-blur-3xl z-40 no-drag-region transition-all duration-500 outline-none ring-0"
               style={{
                 background: `color-mix(in srgb, var(--navbar-bg) ${store.themeOpacity}%, transparent)`,
                 borderColor: 'var(--border-color)',
