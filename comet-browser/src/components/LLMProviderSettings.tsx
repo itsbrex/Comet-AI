@@ -9,7 +9,7 @@ import BackendSettings from './BackendSettings';
 import { motion, AnimatePresence } from 'framer-motion';
 import { OpenAICompatibleProvider } from '@/lib/llm/providers/openai-compatible';
 import { useAppStore } from '@/store/useAppStore';
-import { Cpu, Cloud, Settings, Save, Shield, Database, ChevronDown, Check, Sparkles, Puzzle, FolderOpen, ExternalLink, Monitor, RefreshCw } from 'lucide-react';
+import { Cpu, Cloud, Settings, Save, Shield, Database, ChevronDown, Check, Sparkles, Puzzle, FolderOpen, ExternalLink, Monitor, RefreshCw, X } from 'lucide-react';
 import { getGeminiModelMetadata, getRecommendedGeminiModel } from '@/lib/modelRegistry';
 
 interface LLMProviderSettingsProps {

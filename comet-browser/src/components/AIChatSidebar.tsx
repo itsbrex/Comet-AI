@@ -4144,22 +4144,6 @@ I've successfully executed the following real tasks:
   }, [handleSendMessage]);
 
   useEffect(() => {
-    const listener = window.electronAPI?.onAiQueryDetected;
-    if (!listener) return;
-    const cleanup = listener((query: string) => {
-      if (query === 'Summarize this page' || query === 'Summarize this page using Apple Intelligence') {
-        handleRunCommand({ type: 'APPLE_INTELLIGENCE_SUMMARY', value: '', category: 'ai', riskLevel: 'low' });
-      } else if (query.startsWith('Summarize this using Apple Intelligence: ')) {
-        const text = query.replace('Summarize this using Apple Intelligence: ', '');
-        handleRunCommand({ type: 'APPLE_INTELLIGENCE_SUMMARY', value: text, category: 'ai', riskLevel: 'low' });
-      } else {
-        handleSendMessage(query);
-      }
-    });
-    return cleanup;
-  }, [handleRunCommand, handleSendMessage]);
-
-  useEffect(() => {
     const listener = window.electronAPI?.onAIChatInputText ?? window.electronAPI?.onAiChatInputText;
     if (!listener) return;
     const cleanup = listener((text: string) => {
