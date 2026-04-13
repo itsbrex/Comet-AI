@@ -881,7 +881,7 @@ const AIChatSidebar: React.FC<AIChatSidebarProps> = (props) => {
     return id;
   }, []);
 
-  const resolveThinkingStep = useCallback((id: string, status: 'done' | 'error', detail?: string) => {
+  const resolveThinkingStep = useCallback((id: string, status: 'done' | 'error' | 'skipped', detail?: string) => {
     setThinkingSteps((prev) => prev.map((s) => s.id === id ? { ...s, status, detail: detail ?? s.detail } : s));
   }, []);
 
@@ -4309,7 +4309,7 @@ I've successfully executed the following real tasks:
       const snapshotThinkingSteps = thinkingSteps.slice(-12).map((step) => ({
         id: step.id,
         label: step.label.slice(0, 200),
-        status: step.status,
+        status: step.status as 'running' | 'done' | 'error',
         detail: step.detail ? step.detail.slice(0, 500) : undefined,
         timestamp: step.timestamp,
       }));

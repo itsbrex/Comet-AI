@@ -7,7 +7,7 @@ import { Brain, Loader2, ChevronRight, Check, X, Zap } from 'lucide-react';
 export interface ThinkingStep {
   id: string;
   label: string;
-  status: 'running' | 'done' | 'error';
+  status: 'running' | 'done' | 'error' | 'skipped';
   detail?: string;
   timestamp: number;
 }
