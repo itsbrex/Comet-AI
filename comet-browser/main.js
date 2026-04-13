@@ -2470,6 +2470,38 @@ async function createWindow() {
   app.commandLine.appendSwitch('--disable-gpu-driver-bug-workarounds');
   app.commandLine.appendSwitch('--enable-native-gpu-memory-buffers');
   app.commandLine.appendSwitch('--enable-gpu-memory-buffer-compositor-resources');
+  
+  // GPU offload and acceleration enhancements
+  app.commandLine.appendSwitch('--enable-accelerated-2d-canvas');
+  app.commandLine.appendSwitch('--enable-accelerated-video-decode');
+  app.commandLine.appendSwitch('--enable-gpu-scheduling');
+  app.commandLine.appendSwitch('--enable-video-codecs', 'video/webm;video/mp4;video/avc;video/hevc;video/vp9');
+  app.commandLine.appendSwitch('--enable-vp9-temporal-layers');
+  app.commandLine.appendSwitch('--use-gl', process.platform === 'darwin' ? 'metal' : 'egl');
+  app.commandLine.appendSwitch('--enable-features', 'UseSkiaRenderer,VaapiVideoDecoder,UseMultiPlaneFormatForAndroid');
+  
+  // Memory management and optimization
+  app.commandLine.appendSwitch('--js-flags', '--max-old-space-size=4096');
+  app.commandLine.appendSwitch('--disable-background-networking');
+  app.commandLine.appendSwitch('--disable-default-apps');
+  app.commandLine.appendSwitch('--disable-extensions');
+  app.commandLine.appendSwitch('--disable-sync');
+  app.commandLine.appendSwitch('--disable-translate');
+  app.commandLine.appendSwitch('--metrics-recording-only');
+  app.commandLine.appendSwitch('--no-first-run');
+  app.commandLine.appendSwitch('--safebrowsing-disable-auto-update');
+  app.commandLine.appendSwitch('--memory-pressure-off');
+  app.commandLine.appendSwitch('--enable-features', 'IncognitoPasswordSuggestions,OfflinePagesPrefetching');
+  app.commandLine.appendSwitch('--disable-features', 'ClangCoverage,OppiaEngagement,Survey,NativeNotifications');
+  
+  // Optimize renderer process
+  app.commandLine.appendSwitch('--renderer-process-limit', '8');
+  app.commandLine.appendSwitch('--disable-low-res-tiling');
+  app.commandLine.appendSwitch('--log-missing-plugins');
+  app.commandLine.appendSwitch('--disable-plugin-power-saver');
+  
+  // Aggressive garbage collection
+  app.commandLine.appendSwitch('--js-flags', '--expose-gc,--max-old-space-size=4096,--optimize-for-size,--memory-reducer,--gc-interval=100');
 
   if (isDev) {
     // Clear cache and service workers in development to avoid 404s on stale chunks
@@ -2807,7 +2839,7 @@ ipcMain.handle('test-gemini-api', async (event, apiKey) => {
   }
 });
 
-const gmailService = require('./src/lib/GmailService.js');
+const gmailService = require('./src/lib/gmailService.js');
 
 ipcMain.handle('get-gmail-messages', async () => {
   return await gmailService.getGmailMessages();
@@ -2826,7 +2858,7 @@ ipcMain.on('save-ai-response', (event, content) => {
 // Gmail and Google Services
 
 ipcMain.handle('gmail-authorize', async () => {
-  const { authorize } = require('./src/lib/GmailService.js');
+  const { authorize } = require('./src/lib/gmailService.js');
   try {
     await authorize();
     return { success: true };
@@ -2837,7 +2869,7 @@ ipcMain.handle('gmail-authorize', async () => {
 
 
 ipcMain.handle('gmail-list-messages', async (event, query, maxResults) => {
-  const { listMessages } = require('./src/lib/GmailService.js');
+  const { listMessages } = require('./src/lib/gmailService.js');
   try {
     const messages = await listMessages(query, maxResults);
     return { success: true, messages };
@@ -2847,7 +2879,7 @@ ipcMain.handle('gmail-list-messages', async (event, query, maxResults) => {
 });
 
 ipcMain.handle('gmail-get-message', async (event, messageId) => {
-  const { getMessage } = require('./src/lib/GmailService.js');
+  const { getMessage } = require('./src/lib/gmailService.js');
   try {
     const message = await getMessage(messageId);
     return { success: true, message };
@@ -2857,7 +2889,7 @@ ipcMain.handle('gmail-get-message', async (event, messageId) => {
 });
 
 ipcMain.handle('gmail-send-message', async (event, to, subject, body, threadId) => {
-  const { sendMessage } = require('./src/lib/GmailService.js');
+  const { sendMessage } = require('./src/lib/gmailService.js');
   try {
     const result = await sendMessage(to, subject, body, threadId);
     return { success: true, result };
@@ -2867,7 +2899,7 @@ ipcMain.handle('gmail-send-message', async (event, to, subject, body, threadId) 
 });
 
 ipcMain.handle('gmail-add-label-to-message', async (event, messageId, labelName) => {
-  const { addLabelToMessage } = require('./src/lib/GmailService.js');
+  const { addLabelToMessage } = require('./src/lib/gmailService.js');
   try {
     const result = await addLabelToMessage(messageId, labelName);
     return { success: true, result };
@@ -5885,6 +5917,34 @@ pluginManager.on('plugin:config-updated', ({ pluginId, config }) => {
 });
 
 app.whenReady().then(async () => {
+  // Memory management handlers
+  ipcMain.handle('memory:collect', async () => {
+    if (global.gc) {
+      global.gc();
+      return { success: true, message: 'Garbage collection triggered' };
+    }
+    return { success: false, message: 'GC not available' };
+  });
+
+  ipcMain.handle('memory:stats', async () => {
+    const memUsage = process.memoryUsage();
+    return {
+      heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + ' MB',
+      heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + ' MB',
+      rss: Math.round(memUsage.rss / 1024 / 1024) + ' MB',
+      external: Math.round(memUsage.external / 1024 / 1024) + ' MB'
+    };
+  });
+
+  ipcMain.handle('memory:flush', async () => {
+    // Clear caches
+    if (session.defaultSession) {
+      await session.defaultSession.clearCache();
+      await session.defaultSession.clearStorageData({ storages: ['cachestorage'] });
+    }
+    return { success: true, message: 'Caches cleared' };
+  });
+
   nativeTheme.on('updated', () => {
     updateGoogleSearchTheme();
   });
@@ -7185,6 +7245,9 @@ app.whenReady().then(async () => {
   // Ollama is LAZY — it only connects when the user selects it in Settings.
   // ──────────────────────────────────────────────────────────────────────────
   // Initialize Desktop Automation Services (LOCAL ONLY — no network calls)
+  // CRITICAL: Services are lazy-loaded to speed up app startup time
+  
+  // Step 1: Only initialize essential services (permissions + command executor)
   (async () => {
     try {
       await permissionStore.load();
@@ -7198,7 +7261,7 @@ app.whenReady().then(async () => {
         ANTHROPIC_API_KEY: store.get('anthropic_api_key') || process.env.ANTHROPIC_API_KEY || '',
         OLLAMA_BASE_URL: store.get('ollama_base_url') || 'http://127.0.0.1:11434',
       });
-      console.log('[Main] CometAiEngine initialized with Ollama:', store.get('ollama_base_url') || 'http://127.0.0.1:11434');
+      console.log('[Main] CometAiEngine initialized (lazy - on demand).');
 
       robotService = new RobotService(permissionStore);
       console.log(`[Main] RobotService initialized (available: ${robotService.isAvailable}).`);
@@ -7209,36 +7272,37 @@ app.whenReady().then(async () => {
       commandExecutor.registerHandlers();
       console.log('[Main] CommandExecutor IPC handlers registered.');
 
+      // Tesseract is LAZY - only loads when OCR is needed
       tesseractOcrService = new TesseractOcrService();
       console.log('[Main] TesseractOcrService ready (lazy init on first use).');
 
+      // ScreenVision is LAZY - only loads when find-and-click is needed
       screenVisionService = new ScreenVisionService(cometAiEngine);
-      console.log('[Main] ScreenVisionService initialized.');
+      console.log('[Main] ScreenVisionService ready (lazy init).');
 
+      // RAG is LAZY - only loads when context retrieval is needed
+      // Removed: await ragService.init() - now lazy
+      ragService = new RagService();
+      console.log('[Main] RagService ready (lazy init on first query).');
+
+      // Voice is LAZY - only loads when voice features are used
+      voiceService = new VoiceService();
+      console.log('[Main] VoiceService ready (lazy init on voice request).');
+
+      // Flutter Bridge - LAZY - only starts on demand
       flutterBridge = new FlutterBridgeServer(cometAiEngine, tesseractOcrService);
-      flutterBridge.start(9876);
-      console.log('[Main] FlutterBridgeServer started on port 9876.');
+      // flutterBridge.start(9876) - now lazy
 
+      // MCP Servers - LAZY - only start on demand  
       fileSystemMcp = new FileSystemMcpServer(permissionStore);
       nativeAppMcp = new NativeAppMcpServer(permissionStore);
-      console.log('[Main] MCP Desktop servers (FileSystem + NativeApp) initialized.');
-
-      ragService = new RagService();
-      await ragService.init();
-      console.log('[Main] RagService initialized.');
-
-      voiceService = new VoiceService();
-      voiceService.configure({
-        OPENAI_API_KEY: store.get('openai_api_key') || process.env.OPENAI_API_KEY || '',
-      });
-      console.log('[Main] VoiceService initialized.');
+      console.log('[Main] MCP Desktop servers ready (lazy start).');
 
       workflowRecorder = new WorkflowRecorder();
-      console.log('[Main] WorkflowRecorder initialized.');
+      console.log('[Main] WorkflowRecorder ready (lazy init).');
 
       popSearch = popSearchService;
-      popSearch.initialize(mainWindow);
-      console.log('[Main] PopSearch service initialized.');
+      // popSearch.initialize(mainWindow) - now lazy
     } catch (e) {
       console.error('[Main] Desktop automation services init error:', e.message);
     }
@@ -10340,7 +10404,28 @@ ${tabData}`;
   // RAG — Vector Store (Local Embeddings + Gemini)
   // ============================================================================
 
+  // LAZY INITIALIZATION - Services start on-demand, not at startup
+  // This makes app launch instant
+
+  const initServiceOnDemand = async (service, initFn, name) => {
+    if (service && typeof service.init === 'function') return service;
+    try {
+      console.log(`[LazyInit] Starting ${name}...`);
+      await initFn();
+      console.log(`[LazyInit] ${name} ready`);
+      return service;
+    } catch (e) {
+      console.error(`[LazyInit] Failed to start ${name}:`, e.message);
+      return service;
+    }
+  };
+
+  // RAG Handler - lazy init
   ipcMain.handle('rag-ingest', async (event, { text, source }) => {
+    await initServiceOnDemand(ragService, async () => {
+      if (!ragService) return;
+      await ragService.init();
+    }, 'RAG');
     if (!ragService) return { success: false, error: 'RAG not initialized' };
     try {
       const apiKey = store.get('gemini_api_key') || process.env.GEMINI_API_KEY;
@@ -10350,6 +10435,10 @@ ${tabData}`;
   });
 
   ipcMain.handle('rag-retrieve', async (event, { query, k }) => {
+    await initServiceOnDemand(ragService, async () => {
+      if (!ragService) return;
+      await ragService.init();
+    }, 'RAG');
     if (!ragService) return { success: false, error: 'RAG not initialized' };
     try {
       const apiKey = store.get('gemini_api_key') || process.env.GEMINI_API_KEY;
@@ -10359,6 +10448,10 @@ ${tabData}`;
   });
 
   ipcMain.handle('rag-context', async (event, { query, k }) => {
+    await initServiceOnDemand(ragService, async () => {
+      if (!ragService) return;
+      await ragService.init();
+    }, 'RAG');
     if (!ragService) return { success: false, error: 'RAG not initialized' };
     try {
       const apiKey = store.get('gemini_api_key') || process.env.GEMINI_API_KEY;

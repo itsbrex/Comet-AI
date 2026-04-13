@@ -1133,11 +1133,19 @@ I couldn't schedule the task. The background service may not be running. Please 
     // INSTANT feedback - show user message immediately
     setMessages(prev => [...prev, { id: createMessageId('user'), role: 'user', content: rawContent }]);
     if (!customContent) { setInputMessage(''); setAttachments([]); }
+    
+    // Show AI placeholder immediately so user knows AI received the message
+    const aiPlaceholderId = createMessageId('assistant');
+    setMessages(prev => [...prev, { id: aiPlaceholderId, role: 'model', content: '' }]);
+    
     setIsLoading(true);
     setIsThinking(true);
     setThinkingSteps([]);
     setThinkingText('');
     setError(null);
+
+    // Update the streaming message ref
+    activeStreamingMessageIdRef.current = aiPlaceholderId;
 
     // Security Checks
     const threatCheck = checkThreat(rawContent);
@@ -1199,42 +1207,49 @@ I couldn't schedule the task. The background service may not be running. Please 
     try {
       if (!window.electronAPI) throw new Error('AI Engine disconnected.');
 
-      // RAG & Live Data (Pre-retrieval)
-      const ragId = addThinkingStep('Neural Retrieval...');
-      const contextItems = await BrowserAI.retrieveContext(protectedContent);
+      // ✅ PARALLEL: Run RAG, Live Search, and Browser State in parallel for speed
+      const [ragId, preflightId, browserId] = [
+        addThinkingStep('Neural Retrieval...'),
+        addThinkingStep('🔍 Fetching live data...'),
+        addThinkingStep('📊 Getting browser state...')
+      ];
+
+      // Run all in parallel
+      const [contextItems, liveSearchResult, browserStateResult] = await Promise.all([
+        BrowserAI.retrieveContext(protectedContent).catch(() => []),
+        queryRequiresSearch(protectedContent) ? (async () => {
+          try {
+            const topic = protectedContent
+              .replace(/\b(create|make|generate|write|give me|show me|tell me|what are|what is|latest|find|search|get)\b/gi, '')
+              .replace(/\b(pdf|report|document|page|today|news|please|can you|could you)\b/gi, '')
+              .trim()
+              .slice(0, 80) || 'technology news';
+            return await fetchRealSearchContext(topic);
+          } catch { return ''; }
+        })() : Promise.resolve(''),
+        (async () => {
+          try {
+            const tabs: any[] = await window.electronAPI.getOpenTabs();
+            const activeTab = tabs.find(t => t.active) || tabs[0];
+            if (tabs.length > 0) {
+              return `[BROWSER STATE]\n- ACTIVE TAB: ${activeTab?.title || 'Unknown'} (${activeTab?.url || currentUrl || 'N/A'})\n- OPEN TABS (${tabs.length}):\n${tabs.map((t, idx) => `  ${idx + 1}. ${t.title} (${t.url}) ${t.active ? '[ACTIVE]' : ''}`).join('\n')}`;
+            }
+          } catch { return ''; }
+          return '';          
+        })()
+      ]);
+
+      const liveSearchContext = liveSearchResult;
+      const browserStateContext = browserStateResult;
+
+      // Update thinking steps
       setRagContextItems(contextItems);
       if (contextItems.length > 0) setShowRagPanel(true);
       resolveThinkingStep(ragId, 'done', `${contextItems.length} memories recovered`);
-
-      // ✅ NEW: Pre-flight live search — run BEFORE the LLM call
-      let liveSearchContext = '';
-      if (queryRequiresSearch(protectedContent)) {
-        const preflightId = addThinkingStep('🔍 Fetching live data before answering...');
-        try {
-          const topic = protectedContent
-            .replace(/\b(create|make|generate|write|give me|show me|tell me|what are|what is|latest|find|search|get)\b/gi, '')
-            .replace(/\b(pdf|report|document|page|today|news|please|can you|could you)\b/gi, '')
-            .trim()
-            .slice(0, 80) || 'technology news';
-
-          liveSearchContext = await fetchRealSearchContext(topic);
-          resolveThinkingStep(preflightId, 'done', `Live data fetched (${liveSearchContext.length} chars)`);
-        } catch (e) {
-          resolveThinkingStep(preflightId, 'error', 'Live search failed — LLM will proceed with memory only');
-        }
-      }
-
-      // ✅ NEW: Browser State Injection (Active Tab & Open Tabs)
-      let browserStateContext = '';
-      try {
-        const tabs: any[] = await window.electronAPI.getOpenTabs();
-        const activeTab = tabs.find(t => t.active) || tabs[0];
-        if (tabs.length > 0) {
-          browserStateContext = `[BROWSER STATE]\n- ACTIVE TAB: ${activeTab?.title || 'Unknown'} (${activeTab?.url || currentUrl || 'N/A'})\n- OPEN TABS (${tabs.length}):\n${tabs.map((t, idx) => `  ${idx + 1}. ${t.title} (${t.url}) ${t.active ? '[ACTIVE]' : ''}`).join('\n')}`;
-        }
-      } catch (e) {
-        console.warn('Failed to fetch browser state for LLM context', e);
-      }
+      if (liveSearchContext) resolveThinkingStep(preflightId, 'done', `Live data fetched (${liveSearchContext.length} chars)`);
+      else resolveThinkingStep(preflightId, 'skipped', 'No live search needed');
+      if (browserStateContext) resolveThinkingStep(browserId, 'done', `${browserStateContext.split('\n').length} lines`);
+      else resolveThinkingStep(browserId, 'skipped', 'No browser state');
 
       // LLM Request — Build context with REAL data injected
       const aiId = addThinkingStep('LLM Processing...');
@@ -4910,6 +4925,21 @@ I've successfully executed the following real tasks:
             )
           })}
           {isLoading && messages.length === 0 && <ThinkingIndicator theme={gradientPreset as ThemePreset} variant="full" />}
+          {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'model' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }} 
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-3 px-4 py-3 rounded-2xl border"
+              style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(6,182,212,0.1))', borderColor: 'rgba(99,102,241,0.3)' }}
+            >
+              <div className="flex gap-1">
+                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-300">Comet is thinking</span>
+            </motion.div>
+          )}
         </AnimatePresence>
         <div ref={messagesEndRef} />
       </div>

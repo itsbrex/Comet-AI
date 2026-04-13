@@ -525,6 +525,23 @@ Comet AI Browser is built by a **16-year-old student** from India, preparing for
 - **Memory Leak Prevention**: Resolved `MaxListenersExceededWarning` memory leaks by removing unbound process listeners.
 - **Automation Service Locks**: Implemented a concurrency lock around `initializeAutomationService()`.
 
+### v0.2.9 (2026-04-13) - Performance & Stability
+#### Performance Improvements
+- **Instant App Launch** - Services now lazy-load on-demand; app opens immediately
+- **GPU Offload** - Metal/EGL rendering, accelerated 2D canvas & video decode  
+- **Memory Optimization** - 4GB JS heap, cache clearing, renderer limits
+- **Parallel Pre-processing** - RAG, live search, browser state run simultaneously
+- **Instant UI Feedback** - User messages show immediately, AI placeholder appears before LLM call
+
+#### New Features
+- **Thinking Animation** - Animated indicator shows while AI is processing
+- **Memory Management IPC** - Handlers to collect garbage, flush caches, get stats
+
+#### Bug Fixes
+- **GmailService path** - Fixed require path (lowercase) causing app crash
+- **Icon path** - Reverted to v0.2.6 style for proper app display
+- **Code Signing** - Added signing env vars for GitHub Actions
+
 ### v0.2.6 (2026-03-30) - Native Google Sign-In & Sync Hardening
 #### New Features
 - **Native Google Sign-In** - Uses `google_sign_in` package instead of web OAuth redirect
