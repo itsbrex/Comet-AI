@@ -2482,12 +2482,10 @@ async function createWindow() {
 
   const isMacPlatform = process.platform === 'darwin';
 
-  const appIcon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png'));
-
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    icon: appIcon,
+    icon: path.join(__dirname, 'out', 'icon.ico'),
     frame: isMacPlatform,
     transparent: false,
     webPreferences: {
