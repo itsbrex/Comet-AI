@@ -8,7 +8,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-cyan.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)]()
-[![Version](https://img.shields.io/badge/Version-0.2.9-blue)]()
+[![Version](https://img.shields.io/badge/Version-0.2.9.1-blue)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 [![Built by 16yo](https://img.shields.io/badge/Developer-16_Year_Old_Student-FF69B4?style=for-the-badge&logo=github)](https://github.com/Preet3627)
 [![Low Spec](https://img.shields.io/badge/Tested_On-i5--U_|_8GB_RAM-orange)]()
@@ -52,7 +52,50 @@ Full documentation is available at [browser.ponsrischool.in](https://browser.pon
 
 ---
 
-## ✨ Features (v0.2.9)
+## ✨ Features (v0.2.9.1)
+
+### 🍎 Native AI Sidebar V2 (Thuki-Inspired)
+
+**Inspired by [Thuki](https://github.com/quiet-node/thuki) by Logan Nguyen (Apache 2.0)**
+
+A native Swift-powered floating AI assistant that brings Thuki's elegant design to Electron:
+
+| Feature | Description |
+|---------|-------------|
+| **Morphing Container** | Spotlight-style input bar transforms to full chat |
+| **Command Suggestions** | `/screen`, `/think`, `/search`, `/summarize` with real-time filtering |
+| **Context Quotes** | Selected text pre-fills as quoted context |
+| **Smart Auto-Scroll** | Follows content unless user scrolls up |
+| **Typing Indicator** | Pulsing dots animation during AI response |
+| **Conversation History** | Date-grouped organization (Today, Yesterday, Earlier) |
+| **Multi-Provider LLM** | Connects to Ollama, OpenAI, Anthropic, Gemini |
+| **Auto-Start** | Login item integration for persistent availability |
+| **Native SwiftUI** | Smooth 60fps animations, native macOS integration |
+
+#### Architecture
+
+```
+Electron Main Process
+       ↓ N-API (node-gyp)
+SwiftBridge (Objective-C++)
+       ↓
+CometSidebar.swift (SwiftUI)
+       ↓
+Native macOS Window
+```
+
+#### How to Build
+
+```bash
+cd native-modules/comet-ai-sidebar
+npm install && npm run build
+```
+
+#### Licensing
+
+- **Thuki** by Logan Nguyen is licensed under Apache License 2.0
+- Comet acknowledges Thuki's influence per Apache 2.0 Section 4d
+- Full attribution: [ACKNOWLEDGMENTS.md](comet-browser/ACKNOWLEDGMENTS.md)
 
 ### 🤖 AI Agent
 - Multi-step autonomous task execution via chained commands
@@ -160,38 +203,56 @@ Azure OpenAI setup note:
 - Use your Azure OpenAI v1 base URL, for example `https://YOUR-RESOURCE.openai.azure.com/openai/v1`
 - Enter your Azure API key and your model/deployment name in Comet settings
 
-### 🍎 Apple Intelligence on macOS
+### 🍎 Native macOS Features
 
-Comet now includes a **native Swift Apple Intelligence bridge** for macOS, built in the same spirit as the existing Swift native panel system.
+#### AI Sidebar V2 (Native SwiftUI)
 
-What is included now:
-- **Foundation Models summary bridge** for summarizing current page text or pasted text from inside Comet settings
-- **Image Playground / ImageCreator bridge** for macOS-only local image generation
-- **GUI readiness checks** that detect unsupported Macs, disabled Apple Intelligence, and not-ready model states before use
-- **Packaged helper build step** so macOS distributions can ship the Apple helper in `bin/`
-- **Apple Intelligence Lab** in settings for quick testing and validation
+Comet's native Swift sidebar powered by Thuki's elegant design:
 
-Why this uses Swift:
-- Apple Intelligence APIs are native Apple frameworks, so Comet talks to them through a small Swift helper instead of trying to force them through the web runtime.
-- This matches Comet's existing native macOS architecture for Swift UI panels and helpers.
+```javascript
+const sidebar = new CometAISidebar();
+await sidebar.initialize();
+await sidebar.showWindow();
+await sidebar.configureLLM({
+  endpoint: 'http://127.0.0.1:11434',
+  model: 'gemma4:e2b',
+  provider: 'ollama'
+});
+await sidebar.setAutoStart(true); // Start at login
+```
 
-Current status:
-- The helper compiles and the bridge is integrated into Electron.
-- **Runtime availability still depends on the Mac, macOS version, Apple Intelligence enablement, and Apple's framework/runtime state.**
-- Comet now checks readiness before use and shows clear GUI states when Apple Intelligence is unsupported, disabled, or still getting ready.
-- On unsupported Macs, or when Apple Intelligence/image creation is not available at runtime, Comet fails gracefully and keeps cloud/local providers available.
+#### Apple Intelligence Bridge
 
-Advanced Apple-native paths we can build on:
-- **Writing Tools** for editor-native summarization and rewrite flows in custom text surfaces
-- **App Intents assistant schemas** for exposing Comet actions/content to Siri and Apple Intelligence
-- **ImagePlaygroundViewController** when we want Apple-controlled system image UI instead of only helper-driven generation
+**Native Swift Apple Intelligence integration** for macOS:
 
-Official Apple references:
+- **Foundation Models** - Summarize page text or pasted content
+- **Image Playground** - Local image generation
+- **GUI readiness checks** - Detects unsupported Macs, disabled AI, not-ready states
+- **Apple Intelligence Lab** - Testing and validation in settings
+
+Why Swift:
+- Apple Intelligence APIs are native Apple frameworks
+- Comet uses Swift bridges for Apple APIs
+- Matches Comet's native macOS architecture
+
+#### Native Module Structure
+
+```
+native-modules/comet-ai-sidebar/
+├── binding.gyp                    # node-gyp build
+├── src/
+│   ├── CometSidebar.swift         # SwiftUI implementation
+│   ├── SwiftBridge.mm            # Obj-C++ bridge
+│   └── comet_sidebar_addon.mm    # N-API layer
+└── js/
+    └── index.js                   # Node.js wrapper
+```
+
+#### Official Apple References
+
 - [Apple Intelligence](https://developer.apple.com/apple-intelligence/)
 - [Foundation Models](https://developer.apple.com/documentation/FoundationModels)
-- [Generating content and performing tasks with Foundation Models](https://developer.apple.com/documentation/FoundationModels/generating-content-and-performing-tasks-with-foundation-models)
 - [Image Playground](https://developer.apple.com/documentation/ImagePlayground)
-- [App intent domains](https://developer.apple.com/documentation/appintents/app-intent-domains)
 
 ### 🪟 Microsoft Copilot on Windows
 
@@ -383,15 +444,17 @@ flutter run
 
 ## ⬇️ Downloads
 
-**Latest Release: v0.2.9** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
+**Latest Release: v0.2.9.1** | [View All Releases](https://github.com/Preet3627/Comet-AI/releases/latest)
 
 | Platform | Download | Status |
 |----------|----------|--------|
-| 🪟 Windows (.exe) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser.Setup.0.2.9.exe) | ✅ Stable |
-| 🍎 macOS (.dmg) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.9-arm64.dmg) | ✅ Stable |
-| 🐧 Linux (.AppImage) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.9.AppImage) | ✅ Stable |
+| 🪟 Windows (.exe) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser.Setup.0.2.9.1.exe) | ✅ Stable |
+| 🍎 macOS (.dmg) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.9.1-arm64.dmg) | ✅ Stable |
+| 🐧 Linux (.AppImage) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet.Browser-0.2.9.1.AppImage) | ✅ Stable |
 | 📱 Android (.apk) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/app-release.apk) | ✅ Stable |
 | 🍎 iOS (.ipa) | [Download](https://github.com/Preet3627/Comet-AI/releases/latest/download/Comet-AI.ipa) | 🧪 Beta |
+
+> **macOS Note:** v0.2.9.1 includes the new Native AI Sidebar V2 with Thuki-inspired SwiftUI interface. Requires macOS 13.0+.
 
 ---
 
@@ -404,6 +467,73 @@ flutter run
 | Linux | ✅ Production Ready |
 | Android | ✅ Production Ready |
 | iOS | 🧪 Testing Phase |
+
+---
+
+## 📝 v0.2.9.1 Highlights - Native Swift Sidebar V2
+
+### Thuki-Inspired Native AI Sidebar V2
+
+**Inspired by [Thuki](https://github.com/quiet-node/thuki) by Logan Nguyen (Apache 2.0)**
+
+Comet now features a native Swift-powered AI sidebar that brings Thuki's elegant design to Electron:
+
+#### Architecture Transformation
+
+| Previous (Tauri) | Current (Electron + Swift) |
+|------------------|---------------------------|
+| Thuki (Tauri/Rust) → Native macOS UI | Electron Main Process → N-API → Swift Bridge → Native SwiftUI |
+
+#### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Morphing Container** | Spotlight-style input bar transforms to full chat |
+| **Command Suggestions** | `/screen`, `/think`, `/search` with real-time filtering |
+| **Context Quotes** | Selected text pre-fills as quoted context |
+| **Auto-Scroll** | Follows content unless user scrolls up |
+| **Typing Indicator** | Pulsing dots animation during AI response |
+| **Conversation History** | Date-grouped organization |
+| **Multi-Provider LLM** | Ollama, OpenAI, Anthropic, Gemini |
+| **Auto-Start** | Login item integration via Electron API |
+
+#### Native Module Structure
+
+```
+native-modules/comet-ai-sidebar/
+├── binding.gyp           # node-gyp build config
+├── src/
+│   ├── CometSidebar.swift       # SwiftUI sidebar implementation
+│   ├── SwiftBridge.mm          # Obj-C++ bridge
+│   ├── comet_sidebar_addon.mm  # N-API layer
+│   └── *.h                     # Headers
+└── js/
+    └── index.js                # Node.js wrapper
+```
+
+#### Licensing (Apache 2.0)
+
+- **Thuki** is licensed under Apache License 2.0 by Logan Nguyen
+- Comet acknowledges Thuki's influence per Apache 2.0 Section 4d
+- Source code has been substantially modified for Electron integration
+- Full attribution in `ACKNOWLEDGMENTS.md`
+
+#### How We Modified Tauri → Electron + Swift
+
+1. **Extracted Thuki's UI concepts** - Morphing container, command suggestions, conversation history
+2. **Built Swift bridge** - N-API layer connects SwiftUI to Electron via Objective-C++
+3. **Multi-provider support** - Connects to any LLM provider configured in Electron settings
+4. **Auto-start integration** - Uses macOS Login Items via Electron's API
+5. **Shared settings** - Reads LLM config from Electron's UserDefaults storage
+
+#### v0.2.9.1 Release Files
+
+| File | Description |
+|------|-------------|
+| `native-modules/comet-ai-sidebar/` | Native Swift module |
+| `src/components/ThukiV2Panel.tsx` | React version |
+| `src/lib/native-panels/ThukiV2Panel.swift` | Native SwiftUI version |
+| `ACKNOWLEDGMENTS.md` | Full Apache 2.0 attribution |
 
 ---
 

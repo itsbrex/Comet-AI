@@ -52,6 +52,23 @@ struct CometNativePanelsApp: App {
 
                 Divider()
 
+                if configuration.mode == .sidebar {
+                    Menu("Sidebar Version") {
+                        ForEach(SidebarVersion.allCases, id: \.self) { version in
+                            let isSelected = (viewModel.state.preferences?.sidebarVersion ?? "electron") == version.rawValue
+                            Button {
+                                viewModel.setPreference(key: "sidebarVersion", value: version.rawValue)
+                            } label: {
+                                Label(version.title, systemImage: version.icon)
+                                if isSelected {
+                                    Text("✓")
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                }
+
                 Button("Settings") {
                     viewModel.openPanel(.settings)
                 }
@@ -69,11 +86,20 @@ struct CometNativePanelsApp: App {
 struct RootPanelView: View {
     @ObservedObject var viewModel: NativePanelViewModel
 
+    private var currentSidebarVersion: SidebarVersion {
+        let version = viewModel.state.preferences?.sidebarVersion ?? "electron"
+        return SidebarVersion(rawValue: version) ?? .v1
+    }
+
     var body: some View {
         Group {
             switch viewModel.configuration.mode {
             case .sidebar:
-                SidebarPanelView(viewModel: viewModel)
+                if currentSidebarVersion == .v2 {
+                    ThukiV2Panel(viewModel: viewModel)
+                } else {
+                    SidebarPanelView(viewModel: viewModel)
+                }
             case .actionChain:
                 ActionChainPanelView(viewModel: viewModel)
             case .menu:

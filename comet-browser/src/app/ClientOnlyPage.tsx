@@ -156,13 +156,15 @@ export default function Home() {
   const store = useAppStore(useShallow(selectClientOnlyPageStore));
   const { shouldRenderTab, isTabSuspended } = useOptimizedTabs();
   const [isInitializing, setIsInitializing] = useState(true);
+  const [onboardingLoaded, setOnboardingLoaded] = useState(false);
 
   useEffect(() => {
-    // Let the clean initialization screen show for a moment
-    const timer = setTimeout(() => {
+    Promise.all([
+      new Promise<void>(resolve => setTimeout(resolve, 2500)),
+      window.electronAPI?.getOnboardingState?.().then(() => { setOnboardingLoaded(true); }).catch(() => { setOnboardingLoaded(true); }) || Promise.resolve()
+    ]).then(() => {
       setIsInitializing(false);
-    }, 2500);
-    return () => clearTimeout(timer);
+    });
   }, []);
   const isMacOS = typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgent);
   const [showClipboard, setShowClipboard] = useState(false);
@@ -1758,11 +1760,11 @@ export default function Home() {
         {isInitializing && <InitializingOverlay key="init" />}
       </AnimatePresence>
 
-      {!isInitializing && !store.hasSeenWelcomePage && (
+      {!isInitializing && onboardingLoaded && !store.hasSeenWelcomePage && (
         <WelcomeScreen key="welcome" />
       )}
 
-      {!isInitializing && store.hasSeenWelcomePage && !store.hasCompletedStartupSetup && (
+      {!isInitializing && onboardingLoaded && store.hasSeenWelcomePage && !store.hasCompletedStartupSetup && (
         <StartupSetupUI key="setup" onComplete={() => store.setHasCompletedStartupSetup(true)} />
       )}
 

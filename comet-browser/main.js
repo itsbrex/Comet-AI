@@ -1292,6 +1292,8 @@ const PDF_TEMPLATES = {
     .footer-center { text-align: center; }
     .footer-right { text-align: right; font-size: 0.82rem; color: #0ea5e9; font-weight: 700; }
     @page { margin: 14mm 14mm 16mm 14mm; size: A4; }
+    @page first { margin: 0 0 0 0; }
+    .cover { page-break-after: always; page-rule-first: always; }
   </style>
 </head>
 <body>
@@ -1314,7 +1316,7 @@ const PDF_TEMPLATES = {
     </div>
   </section>
 
-  <div class="page-content">
+  <div class="page-content" style="page-break-before: always;">
     ${tags && tags.length ? `<div class="tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` : ''}
     <div class="content">${content}</div>
   </div>

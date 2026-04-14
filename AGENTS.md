@@ -816,5 +816,64 @@ window.electronAPI.plugins.scan(directory)
 
 ---
 
-*Last Updated: 2026-04-10*
-*Status: v0.2.9 Ready - COMPLETED*
+## ✅ COMPLETED THIS SESSION (2026-04-14)
+
+### Thuki-Inspired Native AI Sidebar V2 (macOS)
+
+**Status:** ✅ COMPLETE
+
+**Inspiration:** [Thuki](https://github.com/quiet-node/thuki) by Logan Nguyen - Apache 2.0 Licensed
+
+**Product Owner:** Logan Nguyen (@quiet_node)
+
+**What We Learned & Implemented:**
+
+Thuki is a floating AI secretary for macOS that inspired several features in Comet-AI's Native AI Sidebar V2:
+
+1. **Floating Overlay UI Design**
+   - Morphing container concept (spotlight-style input → full chat)
+   - Minimal floating glass aesthetic
+   - Smart window positioning
+
+2. **Command Suggestion System**
+   - Slash commands (/screen, /think, /search, etc.)
+   - Real-time command filtering
+   - Arrow key navigation
+
+3. **Context-Aware Quotes**
+   - Pre-filling selected text as quoted context
+   - Quote formatting and display
+
+4. **Image Attachment UX**
+   - Thumbnail previews
+   - Drag-and-drop support
+   - Image removal
+
+5. **Smart Auto-Scroll**
+   - Follow new content unless user scrolls up
+   - User-initiated scroll detection
+
+6. **Typing Indicator**
+   - Pulsing dots animation
+
+**Files Created:**
+- `comet-browser/src/lib/native-panels/ThukiV2Panel.swift` - Native SwiftUI implementation
+- `comet-browser/src/components/ThukiV2Panel.tsx` - React web version
+- `comet-browser/ACKNOWLEDGMENTS.md` - Full attribution and license documentation
+
+**Files Modified:**
+- `comet-browser/src/lib/native-panels/Models.swift` - Added `SidebarVersion` enum and preferences
+- `comet-browser/src/lib/native-panels/Main.swift` - Added sidebar version selector in menu
+- `comet-browser/src/lib/native-panels/SettingsView.swift` - Added sidebar version toggle
+- `AGENTS.md` - Added Thuki acknowledgment
+
+**Apache License 2.0 Compliance:**
+- Thuki is licensed under Apache License 2.0
+- This acknowledgment is provided as required by Section 4d
+- Source code derived from Thuki concepts has been substantially modified
+- Full license text available in `ACKNOWLEDGMENTS.md`
+
+---
+
+*Last Updated: 2026-04-14*
+*Status: v0.2.10 Ready - COMPLETED*

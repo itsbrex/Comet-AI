@@ -4666,12 +4666,12 @@ I've successfully executed the following real tasks:
             displayContent = displayContent.replace(INTERNAL_TAG_RE, '').trim();
 
             const isLastMessage = i === messages.length - 1;
-            const isStreamingEmpty = isLastMessage && isLoading && !displayContent;
+            const msgIsOcr = (msg as any).isOcr || (msg as any).ocrText;
+            const hasValidOcr = msgIsOcr && ((msg as any).ocrText || (msg as any).ocrLabel);
+            const isStreamingEmpty = isLastMessage && isLoading && !displayContent && !hasValidOcr;
             if (isStreamingEmpty && msg.role === 'model') {
               return null;
             }
-
-            const msgIsOcr = (msg as any).isOcr || (msg as any).ocrText;
 
             return (
               <motion.div
