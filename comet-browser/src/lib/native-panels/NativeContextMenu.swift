@@ -116,13 +116,11 @@ import AppKit
     }
     
     private func notifyElectron(action: String) {
-        if let wc = webContents as? Any {
-            NotificationCenter.default.post(
-                name: NSNotification.Name("NativeContextMenuAction"),
-                object: nil,
-                userInfo: ["action": action]
-            )
-        }
+        NotificationCenter.default.post(
+            name: NSNotification.Name("NativeContextMenuAction"),
+            object: nil,
+            userInfo: ["action": action]
+        )
     }
 }
 
