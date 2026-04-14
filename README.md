@@ -622,6 +622,7 @@ For Firebase updates, set these in GitHub Secrets:
 
 PRs are welcome. Please open an issue first to discuss significant changes.
 
+Special thanks to @Dxrkaa for identifying and reporting this issue.
 Special thanks to **Otherwise_Wave9374** for contributions to tool permission gating and agent loop refinement.
 
 ---
